@@ -30,11 +30,16 @@ godot --path .
 ## 天空与天气
 
 - 按 `1` / `2` / `3` 平滑切换 `Clear`、`PartlyCloudy`、`Overcast`。预设参数集中在 `scripts/weather_controller.gd`，并统一驱动天空、方向光、环境雾、海水材质和 `WaveSampler` 的波浪强度。
-- 按 `F3` 打开天气调试面板，可实时查看天气、太阳角度、云量、共享波浪强度与 FPS / 最近帧时间；拖动面板滑杆可调整太阳高度、方位、云量和波浪强度。
+- 左上角状态 Panel 常驻显示实际 FPS，约每 0.5 秒更新；启动数据尚稳定前显示 `FPS: --`。数值直接来自 `Engine.get_frames_per_second()`。
+- 按 `F3` 打开天气与画面调试面板，可实时查看天气、太阳角度、云量、共享波浪强度、Draw Calls 和可见物体数；拖动滑杆可调整太阳高度、方位、云量和波浪强度。较矮的窗口中面板可滚动。
+- F3 面板还可切换 `High` / `Medium` / `Low`、`30 FPS` / `60 FPS` / `Unlimited` 帧率上限以及窗口 / 全屏模式。设置保存在 `user://quality_settings.cfg`。新安装默认 High、60 FPS、窗口化。
+- High 保持现有 4096 阴影图集、SSR/SSAO、四级海面网格和四分之一分辨率云计算；Medium 将阴影图集降至 2048、减少云步数并略减海面细节；Low 将阴影图集降至 1024、关闭 SSR/SSAO、降低云采样并使用三级海面网格。各档复用同一场景和材质。
+- 30 FPS 档关闭 VSync，由 Godot 限帧；60 FPS 档启用 VSync 并设 60 上限；Unlimited 关闭 VSync 并取消引擎限帧。左上角显示的是实际 FPS，不是所选上限。
 - 太阳高度以地平线上方角度表示（3°–75°）。方位以摄像机前向（世界 `-Z`）为 0°，顺时针增加；这是原型内的方向接口，不是地理罗盘方位。
 - 天空由 Godot 原生 Sky Shader 生成，包含大气渐变、地平线薄雾、程序化层云与卷云。云层在半分辨率通道绘制；天空辐照贴图以实时 256×256 更新，让缓慢移动的云参与船体与水面的环境反射。
 - Forward+ 使用 AGX 色调映射、PSSM2 方向光阴影、屏幕空间反射、轻量 SSAO、低强度 Glow 和深度大气雾；这些效果用于海水反射、船体层次与远端地平线融合。实际帧率请以目标设备运行时为准。
 - 本轮画面检查与本机帧时间数据记录见 [`docs/WEATHER_VISUAL_CHECK.md`](docs/WEATHER_VISUAL_CHECK.md)。
+- 本机质量档位与 FPS 基线记录见 [`docs/PERFORMANCE_REPORT.md`](docs/PERFORMANCE_REPORT.md)。本次测量设备为 Apple M2 Pro；M4 目标机仍需复测。
 
 插件来源、提交、Godot 兼容性和许可记录见 [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md)。
 
