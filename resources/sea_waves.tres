@@ -1,0 +1,44 @@
+[gd_resource type="Resource" script_class="SeaWaveSettings" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/sea_wave_settings.gd" id="1_settings"]
+[ext_resource type="Script" path="res://addons/boujie_water_shader/types/gerstner_wave.gd" id="2_wave"]
+
+[sub_resource type="Resource" id="Long_Swell"]
+script = ExtResource("2_wave")
+steepness = 0.48
+amplitude = 2.4
+direction_degrees = 25.0
+frequency = 0.012
+speed = 0.8
+phase_degrees = 0.0
+
+[sub_resource type="Resource" id="Cross_Swell"]
+script = ExtResource("2_wave")
+steepness = 0.26
+amplitude = 1.8
+direction_degrees = 82.0
+frequency = 0.028
+speed = 1.05
+phase_degrees = 72.0
+
+[sub_resource type="Resource" id="Mid_Wave"]
+script = ExtResource("2_wave")
+steepness = 0.13
+amplitude = 1.4
+direction_degrees = 148.0
+frequency = 0.06
+speed = 1.3
+phase_degrees = 205.0
+
+[sub_resource type="Resource" id="Small_Ripple"]
+script = ExtResource("2_wave")
+steepness = 0.06
+amplitude = 2.0
+direction_degrees = 221.0
+frequency = 0.11
+speed = 1.7
+phase_degrees = 318.0
+
+[resource]
+script = ExtResource("1_settings")
+waves = Array[ExtResource("2_wave")]([SubResource("Long_Swell"), SubResource("Cross_Swell"), SubResource("Mid_Wave"), SubResource("Small_Ripple")])

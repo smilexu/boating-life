@@ -1,0 +1,35 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/boat_controller.gd" id="1_controller"]
+[ext_resource type="Script" path="res://scripts/boat_follow_camera.gd" id="2_follow_camera"]
+[ext_resource type="Script" path="res://scripts/boat_hud.gd" id="3_hud"]
+[ext_resource type="PackedScene" path="res://assets/boats/base_boat.fbx" id="4_base_boat"]
+[ext_resource type="Script" path="res://scripts/boat_buoyancy.gd" id="5_buoyancy"]
+
+[node name="Boat" type="Node3D"]
+
+[node name="MotionRoot" type="Node3D" parent="."]
+script = ExtResource("1_controller")
+
+[node name="VisualRoot" type="Node3D" parent="MotionRoot"]
+script = ExtResource("5_buoyancy")
+
+[node name="BaseBoatModel" parent="MotionRoot/VisualRoot" instance=ExtResource("4_base_boat")]
+position = Vector3(0, -0.5, 0)
+scale = Vector3(5, 5, 5)
+
+[node name="FollowCameraRig" type="Node3D" parent="."]
+script = ExtResource("2_follow_camera")
+target_path = NodePath("../MotionRoot")
+
+[node name="Camera3D" type="Camera3D" parent="FollowCameraRig"]
+fov = 58.0
+far = 4000.0
+current = true
+
+[node name="BoatHUD" type="CanvasLayer" parent="."]
+script = ExtResource("3_hud")
+controller_path = NodePath("../MotionRoot")
+weather_controller_path = NodePath("../../WeatherController")
+wave_sampler_path = NodePath("../../WaveSampler")
+

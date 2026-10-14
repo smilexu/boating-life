@@ -1,0 +1,8 @@
+[gd_resource type="Sky" load_steps=2 format=3]
+
+[ext_resource type="ShaderMaterial" path="res://materials/sea_sky_material.tres" id="1_sky_material"]
+
+[resource]
+radiance_size = 3
+process_mode = 3
+sky_material = ExtResource("1_sky_material")

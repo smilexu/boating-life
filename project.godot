@@ -1,0 +1,55 @@
+; Engine configuration file.
+; Sea Prototype - Godot 4.7.2 stable.
+
+config_version=5
+
+[application]
+
+config/name="Sea Prototype"
+run/main_scene="res://scenes/main.tscn"
+config/features=PackedStringArray("4.7", "Forward Plus")
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/window_width_override=1920
+window/size/window_height_override=1080
+window/size/mode=0
+window/size/resizable=true
+
+[input]
+
+boat_accelerate={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":87)]
+}
+boat_brake={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":83)]
+}
+boat_turn_left={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":65)]
+}
+boat_turn_right={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":68)]
+}
+boat_pause={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":32)]
+}
+boat_toggle_autopilot={
+"deadzone": 0.5,
+"events": [Object(InputEventKey,"physical_keycode":84)]
+}
+
+[rendering]
+
+renderer/rendering_method="forward_plus"
+environment/defaults/default_clear_color=Color(0.46, 0.68, 0.82, 1)
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/boujie_water_shader/plugin.cfg")

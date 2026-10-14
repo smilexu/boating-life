@@ -1,0 +1,56 @@
+[gd_scene load_steps=10 format=3]
+
+[ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
+[ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
+[ext_resource type="Script" path="res://scripts/wave_sampler.gd" id="3_wave_sampler"]
+[ext_resource type="Resource" path="res://resources/sea_waves.tres" id="4_waves"]
+[ext_resource type="ShaderMaterial" path="res://materials/sea_water_material.tres" id="5_water_material"]
+[ext_resource type="PackedScene" path="res://scenes/Boat.tscn" id="6_boat"]
+[ext_resource type="Environment" path="res://resources/sea_environment.tres" id="7_environment"]
+[ext_resource type="Script" path="res://scripts/weather_controller.gd" id="8_weather"]
+[ext_resource type="Resource" path="res://resources/cloud_weather_profiles.tres" id="9_cloud_profiles"]
+
+[node name="Main" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("7_environment")
+
+[node name="Sunlight" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-12, 180, 0)
+light_color = Color(1, 0.91, 0.77, 1)
+light_energy = 1.18
+light_angular_distance = 0.5
+shadow_enabled = true
+directional_shadow_mode = 1
+directional_shadow_max_distance = 260.0
+directional_shadow_fade_start = 0.82
+shadow_blur = 1.0
+
+[node name="Ocean" type="Node3D" parent="."]
+script = ExtResource("1_ocean")
+material = ExtResource("5_water_material")
+outermost_resolution = 12
+levels_of_detail = 4
+unit_size = 1.0
+far_edge = 4000.0
+
+[node name="OceanCameraFollower" type="Node3D" parent="."]
+script = ExtResource("2_follower")
+target_path = NodePath("../Ocean")
+follow_axes = 5
+snap = true
+snap_unit = 8.0
+
+[node name="WaveSampler" type="Node" parent="."]
+script = ExtResource("3_wave_sampler")
+wave_settings = ExtResource("4_waves")
+water_material = ExtResource("5_water_material")
+wave_strength = 1.05
+ocean_path = NodePath("../Ocean")
+
+[node name="WeatherController" type="Node" parent="."]
+script = ExtResource("8_weather")
+water_material = ExtResource("5_water_material")
+cloud_profiles = ExtResource("9_cloud_profiles")
+
+[node name="PlayerBoat" parent="." instance=ExtResource("6_boat")]
