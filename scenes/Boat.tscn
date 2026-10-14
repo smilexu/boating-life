@@ -18,6 +18,21 @@ script = ExtResource("5_buoyancy")
 position = Vector3(0, -0.5, 0)
 scale = Vector3(5, 5, 5)
 
+[editable path="MotionRoot/VisualRoot/BaseBoatModel"]
+
+[node name="node_0" parent="MotionRoot/VisualRoot/BaseBoatModel" index="0"]
+layers = 2
+
+[node name="BoatSkyFill" type="OmniLight3D" parent="MotionRoot/VisualRoot"]
+position = Vector3(0, 2.2, 1.0)
+light_color = Color(0.76, 0.86, 1, 1)
+light_energy = 0.5
+light_specular = 0.12
+light_cull_mask = 2
+shadow_enabled = false
+omni_range = 8.0
+omni_attenuation = 0.9
+
 [node name="FollowCameraRig" type="Node3D" parent="."]
 script = ExtResource("2_follow_camera")
 target_path = NodePath("../MotionRoot")

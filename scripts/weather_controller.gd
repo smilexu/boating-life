@@ -32,8 +32,8 @@ const WEATHER_PRESETS := [
 		"fog_density": 0.0012,
 		"water_color": Color(0.026, 0.47, 0.39),
 		"water_fresnel": Color(0.17, 0.52, 0.49),
-		"water_specular": 0.30,
-		"water_roughness": 0.17,
+		"water_specular": 0.24,
+		"water_roughness": 0.10,
 		"wave_strength": 1.05,
 	},
 	{
@@ -51,8 +51,8 @@ const WEATHER_PRESETS := [
 		"fog_density": 0.00165,
 		"water_color": Color(0.044, 0.36, 0.35),
 		"water_fresnel": Color(0.15, 0.39, 0.40),
-		"water_specular": 0.26,
-		"water_roughness": 0.22,
+		"water_specular": 0.22,
+		"water_roughness": 0.16,
 		"wave_strength": 1.25,
 	},
 	{
@@ -70,8 +70,8 @@ const WEATHER_PRESETS := [
 		"fog_density": 0.0022,
 		"water_color": Color(0.07, 0.30, 0.36),
 		"water_fresnel": Color(0.14, 0.34, 0.39),
-		"water_specular": 0.16,
-		"water_roughness": 0.36,
+		"water_specular": 0.14,
+		"water_roughness": 0.28,
 		"wave_strength": 1.5,
 	},
 ]
@@ -266,7 +266,7 @@ func _apply_current_state() -> void:
 	water_material.set_shader_parameter("albedo", _current["water_color"])
 	water_material.set_shader_parameter("albedo_fresnel", _current["water_fresnel"])
 	water_material.set_shader_parameter("specular", _current["water_specular"])
-	water_material.set_shader_parameter("roughness", _current["water_roughness"])
+	water_material.set_shader_parameter("water_roughness_near", _current["water_roughness"])
 
 	var wave_strength := float(_current["wave_strength"])
 	if _wave_sampler != null and absf(wave_strength - _last_applied_wave_strength) > 0.001:

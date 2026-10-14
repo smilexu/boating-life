@@ -21,11 +21,22 @@ uniform vec4 albedo: source_color;
 uniform vec4 albedo_fresnel: source_color;
 uniform sampler2D texture_albedo: source_color;
 uniform float specular : hint_range(0.0, 1.0) = 0.5;
-uniform float roughness : hint_range(0.0, 1.0) = 0.2;
 uniform float metallic : hint_range(0.0, 1.0) = 0.0;
-// Small shading-only ripples break up sun glints without changing Gerstner
-// displacement or the CPU wave sampler used by the boat.
-uniform float glint_ripple_strength : hint_range(0.0, 1.0) = 0.75;
+// Fine surface texture only affects shading; it is not part of hull buoyancy.
+uniform float ripple_scale : hint_range(0.02, 0.5) = 0.17;
+uniform float ripple_speed : hint_range(0.0, 1.0) = 0.08;
+uniform vec2 ripple_direction = vec2(0.87, 0.49);
+uniform float detail_wave_fade_start : hint_range(0.0, 5000.0) = 80.0;
+uniform float detail_wave_fade_end : hint_range(0.0, 5000.0) = 850.0;
+uniform float detail_normal_strength_near : hint_range(0.0, 5.0) = 2.5;
+uniform float detail_normal_strength_far : hint_range(0.0, 1.0) = 0.0;
+uniform float sun_glitter_intensity : hint_range(0.0, 2.0) = 0.72;
+uniform float water_roughness_near : hint_range(0.0, 1.0) = 0.10;
+uniform float water_roughness_far : hint_range(0.0, 1.0) = 0.34;
+uniform float water_specular_near_multiplier : hint_range(0.0, 1.0) = 0.72;
+uniform float water_specular_far_multiplier : hint_range(0.0, 1.0) = 0.62;
+uniform float albedo_detail_fade_start : hint_range(0.0, 5000.0) = 250.0;
+uniform float albedo_detail_fade_end : hint_range(0.0, 5000.0) = 2200.0;
 
 /* When ON - vertex waves rise along the mesh's normal
  * When OFF - vertex waves rise in the global up direction (+y)
@@ -298,6 +309,47 @@ vec4 triplanar_texture(sampler2D p_sampler,vec3 p_weights,vec3 p_triplanar_pos) 
 	return samp;
 }
 
+float water_hash(vec2 p) {
+	vec3 p3 = fract(vec3(p.xyx) * vec3(0.1031, 0.1030, 0.0973));
+	p3 += dot(p3, p3.yzx + 33.33);
+	return fract((p3.x + p3.y) * p3.z);
+}
+
+// Non-periodic value noise plus its analytic X/Y gradient. The quintic
+// interpolation keeps cell boundaries smooth without a tiled normal texture.
+vec3 water_value_noise_gradient(vec2 p) {
+	vec2 cell = floor(p);
+	vec2 f = fract(p);
+	vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+	vec2 du = 30.0 * f * f * (f - 1.0) * (f - 1.0);
+
+	float n00 = water_hash(cell);
+	float n10 = water_hash(cell + vec2(1.0, 0.0));
+	float n01 = water_hash(cell + vec2(0.0, 1.0));
+	float n11 = water_hash(cell + vec2(1.0, 1.0));
+	float row0 = mix(n00, n10, u.x);
+	float row1 = mix(n01, n11, u.x);
+	float value = mix(row0, row1, u.y);
+	float gradient_x = mix((n10 - n00) * du.x, (n11 - n01) * du.x, u.y);
+	float gradient_y = (row1 - row0) * du.y;
+	return vec3(value, gradient_x, gradient_y);
+}
+
+vec3 water_detail_fbm(vec2 p) {
+	vec3 layer_a = water_value_noise_gradient(p);
+	vec3 layer_b = water_value_noise_gradient(p * 2.03 + vec2(17.1, 9.2));
+	vec3 layer_c = water_value_noise_gradient(p * 4.11 + vec2(37.7, 23.4));
+	float value = (layer_a.x - 0.5) * 0.62 + (layer_b.x - 0.5) * 0.27 + (layer_c.x - 0.5) * 0.11;
+	vec2 gradient = layer_a.yz * 0.62 + layer_b.yz * (0.27 * 2.03) + layer_c.yz * (0.11 * 4.11);
+	return vec3(value, gradient);
+}
+
+vec2 rotate_water_vector(vec2 value, float angle) {
+	float c = cos(angle);
+	float s = sin(angle);
+	return vec2(c * value.x - s * value.y, s * value.x + c * value.y);
+}
+
 // Calculate depth of solid object beneath the water by reading the depth texture
 float depth_from_water_to_object(vec2 screen_uv, mat4 inv_projection_matrix, vec3 vertex) {
 	float depth_raw = textureLod(depth_texture, screen_uv, 0.0).r;
@@ -365,18 +417,27 @@ void fragment() {
 		discard;
 	}
 	METALLIC = metallic;
-	SPECULAR = specular;
-	ROUGHNESS = roughness;
+	float reflection_distance_fade = smoothstep(500.0, 2600.0, distance_from_camera);
+	SPECULAR = specular * mix(water_specular_near_multiplier, water_specular_far_multiplier, reflection_distance_fade);
+	ROUGHNESS = mix(water_roughness_near, water_roughness_far, reflection_distance_fade);
 	float detail_time = WaveTime * float(!freeze_time);
 	vec2 detail_position = world_coordinates.xz;
-	vec2 ripple_direction_a = normalize(vec2(0.93, 0.37));
-	vec2 ripple_direction_b = normalize(vec2(-0.32, 0.95));
-	vec2 ripple_direction_c = normalize(vec2(0.58, -0.81));
-	float ripple_a = cos(dot(detail_position, ripple_direction_a) * 13.0 + detail_time * 1.7) * 0.038;
-	float ripple_b = cos(dot(detail_position, ripple_direction_b) * 24.0 - detail_time * 1.1) * 0.023;
-	float ripple_c = cos(dot(detail_position, ripple_direction_c) * 37.0 + detail_time * 0.8) * 0.014;
-	vec2 micro_slope = ripple_direction_a * ripple_a + ripple_direction_b * ripple_b + ripple_direction_c * ripple_c;
-	vec3 micro_normal_offset_world = vec3(-micro_slope.x, 0.0, -micro_slope.y) * glint_ripple_strength;
+	float detail_distance_fade = smoothstep(detail_wave_fade_start, detail_wave_fade_end, distance_from_camera);
+	float detail_strength = mix(detail_normal_strength_near, detail_normal_strength_far, detail_distance_fade);
+	vec2 drift_direction = normalize(ripple_direction + vec2(0.0001, 0.0));
+	vec2 cross_direction = vec2(-drift_direction.y, drift_direction.x);
+	vec2 drift_a = drift_direction * detail_time * ripple_speed;
+	vec2 drift_b = cross_direction * detail_time * ripple_speed * 0.73;
+	float rotation_a = 0.39;
+	float rotation_b = -0.71;
+	vec2 position_a = rotate_water_vector(detail_position + drift_a, rotation_a) * ripple_scale;
+	vec2 position_b = rotate_water_vector(detail_position - drift_b, rotation_b) * (ripple_scale * 0.79) + vec2(31.7, 12.4);
+	vec3 detail_a = water_detail_fbm(position_a);
+	vec3 detail_b = water_detail_fbm(position_b);
+	vec2 gradient_a = rotate_water_vector(detail_a.yz, -rotation_a) * ripple_scale;
+	vec2 gradient_b = rotate_water_vector(detail_b.yz, -rotation_b) * (ripple_scale * 0.79);
+	vec2 micro_slope = gradient_a * 0.64 + gradient_b * 0.36;
+	vec3 micro_normal_offset_world = vec3(-micro_slope.x, 0.0, -micro_slope.y) * detail_strength * sun_glitter_intensity;
 	NORMAL = normalize(NORMAL + (VIEW_MATRIX * vec4(micro_normal_offset_world, 0.0)).xyz);
 	
 	vec4 albedo_tex;
@@ -385,6 +446,8 @@ void fragment() {
 #else
 	albedo_tex = texture(texture_albedo, UV);
 #endif
+	float albedo_detail_fade = 1.0 - smoothstep(albedo_detail_fade_start, albedo_detail_fade_end, distance_from_camera);
+	vec3 albedo_detail = mix(vec3(1.0), albedo_tex.rgb, albedo_detail_fade);
 
 	float final_refraction_opacity = refraction_opacity;
 #ifdef FRESNEL
@@ -442,12 +505,12 @@ void fragment() {
 
 	// Finally write color to the screen. Screen-reading shaders use EMISSION to simulate ALPHA.
 #if defined(REFRACTION) || defined(DEPTH_FOG)
-	ALBEDO = surface_color.rgb * albedo_tex.rgb;
+	ALBEDO = surface_color.rgb * albedo_detail;
 	EMISSION += screen_color * screen_read_blend_amount;
 	ALBEDO *= 1.0 - screen_read_blend_amount;
 	// don't set ALPHA here
 #else
-	ALBEDO = surface_color.rgb * albedo_tex.rgb;
+	ALBEDO = surface_color.rgb * albedo_detail;
 	ALPHA *= surface_color.a * albedo_tex.a;
 #endif
 
