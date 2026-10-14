@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="GeoReference" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/geo_reference.gd" id="1_geo_reference"]
+
+[resource]
+script = ExtResource("1_geo_reference")
+origin_latitude_deg = 55.7
+origin_longitude_deg = 12.75
+origin_altitude_m = 0.0
+south_latitude_deg = 55.35
+north_latitude_deg = 56.1
+west_longitude_deg = 12.25
+east_longitude_deg = 13.22

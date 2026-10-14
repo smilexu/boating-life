@@ -39,7 +39,7 @@ target_path = NodePath("../MotionRoot")
 
 [node name="Camera3D" type="Camera3D" parent="FollowCameraRig"]
 fov = 58.0
-far = 4000.0
+far = 80000.0
 current = true
 
 [node name="BoatHUD" type="CanvasLayer" parent="."]

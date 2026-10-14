@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://addons/SunshineClouds2/SunshineCloudsDriver.gd" id="10_cloud_driver"]
 [ext_resource type="CompositorEffect" path="res://resources/sunshine_clouds_preview.tres" id="11_cloud_effect"]
 [ext_resource type="Script" path="res://scripts/quality_manager.gd" id="12_quality_manager"]
+[ext_resource type="PackedScene" path="res://scenes/OresundRegion.tscn" id="13_oresund_region"]
 
 [sub_resource type="Compositor" id="Compositor_volumetric_clouds"]
 compositor_effects = Array[CompositorEffect]([ExtResource("11_cloud_effect")])
@@ -40,7 +41,7 @@ material = ExtResource("5_water_material")
 outermost_resolution = 12
 levels_of_detail = 4
 unit_size = 1.0
-far_edge = 4000.0
+far_edge = 60000.0
 
 [node name="OceanCameraFollower" type="Node3D" parent="."]
 script = ExtResource("2_follower")
@@ -78,5 +79,7 @@ cloud_profiles = ExtResource("9_cloud_profiles")
 script = ExtResource("12_quality_manager")
 water_material = ExtResource("5_water_material")
 clouds_resource = ExtResource("11_cloud_effect")
+
+[node name="OresundRegion" parent="." instance=ExtResource("13_oresund_region")]
 
 [node name="PlayerBoat" parent="." instance=ExtResource("6_boat")]

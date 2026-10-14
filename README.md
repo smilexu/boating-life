@@ -54,9 +54,20 @@ godot --path .
 - `BoatBuoyancy` 默认用船体前左、前右、后左、后右四点采样海浪，并用阻尼弹簧平滑响应。可在 Inspector 调整浮动强度、俯仰/横摇限制、响应速度及采样点位置。
 - 要查看采样点和对应水面高度，在 `PlayerBoat/MotionRoot/VisualRoot` 的 Inspector 打开 `debug_show_samples`。
 
+## Øresund 地理轮廓原型
+
+- `scenes/OresundRegion.tscn` 是独立地区场景，并已挂入 `scenes/main.tscn`。动态海洋仍使用原来的 Boujie Ocean；仅将它的远端面延伸到 60 km，以便与区域海岸场景相接。
+- 经纬度权威来源为 WGS84。`resources/oresund_georeference.tres` 将 WGS84 ECEF 转成局部 ENU：Godot `+X` 向东、`+Y` 向上、`-Z` 向北，1 单位=1 米。地图原点为 55.700000°N、12.750000°E。
+- 按 `M` 切换地图调试/俯视检查，再按一次返回船尾镜头。调试视图用橙色圆点和“船只”标签实时标出船在地图上的位置，并显示近似 WGS84 坐标；同时显示 5 km 网格、原点、Malmö/Copenhagen/Øresund Bridge 参考标记和两城直线距离。
+- 海岸线使用 OpenStreetMap `natural=coastline`，处理程序位于 `tools/build_oresund_map.py`。数据范围、离线生成方式和 ODbL 分发要求见 [`assets/geodata/README.md`](assets/geodata/README.md)，坐标规则见 [`docs/GEOREFERENCE.md`](docs/GEOREFERENCE.md)。
+- 当前工作树包含两份带 OSM 时间戳的原始 Overpass extract 和处理后的海陆网格。处理器以海上原点为水域种子，通过海岸线交叉奇偶性生成 15 m 分类栅格，再输出 15/80/250 m 简化网格。已有快照可用 `.venv/bin/python tools/build_oresund_map.py` 离线重建；更新数据用 `.venv/bin/python tools/build_oresund_map.py --download`。调试面板显示 `© OpenStreetMap contributors · ODbL-1.0`，分发要求见地理数据说明。
+- 本阶段只生成平坦的陆地区域轮廓，不包含真实高程、植被、建筑、桥梁模型或航线。
+
 ## 目录
 
 - `scenes/`：Godot 场景
 - `scripts/`：GDScript 脚本
 - `assets/`：美术与音频素材
+- `assets/geodata/`：OSM 海岸线输入说明与处理后地区数据
 - `docs/`：开发文档
+- `tools/`：离线地区数据处理脚本

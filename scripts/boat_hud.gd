@@ -109,7 +109,7 @@ func _update_status() -> void:
 	var mode_text := "自动巡航" if _controller.is_autopilot else "手动驾驶"
 	if _controller.is_motion_paused:
 		mode_text += " · 已暂停"
-	_status_label.text = "航速  %.1f m/s  ·  %.1f kn\n模式  %s\nW/S 加速减速  ·  A/D 转向  ·  Space 暂停  ·  T 自动巡航\n右键拖动观察  ·  1/2/3 天气  ·  F3 视觉调试" % [
+	_status_label.text = "航速  %.1f m/s  ·  %.1f kn\n模式  %s\nW/S 加速减速  ·  A/D 转向  ·  Space 暂停  ·  T 自动巡航\n右键拖动观察  ·  1/2/3 天气  ·  M 地图调试  ·  F3 视觉调试" % [
 		_controller.speed_mps,
 		knots,
 		mode_text

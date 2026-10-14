@@ -1,0 +1,59 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/oresund_region.gd" id="1_region"]
+[ext_resource type="Resource" path="res://resources/oresund_georeference.tres" id="2_georeference"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_map_debug"]
+bg_color = Color(0.035, 0.09, 0.13, 0.9)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 14.0
+content_margin_top = 12.0
+content_margin_right = 14.0
+content_margin_bottom = 12.0
+
+[node name="OresundRegion" type="Node3D"]
+script = ExtResource("1_region")
+georeference = ExtResource("2_georeference")
+shoreline_data_path = "res://assets/geodata/processed/oresund_region.json"
+mesh_lod_index = 0
+land_surface_height_m = 0.8
+debug_grid_spacing_m = 5000.0
+
+[node name="Land" type="MeshInstance3D" parent="."]
+visible = false
+
+[node name="OverviewCamera" type="Camera3D" parent="."]
+position = Vector3(0, 70000, 0)
+rotation_degrees = Vector3(-90, 0, 0)
+projection = 1
+current = false
+size = 95000.0
+far = 120000.0
+
+[node name="DebugOverlay" type="CanvasLayer" parent="."]
+layer = 10
+
+[node name="InfoPanel" type="PanelContainer" parent="DebugOverlay"]
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 0.0
+anchor_right = 1.0
+anchor_bottom = 0.0
+offset_left = -410.0
+offset_top = 24.0
+offset_right = -24.0
+offset_bottom = 202.0
+grow_horizontal = 0
+grow_vertical = 1
+visible = false
+theme_override_styles/panel = SubResource("StyleBoxFlat_map_debug")
+
+[node name="InfoLabel" type="Label" parent="DebugOverlay/InfoPanel"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.91, 0.96, 0.94, 1)
+theme_override_font_sizes/font_size = 16
+text = "MAP DEBUG"
+autowrap_mode = 3
