@@ -1,72 +1,21 @@
-[gd_resource type="Resource" script_class="CloudWeatherProfiles" load_steps=8 format=3]
+[gd_resource type="Resource" script_class="CloudWeatherProfiles" load_steps=2 format=3]
 
 [ext_resource type="Script" path="res://resources/cloud_weather_profiles.gd" id="1_profiles"]
-[ext_resource type="Script" path="res://resources/cloud_layer_profile.gd" id="2_layer"]
-
-[sub_resource type="Resource" id="ClearMain"]
-script = ExtResource("2_layer")
-coverage = 0.22
-density = 0.74
-scale = 0.9
-softness = 0.08
-brightness = 1.05
-bottom_darkness = 0.28
-speed = 0.00018
-direction = Vector2(0.96, 0.28)
-grayness = 0.12
-
-[sub_resource type="Resource" id="ClearDetail"]
-script = ExtResource("2_layer")
-coverage = 0.16
-density = 0.22
-scale = 1.0
-softness = 0.12
-brightness = 0.91
-bottom_darkness = 0.12
-speed = 0.00024
-direction = Vector2(0.28, 0.96)
-grayness = 0.18
-
-[sub_resource type="Resource" id="PartlyMain"]
-script = ExtResource("2_layer")
-coverage = 0.32
-density = 0.78
-scale = 0.92
-softness = 0.075
-brightness = 1.08
-bottom_darkness = 0.36
-speed = 0.0002
-direction = Vector2(0.94, 0.34)
-grayness = 0.12
-
-[sub_resource type="Resource" id="PartlyDetail"]
-script = ExtResource("2_layer")
-coverage = 0.21
-density = 0.27
-scale = 1.05
-softness = 0.12
-brightness = 0.93
-bottom_darkness = 0.13
-speed = 0.00027
-direction = Vector2(0.36, 0.93)
-grayness = 0.18
-
-[sub_resource type="Resource" id="OvercastLayer"]
-script = ExtResource("2_layer")
-coverage = 0.91
-density = 0.78
-scale = 0.82
-softness = 0.24
-brightness = 0.79
-bottom_darkness = 0.15
-speed = 0.00012
-direction = Vector2(0.97, 0.24)
-grayness = 0.74
 
 [resource]
 script = ExtResource("1_profiles")
-clear_main = SubResource("ClearMain")
-clear_detail = SubResource("ClearDetail")
-partly_main = SubResource("PartlyMain")
-partly_detail = SubResource("PartlyDetail")
-overcast_layer = SubResource("OvercastLayer")
+clear_coverage = 0.54
+clear_density = 0.95
+clear_lighting_density = 0.7
+clear_ambient_color = Color(0.98, 0.96, 0.91, 1)
+clear_ambient_tint = Color(0.34, 0.43, 0.51, 1)
+partly_coverage = 0.64
+partly_density = 0.95
+partly_lighting_density = 0.7
+partly_ambient_color = Color(0.98, 0.96, 0.92, 1)
+partly_ambient_tint = Color(0.37, 0.45, 0.52, 1)
+overcast_coverage = 0.91
+overcast_density = 0.78
+overcast_lighting_density = 0.48
+overcast_ambient_color = Color(0.78, 0.83, 0.88, 1)
+overcast_ambient_tint = Color(0.52, 0.59, 0.66, 1)

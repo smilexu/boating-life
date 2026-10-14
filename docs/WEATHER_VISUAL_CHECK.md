@@ -1,35 +1,13 @@
-# 云层系统重做与目视检查
+# 天气视觉系统
 
-检查日期：2026-10-14
-
-## 实现方式
-
-- `shaders/sea_sky.gdshader` 保留程序化球面天空、蓝色高度渐变和地平线薄雾；云在天空 Shader 中以全分辨率绘制，没有使用体积云或外部插件。
-- 主积云层按周期网格挑选云团。每个云团由扁平云底和多枚尺寸不同的圆润云顶组成；低频区域场让相邻云团在大尺度上聚集，中频边缘扰动打破规则轮廓。颜色根据云形、视线方向和太阳方向做近似受光，并以云底变暗模拟厚度。
-- 辅助碎云层复用同一片区域场，但采用更小的云团、较低覆盖和较低不透明度；它只在主云空隙中补充细节。
-- Overcast 使用独立的多尺度噪声云幕，覆盖范围更连续、颜色灰蓝且对比度较低。主积云和辅助碎云在该天气下关闭。
-- 云场以球面 UV 为坐标，水平噪声周期按整数倍对齐；云层只以很小的连续速度沿配置方向漂移，避免随机重采样造成闪烁或跳变。
-- 稳定天气只计算当前使用的云层；天气过渡时才同时混合积云与云幕。
+Sea Prototype 使用 Godot 原生 `ProceduralSkyMaterial` 绘制蓝天渐变，WorldEnvironment 的雾效处理地平线大气感。三种天气的云都由 Sunshine Clouds 2 的体积云 CompositorEffect 绘制；旧的自制二维云 Shader 和旧单层云参数已删除，没有并行回退实现。
 
 ## 天气与调参
 
-云参数集中在 `resources/cloud_weather_profiles.tres`，可通过 Godot Inspector 编辑。`resources/cloud_layer_profile.gd` 定义单层参数，`resources/cloud_weather_profiles.gd` 按天气组合配置。覆盖度是程序化云场密度控制值，不代表经过像素统计的屏幕比例。
+- `resources/sea_sky.tres` 保存原生天空渐变、地面地平线颜色和太阳圆盘参数。
+- `resources/cloud_weather_profiles.tres` 保存 Clear、PartlyCloudy、Overcast 的插件云覆盖度、密度、光照强度和环境云色。
+- `resources/sunshine_clouds_preview.tres` 保存插件体积云噪声、云层高度和质量设置；主场景和比较场景共用该资源。
+- `WeatherController` 对天气、太阳和云参数执行平滑过渡；按 1/2/3 切换 Clear、PartlyCloudy、Overcast。太阳高度和方位也能由调试面板调整。
+- 云覆盖度是 Sunshine Clouds 2 的密度分布参数，不代表画面像素覆盖率。
 
-- **Clear**：主积云覆盖度 0.22，辅助碎云覆盖度 0.16；以蓝天和少量蓬松积云为主。
-- **PartlyCloudy**：主积云覆盖度 0.32，辅助碎云覆盖度 0.21；云团更丰富，仍保留蓝天空隙。
-- **Overcast**：层云覆盖度 0.91；灰蓝色连续云幕，不叠加积云。
-
-每层可调 coverage、density、scale、softness、brightness、speed、direction；主层和辅助层还可调 bottom_darkness。Overcast 另有 grayness。Shader 的 `weather_type` 为 0/1/2，`sun_elevation` 和 `sun_azimuth` 使用角度；`WeatherController` 继续提供天气切换、太阳接口和 5 秒平滑过渡。
-
-## 验证
-
-- 使用 Godot 4.7.2 stable、Forward+ / Metal 3.2，在 Apple M2 Pro 上渲染检查。
-- 已对 Clear、PartlyCloudy 和 Overcast 分别生成 1920×1080 游戏镜头画面；临时启动天气值只用于截图，项目默认值已恢复为 Clear。
-- Godot 编辑器资源扫描、主场景加载和运行时退出检查在最终修改后执行，详见本次交付说明。
-- 截图/录制模式不代表实时帧率测试；本次没有测量 FPS 或帧时间。1/2/3 映射在 `WeatherController` 中保留，但本次未通过键盘自动化逐键注入。
-
-## 已知限制
-
-- 云是程序化天空贴图，不是实际 3D 云体；没有体积自阴影、云影投射到水面或真实散射。云顶、背光侧和云底的亮度是轻量伪光照。
-- 云场在 1920×1080 船尾镜头下做过目视校准；其他视野角度、显示分辨率和长时间漂移还需要实际游戏观察。
-- 水面、船只、浮力与海浪参数没有在本次改动；海平线远端网格细线等既有问题不属于本次范围。
+插件版本、当前设置、运行验证和已知限制记录在 [Sunshine Clouds 2 评估](SUNSHINE_CLOUDS_EVALUATION.md)。

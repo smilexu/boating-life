@@ -1,0 +1,104 @@
+[gd_scene load_steps=14 format=3]
+
+[ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
+[ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_camera_follower"]
+[ext_resource type="ShaderMaterial" path="res://materials/sea_water_material.tres" id="3_water_material"]
+[ext_resource type="Script" path="res://scripts/wave_sampler.gd" id="4_wave_sampler"]
+[ext_resource type="Resource" path="res://resources/sea_waves.tres" id="5_waves"]
+[ext_resource type="Script" path="res://addons/SunshineClouds2/SunshineCloudsDriver.gd" id="6_cloud_driver"]
+[ext_resource type="CompositorEffect" path="res://resources/sunshine_clouds_preview.tres" id="7_cloud_effect"]
+[ext_resource type="Script" path="res://scripts/cloud_comparison_overlay.gd" id="8_overlay"]
+[ext_resource type="Script" path="res://scripts/cloud_comparison_camera.gd" id="9_camera"]
+
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_clear"]
+sky_top_color = Color(0.1, 0.31, 0.66, 1)
+sky_horizon_color = Color(0.64, 0.79, 0.89, 1)
+ground_bottom_color = Color(0.24, 0.31, 0.39, 1)
+ground_horizon_color = Color(0.64, 0.79, 0.89, 1)
+sun_angle_max = 12.0
+
+[sub_resource type="Sky" id="Sky_clear"]
+sky_material = SubResource("ProceduralSkyMaterial_clear")
+
+[sub_resource type="Environment" id="Environment_clear"]
+background_mode = 2
+sky = SubResource("Sky_clear")
+ambient_light_source = 3
+ambient_light_color = Color(0.59, 0.73, 0.84, 1)
+ambient_light_energy = 0.82
+reflected_light_source = 2
+tonemap_mode = 4
+fog_enabled = true
+fog_light_color = Color(0.67, 0.78, 0.84, 1)
+fog_aerial_perspective = 0.16
+fog_sun_scatter = 0.08
+fog_density = 0.001
+fog_sky_affect = 0.07
+fog_depth_begin = 180.0
+fog_depth_end = 3200.0
+fog_depth_curve = 1.1
+
+[sub_resource type="Compositor" id="Compositor_clouds"]
+compositor_effects = Array[CompositorEffect]([ExtResource("7_cloud_effect")])
+
+[node name="CloudComparison" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_clear")
+compositor = SubResource("Compositor_clouds")
+
+[node name="Sunlight" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-42, 180, 0)
+light_color = Color(1, 0.94, 0.85, 1)
+light_energy = 1.18
+light_angular_distance = 0.5
+shadow_enabled = true
+directional_shadow_mode = 1
+directional_shadow_max_distance = 260.0
+directional_shadow_fade_start = 0.82
+shadow_blur = 1.0
+
+[node name="Ocean" type="Node3D" parent="."]
+script = ExtResource("1_ocean")
+material = ExtResource("3_water_material")
+outermost_resolution = 12
+levels_of_detail = 4
+unit_size = 1.0
+far_edge = 4000.0
+
+[node name="OceanCameraFollower" type="Node3D" parent="."]
+script = ExtResource("2_camera_follower")
+target_path = NodePath("../Ocean")
+follow_axes = 5
+snap = true
+snap_unit = 8.0
+
+[node name="WaveSampler" type="Node" parent="."]
+script = ExtResource("4_wave_sampler")
+wave_settings = ExtResource("5_waves")
+water_material = ExtResource("3_water_material")
+wave_strength = 1.05
+ocean_path = NodePath("../Ocean")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.999391, 0.0348995, 0, -0.0348995, 0.999391, 0, 1.8, 12)
+script = ExtResource("9_camera")
+fov = 58.0
+far = 4000.0
+current = true
+
+[node name="SunshineCloudsDriverGD" type="Node" parent="." node_paths=PackedStringArray("tracked_directional_lights")]
+script = ExtResource("6_cloud_driver")
+update_continuously = true
+clouds_resource = ExtResource("7_cloud_effect")
+ambience_sample_environment = SubResource("Environment_clear")
+tracked_directional_lights = [NodePath("../Sunlight")]
+tracked_directional_light_shadow_steps = Array[int]([16])
+wind_direction = Vector3(1, 0, 0.35)
+extra_large_structures_wind_speed = 0.8
+large_structures_wind_speed = 1.8
+medium_structures_wind_speed = 4.0
+small_structures_wind_speed = 7.0
+
+[node name="CloudComparisonOverlay" type="CanvasLayer" parent="."]
+script = ExtResource("8_overlay")

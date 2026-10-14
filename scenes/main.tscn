@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
@@ -9,11 +9,17 @@
 [ext_resource type="Environment" path="res://resources/sea_environment.tres" id="7_environment"]
 [ext_resource type="Script" path="res://scripts/weather_controller.gd" id="8_weather"]
 [ext_resource type="Resource" path="res://resources/cloud_weather_profiles.tres" id="9_cloud_profiles"]
+[ext_resource type="Script" path="res://addons/SunshineClouds2/SunshineCloudsDriver.gd" id="10_cloud_driver"]
+[ext_resource type="CompositorEffect" path="res://resources/sunshine_clouds_preview.tres" id="11_cloud_effect"]
+
+[sub_resource type="Compositor" id="Compositor_volumetric_clouds"]
+compositor_effects = Array[CompositorEffect]([ExtResource("11_cloud_effect")])
 
 [node name="Main" type="Node3D"]
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
 environment = ExtResource("7_environment")
+compositor = SubResource("Compositor_volumetric_clouds")
 
 [node name="Sunlight" type="DirectionalLight3D" parent="."]
 rotation_degrees = Vector3(-12, 180, 0)
@@ -47,6 +53,19 @@ wave_settings = ExtResource("4_waves")
 water_material = ExtResource("5_water_material")
 wave_strength = 1.05
 ocean_path = NodePath("../Ocean")
+
+[node name="SunshineCloudsDriverGD" type="Node" parent="." node_paths=PackedStringArray("tracked_directional_lights")]
+script = ExtResource("10_cloud_driver")
+update_continuously = true
+clouds_resource = ExtResource("11_cloud_effect")
+ambience_sample_environment = ExtResource("7_environment")
+tracked_directional_lights = [NodePath("../Sunlight")]
+tracked_directional_light_shadow_steps = Array[int]([16])
+wind_direction = Vector3(1, 0, 0.35)
+extra_large_structures_wind_speed = 0.8
+large_structures_wind_speed = 1.8
+medium_structures_wind_speed = 4.0
+small_structures_wind_speed = 7.0
 
 [node name="WeatherController" type="Node" parent="."]
 script = ExtResource("8_weather")

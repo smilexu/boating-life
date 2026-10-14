@@ -1,15 +1,16 @@
 extends Node
 class_name WeatherController
 
-## Owns the prototype's complete weather preset data and applies it to the
-## existing sky, sun, sea material, environment, and shared Gerstner sampler.
-## Azimuth is degrees clockwise from the camera's forward (-Z) direction.
+## Applies the prototype's weather to the native sky, sunlight, volumetric
+## clouds, sea material, fog, and shared Gerstner sampler.
+## Sun azimuth is degrees clockwise from the camera's forward (-Z) direction.
 
 enum Preset { CLEAR, PARTLY_CLOUDY, OVERCAST }
 
 @export_node_path("WorldEnvironment") var world_environment_path := NodePath("../WorldEnvironment")
 @export_node_path("DirectionalLight3D") var sunlight_path := NodePath("../Sunlight")
 @export_node_path("Node") var wave_sampler_path := NodePath("../WaveSampler")
+@export_node_path("Node") var sunshine_clouds_driver_path := NodePath("../SunshineCloudsDriverGD")
 @export var water_material: ShaderMaterial
 @export var cloud_profiles: CloudWeatherProfiles
 @export_range(0.5, 20.0, 0.5) var transition_seconds := 5.0
@@ -21,8 +22,6 @@ const WEATHER_PRESETS := [
 		"sky_top": Color(0.045, 0.20, 0.49),
 		"sky_horizon": Color(0.39, 0.61, 0.78),
 		"haze": Color(0.78, 0.85, 0.88),
-		"cloud_light": Color(0.97, 0.97, 0.94),
-		"cloud_shadow": Color(0.40, 0.54, 0.62),
 		"sun_elevation": 10.0,
 		"sun_azimuth": 28.0,
 		"sun_color": Color(1.0, 0.91, 0.77),
@@ -42,8 +41,6 @@ const WEATHER_PRESETS := [
 		"sky_top": Color(0.075, 0.23, 0.44),
 		"sky_horizon": Color(0.39, 0.56, 0.68),
 		"haze": Color(0.71, 0.77, 0.80),
-		"cloud_light": Color(0.93, 0.95, 0.96),
-		"cloud_shadow": Color(0.24, 0.33, 0.40),
 		"sun_elevation": 20.0,
 		"sun_azimuth": 28.0,
 		"sun_color": Color(0.96, 0.93, 0.86),
@@ -63,8 +60,6 @@ const WEATHER_PRESETS := [
 		"sky_top": Color(0.18, 0.27, 0.37),
 		"sky_horizon": Color(0.54, 0.63, 0.67),
 		"haze": Color(0.68, 0.73, 0.75),
-		"cloud_light": Color(0.72, 0.77, 0.80),
-		"cloud_shadow": Color(0.18, 0.25, 0.31),
 		"sun_elevation": 16.0,
 		"sun_azimuth": 28.0,
 		"sun_color": Color(0.82, 0.87, 0.92),
@@ -82,17 +77,8 @@ const WEATHER_PRESETS := [
 ]
 
 const COLOR_KEYS := [
-	"sky_top", "sky_horizon", "haze", "cloud_light", "cloud_shadow", "sun_color",
-	"ambient_color", "fog_color", "water_color", "water_fresnel",
-]
-const CLOUD_UNIFORM_KEYS := [
-	"main_cloud_coverage", "main_cloud_density", "main_cloud_scale", "main_cloud_softness",
-	"main_cloud_brightness", "main_cloud_bottom_darkness", "main_cloud_speed", "main_cloud_direction",
-	"detail_cloud_coverage", "detail_cloud_density", "detail_cloud_scale", "detail_cloud_softness",
-	"detail_cloud_brightness", "detail_cloud_bottom_darkness", "detail_cloud_speed", "detail_cloud_direction",
-	"overcast_coverage", "overcast_density", "overcast_scale", "overcast_softness",
-	"overcast_brightness", "overcast_bottom_darkness", "overcast_speed", "overcast_direction",
-	"overcast_grayness",
+	"sky_top", "sky_horizon", "haze", "sun_color", "ambient_color", "fog_color",
+	"water_color", "water_fresnel", "cloud_ambient_color", "cloud_ambient_tint",
 ]
 
 var current_weather_name := "Clear"
@@ -100,7 +86,9 @@ var _world_environment: WorldEnvironment
 var _environment: Environment
 var _sunlight: DirectionalLight3D
 var _wave_sampler: Node
-var _sky_material: ShaderMaterial
+var _sunshine_clouds_driver: SunshineCloudsDriverGD
+var _sunshine_clouds: SunshineCloudsGD
+var _sky_material: ProceduralSkyMaterial
 var _current: Dictionary = {}
 var _from: Dictionary = {}
 var _target: Dictionary = {}
@@ -113,16 +101,22 @@ func _ready() -> void:
 	_world_environment = get_node_or_null(world_environment_path) as WorldEnvironment
 	_sunlight = get_node_or_null(sunlight_path) as DirectionalLight3D
 	_wave_sampler = get_node_or_null(wave_sampler_path)
-	if _world_environment == null or _sunlight == null or water_material == null or cloud_profiles == null:
-		push_error("WeatherController needs WorldEnvironment, Sunlight, the shared sea material, and cloud profiles.")
+	_sunshine_clouds_driver = get_node_or_null(sunshine_clouds_driver_path) as SunshineCloudsDriverGD
+	if _sunshine_clouds_driver != null:
+		_sunshine_clouds = _sunshine_clouds_driver.clouds_resource
+	if _world_environment == null or _sunlight == null or water_material == null or cloud_profiles == null or _sunshine_clouds == null:
+		push_error("WeatherController needs WorldEnvironment, Sunlight, sea material, cloud profiles, and Sunshine Clouds 2.")
 		set_process(false)
 		return
 
 	_environment = _world_environment.environment
-	if _environment.sky != null:
-		_sky_material = _environment.sky.sky_material as ShaderMaterial
+	if _environment == null or _environment.sky == null:
+		push_error("WeatherController needs a WorldEnvironment with a Sky resource.")
+		set_process(false)
+		return
+	_sky_material = _environment.sky.sky_material as ProceduralSkyMaterial
 	if _sky_material == null:
-		push_error("WeatherController could not find the sea sky ShaderMaterial.")
+		push_error("WeatherController needs ProceduralSkyMaterial for the native sky base.")
 		set_process(false)
 		return
 
@@ -202,9 +196,10 @@ func set_sun_azimuth(degrees: float) -> void:
 
 func set_cloud_coverage(value: float) -> void:
 	var coverage := clampf(value, 0.0, 1.0)
-	var profile_key := "overcast_coverage" if float(_current.get("weather_type", 0.0)) >= 1.5 else "main_cloud_coverage"
 	for state in [_current, _from, _target]:
-		state[profile_key] = coverage
+		if state.is_empty():
+			continue
+		state["clouds_coverage"] = coverage
 		state["cloud_coverage"] = coverage
 	_apply_current_state()
 
@@ -222,7 +217,7 @@ func get_sun_azimuth() -> float:
 
 
 func get_cloud_coverage() -> float:
-	return float(_current.get("cloud_coverage", 0.25))
+	return float(_current.get("cloud_coverage", 0.57))
 
 
 func _set_live_value(key: String, value: float) -> void:
@@ -237,22 +232,20 @@ func _set_live_value(key: String, value: float) -> void:
 func _copy_state(preset: Dictionary, weather_index: int) -> Dictionary:
 	var state := preset.duplicate(true)
 	state.merge(cloud_profiles.state_for_weather(weather_index), true)
-	state["weather_type"] = float(weather_index)
-	state["cloud_coverage"] = float(state["overcast_coverage"] if weather_index == Preset.OVERCAST else state["main_cloud_coverage"])
 	return state
 
 
 func _apply_current_state() -> void:
-	_sky_material.set_shader_parameter("sky_top_color", _current["sky_top"])
-	_sky_material.set_shader_parameter("sky_horizon_color", _current["sky_horizon"])
-	_sky_material.set_shader_parameter("atmosphere_haze_color", _current["haze"])
-	_sky_material.set_shader_parameter("cloud_light_color", _current["cloud_light"])
-	_sky_material.set_shader_parameter("cloud_shadow_color", _current["cloud_shadow"])
-	_sky_material.set_shader_parameter("weather_type", _current["weather_type"])
-	_sky_material.set_shader_parameter("sun_elevation", _current["sun_elevation"])
-	_sky_material.set_shader_parameter("sun_azimuth", _current["sun_azimuth"])
-	for key in CLOUD_UNIFORM_KEYS:
-		_sky_material.set_shader_parameter(key, _current[key])
+	_sky_material.sky_top_color = _current["sky_top"]
+	_sky_material.sky_horizon_color = _current["sky_horizon"]
+	_sky_material.ground_horizon_color = _current["haze"]
+
+	_sunshine_clouds.enabled = true
+	_sunshine_clouds.clouds_coverage = float(_current["clouds_coverage"])
+	_sunshine_clouds.clouds_density = float(_current["clouds_density"])
+	_sunshine_clouds.lighting_density = float(_current["lighting_density"])
+	_sunshine_clouds.cloud_ambient_color = _current["cloud_ambient_color"]
+	_sunshine_clouds.cloud_ambient_tint = _current["cloud_ambient_tint"]
 
 	_sunlight.light_color = _current["sun_color"]
 	_sunlight.light_energy = float(_current["sun_energy"])
