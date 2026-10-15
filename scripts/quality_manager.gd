@@ -12,7 +12,8 @@ enum FrameLimit { FPS_30, FPS_60, UNLIMITED }
 const SETTINGS_PATH := "user://quality_settings.cfg"
 const SHADOW_SIZE_SETTING := "rendering/lights_and_shadows/directional_shadow/size"
 
-const QUALITY_NAMES := ["High", "Medium", "Low"]
+const QUALITY_NAMES := ["画质优先", "平衡", "性能优先"]
+const RESOLUTION_SCALES := [1.0, 0.75, 0.67]
 const FRAME_LIMIT_NAMES := ["30 FPS", "60 FPS", "Unlimited"]
 
 const QUALITY_PROFILES := [
@@ -81,6 +82,7 @@ const QUALITY_PROFILES := [
 var current_quality_index := Quality.HIGH
 var current_frame_limit_index := FrameLimit.FPS_60
 var _is_fullscreen := false
+var _quality_user_selected := false
 var _ocean: Ocean
 var _sunlight: DirectionalLight3D
 var _world_environment: WorldEnvironment
@@ -99,25 +101,46 @@ func _ready() -> void:
 		return
 
 	var config := ConfigFile.new()
+	var has_saved_quality := false
 	if config.load(SETTINGS_PATH) == OK:
+		has_saved_quality = config.has_section_key("graphics", "quality")
 		current_quality_index = clampi(int(config.get_value("graphics", "quality", Quality.HIGH)), Quality.HIGH, Quality.LOW)
 		current_frame_limit_index = clampi(int(config.get_value("graphics", "frame_limit", FrameLimit.FPS_60)), FrameLimit.FPS_30, FrameLimit.UNLIMITED)
 		_is_fullscreen = bool(config.get_value("display", "fullscreen", false))
+		_quality_user_selected = bool(config.get_value("graphics", "quality_user_selected", has_saved_quality))
+	if not has_saved_quality:
+		current_quality_index = _recommend_initial_quality()
+		_quality_user_selected = false
 
 	_apply_quality_profile(false)
 	_apply_frame_limit()
 	_apply_window_mode()
+	if not has_saved_quality:
+		_save_settings()
 	settings_changed.emit()
 
 
 func set_quality(index: int) -> void:
 	if index < Quality.HIGH or index > Quality.LOW:
 		return
+	_quality_user_selected = true
 	if current_quality_index == index:
+		_save_settings()
 		return
 	current_quality_index = index
 	_apply_quality_profile(true)
 	_save_settings()
+	settings_changed.emit()
+
+
+## Temporary profile switch for the isolated performance benchmark. It never writes user settings.
+func set_quality_for_benchmark(index: int) -> void:
+	if index < Quality.HIGH or index > Quality.LOW:
+		return
+	if current_quality_index == index:
+		return
+	current_quality_index = index
+	_apply_quality_profile(true)
 	settings_changed.emit()
 
 
@@ -127,6 +150,76 @@ func get_quality_index() -> int:
 
 func get_quality_name() -> String:
 	return QUALITY_NAMES[current_quality_index]
+
+
+func get_quality_selection_source() -> String:
+	return "玩家手动选择" if _quality_user_selected else "首次启动推荐"
+
+
+func get_resolution_scale() -> float:
+	return RESOLUTION_SCALES[current_quality_index]
+
+
+func get_render_metrics() -> Dictionary:
+	var window_size := DisplayServer.window_get_size()
+	if window_size.x <= 0 or window_size.y <= 0:
+		window_size = Vector2i(
+			int(ProjectSettings.get_setting("display/window/size/viewport_width", 1920)),
+			int(ProjectSettings.get_setting("display/window/size/viewport_height", 1080))
+		)
+	var screen_size := DisplayServer.screen_get_size(DisplayServer.SCREEN_OF_MAIN_WINDOW)
+	var screen_scale := DisplayServer.screen_get_scale(DisplayServer.SCREEN_OF_MAIN_WINDOW)
+	var viewport := get_viewport()
+	var scale := viewport.scaling_3d_scale
+	var internal_size := Vector2i(
+		maxi(1, roundi(float(window_size.x) * scale)),
+		maxi(1, roundi(float(window_size.y) * scale))
+	)
+	var design_viewport_size := Vector2i(
+		int(ProjectSettings.get_setting("display/window/size/viewport_width", 1920)),
+		int(ProjectSettings.get_setting("display/window/size/viewport_height", 1080))
+	)
+	return {
+		"window_px": window_size,
+		"screen_px": screen_size,
+		"screens": _get_screen_metrics(),
+		"screen_scale": screen_scale,
+		"screen_count": DisplayServer.get_screen_count(),
+		"hidpi_enabled": bool(ProjectSettings.get_setting("display/window/dpi/allow_hidpi", true)),
+		"viewport_px": Vector2i(roundi(viewport.get_visible_rect().size.x), roundi(viewport.get_visible_rect().size.y)),
+		"design_viewport_px": design_viewport_size,
+		"internal_3d_px_estimate": internal_size,
+		"resolution_scale": scale,
+		"upscaler": "FSR2" if scale < 0.999 else "原生",
+		"vsync": DisplayServer.window_get_vsync_mode(),
+		"refresh_hz": DisplayServer.screen_get_refresh_rate(DisplayServer.SCREEN_OF_MAIN_WINDOW),
+		"max_fps": Engine.max_fps,
+		"adapter": RenderingServer.get_video_adapter_name(),
+		"processor": OS.get_processor_name(),
+		"fullscreen": DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_WINDOWED,
+		"supersampling": scale > 1.001,
+	}
+
+
+func _get_screen_metrics() -> Array[Dictionary]:
+	var screens: Array[Dictionary] = []
+	for screen_index in range(DisplayServer.get_screen_count()):
+		screens.append({
+			"index": screen_index,
+			"size": DisplayServer.screen_get_size(screen_index),
+			"scale": DisplayServer.screen_get_scale(screen_index),
+			"refresh_hz": DisplayServer.screen_get_refresh_rate(screen_index),
+		})
+	return screens
+
+
+func set_clouds_enabled(enabled: bool) -> void:
+	if clouds_resource != null:
+		clouds_resource.enabled = enabled
+
+
+func get_clouds_enabled() -> bool:
+	return clouds_resource != null and clouds_resource.enabled
 
 
 func set_frame_limit(index: int) -> void:
@@ -188,6 +281,53 @@ func _apply_quality_profile(rebuild_ocean: bool) -> void:
 	water_material.set_shader_parameter("detail_normal_strength_near", float(profile["detail_normal_strength"]))
 	water_material.set_shader_parameter("detail_wave_fade_end", float(profile["detail_fade_end"]))
 	water_material.set_shader_parameter("albedo_detail_fade_end", float(profile["albedo_detail_fade_end"]))
+	_apply_resolution_scale(RESOLUTION_SCALES[current_quality_index])
+
+
+func _apply_resolution_scale(scale: float) -> void:
+	var viewport := get_viewport()
+	viewport.scaling_3d_scale = scale
+	viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR2 if scale < 0.999 else Viewport.SCALING_3D_MODE_BILINEAR
+	viewport.fsr_sharpness = 0.2
+
+
+func _recommend_initial_quality() -> int:
+	# Use the largest attached display target and hardware class for the one-time
+	# recommendation. Later display/window/FPS changes never reapply it.
+	var framebuffer_size := DisplayServer.window_get_size()
+	if framebuffer_size.x <= 0 or framebuffer_size.y <= 0:
+		framebuffer_size = Vector2i(
+			int(ProjectSettings.get_setting("display/window/size/viewport_width", 1920)),
+			int(ProjectSettings.get_setting("display/window/size/viewport_height", 1080))
+		)
+	var largest_display_area := framebuffer_size.x * framebuffer_size.y
+	for screen_index in range(DisplayServer.get_screen_count()):
+		var screen_size := DisplayServer.screen_get_size(screen_index)
+		var screen_area := screen_size.x * screen_size.y
+		if screen_area > largest_display_area:
+			framebuffer_size = screen_size
+			largest_display_area = screen_area
+	var megapixels := float(framebuffer_size.x * framebuffer_size.y) / 1_000_000.0
+	var hardware := (RenderingServer.get_video_adapter_name() + " " + OS.get_processor_name()).to_lower()
+	var cores := OS.get_processor_count()
+	if hardware.contains("apple") or hardware.contains("m1") or hardware.contains("m2") or hardware.contains("m3") or hardware.contains("m4") or hardware.contains("m5"):
+		var newer_apple_silicon := hardware.contains("m3") or hardware.contains("m4") or hardware.contains("m5")
+		var high_limit := 4.0 if newer_apple_silicon else 2.5
+		var medium_limit := 7.0 if newer_apple_silicon else 5.0
+		if megapixels <= high_limit and cores >= 8:
+			return Quality.HIGH
+		if megapixels <= medium_limit:
+			return Quality.MEDIUM
+		return Quality.LOW
+	if hardware.contains("nvidia") or hardware.contains("amd") or hardware.contains("radeon"):
+		if megapixels <= 3.0 and cores >= 8:
+			return Quality.HIGH
+		if megapixels <= 7.0:
+			return Quality.MEDIUM
+		return Quality.LOW
+	if megapixels <= 2.1 and cores >= 8:
+		return Quality.MEDIUM
+	return Quality.LOW
 
 
 func _apply_frame_limit() -> void:
@@ -220,6 +360,7 @@ func _apply_window_mode() -> void:
 func _save_settings() -> void:
 	var config := ConfigFile.new()
 	config.set_value("graphics", "quality", current_quality_index)
+	config.set_value("graphics", "quality_user_selected", _quality_user_selected)
 	config.set_value("graphics", "frame_limit", current_frame_limit_index)
 	config.set_value("display", "fullscreen", _is_fullscreen)
 	var error := config.save(SETTINGS_PATH)

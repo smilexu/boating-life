@@ -3,6 +3,8 @@ extends CanvasLayer
 ## Small status display for the boat prototype. Speed is stored in m/s and
 ## converted to knots only for display (1 m/s = 1.94384 kn).
 
+const COMPASS_HUD_SCRIPT := preload("res://scripts/compass_hud.gd")
+
 @export_node_path("Node3D") var controller_path := NodePath("../MotionRoot")
 @export_node_path("Node") var weather_controller_path := NodePath("../../WeatherController")
 @export_node_path("Node") var wave_sampler_path := NodePath("../../WaveSampler")
@@ -30,6 +32,7 @@ var _wave_slider: HSlider
 var _quality_option: OptionButton
 var _frame_limit_option: OptionButton
 var _window_mode_button: Button
+var _clouds_toggle: CheckButton
 var _fps_elapsed := 0.0
 var _runtime_elapsed := 0.0
 var _debug_refresh_elapsed := 0.0
@@ -74,9 +77,18 @@ func _ready() -> void:
 	status_layout.add_child(_fps_label)
 	add_child(_status_panel)
 	_build_debug_panel()
+	_add_compass_widget()
 	_update_status()
 	_update_hud_layout()
 	get_viewport().size_changed.connect(_update_hud_layout)
+
+
+func _add_compass_widget() -> void:
+	var compass := Control.new()
+	compass.name = "CompassHUD"
+	compass.set_script(COMPASS_HUD_SCRIPT)
+	add_child(compass)
+	compass.call("configure", _controller)
 
 
 func _process(delta: float) -> void:
@@ -179,10 +191,14 @@ func _build_debug_panel() -> void:
 	settings_title.add_theme_font_size_override("font_size", 16)
 	settings_title.add_theme_color_override("font_color", Color(0.94, 0.96, 0.94))
 	layout.add_child(settings_title)
-	_quality_option = _add_option_row(layout, "画质", ["High", "Medium", "Low"])
+	_quality_option = _add_option_row(layout, "画质 / 3D 分辨率", ["画质优先 · 100%", "平衡 · 75%", "性能优先 · 67%"])
 	_quality_option.item_selected.connect(_on_quality_selected)
 	_frame_limit_option = _add_option_row(layout, "帧率上限", ["30 FPS", "60 FPS", "Unlimited"])
 	_frame_limit_option.item_selected.connect(_on_frame_limit_selected)
+	_clouds_toggle = CheckButton.new()
+	_clouds_toggle.text = "体积云渲染（性能对照）"
+	_clouds_toggle.toggled.connect(_on_clouds_toggled)
+	layout.add_child(_clouds_toggle)
 	_window_mode_button = Button.new()
 	_window_mode_button.pressed.connect(_on_window_mode_pressed)
 	layout.add_child(_window_mode_button)
@@ -245,11 +261,13 @@ func _refresh_settings_controls() -> void:
 	if _quality_manager == null:
 		_quality_option.disabled = true
 		_frame_limit_option.disabled = true
+		_clouds_toggle.disabled = true
 		_window_mode_button.disabled = true
 		_window_mode_button.text = "画面设置不可用"
 		return
 	_quality_option.select(int(_quality_manager.call("get_quality_index")))
 	_frame_limit_option.select(int(_quality_manager.call("get_frame_limit_index")))
+	_clouds_toggle.set_pressed_no_signal(bool(_quality_manager.call("get_clouds_enabled")))
 	_update_window_mode_button()
 
 
@@ -309,10 +327,39 @@ func _update_debug_status() -> void:
 	var fps := Engine.get_frames_per_second()
 	var draw_calls := int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	var visible_objects := int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
-	_performance_label.text = "实际 %d FPS  ·  Draw Calls %d\n可见物体 %d" % [
+	var process_ms := float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0
+	var render_metrics: Dictionary = _quality_manager.call("get_render_metrics") if _quality_manager != null else {}
+	var window_px: Vector2i = render_metrics.get("window_px", Vector2i.ZERO)
+	var viewport_px: Vector2i = render_metrics.get("viewport_px", Vector2i.ZERO)
+	var design_viewport_px: Vector2i = render_metrics.get("design_viewport_px", Vector2i.ZERO)
+	var internal_px: Vector2i = render_metrics.get("internal_3d_px_estimate", Vector2i.ZERO)
+	var screen_px: Vector2i = render_metrics.get("screen_px", Vector2i.ZERO)
+	var screen_scale := float(render_metrics.get("screen_scale", 1.0))
+	var scale := float(render_metrics.get("resolution_scale", 1.0))
+	var source := str(_quality_manager.call("get_quality_selection_source")) if _quality_manager != null else ""
+	var vsync_mode := int(render_metrics.get("vsync", 0))
+	var max_fps := int(render_metrics.get("max_fps", 0))
+	var frame_limit_text := "Unlimited" if max_fps <= 0 else "%d FPS" % max_fps
+	_performance_label.text = "实际 %d FPS · 帧间隔 %.2f ms · 脚本 %.2f ms\nDraw Calls %d · 可见物体 %d\n窗口 framebuffer %dx%d · 屏幕 %dx%d · HiDPI %s ×%.1f\n项目基准 %dx%d · 根 Viewport %dx%d\n3D 估算 %dx%d @ %.0f%% (%s) · 超采样 %s\n帧率上限 %s · VSync %s · 档位来源：%s · GPU：%s" % [
 		fps,
+		1000.0 / float(fps) if fps > 0 else 0.0,
+		process_ms,
 		draw_calls,
 		visible_objects,
+		window_px.x, window_px.y,
+		screen_px.x, screen_px.y,
+		"开" if bool(render_metrics.get("hidpi_enabled", false)) else "关",
+		screen_scale,
+		design_viewport_px.x, design_viewport_px.y,
+		viewport_px.x, viewport_px.y,
+		internal_px.x, internal_px.y,
+		scale * 100.0,
+		str(render_metrics.get("upscaler", "n/a")),
+		"开" if bool(render_metrics.get("supersampling", false)) else "关",
+		frame_limit_text,
+		"开" if vsync_mode == DisplayServer.VSYNC_ENABLED else "关",
+		source,
+		str(render_metrics.get("adapter", "n/a")),
 	]
 	_refresh_settings_controls()
 
@@ -355,6 +402,11 @@ func _on_frame_limit_selected(index: int) -> void:
 	if _quality_manager != null:
 		_quality_manager.call("set_frame_limit", index)
 		_refresh_settings_controls()
+
+
+func _on_clouds_toggled(enabled: bool) -> void:
+	if _quality_manager != null:
+		_quality_manager.call("set_clouds_enabled", enabled)
 
 
 func _on_window_mode_pressed() -> void:

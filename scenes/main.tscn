@@ -82,4 +82,7 @@ clouds_resource = ExtResource("11_cloud_effect")
 
 [node name="OresundRegion" parent="." instance=ExtResource("13_oresund_region")]
 
+; Start roughly 329 m offshore from Malmö's coast (WGS84 55.60587 N, 12.96300 E), facing east toward land.
 [node name="PlayerBoat" parent="." instance=ExtResource("6_boat")]
+position = Vector3(13424.56, 0, 10459.39)
+rotation_degrees = Vector3(0, 90, 0)

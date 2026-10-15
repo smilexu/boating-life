@@ -11,13 +11,17 @@ const LANDMARKS := {
 
 @export var georeference: GeoReference
 @export_file("*.json") var shoreline_data_path := "res://assets/geodata/processed/oresund_region.json"
+@export_file("*.json") var terrain_manifest_path := "res://assets/terrain/processed/oresund_terrain/manifest.json"
 @export_node_path("Node3D") var player_boat_path := NodePath("../PlayerBoat/MotionRoot")
 @export_node_path("Camera3D") var player_camera_path := NodePath("../PlayerBoat/FollowCameraRig/Camera3D")
 @export_range(0, 2, 1) var mesh_lod_index := 0
 @export_range(0.2, 4.0, 0.1) var land_surface_height_m := 0.8
 @export_range(1000.0, 10000.0, 500.0) var debug_grid_spacing_m := 5000.0
+@export_range(-50.0, 50.0, 0.25) var terrain_vertical_offset_m := 0.0
+@export_range(0.0, 5.0, 0.1) var terrain_coastal_floor_m := 0.5
 
 @onready var _land_mesh_instance: MeshInstance3D = $Land
+@onready var _terrain_chunks: Node3D = $TerrainChunks
 @onready var _overview_camera: Camera3D = $OverviewCamera
 @onready var _info_panel: PanelContainer = $DebugOverlay/InfoPanel
 @onready var _info_label: Label = $DebugOverlay/InfoPanel/InfoLabel
@@ -38,7 +42,10 @@ func _ready() -> void:
 	_build_boat_map_marker()
 	_build_markers()
 	_build_debug_grid()
-	_load_land_mesh()
+	if _load_terrain_chunks():
+		_land_mesh_instance.visible = false
+	else:
+		_load_land_mesh()
 	_set_map_debug(false)
 	_update_map_info()
 
@@ -68,6 +75,108 @@ func _set_map_debug(enabled: bool) -> void:
 		_player_camera.make_current()
 	if enabled:
 		_update_boat_map_marker()
+
+
+func _load_terrain_chunks() -> bool:
+	if not FileAccess.file_exists(terrain_manifest_path):
+		push_warning("Generated terrain is missing. Run .venv/bin/python tools/terrain/build_terrain.py --zoom 11")
+		return false
+	var manifest_file := FileAccess.open(terrain_manifest_path, FileAccess.READ)
+	if manifest_file == null:
+		push_error("Could not open terrain manifest: %s" % terrain_manifest_path)
+		return false
+	var parsed: Variant = JSON.parse_string(manifest_file.get_as_text())
+	if not parsed is Dictionary or int(parsed.get("schema_version", -1)) != 1:
+		push_error("Terrain manifest has an unsupported schema: %s" % terrain_manifest_path)
+		return false
+	var chunks: Array = parsed.get("chunks", [])
+	if chunks.is_empty():
+		push_error("Terrain manifest contains no generated chunks: %s" % terrain_manifest_path)
+		return false
+	var loaded_chunks: Array[Dictionary] = []
+	for chunk_data in chunks:
+		if not chunk_data is Dictionary or not chunk_data.has("file"):
+			push_error("Terrain manifest contains an invalid chunk entry.")
+			return false
+		var chunk_path := terrain_manifest_path.get_base_dir().path_join(str(chunk_data["file"]))
+		var chunk_mesh := _read_terrain_chunk(chunk_path)
+		if chunk_mesh == null:
+			return false
+		loaded_chunks.append({"mesh": chunk_mesh, "file": str(chunk_data["file"])})
+	var terrain_material := _make_terrain_material()
+	for chunk_data in loaded_chunks:
+		var chunk_instance := MeshInstance3D.new()
+		chunk_instance.name = "Terrain_%s" % str(chunk_data["file"]).get_file().get_basename()
+		chunk_instance.mesh = chunk_data["mesh"]
+		chunk_instance.material_override = terrain_material
+		chunk_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+		_terrain_chunks.add_child(chunk_instance)
+	_terrain_chunks.visible = true
+	return true
+
+
+func _read_terrain_chunk(path: String) -> ArrayMesh:
+	if not FileAccess.file_exists(path):
+		push_error("Generated terrain chunk is missing: %s" % path)
+		return null
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null:
+		push_error("Could not open generated terrain chunk: %s" % path)
+		return null
+	var data := file.get_buffer(file.get_length())
+	if data.size() < 16 or data.slice(0, 4).get_string_from_ascii() != "OZTR":
+		push_error("Generated terrain chunk has an invalid header: %s" % path)
+		return null
+	var format_version := data.decode_u32(4)
+	var vertex_count := int(data.decode_u32(8))
+	var index_count := int(data.decode_u32(12))
+	var expected_size := 16 + vertex_count * 40 + index_count * 4
+	if format_version != 1 or vertex_count < 3 or index_count < 3 or index_count % 3 != 0 or data.size() != expected_size:
+		push_error("Generated terrain chunk has invalid counts or version: %s" % path)
+		return null
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var colors := PackedColorArray()
+	vertices.resize(vertex_count)
+	normals.resize(vertex_count)
+	colors.resize(vertex_count)
+	var offset := 16
+	for index in range(vertex_count):
+		var east := data.decode_float(offset)
+		var height := maxf(data.decode_float(offset + 4) + terrain_vertical_offset_m, terrain_coastal_floor_m)
+		var south := data.decode_float(offset + 8)
+		vertices[index] = Vector3(east, height, south)
+		normals[index] = Vector3(data.decode_float(offset + 12), data.decode_float(offset + 16), data.decode_float(offset + 20))
+		colors[index] = Color(data.decode_float(offset + 24), data.decode_float(offset + 28), data.decode_float(offset + 32), data.decode_float(offset + 36))
+		offset += 40
+	var indices := PackedInt32Array()
+	indices.resize(index_count)
+	for index in range(index_count):
+		var vertex_index := int(data.decode_u32(offset))
+		if vertex_index >= vertex_count:
+			push_error("Generated terrain chunk references a missing vertex: %s" % path)
+			return null
+		indices[index] = vertex_index
+		offset += 4
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+func _make_terrain_material() -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color.WHITE
+	material.vertex_color_use_as_albedo = true
+	material.roughness = 0.96
+	material.metallic = 0.0
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return material
 
 
 func _build_boat_map_marker() -> void:
@@ -321,3 +430,4 @@ func _update_map_info() -> void:
 	_info_label.text += "Copenhagen: ΔE %+.1f km  ΔN %+.1f km\n" % [copenhagen.x / 1000.0, -copenhagen.z / 1000.0]
 	_info_label.text += "两地直线距离：%.1f km\n" % (separation.length() / 1000.0)
 	_info_label.text += boat_text + "\n© OpenStreetMap contributors · ODbL-1.0"
+	_info_label.text += "\n© Mapzen / Tilezen · EU-DEM / Copernicus"
