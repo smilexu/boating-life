@@ -1,0 +1,9 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/depth_chart_hud.gd" id="1_hud"]
+
+[node name="DepthChartHUD" type="CanvasLayer"]
+layer = 5
+script = ExtResource("1_hud")
+bathymetry_manager_path = NodePath("../BathymetryManager")
+boat_path = NodePath("../PlayerBoat/MotionRoot")

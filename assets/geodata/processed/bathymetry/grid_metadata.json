@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
+  "source_url": "https://erddap.emodnet.eu/erddap/griddap/bathymetry_dtm_2024.nc",
+  "downloaded_at_utc": "2026-10-15T15:53:15+00:00",
+  "processed_at_utc": "2026-10-15T15:53:28+00:00",
+  "dataset_title": "The EMODnet Grid",
+  "dataset_history": "NetCDF file created with GGSgc NC_Makegrid version 1.7.0 (January 2025)\n2026-10-15T15:53:15Z (local files)\n2026-10-15T15:53:15Z https://erddap.emodnet.eu/erddap/griddap/bathymetry_dtm_2024.nc?elevation%5B(55.35000000):1:(56.10000000)%5D%5B(12.25000000):1:(13.22000000)%5D,interpolation_flag%5B(55.35000000):1:(56.10000000)%5D%5B(12.25000000):1:(13.22000000)%5D,value_count%5B(55.35000000):1:(56.10000000)%5D%5B(12.25000000):1:(13.22000000)%5D",
+  "coordinate_system": "WGS84 longitude/latitude (EPSG:4326); runtime positions use the project GeoReference ECEF-to-ENU conversion",
+  "vertical_datum": "Lowest Astronomical Tide (LAT)",
+  "source_elevation_convention": "elevation in metres relative to LAT; negative values below LAT, positive values above LAT",
+  "stored_value_convention": "positive water depth = -elevation, quantized to 0.1 m; only finite source values below LAT are valid water cells",
+  "rows": 721,
+  "columns": 932,
+  "south_latitude_deg": 55.35052083329834,
+  "north_latitude_deg": 56.10052083329766,
+  "west_longitude_deg": 12.250520833324144,
+  "east_longitude_deg": 13.220312499991582,
+  "latitude_step_deg": 0.0010416666666657193,
+  "longitude_step_deg": 0.0010416666666674956,
+  "resolution_arc_minutes": 0.0625,
+  "binary_file": "depth_grid.bin",
+  "binary_record_bytes": 4,
+  "binary_record_layout": "little-endian int16 depth_decimetres; uint8 interpolation_flag (0/1, 255 invalid); uint8 value_count saturated to 255 (255 invalid)",
+  "invalid_depth_code": -32768,
+  "valid_water_cells": 270230,
+  "invalid_or_non_water_cells": 401742,
+  "water_depth_range_m": [
+    3.7928871279291343e-06,
+    52.961429595947266
+  ],
+  "interpolated_water_cells": 109674,
+  "grid_bytes": 2687888,
+  "georeference_origin": {
+    "latitude_deg": 55.7,
+    "longitude_deg": 12.75,
+    "altitude_m": 0.0
+  },
+  "region_bounds_wgs84_wsen": [
+    12.25,
+    55.35,
+    13.22,
+    56.1
+  ]
+}

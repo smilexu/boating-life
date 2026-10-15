@@ -80,6 +80,12 @@ godot --path .
 - 草地、土壤、沙地、岩石和城市地表颜色是根据高程、坡度、海岸距离和城市参考点生成的美术近似，不代表真实土地覆盖分类。
 - 数据来源、瓦片样本解码、许可署名和已知限制见 [`docs/TERRAIN_DATA.md`](docs/TERRAIN_DATA.md)。
 
+## 船载水深海图仪
+
+- 正式主场景左下角增加了北向上水深海图仪：显示当前海图水深、船只朝向、海岸线、等深线和比例尺。该数值是 LAT 基准的游戏海图估算值，不是安全导航数据。
+- 数据源固定为无需认证的 EMODnet Bathymetry DTM 2024。NetCDF 区域数据已下载并离线转换；游戏运行时不联网。安装和重建命令、来源许可、精度及实测采样见 [`docs/BATHYMETRY_DATA.md`](docs/BATHYMETRY_DATA.md)。
+- 启动位置实测海图水深约 2.2 m。海图使用真实水深着色；主海面仍使用天气控制的整体水色，当前没有按水深改变海面颜色。
+
 ## 目录
 
 - `scenes/`：Godot 场景
@@ -87,5 +93,6 @@ godot --path .
 - `assets/`：美术与音频素材
 - `assets/geodata/`：OSM 海岸线输入说明与处理后地区数据
 - `assets/terrain/`：Mapzen Terrain Tiles 原始缓存与生成的地形网格
+- `assets/geodata/processed/bathymetry/`：离线海图水深栅格、等深线、海岸线和陆地缓存
 - `docs/`：开发文档
 - `tools/`：离线地区数据处理脚本

@@ -1,0 +1,93 @@
+{
+  "status": "complete",
+  "checked_at_utc": "2026-10-15T15:57:00+00:00",
+  "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
+  "samples": [
+    {
+      "name": "Malmo_start_water",
+      "latitude_deg": 55.60587,
+      "longitude_deg": 12.963,
+      "godot_world_east_up_south_m": [
+        13424.56,
+        0.0,
+        10459.39
+      ],
+      "osm_land_mask": false,
+      "nearest_osm_coastline_m": 334.362597901492,
+      "valid": true,
+      "depth_m": 2.2428304092738642,
+      "interpolated": false,
+      "quality_min_value_count": null,
+      "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
+      "vertical_datum": "Lowest Astronomical Tide (LAT)"
+    },
+    {
+      "name": "Oresund_open_water",
+      "latitude_deg": 55.7,
+      "longitude_deg": 12.75,
+      "godot_world_east_up_south_m": [
+        0.0,
+        0.0,
+        -0.0
+      ],
+      "osm_land_mask": false,
+      "nearest_osm_coastline_m": 1051.953668159392,
+      "valid": true,
+      "depth_m": 5.52499999788291,
+      "interpolated": true,
+      "quality_min_value_count": 1,
+      "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
+      "vertical_datum": "Lowest Astronomical Tide (LAT)"
+    },
+    {
+      "name": "Copenhagen_side_water",
+      "latitude_deg": 55.7,
+      "longitude_deg": 12.6,
+      "godot_world_east_up_south_m": [
+        -9431.27,
+        0.0,
+        -10.2
+      ],
+      "osm_land_mask": false,
+      "nearest_osm_coastline_m": 36.41082789992158,
+      "valid": false,
+      "reason": "Land, above LAT, or no-data cell in the bilinear neighbourhood",
+      "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
+      "vertical_datum": "Lowest Astronomical Tide (LAT)"
+    },
+    {
+      "name": "Malmo_coastal_approach",
+      "latitude_deg": 55.60587,
+      "longitude_deg": 12.97,
+      "godot_world_east_up_south_m": [
+        13865.74,
+        0.0,
+        10458.02
+      ],
+      "osm_land_mask": false,
+      "nearest_osm_coastline_m": 71.7606945956701,
+      "valid": true,
+      "depth_m": 0.7370640177343162,
+      "interpolated": false,
+      "quality_min_value_count": null,
+      "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
+      "vertical_datum": "Lowest Astronomical Tide (LAT)"
+    },
+    {
+      "name": "Outside_region_and_data",
+      "latitude_deg": 56.12,
+      "longitude_deg": 13.23,
+      "godot_world_east_up_south_m": [
+        29855.32,
+        0.0,
+        -46865.77
+      ],
+      "osm_land_mask": null,
+      "nearest_osm_coastline_m": 33326.826910707176,
+      "valid": false,
+      "reason": "Outside source grid",
+      "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
+      "vertical_datum": "Lowest Astronomical Tide (LAT)"
+    }
+  ]
+}
