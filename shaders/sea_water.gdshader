@@ -26,9 +26,11 @@ uniform float metallic : hint_range(0.0, 1.0) = 0.0;
 uniform float ripple_scale : hint_range(0.02, 0.5) = 0.17;
 uniform float ripple_speed : hint_range(0.0, 1.0) = 0.08;
 uniform vec2 ripple_direction = vec2(0.87, 0.49);
+// Shading-only normal blend; vertex displacement and CPU WaveSampler stay unchanged.
+uniform float wave_normal_strength : hint_range(0.0, 1.0) = 0.45;
 uniform float detail_wave_fade_start : hint_range(0.0, 5000.0) = 80.0;
 uniform float detail_wave_fade_end : hint_range(0.0, 5000.0) = 850.0;
-uniform float detail_normal_strength_near : hint_range(0.0, 5.0) = 2.5;
+uniform float detail_normal_strength_near : hint_range(0.0, 5.0) = 0.8;
 uniform float detail_normal_strength_far : hint_range(0.0, 1.0) = 0.0;
 uniform float sun_glitter_intensity : hint_range(0.0, 2.0) = 0.72;
 uniform float water_roughness_near : hint_range(0.0, 1.0) = 0.10;
@@ -90,6 +92,27 @@ uniform vec4 color_deep : source_color;
 uniform vec4 color_shallow : source_color;
 uniform float beers_law = 2.0;
 uniform float depth_offset = -0.75;
+group_uniforms;
+
+group_uniforms BathymetryColor;
+uniform sampler2D bathymetry_depth_texture : filter_linear, repeat_disable;
+uniform bool enable_depth_color = true;
+uniform vec4 bathymetry_bounds_east_north = vec4(0.0, 0.0, 1.0, 1.0);
+uniform vec4 shallow_water_color : source_color = vec4(0.22, 0.62, 0.48, 1.0);
+uniform vec4 mid_water_color : source_color = vec4(0.06, 0.42, 0.46, 1.0);
+uniform vec4 blue_water_color : source_color = vec4(0.04, 0.30, 0.44, 1.0);
+uniform float depth_color_strength : hint_range(0.0, 1.0) = 0.60;
+uniform float valid_coverage_min : hint_range(0.0, 1.0) = 0.20;
+uniform float valid_coverage_max : hint_range(0.0, 1.0) = 0.80;
+uniform float shallow_depth_threshold : hint_range(0.0, 10.0) = 2.0;
+uniform float mid_depth_threshold : hint_range(0.1, 15.0) = 5.0;
+uniform float blue_depth_threshold : hint_range(0.2, 20.0) = 10.0;
+uniform float deep_depth_threshold : hint_range(1.0, 80.0) = 20.0;
+// 0=full, 1=flat base, 2=waves/no albedo pattern/no bathymetry,
+// 3=waves/no albedo pattern/with bathymetry, 4=normal, 5=Fresnel,
+// 6=depth validity, 7=diffuse/shadows only, 8=specular/reflection only,
+// 9=diffuse with flat normal, 10=specular with flat normal, 11=full with flat normal.
+uniform int water_diagnostic_mode = 0;
 group_uniforms;
 
 group_uniforms SnellWindow;
@@ -350,6 +373,43 @@ vec2 rotate_water_vector(vec2 value, float angle) {
 	return vec2(c * value.x - s * value.y, s * value.x + c * value.y);
 }
 
+// Texture RG channels store 0–64 m depth and valid-water coverage. The texture
+// is baked into the same local east/north frame as GeoReference and does not
+// follow the camera-snapped ocean mesh.
+vec2 sample_bathymetry(vec2 world_east_north) {
+	vec2 extent = bathymetry_bounds_east_north.zw - bathymetry_bounds_east_north.xy;
+	if (extent.x <= 0.0 || extent.y <= 0.0) {
+		return vec2(64.0, 0.0);
+	}
+	vec2 uv = vec2(
+		(world_east_north.x - bathymetry_bounds_east_north.x) / extent.x,
+		(bathymetry_bounds_east_north.w - world_east_north.y) / extent.y
+	);
+	if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) {
+		return vec2(64.0, 0.0);
+	}
+	vec2 encoded = textureLod(bathymetry_depth_texture, uv, 0.0).rg;
+	return vec2(encoded.r * 64.0, encoded.g);
+}
+
+vec3 bathymetry_tint(float depth_m, vec3 base_color) {
+	vec3 shallow_to_mid = mix(
+		shallow_water_color.rgb,
+		mid_water_color.rgb,
+		smoothstep(shallow_depth_threshold, mid_depth_threshold, depth_m)
+	);
+	vec3 mid_to_blue = mix(
+		shallow_to_mid,
+		blue_water_color.rgb,
+		smoothstep(mid_depth_threshold, blue_depth_threshold, depth_m)
+	);
+	return mix(
+		mid_to_blue,
+		base_color,
+		smoothstep(blue_depth_threshold, deep_depth_threshold, depth_m)
+	);
+}
+
 // Calculate depth of solid object beneath the water by reading the depth texture
 float depth_from_water_to_object(vec2 screen_uv, mat4 inv_projection_matrix, vec3 vertex) {
 	float depth_raw = textureLod(depth_texture, screen_uv, 0.0).r;
@@ -420,6 +480,10 @@ void fragment() {
 	float reflection_distance_fade = smoothstep(500.0, 2600.0, distance_from_camera);
 	SPECULAR = specular * mix(water_specular_near_multiplier, water_specular_far_multiplier, reflection_distance_fade);
 	ROUGHNESS = mix(water_roughness_near, water_roughness_far, reflection_distance_fade);
+	// NORMAL is in view space in fragment(). Blend toward world-up in the same
+	// space so this changes lighting/reflection response only, not wave geometry.
+	vec3 flat_water_normal_view = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
+	NORMAL = normalize(mix(flat_water_normal_view, NORMAL, wave_normal_strength));
 	float detail_time = WaveTime * float(!freeze_time);
 	vec2 detail_position = world_coordinates.xz;
 	float detail_distance_fade = smoothstep(detail_wave_fade_start, detail_wave_fade_end, distance_from_camera);
@@ -448,6 +512,9 @@ void fragment() {
 #endif
 	float albedo_detail_fade = 1.0 - smoothstep(albedo_detail_fade_start, albedo_detail_fade_end, distance_from_camera);
 	vec3 albedo_detail = mix(vec3(1.0), albedo_tex.rgb, albedo_detail_fade);
+	if (water_diagnostic_mode == 2 || water_diagnostic_mode == 3) {
+		albedo_detail = vec3(1.0);
+	}
 
 	float final_refraction_opacity = refraction_opacity;
 #ifdef FRESNEL
@@ -468,6 +535,21 @@ void fragment() {
 	final_refraction_opacity = clamp(final_refraction_opacity, 0.0, 1.0);
 	surface_color = mix(albedo_snell, surface_color, snell_factor);
 #endif
+
+	bool use_depth_color = enable_depth_color;
+	if (water_diagnostic_mode == 1 || water_diagnostic_mode == 2) {
+		use_depth_color = false;
+	} else if (water_diagnostic_mode == 3) {
+		use_depth_color = true;
+	}
+	if (use_depth_color) {
+		vec2 bathymetry = sample_bathymetry(vec2(world_coordinates.x, -world_coordinates.z));
+		float valid_water = smoothstep(valid_coverage_min, valid_coverage_max, bathymetry.y);
+		if (valid_water > 0.0) {
+			vec3 depth_color = bathymetry_tint(bathymetry.x, surface_color.rgb);
+			surface_color.rgb = mix(surface_color.rgb, depth_color, depth_color_strength * valid_water);
+		}
+	}
 
 	// Screen-reading shader features
 	float screen_lod = 0.0;
@@ -547,5 +629,75 @@ void fragment() {
 	EMISSION *= (1.0-shore_alpha); // block emission
 	ALBEDO = mix(ALBEDO, foam_tex.rgb, shore_alpha);
 #endif
+
+	// Water appearance diagnostics are output-only: no vertex wave inputs,
+	// phase, amplitude, boat motion, or WaveSampler values are changed.
+	if (water_diagnostic_mode == 1) {
+		ALBEDO = vec3(0.0);
+		EMISSION = albedo.rgb;
+		METALLIC = 0.0;
+		ROUGHNESS = 1.0;
+		SPECULAR = 0.0;
+		ALPHA = 1.0;
+	} else if (water_diagnostic_mode == 4) {
+		ALBEDO = vec3(0.0);
+		EMISSION = normalize(NORMAL) * 0.5 + 0.5;
+		METALLIC = 0.0;
+		ROUGHNESS = 1.0;
+		SPECULAR = 0.0;
+		ALPHA = 1.0;
+	} else if (water_diagnostic_mode == 5) {
+		float fresnel_debug = fresnel(3.0, NORMAL, VIEW);
+		ALBEDO = vec3(0.0);
+		EMISSION = vec3(fresnel_debug);
+		METALLIC = 0.0;
+		ROUGHNESS = 1.0;
+		SPECULAR = 0.0;
+		ALPHA = 1.0;
+	} else if (water_diagnostic_mode == 6) {
+		vec2 bathymetry_debug = sample_bathymetry(vec2(world_coordinates.x, -world_coordinates.z));
+		float valid_debug = smoothstep(valid_coverage_min, valid_coverage_max, bathymetry_debug.y);
+		float depth_debug = smoothstep(0.0, deep_depth_threshold, bathymetry_debug.x);
+		ALBEDO = vec3(0.0);
+		EMISSION = vec3(depth_debug, valid_debug, 1.0 - valid_debug);
+		METALLIC = 0.0;
+		ROUGHNESS = 1.0;
+		SPECULAR = 0.0;
+		ALPHA = 1.0;
+	} else if (water_diagnostic_mode == 7) {
+		// Keep direct diffuse lighting (including cast shadows), suppress Fresnel,
+		// color texture, bathymetry, and specular/environment reflection.
+		ALBEDO = albedo.rgb;
+		EMISSION = vec3(0.0);
+		METALLIC = 0.0;
+		ROUGHNESS = 1.0;
+		SPECULAR = 0.0;
+		ALPHA = 1.0;
+	} else if (water_diagnostic_mode == 8) {
+		// Keep the material specular response while removing diffuse base color.
+		ALBEDO = vec3(0.0);
+		EMISSION = vec3(0.0);
+		METALLIC = 0.0;
+		ALPHA = 1.0;
+	} else if (water_diagnostic_mode == 9) {
+		// Isolate diffuse lighting from Gerstner and detail-normal modulation.
+		NORMAL = flat_water_normal_view;
+		ALBEDO = albedo.rgb;
+		EMISSION = vec3(0.0);
+		METALLIC = 0.0;
+		ROUGHNESS = 1.0;
+		SPECULAR = 0.0;
+		ALPHA = 1.0;
+	} else if (water_diagnostic_mode == 10) {
+		// Isolate specular/environment lighting from wave normal modulation.
+		NORMAL = flat_water_normal_view;
+		ALBEDO = vec3(0.0);
+		EMISSION = vec3(0.0);
+		METALLIC = 0.0;
+		ALPHA = 1.0;
+	} else if (water_diagnostic_mode == 11) {
+		// Compare full shading with a constant upward surface normal.
+		NORMAL = flat_water_normal_view;
+	}
 
 }

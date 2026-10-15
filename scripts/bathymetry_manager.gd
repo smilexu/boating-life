@@ -5,13 +5,31 @@ extends Node
 ## converted to zero or treated as navigable water.
 
 @export var georeference: GeoReference
+@export var water_material: ShaderMaterial
+@export var enable_depth_color := true
+@export_enum("D - Full", "A - Flat Base", "B - Waves No Color Texture No Depth", "C - Waves Plus Depth No Color Texture", "Normal", "Fresnel", "Depth Validity", "Diffuse Shadows Only", "Specular Reflection Only", "Diffuse Flat Normal", "Specular Flat Normal", "Full Flat Normal") var water_diagnostic_mode := 0
 @export_file("*.json") var grid_metadata_path := "res://assets/geodata/processed/bathymetry/grid_metadata.json"
+@export_file("*.rg8") var depth_texture_path := "res://assets/geodata/processed/bathymetry/depth_texture.rg8"
 @export_file("*.json") var manifest_path := "res://assets/geodata/processed/bathymetry/manifest.json"
 @export_file("*.json") var features_path := "res://assets/geodata/processed/bathymetry/chart_features.json"
 @export_file("*.png") var land_mask_path := "res://assets/geodata/processed/bathymetry/land_mask.png"
 
 const INVALID_DEPTH_DM := -32768
 const SOURCE_NAME := "EMODnet DTM 2024 · LAT"
+const WATER_DIAGNOSTIC_NAMES := [
+	"D - Full",
+	"A - Flat Base",
+	"B - Waves No Color Texture No Depth",
+	"C - Waves Plus Depth No Color Texture",
+	"Wave Normal",
+	"Fresnel",
+	"Depth Validity",
+	"Diffuse Shadows Only",
+	"Specular Reflection Only",
+	"Diffuse Flat Normal",
+	"Specular Flat Normal",
+	"Full Flat Normal",
+]
 
 var data_available := false
 var source_description := SOURCE_NAME
@@ -21,6 +39,8 @@ var contours_by_depth: Dictionary = {}
 var contour_bounds_by_depth: Dictionary = {}
 
 var _grid_data := PackedByteArray()
+var _depth_texture: ImageTexture
+var _depth_texture_bounds := Vector4.ZERO
 var _land_mask: Image
 var _land_mask_meta: Dictionary = {}
 var _rows := 0
@@ -35,6 +55,30 @@ func _ready() -> void:
 	_load_features()
 	_load_land_mask()
 	_load_grid()
+	_apply_depth_color_state()
+	_apply_water_diagnostic_mode()
+
+
+func set_depth_color_enabled(enabled: bool) -> void:
+	enable_depth_color = enabled
+	_apply_depth_color_state()
+	print("Bathymetry sea tint: %s" % ("ON" if enabled else "OFF"))
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if event is not InputEventKey or not event.pressed or event.echo:
+		return
+	if event.physical_keycode == KEY_B:
+		set_depth_color_enabled(not enable_depth_color)
+	elif event.physical_keycode == KEY_F10:
+		water_diagnostic_mode = (water_diagnostic_mode + 1) % WATER_DIAGNOSTIC_NAMES.size()
+		_apply_water_diagnostic_mode()
+		print("Water diagnostic: %s" % WATER_DIAGNOSTIC_NAMES[water_diagnostic_mode])
+	elif event.physical_keycode == KEY_F9:
+		if water_material != null:
+			var frozen := not bool(water_material.get_shader_parameter("freeze_time"))
+			water_material.set_shader_parameter("freeze_time", frozen)
+			print("Wave time frozen: %s" % frozen)
 
 
 func get_depth_at_world_position(world_position: Vector3) -> Dictionary:
@@ -166,7 +210,55 @@ func _load_grid() -> void:
 		return
 	source_description = str(metadata.get("source", SOURCE_NAME))
 	data_available = true
+	_load_depth_texture(metadata)
 	print("Bathymetry loaded: %d×%d cells · %s" % [_columns, _rows, source_description])
+
+
+func _load_depth_texture(metadata: Dictionary) -> void:
+	var texture_metadata: Variant = metadata.get("gpu_depth_texture", {})
+	if not texture_metadata is Dictionary:
+		push_warning("Bathymetry depth-color texture metadata is missing; sea tint stays disabled.")
+		return
+	var width := int(texture_metadata.get("width", 0))
+	var height := int(texture_metadata.get("height", 0))
+	if width < 2 or height < 2:
+		push_warning("Bathymetry depth-color texture has invalid dimensions; sea tint stays disabled.")
+		return
+	if not FileAccess.file_exists(depth_texture_path):
+		push_warning("Bathymetry depth-color texture is missing: %s" % depth_texture_path)
+		return
+	var raw_data := FileAccess.get_file_as_bytes(depth_texture_path)
+	if raw_data.size() != width * height * 2:
+		push_warning("Bathymetry depth-color texture has an unexpected byte length; sea tint stays disabled.")
+		return
+	var bounds: Array = texture_metadata.get("bounds_east_north_m", [])
+	if bounds.size() != 4:
+		push_warning("Bathymetry depth-color texture has invalid world bounds; sea tint stays disabled.")
+		return
+	var image := Image.create_from_data(width, height, false, Image.FORMAT_RG8, raw_data)
+	if image.is_empty():
+		push_warning("Could not create the bathymetry depth-color image; sea tint stays disabled.")
+		return
+	_depth_texture = ImageTexture.create_from_image(image)
+	_depth_texture_bounds = Vector4(float(bounds[0]), float(bounds[1]), float(bounds[2]), float(bounds[3]))
+	if water_material != null:
+		water_material.set_shader_parameter("bathymetry_depth_texture", _depth_texture)
+		water_material.set_shader_parameter("bathymetry_bounds_east_north", _depth_texture_bounds)
+		print("Bathymetry tint texture loaded: %d×%d RG8" % [width, height])
+	else:
+		push_warning("BathymetryManager has no ShaderMaterial reference; sea tint stays disabled.")
+
+
+func _apply_depth_color_state() -> void:
+	if water_material == null:
+		return
+	water_material.set_shader_parameter("enable_depth_color", enable_depth_color and _depth_texture != null)
+
+
+func _apply_water_diagnostic_mode() -> void:
+	if water_material == null:
+		return
+	water_material.set_shader_parameter("water_diagnostic_mode", water_diagnostic_mode)
 
 
 func _load_land_mask() -> void:

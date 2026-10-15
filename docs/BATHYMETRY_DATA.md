@@ -44,11 +44,31 @@ The Task 7 OSM coastlines and land triangles are also converted to `chart_featur
 
 `DepthChartHUD` is in the main scene at the lower left. The numeric depth is sampled every 0.5 s. Its north-up 128×92 chart raster is only rebuilt after the boat moves 45 m; coastline and cached contours are drawn as static polylines. The chart shows shallow-to-deep blue-green bands, OSM land, 2/5/10/20 m isobaths, a centre heading marker, distance rings and a 500 m scale. A missing bathymetry cache is visibly hatched/unknown, never painted as deep water.
 
+## Bathymetry-driven sea color
+
+The existing depth grid is also baked into `depth_texture.rg8`; the offline build reads the cached NetCDF and OSM mask and does not download data. It resamples the EMODnet depth values onto the existing 30 m OSM land-mask grid using the same local ECEF/ENU transform as `GeoReference`. The resulting 2,052×2,788 raw RG8 texture is 11,441,952 bytes before GPU upload. R stores depth from 0–64 m at about 0.25 m per code step; G stores water validity. Invalid texels remain invalid, and a one-cell edge fill copies a neighboring water depth only into R so bilinear filtering does not pull shallow samples toward 64 m. G remains zero there and gates the tint.
+
+At runtime, `BathymetryManager` reads that raw file once, creates an `ImageTexture`, and assigns it to the existing shared sea `ShaderMaterial`. The shader maps world east from X and north from -Z through the texture's ENU bounds; V is flipped so the north edge corresponds to image row zero. This uses absolute world coordinates, so the camera-following ocean mesh does not drag the color pattern with it. Wave Y motion is not used. Outside the texture bounds, over OSM land, and in areas with no valid DTM data, the shader keeps the current weather-driven sea color.
+
+The shader samples the RG texture once per water fragment with linear filtering. It blends shallow, middle, blue, then current weather/Fresnel color at 2, 5, 10, and 20 m using `smoothstep`; default `depth_color_strength` is 0.80. This was increased after visual feedback found the initial 0.46 mix too subtle. The validity fade uses `valid_coverage_min=0.20` and `valid_coverage_max=0.80`, so partial nearshore data remains visible while zero-coverage locations stay unchanged. The blend changes only `surface_color.rgb`, leaving waves, normals, roughness, reflection, foam, transparency, and depth writing alone. Press **B** while playing to toggle the tint for visual/performance comparison; the current state and colors are editable on the shared sea material.
+
+`validate_bathymetry.py` compares the GPU texture's filtered samples with BathymetryManager's CPU grid samples at the five check locations. The 0.74 m Malmö approach sample is retained as partial edge coverage and fades its tint according to the texture validity channel rather than becoming a false full-valid cell.
+
+| Check point | CPU depth | GPU texture depth | Valid coverage / tint weight | Result |
+| --- | ---: | ---: | ---: | --- |
+| Malmö spawn | 2.243 m | 2.235 m | 1.00 / 1.00 | Full shallow tint; difference 0.008 m |
+| Øresund open water | 5.525 m | 5.522 m | 1.00 / 1.00 | Mid-depth tint; difference 0.003 m |
+| Malmö coastal approach | 0.737 m | 0.753 m | 0.64 / 0.47 | Partial nearshore tint; difference 0.016 m |
+| Copenhagen test point | invalid | 64 m sentinel | 0 / 0 | Original sea color |
+| Outside source region | invalid | outside texture | 0 / 0 | Original sea color |
+
+The new shader ran in a Godot 4.7.2 graphical launch using Forward+ / Metal 3.2 on an Apple M2 Pro; the process log showed no shader error. The matching windowed visual check after this change and controlled on/off FPS/frame-time comparison were not captured, so visual tuning and performance impact still need review. The earlier screenshot's instantaneous FPS is not used as an A/B result.
+
 ## Current data and validation record
 
 - The open-water probe and full regional request succeeded with HTTP 200. The request included `elevation`, `interpolation_flag`, and `value_count`; the downloaded bytes, hash, URL, and UTC timestamp are retained in `assets/geodata/source/emodnet_bathymetry_download.json`.
 - The decoded grid contains 721 rows × 932 columns (0.0625 arc-minute spacing), 270,230 valid water cells, and 401,742 invalid or non-water cells. Valid source depths range from approximately 0 m to 52.96 m. The processed grid is 2,687,888 bytes and includes 2 m, 5 m, 10 m, and 20 m contours where supported by valid ocean cells.
 - Five real-data checks are recorded in [`BATHYMETRY_SAMPLE_CHECKS.json`](BATHYMETRY_SAMPLE_CHECKS.json). The current Malmö start point (55.60587° N, 12.96300° E; Godot X/Z 13,424.56/10,459.39 m) samples **2.24 m**. Open Øresund at 55.70000° N, 12.75000° E samples **5.525 m** (interpolated). The Malmö coastal approach at 55.60587° N, 12.97000° E samples **0.74 m**. The Copenhagen-side test point 36 m from the OSM shore is invalid because its bilinear neighborhood contains land/no-data; outside the source bounds also returns invalid.
-- The depth chart is colored by the downloaded depth grid. The large ocean surface is still colored by the existing weather albedo; this task did not connect bathymetry to the sea shader. Shallow-water tinting can be added as a separate visual change if desired.
+- The depth chart and the sea surface both use the downloaded depth grid. The ocean tint is a restrained base-color blend; the existing weather albedo, reflections, waves, and foam remain active. The in-game visual balance still needs review against a fresh screenshot.
 - A Godot 4.7.2 graphical launch reported Forward+ / Metal 3.2 on an Apple M2 Pro. The supplied screenshot confirms the HUD and live 2.2 m depth readout render in game. No controlled FPS or frame-time comparison has been recorded. The device reported for this run is not an M4.
 - This dataset combines multiple source products and has roughly 65–116 m cells here. The nearshore grid may not align exactly with the OSM coastline; current bilinear sampling deliberately reports invalid at land/no-data edges instead of extrapolating across them. The HUD is for game feedback only, not navigation.

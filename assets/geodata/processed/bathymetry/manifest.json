@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "bathymetry_ready": true,
-  "generated_at_utc": "2026-10-15T15:53:29+00:00",
+  "generated_at_utc": "2026-10-15T16:07:55+00:00",
   "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
   "source_url": "https://erddap.emodnet.eu/erddap/griddap/bathymetry_dtm_2024.nc",
   "doi": "https://doi.org/10.12770/cf51df64-56f9-4a99-b1aa-36b8d7b743a1",
@@ -22,6 +22,28 @@
   "grid_metadata": "grid_metadata.json",
   "features": "chart_features.json",
   "grid": "depth_grid.bin",
+  "gpu_depth_texture": {
+    "file": "depth_texture.rg8",
+    "format": "raw RG8",
+    "width": 2052,
+    "height": 2788,
+    "cell_size_m": 30.0,
+    "channels": {
+      "R": "positive depth metres mapped to 0–64 m (about 0.25 m per code value)",
+      "G": "valid water coverage; 255 valid, 0 land/no-data/outside coverage"
+    },
+    "filtering": "GPU linear filtering; validity channel gates tint, and one invalid texel adjacent to water carries neighboring depth only to avoid coast interpolation bias",
+    "bounds_east_north_m": [
+      -31717.533312676806,
+      -38992.2014243554,
+      29842.466687323194,
+      44647.7985756446
+    ],
+    "bytes": 11441952,
+    "valid_texture_cells": 2247698,
+    "masked_osm_land_cells": 3346884,
+    "source_interpolated_cells": 1179084
+  },
   "contour_levels_m": [
     2.0,
     5.0,
@@ -33,7 +55,7 @@
     "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
     "source_url": "https://erddap.emodnet.eu/erddap/griddap/bathymetry_dtm_2024.nc",
     "downloaded_at_utc": "2026-10-15T15:53:15+00:00",
-    "processed_at_utc": "2026-10-15T15:53:28+00:00",
+    "processed_at_utc": "2026-10-15T16:07:54+00:00",
     "dataset_title": "The EMODnet Grid",
     "dataset_history": "NetCDF file created with GGSgc NC_Makegrid version 1.7.0 (January 2025)\n2026-10-15T15:53:15Z (local files)\n2026-10-15T15:53:15Z https://erddap.emodnet.eu/erddap/griddap/bathymetry_dtm_2024.nc?elevation%5B(55.35000000):1:(56.10000000)%5D%5B(12.25000000):1:(13.22000000)%5D,interpolation_flag%5B(55.35000000):1:(56.10000000)%5D%5B(12.25000000):1:(13.22000000)%5D,value_count%5B(55.35000000):1:(56.10000000)%5D%5B(12.25000000):1:(13.22000000)%5D",
     "coordinate_system": "WGS84 longitude/latitude (EPSG:4326); runtime positions use the project GeoReference ECEF-to-ENU conversion",
@@ -52,6 +74,28 @@
     "binary_file": "depth_grid.bin",
     "binary_record_bytes": 4,
     "binary_record_layout": "little-endian int16 depth_decimetres; uint8 interpolation_flag (0/1, 255 invalid); uint8 value_count saturated to 255 (255 invalid)",
+    "gpu_depth_texture": {
+      "file": "depth_texture.rg8",
+      "format": "raw RG8",
+      "width": 2052,
+      "height": 2788,
+      "cell_size_m": 30.0,
+      "channels": {
+        "R": "positive depth metres mapped to 0–64 m (about 0.25 m per code value)",
+        "G": "valid water coverage; 255 valid, 0 land/no-data/outside coverage"
+      },
+      "filtering": "GPU linear filtering; validity channel gates tint, and one invalid texel adjacent to water carries neighboring depth only to avoid coast interpolation bias",
+      "bounds_east_north_m": [
+        -31717.533312676806,
+        -38992.2014243554,
+        29842.466687323194,
+        44647.7985756446
+      ],
+      "bytes": 11441952,
+      "valid_texture_cells": 2247698,
+      "masked_osm_land_cells": 3346884,
+      "source_interpolated_cells": 1179084
+    },
     "invalid_depth_code": -32768,
     "valid_water_cells": 270230,
     "invalid_or_non_water_cells": 401742,

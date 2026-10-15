@@ -1,7 +1,29 @@
 {
   "status": "complete",
-  "checked_at_utc": "2026-10-15T15:57:00+00:00",
+  "checked_at_utc": "2026-10-15T16:17:19+00:00",
   "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
+  "gpu_texture": {
+    "file": "depth_texture.rg8",
+    "format": "raw RG8",
+    "width": 2052,
+    "height": 2788,
+    "cell_size_m": 30.0,
+    "channels": {
+      "R": "positive depth metres mapped to 0–64 m (about 0.25 m per code value)",
+      "G": "valid water coverage; 255 valid, 0 land/no-data/outside coverage"
+    },
+    "filtering": "GPU linear filtering; validity channel gates tint, and one invalid texel adjacent to water carries neighboring depth only to avoid coast interpolation bias",
+    "bounds_east_north_m": [
+      -31717.533312676806,
+      -38992.2014243554,
+      29842.466687323194,
+      44647.7985756446
+    ],
+    "bytes": 11441952,
+    "valid_texture_cells": 2247698,
+    "masked_osm_land_cells": 3346884,
+    "source_interpolated_cells": 1179084
+  },
   "samples": [
     {
       "name": "Malmo_start_water",
@@ -18,6 +40,14 @@
       "depth_m": 2.2428304092738642,
       "interpolated": false,
       "quality_min_value_count": null,
+      "gpu_texture_sample": {
+        "depth_m": 2.234716370949883,
+        "valid_coverage": 1.0,
+        "tint_weight": 1.0,
+        "valid": true,
+        "full_coverage": true,
+        "source_depth_error_m": -0.008114038323981276
+      },
       "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
       "vertical_datum": "Lowest Astronomical Tide (LAT)"
     },
@@ -36,6 +66,14 @@
       "depth_m": 5.52499999788291,
       "interpolated": true,
       "quality_min_value_count": 1,
+      "gpu_texture_sample": {
+        "depth_m": 5.52156862745098,
+        "valid_coverage": 1.0,
+        "tint_weight": 1.0,
+        "valid": true,
+        "full_coverage": true,
+        "source_depth_error_m": -0.003431370431929537
+      },
       "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
       "vertical_datum": "Lowest Astronomical Tide (LAT)"
     },
@@ -52,6 +90,13 @@
       "nearest_osm_coastline_m": 36.41082789992158,
       "valid": false,
       "reason": "Land, above LAT, or no-data cell in the bilinear neighbourhood",
+      "gpu_texture_sample": {
+        "depth_m": 64.0,
+        "valid_coverage": 0.0,
+        "tint_weight": 0.0,
+        "valid": false,
+        "full_coverage": false
+      },
       "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
       "vertical_datum": "Lowest Astronomical Tide (LAT)"
     },
@@ -70,6 +115,14 @@
       "depth_m": 0.7370640177343162,
       "interpolated": false,
       "quality_min_value_count": null,
+      "gpu_texture_sample": {
+        "depth_m": 0.7529411764705882,
+        "valid_coverage": 0.6395355935399039,
+        "tint_weight": 0.82368358215719,
+        "valid": true,
+        "full_coverage": false,
+        "source_depth_error_m": 0.015877158736272046
+      },
       "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
       "vertical_datum": "Lowest Astronomical Tide (LAT)"
     },
@@ -86,6 +139,10 @@
       "nearest_osm_coastline_m": 33326.826910707176,
       "valid": false,
       "reason": "Outside source grid",
+      "gpu_texture_sample": {
+        "valid_coverage": 0.0,
+        "reason": "Outside GPU texture bounds"
+      },
       "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
       "vertical_datum": "Lowest Astronomical Tide (LAT)"
     }

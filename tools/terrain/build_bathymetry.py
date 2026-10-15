@@ -22,6 +22,7 @@ NETCDF_PATH = OSM_DIR / "emodnet_bathymetry_2024_oresund.nc"
 OUTPUT_DIR = ROOT / "assets/geodata/processed/bathymetry"
 GRID_PATH = OUTPUT_DIR / "depth_grid.bin"
 GRID_META_PATH = OUTPUT_DIR / "grid_metadata.json"
+DEPTH_TEXTURE_PATH = OUTPUT_DIR / "depth_texture.rg8"
 FEATURES_PATH = OUTPUT_DIR / "chart_features.json"
 LAND_MASK_PATH = OUTPUT_DIR / "land_mask.png"
 MANIFEST_PATH = OUTPUT_DIR / "manifest.json"
@@ -72,6 +73,146 @@ def geodetic_to_local(latitude_deg: float, longitude_deg: float, origin: tuple[f
         + math.cos(lat0_rad) * dz
     )
     return east, north
+
+
+def local_to_geodetic_arrays(east, north, origin: tuple[float, float, float]):
+    """Vectorized inverse of GeoReference.world_to_geodetic() for the texture bake."""
+    import numpy as np
+
+    a = 6378137.0
+    f = 1.0 / 298.257223563
+    e2 = f * (2.0 - f)
+    lat0 = math.radians(origin[0])
+    lon0 = math.radians(origin[1])
+    alt0 = origin[2]
+
+    def ecef(latitude: float, longitude: float, altitude: float) -> tuple[float, float, float]:
+        sin_lat = math.sin(latitude)
+        cos_lat = math.cos(latitude)
+        radius = a / math.sqrt(1.0 - e2 * sin_lat * sin_lat)
+        return (
+            (radius + altitude) * cos_lat * math.cos(longitude),
+            (radius + altitude) * cos_lat * math.sin(longitude),
+            (radius * (1.0 - e2) + altitude) * sin_lat,
+        )
+
+    ox, oy, oz = ecef(lat0, lon0, alt0)
+    sin_lat0, cos_lat0 = math.sin(lat0), math.cos(lat0)
+    sin_lon0, cos_lon0 = math.sin(lon0), math.cos(lon0)
+    x = ox - sin_lon0 * east - sin_lat0 * cos_lon0 * north
+    y = oy + cos_lon0 * east - sin_lat0 * sin_lon0 * north
+    z = oz + cos_lat0 * north
+    longitude = np.arctan2(y, x)
+    horizontal = np.sqrt(x * x + y * y)
+    latitude = np.arctan2(z, horizontal * (1.0 - e2))
+    altitude = np.zeros_like(latitude)
+    for _iteration in range(8):
+        sin_lat = np.sin(latitude)
+        cos_lat = np.cos(latitude)
+        radius = a / np.sqrt(1.0 - e2 * sin_lat * sin_lat)
+        altitude = horizontal / np.maximum(np.abs(cos_lat), 0.000001) - radius
+        denominator = radius + altitude
+        latitude = np.arctan2(z, horizontal * (1.0 - e2 * radius / denominator))
+    return np.rad2deg(latitude), np.rad2deg(longitude)
+
+
+def build_depth_texture(depth_dm, valid, interpolation_byte, latitude, longitude, origin, land_mask_meta) -> dict:
+    """Bake the real grid into a world-aligned, linearly-filterable RG8 texture."""
+    import numpy as np
+    from PIL import Image
+
+    source_rows, source_columns = depth_dm.shape
+    lat_step = float(latitude[1] - latitude[0])
+    lon_step = float(longitude[1] - longitude[0])
+    land_mask_path = OUTPUT_DIR / str(land_mask_meta.get("file", "land_mask.png"))
+    if not land_mask_path.is_file() or not land_mask_meta:
+        raise RuntimeError("The OSM land mask is required to build the GPU depth texture")
+    mask_image = np.asarray(Image.open(land_mask_path).convert("L"), dtype=np.uint8)
+    texture_height, texture_width = mask_image.shape
+    mask_min_east, mask_min_north, mask_max_east, mask_max_north = map(float, land_mask_meta["bounds_east_north_m"])
+    mask_cell_m = float(land_mask_meta.get("cell_size_m", LAND_MASK_CELL_M))
+    # Reuse the native 30 m OSM mask grid. Depth is only resampled from EMODnet;
+    # the finer texels prevent valid nearshore water being erased by a coarse mask.
+    min_east = mask_min_east
+    max_east = mask_min_east + texture_width * mask_cell_m
+    max_north = mask_max_north
+    min_north = mask_max_north - texture_height * mask_cell_m
+
+    east_values = min_east + (np.arange(texture_width, dtype=np.float64) + 0.5) * mask_cell_m
+    north_values = max_north - (np.arange(texture_height, dtype=np.float64) + 0.5) * mask_cell_m
+    east_grid, north_grid = np.meshgrid(east_values, north_values)
+    sample_latitude, sample_longitude = local_to_geodetic_arrays(east_grid, north_grid, origin)
+    fx = (sample_longitude - float(longitude[0])) / lon_step
+    fy = (sample_latitude - float(latitude[0])) / lat_step
+    inside = (fx >= 0.0) & (fy >= 0.0) & (fx <= source_columns - 1) & (fy <= source_rows - 1)
+    x0 = np.clip(np.floor(fx).astype(np.int32), 0, source_columns - 2)
+    y0 = np.clip(np.floor(fy).astype(np.int32), 0, source_rows - 2)
+    tx = np.clip(fx - x0, 0.0, 1.0)
+    ty = np.clip(fy - y0, 0.0, 1.0)
+    source_valid = (
+        valid[y0, x0]
+        & valid[y0, x0 + 1]
+        & valid[y0 + 1, x0 + 1]
+        & valid[y0 + 1, x0]
+    )
+    depth_south = depth_dm[y0, x0] * (1.0 - tx) + depth_dm[y0, x0 + 1] * tx
+    depth_north = depth_dm[y0 + 1, x0] * (1.0 - tx) + depth_dm[y0 + 1, x0 + 1] * tx
+    sampled_depth_dm = depth_south * (1.0 - ty) + depth_north * ty
+    source_interpolated = (
+        (interpolation_byte[y0, x0] == 1)
+        | (interpolation_byte[y0, x0 + 1] == 1)
+        | (interpolation_byte[y0 + 1, x0 + 1] == 1)
+        | (interpolation_byte[y0 + 1, x0] == 1)
+    )
+
+    land_mask = mask_image >= 128
+    texture_valid = inside & source_valid & ~land_mask
+    # RG8: R stores 0–64 m depth (about 0.25 m steps), G stores valid-water coverage.
+    # The validity channel always controls whether color is applied. For the
+    # depth channel, fill one texel around valid water from adjacent water depths
+    # so linear filtering at a coast does not average shallow water toward 64 m.
+    depth_m = np.clip(sampled_depth_dm.astype(np.float64) * 0.1, 0.0, 64.0)
+    source_depth_m = depth_m.copy()
+    depth_m[~texture_valid] = 64.0
+    padded_depth = np.pad(source_depth_m, 1, mode="constant", constant_values=64.0)
+    padded_valid = np.pad(texture_valid, 1, mode="constant", constant_values=False)
+    neighbor_depth_sum = np.zeros((texture_height, texture_width), dtype=np.float64)
+    neighbor_valid_count = np.zeros((texture_height, texture_width), dtype=np.uint8)
+    for offset_y in (-1, 0, 1):
+        for offset_x in (-1, 0, 1):
+            if offset_x == 0 and offset_y == 0:
+                continue
+            neighbor_slice = (
+                slice(1 + offset_y, 1 + offset_y + texture_height),
+                slice(1 + offset_x, 1 + offset_x + texture_width),
+            )
+            neighbor_is_valid = padded_valid[neighbor_slice]
+            neighbor_depth_sum += np.where(neighbor_is_valid, padded_depth[neighbor_slice], 0.0)
+            neighbor_valid_count += neighbor_is_valid.astype(np.uint8)
+    edge_fill = ~texture_valid & (neighbor_valid_count > 0)
+    depth_m[edge_fill] = neighbor_depth_sum[edge_fill] / neighbor_valid_count[edge_fill]
+    texture = np.empty((texture_height, texture_width, 2), dtype=np.uint8)
+    texture[:, :, 0] = np.rint(depth_m * (255.0 / 64.0)).astype(np.uint8)
+    texture[:, :, 1] = np.where(texture_valid, 255, 0).astype(np.uint8)
+    DEPTH_TEXTURE_PATH.write_bytes(texture.tobytes(order="C"))
+
+    return {
+        "file": DEPTH_TEXTURE_PATH.name,
+        "format": "raw RG8",
+        "width": texture_width,
+        "height": texture_height,
+        "cell_size_m": mask_cell_m,
+        "channels": {
+            "R": "positive depth metres mapped to 0–64 m (about 0.25 m per code value)",
+            "G": "valid water coverage; 255 valid, 0 land/no-data/outside coverage",
+        },
+        "filtering": "GPU linear filtering; validity channel gates tint, and one invalid texel adjacent to water carries neighboring depth only to avoid coast interpolation bias",
+        "bounds_east_north_m": [min_east, min_north, max_east, max_north],
+        "bytes": DEPTH_TEXTURE_PATH.stat().st_size,
+        "valid_texture_cells": int(np.count_nonzero(texture_valid)),
+        "masked_osm_land_cells": int(np.count_nonzero(land_mask)),
+        "source_interpolated_cells": int(np.count_nonzero(texture_valid & source_interpolated)),
+    }
 
 
 def build_land_mask(region: dict) -> dict:
@@ -265,7 +406,7 @@ def make_contours(depth_dm, valid, latitudes, longitudes, origin) -> dict[str, l
     return result
 
 
-def process_netcdf() -> dict:
+def process_netcdf(land_mask_meta: dict) -> dict:
     try:
         import netCDF4
         import numpy as np
@@ -337,6 +478,7 @@ def process_netcdf() -> dict:
     records["interpolated"] = interp_byte
     records["value_count"] = count_byte
     records.tofile(GRID_PATH)
+    depth_texture_meta = build_depth_texture(depth_dm, valid, interp_byte, latitude, longitude, origin, land_mask_meta)
     grid_meta = {
         "schema_version": 1,
         "source": "EMODnet Digital Bathymetry (DTM 2024), bathymetry_dtm_2024 ERDDAP griddap",
@@ -361,6 +503,7 @@ def process_netcdf() -> dict:
         "binary_file": GRID_PATH.name,
         "binary_record_bytes": 4,
         "binary_record_layout": "little-endian int16 depth_decimetres; uint8 interpolation_flag (0/1, 255 invalid); uint8 value_count saturated to 255 (255 invalid)",
+        "gpu_depth_texture": depth_texture_meta,
         "invalid_depth_code": INVALID_DEPTH_DM,
         "valid_water_cells": int(np.count_nonzero(valid)),
         "invalid_or_non_water_cells": int(valid.size - np.count_nonzero(valid)),
@@ -400,7 +543,7 @@ def main() -> int:
         }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
         print(f"Wrote {len(coastlines)} OSM coastline polylines and a {land_mask['width']}×{land_mask['height']} land mask.")
         return 0
-    grid_meta = process_netcdf()
+    grid_meta = process_netcdf(land_mask)
     MANIFEST_PATH.write_text(json.dumps({
         "schema_version": 1,
         "bathymetry_ready": True,
@@ -413,6 +556,7 @@ def main() -> int:
         "grid_metadata": GRID_META_PATH.name,
         "features": FEATURES_PATH.name,
         "grid": GRID_PATH.name,
+        "gpu_depth_texture": grid_meta["gpu_depth_texture"],
         "contour_levels_m": CONTOUR_LEVELS_M,
         "grid_summary": grid_meta,
     }, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")

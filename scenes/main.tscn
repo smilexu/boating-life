@@ -86,6 +86,7 @@ clouds_resource = ExtResource("11_cloud_effect")
 [node name="BathymetryManager" type="Node" parent="."]
 script = ExtResource("14_bathymetry_manager")
 georeference = ExtResource("15_georeference")
+water_material = ExtResource("5_water_material")
 
 [node name="OresundRegion" parent="." instance=ExtResource("13_oresund_region")]
 

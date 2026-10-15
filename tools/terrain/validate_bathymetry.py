@@ -95,6 +95,48 @@ def sample_depth(metadata: dict, data: bytes, latitude: float, longitude: float)
     }
 
 
+def sample_gpu_texture(metadata: dict, data: bytes, latitude: float, longitude: float, origin: tuple[float, float, float]) -> dict:
+    texture_meta = metadata.get("gpu_depth_texture", {})
+    if not texture_meta:
+        return {"valid_coverage": 0.0, "reason": "No GPU depth texture was generated"}
+    width = int(texture_meta["width"])
+    height = int(texture_meta["height"])
+    bounds = list(map(float, texture_meta["bounds_east_north_m"]))
+    min_east, min_north, max_east, max_north = bounds
+    east, north = geodetic_to_local(latitude, longitude, origin)
+    u = (east - min_east) / (max_east - min_east)
+    v = (max_north - north) / (max_north - min_north)
+    if u < 0.0 or v < 0.0 or u > 1.0 or v > 1.0:
+        return {"valid_coverage": 0.0, "reason": "Outside GPU texture bounds"}
+
+    texel_x = u * width - 0.5
+    texel_y = v * height - 0.5
+    floor_x, floor_y = math.floor(texel_x), math.floor(texel_y)
+    tx, ty = texel_x - floor_x, texel_y - floor_y
+    x0, x1 = max(0, min(width - 1, floor_x)), max(0, min(width - 1, floor_x + 1))
+    y0, y1 = max(0, min(height - 1, floor_y)), max(0, min(height - 1, floor_y + 1))
+
+    def read_channel(x: int, y: int, channel: int) -> float:
+        return float(data[(y * width + x) * 2 + channel]) / 255.0
+
+    def bilinear(channel: int) -> float:
+        top = read_channel(x0, y0, channel) * (1.0 - tx) + read_channel(x1, y0, channel) * tx
+        bottom = read_channel(x0, y1, channel) * (1.0 - tx) + read_channel(x1, y1, channel) * tx
+        return top * (1.0 - ty) + bottom * ty
+
+    depth_m = bilinear(0) * 64.0
+    valid_coverage = bilinear(1)
+    coverage_t = max(0.0, min(1.0, (valid_coverage - 0.20) / (0.80 - 0.20)))
+    tint_weight = coverage_t * coverage_t * (3.0 - 2.0 * coverage_t)
+    return {
+        "depth_m": depth_m,
+        "valid_coverage": valid_coverage,
+        "tint_weight": tint_weight,
+        "valid": valid_coverage > 0.0,
+        "full_coverage": valid_coverage >= 0.98,
+    }
+
+
 def main() -> int:
     origin = parse_georeference_origin()
     coast_segments, land_mask_meta = load_coastline_geometry()
@@ -123,10 +165,16 @@ def main() -> int:
         return 2
     metadata = json.loads(GRID_META_PATH.read_text(encoding="utf-8"))
     data = GRID_PATH.read_bytes()
+    texture_meta = metadata.get("gpu_depth_texture", {})
+    texture_path = GRID_META_PATH.parent / str(texture_meta.get("file", ""))
+    texture_data = texture_path.read_bytes() if texture_meta and texture_path.is_file() else b""
     output_samples = []
     for name, latitude, longitude in SAMPLES:
         east, north = geodetic_to_local(latitude, longitude, origin)
         sample = sample_depth(metadata, data, latitude, longitude)
+        texture_sample = sample_gpu_texture(metadata, texture_data, latitude, longitude, origin) if texture_data else {"valid_coverage": 0.0, "reason": "GPU texture file is missing"}
+        if bool(sample.get("valid", False)) and float(texture_sample.get("valid_coverage", 0.0)) > 0.0:
+            texture_sample["source_depth_error_m"] = float(texture_sample["depth_m"]) - float(sample["depth_m"])
         output_samples.append({
             "name": name,
             "latitude_deg": latitude,
@@ -135,6 +183,7 @@ def main() -> int:
             "osm_land_mask": sample_osm_land_mask(east, north, land_mask_meta),
             "nearest_osm_coastline_m": nearest_coastline_distance(east, north, coast_segments),
             **sample,
+            "gpu_texture_sample": texture_sample,
             "source": metadata.get("source"),
             "vertical_datum": metadata.get("vertical_datum"),
         })
@@ -142,6 +191,7 @@ def main() -> int:
         "status": "complete",
         "checked_at_utc": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
         "source": metadata.get("source"),
+        "gpu_texture": metadata.get("gpu_depth_texture", {}),
         "samples": output_samples,
     }
     OUTPUT.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
