@@ -1,0 +1,232 @@
+{
+  "camera_fov": 48.0,
+  "camera_position": [
+    13395.4521484375,
+    12.0,
+    10514.1328125
+  ],
+  "captures": [
+    {
+      "max_horizontal_bright_row_fraction": 0.0531674208144796,
+      "name": "A0_normal_baseline_timeline",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/A0_normal_baseline_timeline.png",
+      "samples": [
+        0.0452488687782805,
+        0.0407239819004525,
+        0.0407239819004525,
+        0.0418552036199095,
+        0.0429864253393665,
+        0.0429864253393665,
+        0.0441176470588235,
+        0.0429864253393665,
+        0.0418552036199095,
+        0.0429864253393665,
+        0.0429864253393665,
+        0.0429864253393665,
+        0.0429864253393665,
+        0.0463800904977376,
+        0.0486425339366516,
+        0.0497737556561086,
+        0.0486425339366516,
+        0.0475113122171946,
+        0.0463800904977376,
+        0.0531674208144796
+      ],
+      "samples_seconds": 20,
+      "save_error": 0
+    },
+    {
+      "name": "A0_normal_baseline_peak",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/A0_normal_baseline_peak.png",
+      "save_error": 0
+    },
+    {
+      "height": 1080,
+      "name": "A0_normal_baseline_peak",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/A0_normal_baseline_peak.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "max_horizontal_bright_row_fraction": 0.0,
+      "name": "A1_specular_disabled_timeline",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/A1_specular_disabled_timeline.png",
+      "samples": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "samples_seconds": 20,
+      "save_error": 0
+    },
+    {
+      "name": "A1_specular_disabled_peak",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/A1_specular_disabled_peak.png",
+      "save_error": 0
+    },
+    {
+      "max_horizontal_bright_row_fraction": 0.0,
+      "name": "A2_constant_color_waves_timeline",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/A2_constant_color_waves_timeline.png",
+      "samples": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "samples_seconds": 20,
+      "save_error": 0
+    },
+    {
+      "name": "A2_constant_color_waves_peak",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/A2_constant_color_waves_peak.png",
+      "save_error": 0
+    },
+    {
+      "height": 1080,
+      "name": "A2_constant_color_waves_single",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/A2_constant_color_waves_single.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "A3_lod_shell_visualization",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/A3_lod_shell_visualization.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "A4_waves_disabled",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/A4_waves_disabled.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "max_horizontal_bright_row_fraction": 0.0339366515837104,
+      "name": "A5_coarser_lod_timeline",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/A5_coarser_lod_timeline.png",
+      "samples": [
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104,
+        0.0339366515837104
+      ],
+      "samples_seconds": 20,
+      "save_error": 0
+    },
+    {
+      "name": "A5_coarser_lod_peak",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/A5_coarser_lod_peak.png",
+      "save_error": 0
+    },
+    {
+      "height": 1080,
+      "name": "B0_sun_before",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/B0_sun_before.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "B1_sun_glow_off",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_sun_polish/B1_sun_glow_off.png",
+      "save_error": 0,
+      "width": 1920
+    }
+  ],
+  "engine": {
+    "build": "official",
+    "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "hex": 263938,
+    "major": 4,
+    "minor": 7,
+    "patch": 2,
+    "status": "stable",
+    "string": "4.7.2-stable (official)",
+    "timestamp": 0
+  },
+  "fps_cap": 0,
+  "glow": {
+    "bloom": 0.0399999991059303,
+    "enabled": true,
+    "intensity": 0.280000001192093,
+    "threshold": 1.35000002384186
+  },
+  "ocean_geometry": {
+    "far_edge": 60000,
+    "generated_mesh_count": 51,
+    "levels_of_detail": 4,
+    "outermost_resolution": 12,
+    "region_width": 96.0,
+    "total_width": 672.0
+  },
+  "quality": "High",
+  "renderer": "Apple M2 Pro (Apple8)",
+  "resolution": [
+    1920,
+    1080
+  ],
+  "sun_angle_max": 1.39999997615814,
+  "sun_azimuth": 28.0,
+  "sun_color": [
+    1.0,
+    0.910000026226044,
+    0.769999980926514
+  ],
+  "sun_curve": 0.150000005960464,
+  "sun_elevation": 10.0,
+  "sun_energy": 1.17999994754791,
+  "vsync": 0,
+  "water_specular": 0.18
+}

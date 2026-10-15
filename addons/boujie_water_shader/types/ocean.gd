@@ -5,6 +5,11 @@ extends Node3D
 
 ## An ocean plane, with configurable levels of detail.
 
+# The shader fades Gerstner displacement by camera distance. This step keeps
+# the transition ring much finer than the longest visible wave while the
+# tangential spacing matches the welded edge of the outer LOD.
+const WAVE_TRANSITION_RADIAL_STEP := 32.0
+
 # Based on the famous tutorial by StayAtHomeDev: https://www.youtube.com/watch?v=WfRb50J7hD8
 
 @export var material: Material:
@@ -62,15 +67,38 @@ func _process(_delta):
 func build_farplane():
 	_clear_generated_meshes("_gen_farplane")
 
-	var near = total_width / 2
-	var middle = (near + far_edge) / 2
-	middle = min(near * 3, middle)
+	var near: float = total_width / 2.0
 	if far_edge < near:
 		push_error("Cannot generate farplane, Far Edge is closer than inner planes!")
 		return
 
-	# midplane prevents texture jitter errors being noticeable.
-	var midplane = FarPlaneMeshGenerator.new(near, region_width, middle)
+	# The original farplane used only four vertices per side. Those vertices
+	# cannot follow the camera-distance Gerstner displacement at the shared LOD
+	# edge, so its interpolated surface diverges from the near meshes as waves
+	# move. Tessellate a transition band through the shader's complete wave fade
+	# and start the large, flat farplane only after displacement reaches zero.
+	var transition_far: float = near
+	if material is ShaderMaterial:
+		var wave_fade_end := float(material.get_shader_parameter("vertex_wave_fade_max"))
+		if wave_fade_end > near:
+			var seam_step := max_unit_size * 2.0
+			var margin := max_unit_size * 4.0
+			transition_far = ceil((wave_fade_end + margin) / seam_step) * seam_step
+			transition_far = minf(transition_far, far_edge)
+			var transition := WaveTransitionMeshGenerator.new(
+				near, transition_far, seam_step, WAVE_TRANSITION_RADIAL_STEP
+			)
+			transition.generate()
+			_add_mesh_as_node(transition.commit(), "_gen_farplane_transition")
+
+	var middle: float = (transition_far + float(far_edge)) / 2.0
+	middle = minf(transition_far * 3.0, middle)
+	if far_edge <= transition_far:
+		_apply_material("_gen_farplane")
+		return
+
+	# Midplane prevents texture jitter errors being noticeable.
+	var midplane = FarPlaneMeshGenerator.new(transition_far, region_width, middle)
 	midplane.generate()
 	var mesh = midplane.commit()
 	_add_mesh_as_node(mesh, "_gen_farplane_mid")
@@ -255,3 +283,63 @@ class FarPlaneMeshGenerator:
 			uvs.append(Vector2(coord) / self.uv_scale - Vector2(0.5, 0.5))  # TODO: validate
 			verts.append(Vector3(coord.x, 0, coord.y))
 		self._st.add_triangle_fan(PackedVector3Array(verts), PackedVector2Array(uvs))
+
+
+class WaveTransitionMeshGenerator:
+	extends RefCounted
+	# A square ring keeps the far mesh edge aligned with the welded LOD boundary.
+	var inner_radius: float
+	var outer_radius: float
+	var tangent_step: float
+	var radial_step: float
+	var _st: SurfaceTool
+
+	func _init(inner: float, outer: float, tangent: float, radial: float) -> void:
+		inner_radius = inner
+		outer_radius = outer
+		tangent_step = maxf(tangent, 0.001)
+		radial_step = maxf(radial, 0.001)
+		_st = SurfaceTool.new()
+		_st.begin(Mesh.PRIMITIVE_TRIANGLES)
+
+	func generate() -> void:
+		var radial_segments := maxi(1, int(ceil((outer_radius - inner_radius) / radial_step)))
+		var outer_tangent_segments := maxi(1, int(round(2.0 * outer_radius / tangent_step)))
+		var inner_tangent_segments := maxi(1, int(round(2.0 * inner_radius / tangent_step)))
+		# North and south spans cover the full width. East and west stop at the
+		# inner corners, so no surface is emitted twice at the four corners.
+		_add_grid(-outer_radius, outer_radius, -outer_radius, -inner_radius,
+			outer_tangent_segments, radial_segments)
+		_add_grid(-outer_radius, outer_radius, inner_radius, outer_radius,
+			outer_tangent_segments, radial_segments)
+		_add_grid(-outer_radius, -inner_radius, -inner_radius, inner_radius,
+			radial_segments, inner_tangent_segments)
+		_add_grid(inner_radius, outer_radius, -inner_radius, inner_radius,
+			radial_segments, inner_tangent_segments)
+
+	func commit() -> ArrayMesh:
+		_st.generate_normals()
+		_st.index()
+		return _st.commit()
+
+	func _add_grid(
+		min_x: float,
+		max_x: float,
+		min_z: float,
+		max_z: float,
+		segments_x: int,
+		segments_z: int
+	) -> void:
+		for z_index in range(segments_z):
+			var z0 := lerpf(min_z, max_z, float(z_index) / float(segments_z))
+			var z1 := lerpf(min_z, max_z, float(z_index + 1) / float(segments_z))
+			for x_index in range(segments_x):
+				var x0 := lerpf(min_x, max_x, float(x_index) / float(segments_x))
+				var x1 := lerpf(min_x, max_x, float(x_index + 1) / float(segments_x))
+				var coords := [Vector2(x0, z0), Vector2(x1, z0), Vector2(x1, z1), Vector2(x0, z1)]
+				var verts := PackedVector3Array()
+				var uvs := PackedVector2Array()
+				for coord in coords:
+					verts.append(Vector3(coord.x, 0.0, coord.y))
+					uvs.append(coord / tangent_step)
+				_st.add_triangle_fan(verts, uvs)

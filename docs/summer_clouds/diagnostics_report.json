@@ -1,0 +1,126 @@
+{
+  "camera_frozen": true,
+  "candidate": {
+    "clear_lighting_density": 0.56,
+    "clouds_detail_power": 0.16,
+    "curl_noise_strength": 700.0,
+    "lighting_sharpness": 0.24,
+    "medium_noise_scale": 24000.0,
+    "overcast_lighting_density": 0.4,
+    "partly_lighting_density": 0.56,
+    "small_noise_scale": 10000.0
+  },
+  "captures": [
+    {
+      "height": 1080,
+      "name": "A_clear_before_overview",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_density_without_small_or_curl",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_lighting_off",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_half_resolution",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "B_clear_after_candidate_overview",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "G_partly_cloudy_after",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "H_overcast_after",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "quality_medium_candidate",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "quality_low_candidate",
+      "save_error": 0,
+      "width": 1920
+    }
+  ],
+  "cloud_dither_time_frozen": 7.5,
+  "cloud_parameters_before": {
+    "blur_power": 0.75,
+    "blur_quality": 1.0,
+    "cloud_ceiling": 6400.0,
+    "cloud_floor": 1200.0,
+    "clouds_coverage": 0.58,
+    "clouds_density": 0.95,
+    "clouds_detail_power": 0.36,
+    "clouds_sharpness": 0.58,
+    "curl_noise_strength": 1500.0,
+    "extra_large_noise_scale": 240000.0,
+    "large_noise_scale": 68000.0,
+    "lighting_density": 0.7,
+    "lighting_sharpness": 0.18,
+    "max_lighting_steps": 12.0,
+    "max_step_count": 160.0,
+    "medium_noise_scale": 19000.0,
+    "resolution_scale": 2,
+    "small_noise_scale": 6500.0
+  },
+  "cloud_world_offsets_frozen": true,
+  "engine": {
+    "build": "official",
+    "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "hex": 263938,
+    "major": 4,
+    "minor": 7,
+    "patch": 2,
+    "status": "stable",
+    "string": "4.7.2-stable (official)",
+    "timestamp": 0
+  },
+  "fps_after": {
+    "fps": 75.1680385500085,
+    "frame_time_ms": 13.3035265957447,
+    "frames": 376,
+    "seconds": 5.002126
+  },
+  "fps_before": {
+    "fps": 74.7696734204607,
+    "frame_time_ms": 13.3744064171123,
+    "frames": 374,
+    "seconds": 5.002028
+  },
+  "fps_cap_during_fps_samples": 0,
+  "processor": "Apple M2 Pro",
+  "quality_for_A_to_E": "High",
+  "renderer": "Apple M2 Pro (Apple8)",
+  "resolution_scale_for_A_to_C": 2,
+  "resolution_scale_for_D_diagnostic_only": 1,
+  "viewport_px": [
+    1920,
+    1080
+  ],
+  "vsync_during_fps_samples": "disabled",
+  "wave_phase_frozen": true
+}

@@ -1,17 +1,25 @@
-[gd_resource type="Sky" load_steps=2 format=3]
+[gd_resource type="Sky" load_steps=3 format=3]
 
-[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_sea"]
-sky_top_color = Color(0.055, 0.245, 0.56, 1)
-sky_horizon_color = Color(0.40, 0.64, 0.82, 1)
-ground_bottom_color = Color(0.12, 0.19, 0.25, 1)
-ground_horizon_color = Color(0.62, 0.75, 0.83, 1)
-sky_curve = 0.18
-ground_curve = 0.08
-sun_angle_max = 1.4
-sun_curve = 0.15
-use_debanding = true
+[ext_resource type="Shader" path="res://shaders/sea_sky.gdshader" id="1_sky_shader"]
+
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_sea_sky"]
+shader = ExtResource("1_sky_shader")
+shader_parameter/sky_top_color = Color(0.055, 0.245, 0.56, 1)
+shader_parameter/sky_horizon_color = Color(0.40, 0.64, 0.82, 1)
+shader_parameter/ground_bottom_color = Color(0.12, 0.19, 0.25, 1)
+shader_parameter/ground_horizon_color = Color(0.62, 0.75, 0.83, 1)
+shader_parameter/sky_gradient_power = 0.72
+shader_parameter/ground_gradient_power = 0.88
+shader_parameter/sun_direction = Vector3(0.4532, 0.1736, -0.8746)
+shader_parameter/sun_disk_color = Color(1, 0.98, 0.92, 1)
+shader_parameter/sun_energy = 1.18
+shader_parameter/sun_disk_radius_degrees = 0.42
+shader_parameter/sun_edge_softness_degrees = 0.07
+shader_parameter/sun_core_radiance = 3.4
+shader_parameter/sun_halo_strength = 0.22
+shader_parameter/sun_halo_radius_degrees = 5.5
 
 [resource]
 radiance_size = 3
 process_mode = 3
-sky_material = SubResource("ProceduralSkyMaterial_sea")
+sky_material = SubResource("ShaderMaterial_sea_sky")

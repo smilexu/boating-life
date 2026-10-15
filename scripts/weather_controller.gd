@@ -25,6 +25,12 @@ const WEATHER_PRESETS := [
 		"sun_elevation": 10.0,
 		"sun_azimuth": 28.0,
 		"sun_color": Color(1.0, 0.91, 0.77),
+		"sun_disk_color": Color(1.0, 0.98, 0.92),
+		"sun_disk_radius": 0.42,
+		"sun_disk_edge": 0.07,
+		"sun_core_radiance": 3.4,
+		"sun_halo_strength": 0.22,
+		"sun_halo_radius": 5.5,
 		"sun_energy": 1.18,
 		"ambient_color": Color(0.64, 0.77, 0.87),
 		"ambient_energy": 0.84,
@@ -35,7 +41,7 @@ const WEATHER_PRESETS := [
 		"shallow_water_color": Color(0.33, 0.57, 0.57),
 		"mid_water_color": Color(0.19, 0.46, 0.55),
 		"blue_water_color": Color(0.14, 0.38, 0.54),
-		"water_specular": 0.18,
+		"water_specular": 0.08,
 		"water_roughness": 0.075,
 		"wave_strength": 1.05,
 	},
@@ -47,6 +53,12 @@ const WEATHER_PRESETS := [
 		"sun_elevation": 20.0,
 		"sun_azimuth": 28.0,
 		"sun_color": Color(0.96, 0.93, 0.86),
+		"sun_disk_color": Color(0.98, 0.97, 0.92),
+		"sun_disk_radius": 0.40,
+		"sun_disk_edge": 0.08,
+		"sun_core_radiance": 3.0,
+		"sun_halo_strength": 0.10,
+		"sun_halo_radius": 5.0,
 		"sun_energy": 0.85,
 		"ambient_color": Color(0.54, 0.63, 0.70),
 		"ambient_energy": 0.83,
@@ -69,6 +81,12 @@ const WEATHER_PRESETS := [
 		"sun_elevation": 16.0,
 		"sun_azimuth": 28.0,
 		"sun_color": Color(0.82, 0.87, 0.92),
+		"sun_disk_color": Color(0.82, 0.87, 0.92),
+		"sun_disk_radius": 0.32,
+		"sun_disk_edge": 0.10,
+		"sun_core_radiance": 2.2,
+		"sun_halo_strength": 0.025,
+		"sun_halo_radius": 4.0,
 		"sun_energy": 0.42,
 		"ambient_color": Color(0.56, 0.64, 0.69),
 		"ambient_energy": 1.08,
@@ -86,7 +104,7 @@ const WEATHER_PRESETS := [
 ]
 
 const COLOR_KEYS := [
-	"sky_top", "sky_horizon", "haze", "sun_color", "ambient_color", "fog_color",
+	"sky_top", "sky_horizon", "haze", "sun_color", "sun_disk_color", "ambient_color", "fog_color",
 	"water_color", "water_fresnel", "shallow_water_color", "mid_water_color", "blue_water_color",
 	"cloud_ambient_color", "cloud_ambient_tint",
 ]
@@ -98,7 +116,7 @@ var _sunlight: DirectionalLight3D
 var _wave_sampler: Node
 var _sunshine_clouds_driver: SunshineCloudsDriverGD
 var _sunshine_clouds: SunshineCloudsGD
-var _sky_material: ProceduralSkyMaterial
+var _sky_material: ShaderMaterial
 var _current: Dictionary = {}
 var _from: Dictionary = {}
 var _target: Dictionary = {}
@@ -124,9 +142,9 @@ func _ready() -> void:
 		push_error("WeatherController needs a WorldEnvironment with a Sky resource.")
 		set_process(false)
 		return
-	_sky_material = _environment.sky.sky_material as ProceduralSkyMaterial
+	_sky_material = _environment.sky.sky_material as ShaderMaterial
 	if _sky_material == null:
-		push_error("WeatherController needs ProceduralSkyMaterial for the native sky base.")
+		push_error("WeatherController needs the project's sky ShaderMaterial.")
 		set_process(false)
 		return
 
@@ -246,9 +264,15 @@ func _copy_state(preset: Dictionary, weather_index: int) -> Dictionary:
 
 
 func _apply_current_state() -> void:
-	_sky_material.sky_top_color = _current["sky_top"]
-	_sky_material.sky_horizon_color = _current["sky_horizon"]
-	_sky_material.ground_horizon_color = _current["haze"]
+	_sky_material.set_shader_parameter("sky_top_color", _color_to_vector3(_current["sky_top"]))
+	_sky_material.set_shader_parameter("sky_horizon_color", _color_to_vector3(_current["sky_horizon"]))
+	_sky_material.set_shader_parameter("ground_horizon_color", _color_to_vector3(_current["haze"]))
+	_sky_material.set_shader_parameter("sun_disk_color", _color_to_vector3(_current["sun_disk_color"]))
+	_sky_material.set_shader_parameter("sun_disk_radius_degrees", float(_current["sun_disk_radius"]))
+	_sky_material.set_shader_parameter("sun_edge_softness_degrees", float(_current["sun_disk_edge"]))
+	_sky_material.set_shader_parameter("sun_core_radiance", float(_current["sun_core_radiance"]))
+	_sky_material.set_shader_parameter("sun_halo_strength", float(_current["sun_halo_strength"]))
+	_sky_material.set_shader_parameter("sun_halo_radius_degrees", float(_current["sun_halo_radius"]))
 
 	_sunshine_clouds.enabled = true
 	_sunshine_clouds.clouds_coverage = float(_current["clouds_coverage"])
@@ -267,6 +291,8 @@ func _apply_current_state() -> void:
 		sin(elevation),
 		-cos(azimuth) * cos(elevation)
 	).normalized()
+	_sky_material.set_shader_parameter("sun_direction", sun_direction)
+	_sky_material.set_shader_parameter("sun_energy", float(_current["sun_energy"]))
 	_sunlight.global_basis = Basis.looking_at(-sun_direction, Vector3.UP)
 
 	_environment.ambient_light_color = _current["ambient_color"]
@@ -286,3 +312,7 @@ func _apply_current_state() -> void:
 	if _wave_sampler != null and absf(wave_strength - _last_applied_wave_strength) > 0.001:
 		_wave_sampler.set("wave_strength", wave_strength)
 		_last_applied_wave_strength = wave_strength
+
+
+func _color_to_vector3(color: Color) -> Vector3:
+	return Vector3(color.r, color.g, color.b)

@@ -1,0 +1,178 @@
+{
+  "camera_and_cloud_offsets_frozen_for_fixed_views": true,
+  "camera_stability_sweep": [
+    {
+      "cloud_time": 19.925921373,
+      "yaw_degrees": -7.0
+    },
+    {
+      "cloud_time": 36.276189594,
+      "yaw_degrees": 0.0
+    },
+    {
+      "cloud_time": 53.2118881769999,
+      "yaw_degrees": 7.0
+    }
+  ],
+  "candidate": {
+    "clouds_detail_power": 0.6,
+    "curl_noise_strength": 700.0,
+    "lighting_density": 0.56,
+    "lighting_sharpness": 0.24,
+    "medium_noise_scale": 24000.0,
+    "small_noise_scale": 10000.0
+  },
+  "captures": [
+    {
+      "height": 1080,
+      "name": "A_clear_before_overview",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_small_detail_reduced",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_curl_off",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_lighting_off",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "B_clear_after_overview",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "G_partly_cloudy_after",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "H_overcast_after",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "quality_high_after",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "quality_medium_after",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "quality_low_after",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "I_third_person_after",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "camera_motion_yaw_m7",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "camera_motion_yaw_0",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "camera_motion_yaw_7",
+      "save_error": 0,
+      "width": 1920
+    }
+  ],
+  "cloud_dither_time_for_fixed_views": 7.5,
+  "cloud_parameters_before": {
+    "blur_power": 0.75,
+    "blur_quality": 1.0,
+    "cloud_ceiling": 6400.0,
+    "cloud_floor": 1200.0,
+    "clouds_coverage": 0.58,
+    "clouds_density": 0.95,
+    "clouds_detail_power": 0.36,
+    "clouds_sharpness": 0.58,
+    "curl_noise_strength": 1500.0,
+    "extra_large_noise_scale": 240000.0,
+    "large_noise_scale": 68000.0,
+    "lighting_density": 0.7,
+    "lighting_sharpness": 0.18,
+    "max_lighting_steps": 12.0,
+    "max_step_count": 160.0,
+    "medium_noise_scale": 19000.0,
+    "resolution_scale": 2,
+    "small_noise_scale": 6500.0
+  },
+  "engine": {
+    "build": "official",
+    "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "hex": 263938,
+    "major": 4,
+    "minor": 7,
+    "patch": 2,
+    "status": "stable",
+    "string": "4.7.2-stable (official)",
+    "timestamp": 0
+  },
+  "fps_after": {
+    "fps": 85.4548634598997,
+    "frame_time_ms": 11.7020841121495,
+    "frames": 428,
+    "seconds": 5.008492
+  },
+  "fps_after_repeat": {
+    "fps": 81.7319009801034,
+    "frame_time_ms": 12.2351246943765,
+    "frames": 409,
+    "seconds": 5.004166
+  },
+  "fps_before": {
+    "fps": 74.8796349697455,
+    "frame_time_ms": 13.3547659574468,
+    "frames": 376,
+    "seconds": 5.021392
+  },
+  "fps_before_repeat": {
+    "fps": 81.969474567671,
+    "frame_time_ms": 12.1996634146341,
+    "frames": 410,
+    "seconds": 5.001862
+  },
+  "fps_cap_during_fps_samples": 0,
+  "processor": "Apple M2 Pro",
+  "quality_for_A_to_diagnostics_and_B": "High",
+  "renderer": "Apple M2 Pro (Apple8)",
+  "resolution_scale_for_fixed_view": 2,
+  "viewport_px": [
+    1920,
+    1080
+  ],
+  "vsync_during_fps_samples": "disabled",
+  "wave_phase_frozen_for_fixed_views": true
+}
