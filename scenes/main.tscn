@@ -35,8 +35,8 @@ shadow_enabled = true
 directional_shadow_mode = 1
 directional_shadow_max_distance = 260.0
 directional_shadow_fade_start = 0.82
-shadow_blur = 1.6
-shadow_opacity = 0.35
+shadow_blur = 1.8
+shadow_opacity = 0.30
 
 [node name="Ocean" type="Node3D" parent="."]
 script = ExtResource("1_ocean")

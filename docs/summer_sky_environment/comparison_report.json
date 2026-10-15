@@ -1,0 +1,201 @@
+{
+  "after_parameters": {
+    "ambient_energy": 0.84,
+    "cloud_blur_power": 0.75,
+    "cloud_floor_ceiling_m": [
+      1200,
+      6400
+    ],
+    "cloud_noise_scale_extra_large_large": [
+      240000,
+      68000
+    ],
+    "fog_aerial_perspective": 0.13,
+    "fog_density": 0.0007,
+    "fog_sun_scatter": 0.08,
+    "shadow_blur_opacity": [
+      1.8,
+      0.3
+    ],
+    "sky_horizon": [
+      0.4,
+      0.64,
+      0.82
+    ],
+    "sky_top": [
+      0.055,
+      0.245,
+      0.56
+    ]
+  },
+  "before_parameters": {
+    "ambient_energy": 0.78,
+    "cloud_blur_power": 0.9,
+    "cloud_floor_ceiling_m": [
+      900,
+      5400
+    ],
+    "cloud_noise_scale_extra_large_large": [
+      285000,
+      80000
+    ],
+    "fog_aerial_perspective": 0.18,
+    "fog_density": 0.0012,
+    "fog_sun_scatter": 0.12,
+    "shadow_blur_opacity": [
+      1.6,
+      0.35
+    ],
+    "sky_horizon": [
+      0.39,
+      0.61,
+      0.78
+    ],
+    "sky_top": [
+      0.045,
+      0.2,
+      0.49
+    ]
+  },
+  "captures": [
+    {
+      "height": 1080,
+      "name": "A_clear_before_third_person",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sky_environment/A_clear_before_third_person.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "B_clear_after_third_person",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sky_environment/B_clear_after_third_person.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_clear_deeper_blue_horizon_fog",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sky_environment/diagnostic_clear_deeper_blue_horizon_fog.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_clear_far_water_fade",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sky_environment/diagnostic_clear_far_water_fade.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "C_clear_after_side_sunlight",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sky_environment/C_clear_after_side_sunlight.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "D_clear_after_wide_horizon",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sky_environment/D_clear_after_wide_horizon.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "E_partly_cloudy_after",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sky_environment/E_partly_cloudy_after.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "F_overcast_after",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sky_environment/F_overcast_after.png",
+      "save_error": 0,
+      "width": 1920
+    }
+  ],
+  "engine": {
+    "build": "official",
+    "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "hex": 263938,
+    "major": 4,
+    "minor": 7,
+    "patch": 2,
+    "status": "stable",
+    "string": "4.7.2-stable (official)",
+    "timestamp": 0
+  },
+  "fps_after_engine_reported": {
+    "average_fps": 65.7703703703704,
+    "average_frame_time_ms": 15.2044149115891,
+    "max_fps": 73,
+    "min_fps": 61,
+    "runs": [
+      {
+        "average_fps": 65.9333333333333,
+        "max_fps": 73,
+        "min_fps": 61,
+        "run": 1
+      },
+      {
+        "average_fps": 64.5722222222222,
+        "max_fps": 67,
+        "min_fps": 63,
+        "run": 2
+      },
+      {
+        "average_fps": 66.8055555555556,
+        "max_fps": 70,
+        "min_fps": 65,
+        "run": 3
+      }
+    ],
+    "sample_count": 540,
+    "source": "Engine.get_frames_per_second()"
+  },
+  "fps_before_engine_reported": {
+    "average_fps": 64.3222222222222,
+    "average_frame_time_ms": 15.5467265503541,
+    "max_fps": 72,
+    "min_fps": 59,
+    "runs": [
+      {
+        "average_fps": 64.8111111111111,
+        "max_fps": 72,
+        "min_fps": 59,
+        "run": 1
+      },
+      {
+        "average_fps": 61.2888888888889,
+        "max_fps": 63,
+        "min_fps": 60,
+        "run": 2
+      },
+      {
+        "average_fps": 66.8666666666667,
+        "max_fps": 68,
+        "min_fps": 65,
+        "run": 3
+      }
+    ],
+    "sample_count": 540,
+    "source": "Engine.get_frames_per_second()"
+  },
+  "max_fps_during_fps_samples": 0,
+  "processor": "Apple M2 Pro",
+  "quality": "High",
+  "renderer": "Apple M2 Pro (Apple8)",
+  "resolution_scale": 1.0,
+  "sun_direction_unchanged_for_A_to_D": true,
+  "viewport_px": [
+    1920,
+    1080
+  ],
+  "vsync_during_fps_samples": "disabled",
+  "wave_phase_frozen": true,
+  "window_px": [
+    1920,
+    1080
+  ]
+}

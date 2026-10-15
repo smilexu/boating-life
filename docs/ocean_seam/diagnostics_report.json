@@ -1,0 +1,625 @@
+{
+  "camera_fov": 68.0,
+  "camera_offset": [
+    72.0,
+    32.0,
+    -136.0
+  ],
+  "captures": [
+    {
+      "height": 1080,
+      "name": "A_before_wide_normal_fog_on",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_seam/A_before_wide_normal_fog_on.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_flat_base_fog_off_default_fade",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_seam/diagnostic_flat_base_fog_off_default_fade.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_flat_base_fog_off_long_fade",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_seam/diagnostic_flat_base_fog_off_long_fade.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_normal_fog_off_default_fade",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_seam/diagnostic_normal_fog_off_default_fade.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_normal_fog_on_default_fade",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_seam/diagnostic_normal_fog_on_default_fade.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_bathymetry_validity",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_seam/diagnostic_bathymetry_validity.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_terrain_hidden",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_seam/diagnostic_terrain_hidden.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_terrain_shadows_off",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_seam/diagnostic_terrain_shadows_off.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_terrain_geometry_magenta",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_seam/diagnostic_terrain_geometry_magenta.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_water_alpha_fade_removed",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_seam/diagnostic_water_alpha_fade_removed.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "diagnostic_lod_shells",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/ocean_seam/diagnostic_lod_shells.png",
+      "save_error": 0,
+      "width": 1920
+    }
+  ],
+  "engine": {
+    "build": "official",
+    "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "hex": 263938,
+    "major": 4,
+    "minor": 7,
+    "patch": 2,
+    "status": "stable",
+    "string": "4.7.2-stable (official)",
+    "timestamp": 0
+  },
+  "generated_meshes": [
+    {
+      "node": "_gen_nearplane_-3_-3",
+      "position": [
+        -288.0,
+        0.0,
+        -288.0
+      ],
+      "triangles": 52,
+      "vertices": 157
+    },
+    {
+      "node": "_gen_nearplane_-2_-3",
+      "position": [
+        -192.0,
+        0.0,
+        -288.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_-1_-3",
+      "position": [
+        -96.0,
+        0.0,
+        -288.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_0_-3",
+      "position": [
+        0.0,
+        0.0,
+        -288.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_1_-3",
+      "position": [
+        96.0,
+        0.0,
+        -288.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_2_-3",
+      "position": [
+        192.0,
+        0.0,
+        -288.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_3_-3",
+      "position": [
+        288.0,
+        0.0,
+        -288.0
+      ],
+      "triangles": 52,
+      "vertices": 157
+    },
+    {
+      "node": "_gen_nearplane_-3_-2",
+      "position": [
+        -288.0,
+        0.0,
+        -192.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_-2_-2",
+      "position": [
+        -192.0,
+        0.0,
+        -192.0
+      ],
+      "triangles": 200,
+      "vertices": 601
+    },
+    {
+      "node": "_gen_nearplane_-1_-2",
+      "position": [
+        -96.0,
+        0.0,
+        -192.0
+      ],
+      "triangles": 204,
+      "vertices": 613
+    },
+    {
+      "node": "_gen_nearplane_0_-2",
+      "position": [
+        0.0,
+        0.0,
+        -192.0
+      ],
+      "triangles": 204,
+      "vertices": 613
+    },
+    {
+      "node": "_gen_nearplane_1_-2",
+      "position": [
+        96.0,
+        0.0,
+        -192.0
+      ],
+      "triangles": 204,
+      "vertices": 613
+    },
+    {
+      "node": "_gen_nearplane_2_-2",
+      "position": [
+        192.0,
+        0.0,
+        -192.0
+      ],
+      "triangles": 200,
+      "vertices": 601
+    },
+    {
+      "node": "_gen_nearplane_3_-2",
+      "position": [
+        288.0,
+        0.0,
+        -192.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_-3_-1",
+      "position": [
+        -288.0,
+        0.0,
+        -96.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_-2_-1",
+      "position": [
+        -192.0,
+        0.0,
+        -96.0
+      ],
+      "triangles": 204,
+      "vertices": 613
+    },
+    {
+      "node": "_gen_nearplane_-1_-1",
+      "position": [
+        -96.0,
+        0.0,
+        -96.0
+      ],
+      "triangles": 784,
+      "vertices": 2353
+    },
+    {
+      "node": "_gen_nearplane_0_-1",
+      "position": [
+        0.0,
+        0.0,
+        -96.0
+      ],
+      "triangles": 792,
+      "vertices": 2377
+    },
+    {
+      "node": "_gen_nearplane_1_-1",
+      "position": [
+        96.0,
+        0.0,
+        -96.0
+      ],
+      "triangles": 784,
+      "vertices": 2353
+    },
+    {
+      "node": "_gen_nearplane_2_-1",
+      "position": [
+        192.0,
+        0.0,
+        -96.0
+      ],
+      "triangles": 204,
+      "vertices": 613
+    },
+    {
+      "node": "_gen_nearplane_3_-1",
+      "position": [
+        288.0,
+        0.0,
+        -96.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_-3_0",
+      "position": [
+        -288.0,
+        0.0,
+        0.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_-2_0",
+      "position": [
+        -192.0,
+        0.0,
+        0.0
+      ],
+      "triangles": 204,
+      "vertices": 613
+    },
+    {
+      "node": "_gen_nearplane_-1_0",
+      "position": [
+        -96.0,
+        0.0,
+        0.0
+      ],
+      "triangles": 792,
+      "vertices": 2377
+    },
+    {
+      "node": "_gen_nearplane_0_0",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "triangles": 3072,
+      "vertices": 9217
+    },
+    {
+      "node": "_gen_nearplane_1_0",
+      "position": [
+        96.0,
+        0.0,
+        0.0
+      ],
+      "triangles": 792,
+      "vertices": 2377
+    },
+    {
+      "node": "_gen_nearplane_2_0",
+      "position": [
+        192.0,
+        0.0,
+        0.0
+      ],
+      "triangles": 204,
+      "vertices": 613
+    },
+    {
+      "node": "_gen_nearplane_3_0",
+      "position": [
+        288.0,
+        0.0,
+        0.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_-3_1",
+      "position": [
+        -288.0,
+        0.0,
+        96.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_-2_1",
+      "position": [
+        -192.0,
+        0.0,
+        96.0
+      ],
+      "triangles": 204,
+      "vertices": 613
+    },
+    {
+      "node": "_gen_nearplane_-1_1",
+      "position": [
+        -96.0,
+        0.0,
+        96.0
+      ],
+      "triangles": 784,
+      "vertices": 2353
+    },
+    {
+      "node": "_gen_nearplane_0_1",
+      "position": [
+        0.0,
+        0.0,
+        96.0
+      ],
+      "triangles": 792,
+      "vertices": 2377
+    },
+    {
+      "node": "_gen_nearplane_1_1",
+      "position": [
+        96.0,
+        0.0,
+        96.0
+      ],
+      "triangles": 784,
+      "vertices": 2353
+    },
+    {
+      "node": "_gen_nearplane_2_1",
+      "position": [
+        192.0,
+        0.0,
+        96.0
+      ],
+      "triangles": 204,
+      "vertices": 613
+    },
+    {
+      "node": "_gen_nearplane_3_1",
+      "position": [
+        288.0,
+        0.0,
+        96.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_-3_2",
+      "position": [
+        -288.0,
+        0.0,
+        192.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_-2_2",
+      "position": [
+        -192.0,
+        0.0,
+        192.0
+      ],
+      "triangles": 200,
+      "vertices": 601
+    },
+    {
+      "node": "_gen_nearplane_-1_2",
+      "position": [
+        -96.0,
+        0.0,
+        192.0
+      ],
+      "triangles": 204,
+      "vertices": 613
+    },
+    {
+      "node": "_gen_nearplane_0_2",
+      "position": [
+        0.0,
+        0.0,
+        192.0
+      ],
+      "triangles": 204,
+      "vertices": 613
+    },
+    {
+      "node": "_gen_nearplane_1_2",
+      "position": [
+        96.0,
+        0.0,
+        192.0
+      ],
+      "triangles": 204,
+      "vertices": 613
+    },
+    {
+      "node": "_gen_nearplane_2_2",
+      "position": [
+        192.0,
+        0.0,
+        192.0
+      ],
+      "triangles": 200,
+      "vertices": 601
+    },
+    {
+      "node": "_gen_nearplane_3_2",
+      "position": [
+        288.0,
+        0.0,
+        192.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_-3_3",
+      "position": [
+        -288.0,
+        0.0,
+        288.0
+      ],
+      "triangles": 52,
+      "vertices": 157
+    },
+    {
+      "node": "_gen_nearplane_-2_3",
+      "position": [
+        -192.0,
+        0.0,
+        288.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_-1_3",
+      "position": [
+        -96.0,
+        0.0,
+        288.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_0_3",
+      "position": [
+        0.0,
+        0.0,
+        288.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_1_3",
+      "position": [
+        96.0,
+        0.0,
+        288.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_2_3",
+      "position": [
+        192.0,
+        0.0,
+        288.0
+      ],
+      "triangles": 54,
+      "vertices": 163
+    },
+    {
+      "node": "_gen_nearplane_3_3",
+      "position": [
+        288.0,
+        0.0,
+        288.0
+      ],
+      "triangles": 52,
+      "vertices": 157
+    },
+    {
+      "node": "_gen_farplane_mid",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "triangles": 2,
+      "vertices": 8
+    },
+    {
+      "node": "_gen_farplane_far",
+      "position": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "triangles": 2,
+      "vertices": 8
+    }
+  ],
+  "quality": "High",
+  "renderer": "Apple M2 Pro (Apple8)",
+  "viewport_px": [
+    1920,
+    1080
+  ],
+  "water_fade_before": [
+    3600.0,
+    4000.0
+  ],
+  "water_far_edge": 60000,
+  "water_lod_levels": 4,
+  "water_outermost_resolution": 12,
+  "water_region_width": 96.0,
+  "water_total_width": 672.0
+}

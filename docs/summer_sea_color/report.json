@@ -1,0 +1,209 @@
+{
+  "capture_resolution": [
+    1920,
+    1080
+  ],
+  "captures": [
+    {
+      "height": 1080,
+      "name": "A0_clear_previous_high_runtime",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sea_color/A0_clear_previous_high_runtime.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "A_clear_before_depth_on",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sea_color/A_clear_before_depth_on.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "B_clear_after_depth_on",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sea_color/B_clear_after_depth_on.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "C_clear_after_depth_off",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sea_color/C_clear_after_depth_off.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "D_clear_after_depth_on",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sea_color/D_clear_after_depth_on.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "E_partly_cloudy",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sea_color/E_partly_cloudy.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "F_overcast",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sea_color/F_overcast.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "G_clear_after_side_reflection",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/summer_sea_color/G_clear_after_side_reflection.png",
+      "save_error": 0,
+      "width": 1920
+    }
+  ],
+  "controlled_color_comparison_detail_normal_strength_near": 0.8,
+  "depth_color_strength": 0.6,
+  "detail_normal_strength_near": 0.8,
+  "engine": {
+    "build": "official",
+    "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "hex": 263938,
+    "major": 4,
+    "minor": 7,
+    "patch": 2,
+    "status": "stable",
+    "string": "4.7.2-stable (official)",
+    "timestamp": 0
+  },
+  "fps_after": [
+    {
+      "average_fps": 59.9845639722045,
+      "elapsed_seconds": 3.000772,
+      "frame_time_ms": 16.6709555555556,
+      "frames": 180,
+      "run": 1
+    },
+    {
+      "average_fps": 60.0065807216858,
+      "elapsed_seconds": 2.999671,
+      "frame_time_ms": 16.6648388888889,
+      "frames": 180,
+      "run": 2
+    },
+    {
+      "average_fps": 59.9807861548351,
+      "elapsed_seconds": 3.000961,
+      "frame_time_ms": 16.6720055555556,
+      "frames": 180,
+      "run": 3
+    }
+  ],
+  "fps_before": [
+    {
+      "average_fps": 59.9523378913764,
+      "elapsed_seconds": 3.002385,
+      "frame_time_ms": 16.6799166666667,
+      "frames": 180,
+      "run": 1
+    },
+    {
+      "average_fps": 60.1252408767463,
+      "elapsed_seconds": 2.993751,
+      "frame_time_ms": 16.63195,
+      "frames": 180,
+      "run": 2
+    },
+    {
+      "average_fps": 60.1039598158281,
+      "elapsed_seconds": 2.994811,
+      "frame_time_ms": 16.6378388888889,
+      "frames": 180,
+      "run": 3
+    }
+  ],
+  "internal_3d_px_estimate": [
+    1920,
+    1080
+  ],
+  "max_fps_during_measurement": 0,
+  "palette_after_clear": {
+    "albedo": [
+      0.140000000596046,
+      0.430000007152557,
+      0.579999983310699,
+      1.0
+    ],
+    "albedo_fresnel": [
+      0.200000002980232,
+      0.5,
+      0.610000014305115,
+      1.0
+    ],
+    "blue_water_color": [
+      0.140000000596046,
+      0.379999995231628,
+      0.540000021457672,
+      1.0
+    ],
+    "mid_water_color": [
+      0.189999997615814,
+      0.46000000834465,
+      0.550000011920929,
+      1.0
+    ],
+    "shallow_water_color": [
+      0.330000013113022,
+      0.569999992847443,
+      0.569999992847443,
+      1.0
+    ]
+  },
+  "palette_before": {
+    "albedo": [
+      0.0260000005364418,
+      0.469999998807907,
+      0.389999985694885,
+      1.0
+    ],
+    "albedo_fresnel": [
+      0.170000001788139,
+      0.519999980926514,
+      0.490000009536743,
+      1.0
+    ],
+    "blue_water_color": [
+      0.0399999991059303,
+      0.300000011920929,
+      0.439999997615814,
+      1.0
+    ],
+    "mid_water_color": [
+      0.0599999986588955,
+      0.419999986886978,
+      0.46000000834465,
+      1.0
+    ],
+    "shallow_water_color": [
+      0.219999998807907,
+      0.620000004768372,
+      0.479999989271164,
+      1.0
+    ]
+  },
+  "previous_high_profile_detail_normal_strength_near": 2.5,
+  "processor": "Apple M2 Pro",
+  "quality": "High",
+  "renderer": "Apple M2 Pro (Apple8)",
+  "resolution_scale": 1.0,
+  "viewport_px": [
+    1920,
+    1080
+  ],
+  "vsync_during_measurement": 0,
+  "wave_normal_strength": 0.45,
+  "wave_time_frozen": true,
+  "window_px": [
+    1920,
+    1080
+  ]
+}

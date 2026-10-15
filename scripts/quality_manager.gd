@@ -16,11 +16,13 @@ const QUALITY_NAMES := ["画质优先", "平衡", "性能优先"]
 const RESOLUTION_SCALES := [1.0, 0.75, 0.67]
 const FRAME_LIMIT_NAMES := ["30 FPS", "60 FPS", "Unlimited"]
 
+# Keep the approved surface-normal contrast in every profile; increasing this
+# scalar had reintroduced broad mottling without a meaningful performance gain.
 const QUALITY_PROFILES := [
 	{
 		"shadow_size": 4096,
 		"shadow_distance": 260.0,
-		"shadow_blur": 1.6,
+		"shadow_blur": 1.8,
 		"ssr_enabled": true,
 		"ssr_max_steps": 48,
 		"ssao_enabled": true,
@@ -31,7 +33,7 @@ const QUALITY_PROFILES := [
 		"cloud_lighting_steps": 12.0,
 		"ocean_resolution": 12,
 		"ocean_lods": 4,
-		"detail_normal_strength": 2.5,
+		"detail_normal_strength": 0.8,
 		"detail_fade_end": 950.0,
 		"albedo_detail_fade_end": 2200.0,
 	},
@@ -49,7 +51,7 @@ const QUALITY_PROFILES := [
 		"cloud_lighting_steps": 10.0,
 		"ocean_resolution": 10,
 		"ocean_lods": 4,
-		"detail_normal_strength": 2.2,
+		"detail_normal_strength": 0.8,
 		"detail_fade_end": 780.0,
 		"albedo_detail_fade_end": 1800.0,
 	},
@@ -67,7 +69,7 @@ const QUALITY_PROFILES := [
 		"cloud_lighting_steps": 8.0,
 		"ocean_resolution": 8,
 		"ocean_lods": 3,
-		"detail_normal_strength": 1.5,
+		"detail_normal_strength": 0.8,
 		"detail_fade_end": 540.0,
 		"albedo_detail_fade_end": 1200.0,
 	},

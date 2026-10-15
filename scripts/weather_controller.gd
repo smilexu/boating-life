@@ -19,21 +19,24 @@ enum Preset { CLEAR, PARTLY_CLOUDY, OVERCAST }
 const WEATHER_PRESETS := [
 	{
 		"name": "Clear",
-		"sky_top": Color(0.045, 0.20, 0.49),
-		"sky_horizon": Color(0.39, 0.61, 0.78),
-		"haze": Color(0.78, 0.85, 0.88),
+		"sky_top": Color(0.055, 0.245, 0.56),
+		"sky_horizon": Color(0.40, 0.64, 0.82),
+		"haze": Color(0.62, 0.75, 0.83),
 		"sun_elevation": 10.0,
 		"sun_azimuth": 28.0,
 		"sun_color": Color(1.0, 0.91, 0.77),
 		"sun_energy": 1.18,
-		"ambient_color": Color(0.61, 0.75, 0.84),
-		"ambient_energy": 0.78,
-		"fog_color": Color(0.72, 0.83, 0.88),
-		"fog_density": 0.0012,
-		"water_color": Color(0.026, 0.47, 0.39),
-		"water_fresnel": Color(0.17, 0.52, 0.49),
-		"water_specular": 0.24,
-		"water_roughness": 0.10,
+		"ambient_color": Color(0.64, 0.77, 0.87),
+		"ambient_energy": 0.84,
+		"fog_color": Color(0.40, 0.58, 0.72),
+		"fog_density": 0.0007,
+		"water_color": Color(0.14, 0.43, 0.58),
+		"water_fresnel": Color(0.20, 0.50, 0.61),
+		"shallow_water_color": Color(0.33, 0.57, 0.57),
+		"mid_water_color": Color(0.19, 0.46, 0.55),
+		"blue_water_color": Color(0.14, 0.38, 0.54),
+		"water_specular": 0.18,
+		"water_roughness": 0.075,
 		"wave_strength": 1.05,
 	},
 	{
@@ -51,8 +54,11 @@ const WEATHER_PRESETS := [
 		"fog_density": 0.00165,
 		"water_color": Color(0.044, 0.36, 0.35),
 		"water_fresnel": Color(0.15, 0.39, 0.40),
-		"water_specular": 0.22,
-		"water_roughness": 0.16,
+		"shallow_water_color": Color(0.22, 0.62, 0.48),
+		"mid_water_color": Color(0.06, 0.42, 0.46),
+		"blue_water_color": Color(0.04, 0.30, 0.44),
+		"water_specular": 0.16,
+		"water_roughness": 0.12,
 		"wave_strength": 1.25,
 	},
 	{
@@ -70,15 +76,19 @@ const WEATHER_PRESETS := [
 		"fog_density": 0.0022,
 		"water_color": Color(0.07, 0.30, 0.36),
 		"water_fresnel": Color(0.14, 0.34, 0.39),
-		"water_specular": 0.14,
-		"water_roughness": 0.28,
+		"shallow_water_color": Color(0.22, 0.62, 0.48),
+		"mid_water_color": Color(0.06, 0.42, 0.46),
+		"blue_water_color": Color(0.04, 0.30, 0.44),
+		"water_specular": 0.10,
+		"water_roughness": 0.22,
 		"wave_strength": 1.5,
 	},
 ]
 
 const COLOR_KEYS := [
 	"sky_top", "sky_horizon", "haze", "sun_color", "ambient_color", "fog_color",
-	"water_color", "water_fresnel", "cloud_ambient_color", "cloud_ambient_tint",
+	"water_color", "water_fresnel", "shallow_water_color", "mid_water_color", "blue_water_color",
+	"cloud_ambient_color", "cloud_ambient_tint",
 ]
 
 var current_weather_name := "Clear"
@@ -244,6 +254,7 @@ func _apply_current_state() -> void:
 	_sunshine_clouds.clouds_coverage = float(_current["clouds_coverage"])
 	_sunshine_clouds.clouds_density = float(_current["clouds_density"])
 	_sunshine_clouds.lighting_density = float(_current["lighting_density"])
+	_sunshine_clouds.atmospheric_density = float(_current["atmospheric_density"])
 	_sunshine_clouds.cloud_ambient_color = _current["cloud_ambient_color"]
 	_sunshine_clouds.cloud_ambient_tint = _current["cloud_ambient_tint"]
 
@@ -265,6 +276,9 @@ func _apply_current_state() -> void:
 
 	water_material.set_shader_parameter("albedo", _current["water_color"])
 	water_material.set_shader_parameter("albedo_fresnel", _current["water_fresnel"])
+	water_material.set_shader_parameter("shallow_water_color", _current["shallow_water_color"])
+	water_material.set_shader_parameter("mid_water_color", _current["mid_water_color"])
+	water_material.set_shader_parameter("blue_water_color", _current["blue_water_color"])
 	water_material.set_shader_parameter("specular", _current["water_specular"])
 	water_material.set_shader_parameter("water_roughness_near", _current["water_roughness"])
 

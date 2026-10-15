@@ -1,0 +1,177 @@
+{
+  "captures": [
+    {
+      "height": 1080,
+      "name": "sun_A_original_full_environment",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/sun_A_original_full_environment.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "sun_diag_glow_off",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/sun_diag_glow_off.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "sun_diag_fog_off",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/sun_diag_fog_off.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "sun_diag_glow_and_fog_off",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/sun_diag_glow_and_fog_off.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "sun_B_after_disc_1_4deg",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/sun_B_after_disc_1_4deg.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "reflection_C_original_full_shading",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/reflection_C_original_full_shading.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "reflection_diag_glow_off",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/reflection_diag_glow_off.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "reflection_diag_diffuse_only",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/reflection_diag_diffuse_only.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "reflection_diag_specular_only",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/reflection_diag_specular_only.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "reflection_diag_specular_flat_normal",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/reflection_diag_specular_flat_normal.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "reflection_diag_ssr_off",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/reflection_diag_ssr_off.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "reflection_D_after_tighter_glints",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/reflection_D_after_tighter_glints.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "reflection_E_boat_in_sun_path",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/reflection_E_boat_in_sun_path.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "weather_F_clear_stern_view",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/weather_F_clear_stern_view.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "weather_G_partly_cloudy",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/weather_G_partly_cloudy.png",
+      "save_error": 0,
+      "width": 1920
+    },
+    {
+      "height": 1080,
+      "name": "weather_H_overcast",
+      "path": "/Users/smixu1/dev/boat-life-simulator/docs/sun_reflection/weather_H_overcast.png",
+      "save_error": 0,
+      "width": 1920
+    }
+  ],
+  "engine": {
+    "build": "official",
+    "hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+    "hex": 263938,
+    "major": 4,
+    "minor": 7,
+    "patch": 2,
+    "status": "stable",
+    "string": "4.7.2-stable (official)",
+    "timestamp": 0
+  },
+  "environment": {
+    "fog_density": 0.000699999975040555,
+    "fog_enabled": true,
+    "glow_bloom": 0.0399999991059303,
+    "glow_enabled": true,
+    "glow_intensity": 0.280000001192093,
+    "ssr_enabled": true
+  },
+  "fps_average_after_reflection_adjustment": 65.2037617956019,
+  "fps_average_before_reflection_adjustment": 63.7281867989194,
+  "fps_cap_during_capture": 0,
+  "fps_measurements": {
+    "after_first": 70.4147107301846,
+    "after_second": 59.9928128610192,
+    "before_first": 67.4521314374628,
+    "before_second": 60.004242160376,
+    "seconds_per_sample": 5.0
+  },
+  "frame_time_ms_after": 15.3365384521028,
+  "frame_time_ms_before": 15.6916436859452,
+  "original_vsync": 0,
+  "quality": "High",
+  "renderer": "Apple M2 Pro (Apple8)",
+  "resolution_scale": 1.0,
+  "sun": {
+    "azimuth_degrees": 28.0,
+    "elevation_degrees": 10.0,
+    "light_energy": 1.17999994754791,
+    "native_sky_disc_curve": 0.150000005960464,
+    "native_sky_disc_degrees_after": 1.4,
+    "native_sky_disc_degrees_before": 12.0
+  },
+  "viewport_px": [
+    1920,
+    1080
+  ],
+  "vsync_during_capture": 0,
+  "water": {
+    "detail_normal_strength_near": 0.8,
+    "far_multiplier": 0.62,
+    "near_multiplier": 0.72,
+    "roughness_far_after": 0.29,
+    "roughness_far_before": 0.34,
+    "roughness_near_after": 0.075,
+    "roughness_near_before": 0.1,
+    "specular_after": 0.18,
+    "specular_before": 0.24,
+    "sun_glitter_intensity": 0.72,
+    "wave_normal_strength": 0.45
+  }
+}
