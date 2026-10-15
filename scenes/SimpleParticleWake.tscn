@@ -1,20 +1,9 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="PackedScene" path="res://scenes/main.tscn" id="1_main"]
 [ext_resource type="Script" path="res://scripts/simple_particle_wake_test_controller.gd" id="2_test_controller"]
-[ext_resource type="Script" path="res://scripts/particle_wake_manager.gd" id="3_particle_wake"]
 
 [node name="SimpleParticleWake" type="Node3D"]
 script = ExtResource("2_test_controller")
 
 [node name="Main" parent="." instance=ExtResource("1_main")]
-
-[node name="ParticleWakeManager" type="Node3D" parent="."]
-script = ExtResource("3_particle_wake")
-stern_offset_m = 2.75
-particle_capacity = 240
-particle_lifetime_seconds = 4.0
-surface_offset_m = 0.045
-emitter_height_offset_m = 0.025
-wake_tint = Color(0.28, 0.62, 0.64, 1)
-foam_tint = Color(0.83, 0.92, 0.89, 1)

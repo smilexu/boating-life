@@ -1,0 +1,11 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/wake_system.gd" id="1_wake_system"]
+[ext_resource type="Resource" path="res://resources/wake_profiles/SailboatWake.tres" id="2_sailboat_profile"]
+
+[node name="WakeSystem" type="Node3D"]
+script = ExtResource("1_wake_system")
+profile = ExtResource("2_sailboat_profile")
+
+[node name="WakeEmitter" type="Node3D" parent="."]
+position = Vector3(0, 0, 2.75)

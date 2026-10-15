@@ -23,6 +23,8 @@ uniform float wake_opacity : hint_range(0.0, 1.0) = 0.26;
 uniform float foam_opacity : hint_range(0.0, 1.0) = 0.76;
 uniform float foam_threshold : hint_range(0.0, 1.0) = 0.51;
 uniform float foam_softness : hint_range(0.01, 0.5) = 0.14;
+uniform float particle_opacity_min : hint_range(0.0, 1.0) = 0.78;
+uniform float particle_opacity_max : hint_range(0.0, 1.0) = 1.0;
 
 varying float patch_seed;
 
@@ -89,19 +91,40 @@ void vertex() {
 
 void fragment() {
 	vec2 centered = (UV - vec2(0.5)) * 2.0;
-	float radius = length(centered);
-	vec2 noise_uv = UV * 3.1 + vec2(patch_seed * 13.7, patch_seed * 29.3);
+	float pattern = floor(patch_seed * 3.0);
+	float style = fract(patch_seed * 3.0);
+	vec2 stretch = vec2(
+		mix(0.78, 1.18, fract(style * 1.73 + 0.2)),
+		mix(0.76, 1.16, fract(style * 2.31 + 0.4))
+	);
+	centered *= stretch;
+	float radial = length(centered);
+	if (pattern < 0.5) {
+		radial = length(centered * vec2(0.9, 1.08));
+	} else if (pattern < 1.5) {
+		float rounded_square = max(abs(centered.x), abs(centered.y) * 0.84);
+		radial = mix(rounded_square, length(centered), 0.42);
+	} else {
+		radial = abs(centered.x) * 0.72 + abs(centered.y) * 0.58;
+	}
+	float noise_scale = mix(2.2, 4.45, pattern / 2.0);
+	vec2 noise_uv = UV * noise_scale + vec2(patch_seed * 13.7, patch_seed * 29.3);
 	float broad_noise = value_noise(noise_uv);
-	float edge_noise = value_noise(noise_uv * 2.35 + vec2(8.2, 3.7));
-	float warped_radius = radius + (broad_noise - 0.5) * 0.24 + (edge_noise - 0.5) * 0.09;
-	float silhouette = 1.0 - smoothstep(0.63, 1.02, warped_radius);
+	float edge_noise = value_noise(noise_uv * mix(1.8, 2.45, style) + vec2(8.2, 3.7));
+	float roughness = mix(0.13, 0.25, pattern / 2.0);
+	float warped_radius = radial + (broad_noise - 0.5) * roughness + (edge_noise - 0.5) * 0.085;
+	float edge_start = mix(0.58, 0.69, style);
+	float silhouette = 1.0 - smoothstep(edge_start, 1.02, warped_radius);
 	float patch_noise = broad_noise * 0.78 + edge_noise * 0.22;
-	float foam_mask = smoothstep(foam_threshold, foam_threshold + foam_softness, patch_noise)
+	float threshold_variation = (style - 0.5) * 0.12;
+	float foam_mask = smoothstep(foam_threshold + threshold_variation, foam_threshold + threshold_variation + foam_softness, patch_noise)
 		* silhouette;
-	float body_variation = mix(0.58, 1.0, broad_noise);
+	float particle_variation = mix(particle_opacity_min, particle_opacity_max, fract(patch_seed * 7.13));
+	float body_variation = mix(0.54, 0.94, broad_noise) * particle_variation;
 	float body_alpha = silhouette * wake_opacity * body_variation;
-	float foam_alpha = foam_mask * foam_opacity;
-	vec3 patch_color = mix(wake_tint, foam_tint, foam_mask * 0.88);
+	float foam_alpha = foam_mask * foam_opacity * particle_variation;
+	vec3 varied_foam_tint = foam_tint * mix(0.9, 1.0, fract(patch_seed * 5.71));
+	vec3 patch_color = mix(wake_tint, varied_foam_tint, foam_mask * 0.88);
 	ALBEDO = patch_color * COLOR.rgb;
 	ALPHA = clamp(max(body_alpha, foam_alpha) * COLOR.a, 0.0, 0.9);
 }

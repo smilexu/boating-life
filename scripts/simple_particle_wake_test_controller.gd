@@ -7,8 +7,8 @@ enum WakeMode { OFF, GPU_PARTICLES }
 
 const SPEED_PRESETS := {"STOP": 0.0, "LOW": 2.0, "CRUISE": 7.0, "FAST": 12.0}
 const MODE_NAMES := ["OFF", "GPU PARTICLES"]
-const BENCHMARK_WARMUP_SECONDS := 3.0
-const BENCHMARK_SAMPLE_SECONDS := 5.0
+const BENCHMARK_WARMUP_SECONDS := 8.0
+const BENCHMARK_SAMPLE_SECONDS := 6.0
 const BENCHMARK_QUALITY_NAMES := ["画质优先", "平衡", "性能优先"]
 const BENCHMARK_CLOUD_STATES := [true, false]
 const BENCHMARK_WAKE_STATES := [false, true]
@@ -23,7 +23,7 @@ const STATE_CHECKS := [
 
 @export_node_path("Node3D") var boat_controller_path := NodePath("Main/PlayerBoat/MotionRoot")
 @export_node_path("Node3D") var boat_camera_path := NodePath("Main/PlayerBoat/FollowCameraRig/Camera3D")
-@export_node_path("Node") var particle_wake_manager_path := NodePath("ParticleWakeManager")
+@export_node_path("Node") var wake_system_path := NodePath("Main/PlayerBoat/MotionRoot/VisualRoot/WakeSystem")
 
 var _boat: BoatController
 var _boat_camera: Camera3D
@@ -56,18 +56,33 @@ var _benchmark_started_at_msec := 0
 var _state_check_active := false
 var _state_check_index := -1
 var _state_check_elapsed := 0.0
+var _integration_check_active := false
+var _integration_stage_index := -1
+var _integration_stage_elapsed := 0.0
+var _capture_remaining_seconds := -1.0
+var _capture_path := ""
 var _start_position := Vector3.ZERO
 var _start_rotation := Vector3.ZERO
+
+const INTEGRATION_STAGES := [
+	{"name": "MANUAL_ACCEL", "duration": 3.5},
+	{"name": "MANUAL_LEFT", "duration": 2.0},
+	{"name": "MANUAL_RIGHT", "duration": 4.0},
+	{"name": "AUTOPILOT_CRUISE", "duration": 5.0},
+	{"name": "BRAKE", "duration": 5.0},
+	{"name": "STOP_FADE", "duration": 5.0},
+	{"name": "TELEPORT_RESET", "duration": 1.5},
+]
 
 
 func _ready() -> void:
 	process_priority = 100
 	_boat = get_node_or_null(boat_controller_path) as BoatController
 	_boat_camera = get_node_or_null(boat_camera_path) as Camera3D
-	_particle_wake = get_node_or_null(particle_wake_manager_path)
+	_particle_wake = get_node_or_null(wake_system_path)
 	_quality_manager = get_node_or_null("Main/QualityManager")
 	if _boat == null or _boat_camera == null or _particle_wake == null or _quality_manager == null:
-		push_error("SimpleParticleWake is missing a boat, camera, quality manager, or particle wake reference.")
+		push_error("SimpleParticleWake is missing a boat, camera, quality manager, or WakeSystem reference.")
 		return
 	_start_position = _boat.global_position
 	_start_rotation = _boat.global_rotation
@@ -76,12 +91,27 @@ func _ready() -> void:
 	_create_panel()
 	select_speed_state("CRUISE")
 	var user_arguments := OS.get_cmdline_user_args()
+	for argument in user_arguments:
+		if str(argument).begins_with("--wake-capture="):
+			_capture_path = str(argument).get_slice("=", 1)
+			_capture_remaining_seconds = 7.0
+		elif str(argument) == "--wake-capture-overhead":
+			_overhead_view_enabled = true
+			_update_overhead_camera()
+			_overhead_camera.make_current()
+		elif str(argument) == "--wake-capture-turn":
+			_s_turn_enabled = true
+			_s_turn_base_yaw = _boat.rotation.y
+			_s_turn_time = 0.0
 	if user_arguments.has("--display-probe"):
 		print("DISPLAY_PROBE %s" % str(_quality_manager.call("get_render_metrics")))
 		get_tree().quit()
 		return
-	if user_arguments.has("--display-benchmark"):
+	if user_arguments.has("--display-benchmark") or user_arguments.has("--wake-benchmark-1920") or user_arguments.has("--wake-benchmark-3440"):
 		_start_automated_benchmark()
+	elif user_arguments.has("--wake-integration-check"):
+		_set_wake_mode(WakeMode.GPU_PARTICLES)
+		_start_integration_check()
 	elif user_arguments.has("--wake-state-check"):
 		_set_wake_mode(WakeMode.GPU_PARTICLES)
 		_start_state_check()
@@ -93,13 +123,14 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _boat == null:
 		return
-	_boat.is_autopilot = false
-	_boat.is_motion_paused = false
-	_boat.speed_mps = float(SPEED_PRESETS[_selected_state])
-	if _s_turn_enabled:
-		_s_turn_time += delta
-		var phase := TAU * _s_turn_time / 16.0
-		_boat.rotation.y = _s_turn_base_yaw + deg_to_rad(32.0) * sin(phase)
+	if not _integration_check_active:
+		_boat.is_autopilot = false
+		_boat.is_motion_paused = false
+		_boat.speed_mps = float(SPEED_PRESETS[_selected_state])
+		if _s_turn_enabled:
+			_s_turn_time += delta
+			var phase := TAU * _s_turn_time / 16.0
+			_boat.rotation.y = _s_turn_base_yaw + deg_to_rad(32.0) * sin(phase)
 
 	var movement := _boat.global_position - _last_boat_position
 	_last_boat_position = _boat.global_position
@@ -111,6 +142,12 @@ func _process(delta: float) -> void:
 		_update_benchmark(delta)
 	if _state_check_active:
 		_update_state_check(delta)
+	if _integration_check_active:
+		_update_integration_check(delta)
+	if _capture_remaining_seconds >= 0.0:
+		_capture_remaining_seconds -= delta
+		if _capture_remaining_seconds <= 0.0:
+			_capture_wake_view()
 
 	_ui_elapsed += delta
 	if _ui_elapsed >= 0.5:
@@ -159,7 +196,7 @@ func select_speed_state(state_name: String) -> void:
 
 func _set_wake_mode(mode: int) -> void:
 	_wake_mode = clampi(mode, WakeMode.OFF, WakeMode.GPU_PARTICLES)
-	_particle_wake.call("set_wake_active", _wake_mode == WakeMode.GPU_PARTICLES)
+	_particle_wake.call("set_wake_enabled", _wake_mode == WakeMode.GPU_PARTICLES)
 	_update_panel()
 
 
@@ -245,29 +282,30 @@ func _update_panel() -> void:
 	var draw_calls := int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	var view_text := "tilted top-down" if _overhead_view_enabled else "stern follow"
 	var mode_text: String = str(MODE_NAMES[_wake_mode])
+	var profile_name := str(_particle_wake.call("get_profile_name"))
 	var fps_text := "--" if fps <= 0 else str(fps)
 	var particle_text := "steady est. %d / %d cap (%.2f ratio)" % [particles, particle_capacity, emission_ratio]
 	if _wake_mode != WakeMode.GPU_PARTICLES:
-		particle_text = "0 rendered / %d cap" % particle_capacity
+		particle_text = "new emission off; existing foam fades"
 	_panel_label.text = (
 		"GPU PARTICLE WAKE / DISPLAY TEST\n"
 		+ "F6 Stop · F7 Low 2 · F8 Cruise 7 · F9 Fast 12 m/s\n"
 		+ "F10/V S-turn · F11/K OFF / GPU particles\n"
 		+ "F12/O camera: stern / tilted top-down\n"
 		+ "Mode: %s · Speed target %.1f / measured %.2f m/s · View: %s\n"
-		+ "Particles: %s · persistence %.1f s\n"
+		+ "Profile: %s · Particles: %s · persistence %.1f–%.1f s\n"
 		+ "FPS: %s · frame interval %.2f ms · Draw Calls %d"
-	) % [mode_text, target_speed, _measured_speed_mps, view_text, particle_text, lifetime_range.x, fps_text, frame_ms, draw_calls]
+	) % [mode_text, target_speed, _measured_speed_mps, view_text, profile_name, particle_text, lifetime_range.x, lifetime_range.y, fps_text, frame_ms, draw_calls]
 
 
 func _start_automated_benchmark() -> void:
 	_benchmark_active = true
 	var user_arguments := OS.get_cmdline_user_args()
-	if user_arguments.has("--display-benchmark-windowed"):
+	if user_arguments.has("--wake-benchmark-1920") or user_arguments.has("--display-benchmark-windowed"):
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 		DisplayServer.window_set_size(Vector2i(1920, 1080))
 		await get_tree().process_frame
-	elif user_arguments.has("--display-benchmark-3440-windowed"):
+	elif user_arguments.has("--wake-benchmark-3440") or user_arguments.has("--display-benchmark-3440-windowed"):
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED)
 		if DisplayServer.get_screen_count() > 1:
 			DisplayServer.window_set_current_screen(1)
@@ -291,14 +329,23 @@ func _start_automated_benchmark() -> void:
 	_benchmark_original_clouds_enabled = bool(_quality_manager.call("get_clouds_enabled"))
 	_benchmark_started_at_msec = Time.get_ticks_msec()
 	_benchmark_cases.clear()
-	for quality_index in range(BENCHMARK_QUALITY_NAMES.size()):
-		for clouds_enabled in BENCHMARK_CLOUD_STATES:
-			for wake_enabled in BENCHMARK_WAKE_STATES:
-				_benchmark_cases.append({
-					"quality": quality_index,
-					"clouds": clouds_enabled,
-					"wake": wake_enabled,
-				})
+	var matched_wake_test := user_arguments.has("--wake-benchmark-1920") or user_arguments.has("--wake-benchmark-3440")
+	if matched_wake_test:
+		for wake_enabled in BENCHMARK_WAKE_STATES:
+			_benchmark_cases.append({
+				"quality": _benchmark_original_quality,
+				"clouds": _benchmark_original_clouds_enabled,
+				"wake": wake_enabled,
+			})
+	else:
+		for quality_index in range(BENCHMARK_QUALITY_NAMES.size()):
+			for clouds_enabled in BENCHMARK_CLOUD_STATES:
+				for wake_enabled in BENCHMARK_WAKE_STATES:
+					_benchmark_cases.append({
+						"quality": quality_index,
+						"clouds": clouds_enabled,
+						"wake": wake_enabled,
+					})
 	var metrics: Dictionary = _quality_manager.call("get_render_metrics")
 	print(
 		"DISPLAY_BENCH_SETUP window_px=%s viewport_px=%s screen_px=%s screens=%s refresh_hz=%.1f screen_scale=%.2f hidpi=%s internal_3d_estimate=%s adapter=%s processor=%s fullscreen=%s vsync=%d max_fps=%d cases=%d"
@@ -335,6 +382,7 @@ func _start_benchmark_case() -> void:
 	_benchmark_draw_calls_sum = 0.0
 	_benchmark_min_frame_ms = INF
 	_benchmark_max_frame_ms = 0.0
+	_particle_wake.call("reset_wake")
 	print("DISPLAY_BENCH_BEGIN quality=%s scale=%.2f clouds=%s wake=%s speed_mps=7.0 warmup_s=%.1f sample_s=%.1f" % [BENCHMARK_QUALITY_NAMES[quality_index], float(_quality_manager.call("get_resolution_scale")), "on" if clouds_enabled else "off", "gpu" if wake_enabled else "off", BENCHMARK_WARMUP_SECONDS, BENCHMARK_SAMPLE_SECONDS])
 
 
@@ -403,3 +451,100 @@ func _update_state_check(delta: float) -> void:
 		)
 		_state_check_index += 1
 		_begin_state_check_stage()
+
+
+func _start_integration_check() -> void:
+	_integration_check_active = true
+	_boat.is_autopilot = false
+	_boat.is_motion_paused = false
+	_boat.global_position = _start_position
+	_boat.global_rotation = _start_rotation
+	_boat.speed_mps = 0.0
+	_particle_wake.call("set_wake_enabled", true)
+	_particle_wake.call("reset_wake")
+	var default_profile := load("res://resources/wake_profiles/SailboatWake.tres") as WakeProfile
+	for profile_path in [
+		"res://resources/wake_profiles/SailboatWake.tres",
+		"res://resources/wake_profiles/FishingBoatWake.tres",
+		"res://resources/wake_profiles/SpeedboatWake.tres",
+	]:
+		var loaded_profile := load(profile_path) as WakeProfile
+		if loaded_profile == null:
+			push_error("WakeProfile failed to load: %s" % profile_path)
+			continue
+		_particle_wake.call("set_wake_profile", loaded_profile)
+		print("WAKE_PROFILE_CHECK name=%s capacity=%d visible_speed=%.2f full_effect_speed=%.2f" % [loaded_profile.profile_name, loaded_profile.max_particle_budget, loaded_profile.minimum_visible_speed_mps, loaded_profile.full_effect_speed_mps])
+	if default_profile != null:
+		_particle_wake.call("set_wake_profile", default_profile)
+		_particle_wake.call("reset_wake")
+	_integration_stage_index = 0
+	_begin_integration_stage()
+
+
+func _begin_integration_stage() -> void:
+	_release_test_inputs()
+	if _integration_stage_index >= INTEGRATION_STAGES.size():
+		print("WAKE_INTEGRATION_CHECK_COMPLETE stages=%d" % INTEGRATION_STAGES.size())
+		get_tree().quit()
+		return
+	var stage: Dictionary = INTEGRATION_STAGES[_integration_stage_index]
+	var stage_name := str(stage["name"])
+	match stage_name:
+		"MANUAL_ACCEL":
+			Input.action_press("boat_accelerate")
+		"MANUAL_LEFT":
+			Input.action_press("boat_accelerate")
+			Input.action_press("boat_turn_left")
+		"MANUAL_RIGHT":
+			Input.action_press("boat_accelerate")
+			Input.action_press("boat_turn_right")
+		"AUTOPILOT_CRUISE":
+			# Drive the real BoatController autopilot integrator without synthesizing a key event.
+			# The runtime key mapping itself is checked by the live game smoke test.
+			_boat.rotation.y = _start_rotation.y
+			_boat.set("_autopilot_heading_radians", _boat.rotation.y)
+			_boat.is_autopilot = true
+		"BRAKE":
+			_boat.is_autopilot = false
+			Input.action_press("boat_brake")
+		"TELEPORT_RESET":
+			_boat.global_position += Vector3(150.0, 0.0, 0.0)
+	_integration_stage_elapsed = 0.0
+	print("WAKE_INTEGRATION_BEGIN name=%s duration_s=%.1f" % [stage_name, float(stage["duration"])])
+
+
+func _update_integration_check(delta: float) -> void:
+	_integration_stage_elapsed += delta
+	var stage: Dictionary = INTEGRATION_STAGES[_integration_stage_index]
+	if _integration_stage_elapsed < float(stage["duration"]):
+		return
+	print(
+		"WAKE_INTEGRATION_RESULT name=%s speed_mps=%.2f emission_ratio=%.3f estimated_particles=%d capacity=%d autopilot=%s yaw_degrees=%.1f position=%s"
+		% [
+			str(stage["name"]),
+			float(_particle_wake.call("get_measured_speed_mps")),
+			float(_particle_wake.call("get_emission_ratio")),
+			int(_particle_wake.call("get_estimated_steady_state_particle_count")),
+			int(_particle_wake.call("get_particle_capacity")),
+			str(_boat.is_autopilot),
+			rad_to_deg(_boat.rotation.y),
+			str(_boat.global_position.round()),
+		]
+	)
+	_integration_stage_index += 1
+	_begin_integration_stage()
+
+
+func _release_test_inputs() -> void:
+	Input.action_release("boat_accelerate")
+	Input.action_release("boat_brake")
+	Input.action_release("boat_turn_left")
+	Input.action_release("boat_turn_right")
+	Input.action_release("boat_toggle_autopilot")
+
+
+func _capture_wake_view() -> void:
+	_capture_remaining_seconds = -1.0
+	var error := get_viewport().get_texture().get_image().save_png(_capture_path)
+	print("WAKE_CAPTURE_RESULT path=%s error=%d speed_mps=%.2f profile=%s" % [_capture_path, error, float(_particle_wake.call("get_measured_speed_mps")), str(_particle_wake.call("get_profile_name"))])
+	get_tree().quit()

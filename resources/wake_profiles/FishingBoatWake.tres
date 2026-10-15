@@ -1,0 +1,33 @@
+[gd_resource type="Resource" script_class="WakeProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/wake_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+profile_name = "小型渔船 / 工作艇"
+max_particle_budget = 260
+minimum_visible_speed_mps = 0.4
+full_effect_speed_mps = 10.0
+emission_strength_min = 0.1
+emission_strength_max = 0.88
+speed_influence = 1.0
+response_speed = 1.9
+spawn_half_width_min_m = 0.32
+spawn_half_width_max_m = 0.88
+spawn_length_half_extent_m = 0.22
+lateral_spread_min_degrees = 6.0
+lateral_spread_max_degrees = 16.0
+initial_velocity_min_mps = 0.05
+initial_velocity_max_mps = 0.8
+particle_size_min_m = 0.34
+particle_size_max_m = 1.28
+particle_lifetime_min_seconds = 3.0
+particle_lifetime_max_seconds = 4.4
+wake_opacity_min = 0.11
+wake_opacity_max = 0.23
+foam_opacity_min = 0.52
+foam_opacity_max = 0.8
+wake_tint = Color(0.28, 0.62, 0.64, 1)
+foam_tint = Color(0.83, 0.92, 0.89, 1)
+color_hue_variation = 0.04
+future_v_wave_strength = 0.0

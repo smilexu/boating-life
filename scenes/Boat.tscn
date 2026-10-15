@@ -1,10 +1,11 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://scripts/boat_controller.gd" id="1_controller"]
 [ext_resource type="Script" path="res://scripts/boat_follow_camera.gd" id="2_follow_camera"]
 [ext_resource type="Script" path="res://scripts/boat_hud.gd" id="3_hud"]
 [ext_resource type="PackedScene" path="res://assets/boats/base_boat.fbx" id="4_base_boat"]
 [ext_resource type="Script" path="res://scripts/boat_buoyancy.gd" id="5_buoyancy"]
+[ext_resource type="PackedScene" path="res://scenes/WakeSystem.tscn" id="6_wake_system"]
 
 [node name="Boat" type="Node3D"]
 
@@ -17,6 +18,8 @@ script = ExtResource("5_buoyancy")
 [node name="BaseBoatModel" parent="MotionRoot/VisualRoot" instance=ExtResource("4_base_boat")]
 position = Vector3(0, -0.5, 0)
 scale = Vector3(5, 5, 5)
+
+[node name="WakeSystem" parent="MotionRoot/VisualRoot" instance=ExtResource("6_wake_system")]
 
 [editable path="MotionRoot/VisualRoot/BaseBoatModel"]
 

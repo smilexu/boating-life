@@ -44,10 +44,11 @@ godot --path .
 
 ## GPU 粒子船舶尾流
 
-- 当前唯一维护的尾流实现是 GPUParticles3D + ParticleProcessMaterial + shaders/particle_wake_foam.gdshader，位于独立测试场景 scenes/SimpleParticleWake.tscn。测试沿用正式船只、动态海面、WaveSampler、天空与摄像机，不接入正式主场景。
-- 按 F6 / F7 / F8 / F9 测试停止、2、7、12 m/s；F10 / V 切换 S 弯；F11 / K 只切换关闭 / GPU 粒子尾流；F12 / O 切换船尾与倾斜俯视镜头。
+- 正式船只已使用可复用的 `scenes/WakeSystem.tscn`；它根据 BoatController 的世界空间水平位移测速，世界坐标 GPUParticles3D 粒子在转弯后保留历史位置，并复用 WaveSampler 的 Gerstner 参数和时间基准贴近海面。
+- 船型视觉配置保存在 `resources/wake_profiles/`：`SailboatWake.tres`（默认）、`FishingBoatWake.tres`、`SpeedboatWake.tres`。未来船型可实例化同一 WakeSystem 并指定不同 WakeProfile。
+- 运行 `godot --path . res://scenes/SimpleParticleWake.tscn` 打开独立对比场景。F6 / F7 / F8 / F9 切换停止、2、7、12 m/s；F10 / V 切换 S 弯；F11 / K 只切换关闭 / GPU 粒子尾流；F12 / O 切换船尾与倾斜俯视镜头。此场景复用正式船上的同一个 WakeSystem。
 - 旧版动态 Mesh / Water Trail 实现已从项目中移除，不再维护或参与测试。
-- 对照条件、运行命令与性能限制见 [docs/PERFORMANCE_REPORT.md](docs/PERFORMANCE_REPORT.md) 和 [docs/SIMPLE_PARTICLE_WAKE_REPORT.md](docs/SIMPLE_PARTICLE_WAKE_REPORT.md)。
+- 架构和船型参数见 [docs/WAKE_SYSTEM.md](docs/WAKE_SYSTEM.md)；运行验证、对照命令与性能限制见 [docs/PERFORMANCE_REPORT.md](docs/PERFORMANCE_REPORT.md) 和 [docs/SIMPLE_PARTICLE_WAKE_REPORT.md](docs/SIMPLE_PARTICLE_WAKE_REPORT.md)。
 
 插件来源、提交、Godot 兼容性和许可记录见 [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md)。
 
