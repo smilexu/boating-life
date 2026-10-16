@@ -1,4 +1,4 @@
-[gd_scene load_steps=18 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
@@ -16,6 +16,8 @@
 [ext_resource type="Script" path="res://scripts/bathymetry_manager.gd" id="14_bathymetry_manager"]
 [ext_resource type="Resource" path="res://resources/oresund_georeference.tres" id="15_georeference"]
 [ext_resource type="PackedScene" path="res://scenes/DepthChartHUD.tscn" id="16_depth_chart_hud"]
+[ext_resource type="Script" path="res://scripts/day_night_visual_controller.gd" id="17_day_night"]
+[ext_resource type="Resource" path="res://resources/day_night_visual_profile.tres" id="18_day_night_profile"]
 
 [sub_resource type="Compositor" id="Compositor_volumetric_clouds"]
 compositor_effects = Array[CompositorEffect]([ExtResource("11_cloud_effect")])
@@ -37,6 +39,21 @@ directional_shadow_max_distance = 260.0
 directional_shadow_fade_start = 0.82
 shadow_blur = 1.8
 shadow_opacity = 0.30
+
+[node name="Moonlight" type="DirectionalLight3D" parent="."]
+visible = true
+light_color = Color(0.55, 0.68, 0.92, 1)
+light_energy = 0.0
+shadow_enabled = false
+light_angular_distance = 2.0
+cull_mask = 1048575
+
+[node name="NightCloudFill" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-90, 0, 0)
+light_color = Color(0.42, 0.53, 0.72, 1)
+light_energy = 0.0
+shadow_enabled = false
+light_cull_mask = 0
 
 [node name="Ocean" type="Node3D" parent="."]
 script = ExtResource("1_ocean")
@@ -65,8 +82,8 @@ script = ExtResource("10_cloud_driver")
 update_continuously = true
 clouds_resource = ExtResource("11_cloud_effect")
 ambience_sample_environment = ExtResource("7_environment")
-tracked_directional_lights = [NodePath("../Sunlight")]
-tracked_directional_light_shadow_steps = Array[int]([16])
+tracked_directional_lights = [NodePath("../Sunlight"), NodePath("../Moonlight"), NodePath("../NightCloudFill")]
+tracked_directional_light_shadow_steps = Array[int]([16, 2, 2])
 wind_direction = Vector3(1, 0, 0.35)
 extra_large_structures_wind_speed = 0.8
 large_structures_wind_speed = 1.8
@@ -77,6 +94,11 @@ small_structures_wind_speed = 7.0
 script = ExtResource("8_weather")
 water_material = ExtResource("5_water_material")
 cloud_profiles = ExtResource("9_cloud_profiles")
+
+[node name="DayNightVisualController" type="Node" parent="."]
+script = ExtResource("17_day_night")
+georeference = ExtResource("15_georeference")
+visual_profile = ExtResource("18_day_night_profile")
 
 [node name="QualityManager" type="Node" parent="."]
 script = ExtResource("12_quality_manager")

@@ -37,6 +37,13 @@ uniform float water_roughness_near : hint_range(0.0, 1.0) = 0.10;
 uniform float water_roughness_far : hint_range(0.0, 1.0) = 0.34;
 uniform float water_specular_near_multiplier : hint_range(0.0, 1.0) = 0.72;
 uniform float water_specular_far_multiplier : hint_range(0.0, 1.0) = 0.62;
+// Small night-only surface lift keeps deep water readable when the sky stops
+// contributing daylight. It adds no pass or texture fetch and leaves daytime
+// albedo/reflection unchanged at night_visual_weight = 0.
+uniform float night_visual_weight : hint_range(0.0, 1.0) = 0.0;
+uniform vec3 night_surface_lift = vec3(0.010, 0.024, 0.052);
+uniform float night_specular_scale : hint_range(0.0, 1.0) = 0.68;
+uniform float night_roughness_target : hint_range(0.05, 0.5) = 0.20;
 uniform float albedo_detail_fade_start : hint_range(0.0, 5000.0) = 250.0;
 uniform float albedo_detail_fade_end : hint_range(0.0, 5000.0) = 2200.0;
 
@@ -480,6 +487,8 @@ void fragment() {
 	float reflection_distance_fade = smoothstep(500.0, 2600.0, distance_from_camera);
 	SPECULAR = specular * mix(water_specular_near_multiplier, water_specular_far_multiplier, reflection_distance_fade);
 	ROUGHNESS = mix(water_roughness_near, water_roughness_far, reflection_distance_fade);
+	SPECULAR *= mix(1.0, night_specular_scale, night_visual_weight);
+	ROUGHNESS = mix(ROUGHNESS, max(ROUGHNESS, night_roughness_target), night_visual_weight);
 	// NORMAL is in view space in fragment(). Blend toward world-up in the same
 	// space so this changes lighting/reflection response only, not wave geometry.
 	vec3 flat_water_normal_view = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
@@ -632,6 +641,9 @@ void fragment() {
 
 	// Water appearance diagnostics are output-only: no vertex wave inputs,
 	// phase, amplitude, boat motion, or WaveSampler values are changed.
+	if (water_diagnostic_mode == 0) {
+		EMISSION += night_surface_lift * night_visual_weight;
+	}
 	if (water_diagnostic_mode == 1) {
 		ALBEDO = vec3(0.0);
 		EMISSION = albedo.rgb;

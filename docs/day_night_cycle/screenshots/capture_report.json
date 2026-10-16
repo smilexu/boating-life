@@ -1,0 +1,248 @@
+{
+	"captures": [
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"direct_light_strength": 0.138240347828901,
+			"height": 1080,
+			"hour": 5,
+			"name": "summer_0500",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/summer_0500.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 50.6386756300585,
+			"solar_elevation_degrees": 0.86900916185494,
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"direct_light_strength": 1.0,
+			"height": 1080,
+			"hour": 8,
+			"name": "summer_0800",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/summer_0800.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 86.3748984996118,
+			"solar_elevation_degrees": 24.0789222661261,
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"direct_light_strength": 1.0,
+			"height": 1080,
+			"hour": 12,
+			"name": "summer_1200",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/summer_1200.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 150.154996967246,
+			"solar_elevation_degrees": 53.2306725514559,
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"direct_light_strength": 1.0,
+			"height": 1080,
+			"hour": 17,
+			"name": "summer_1700",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/summer_1700.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 254.233192556427,
+			"solar_elevation_degrees": 36.5264743091479,
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"direct_light_strength": 1.0,
+			"height": 1080,
+			"hour": 20,
+			"name": "summer_2000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/summer_2000.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 291.438044043846,
+			"solar_elevation_degrees": 11.6342661716709,
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"hour": 23,
+			"name": "summer_2300",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/summer_2300.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 328.629500771671,
+			"solar_elevation_degrees": -7.57745562059278,
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"hour": 2,
+			"name": "summer_0200",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/summer_0200.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 10.7402994597804,
+			"solar_elevation_degrees": -11.9759936235456,
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"hour": 5,
+			"name": "winter_0500",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/winter_0500.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 90.8378601522211,
+			"solar_elevation_degrees": -27.911407661732,
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"hour": 8,
+			"name": "winter_0800",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/winter_0800.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 126.286563227992,
+			"solar_elevation_degrees": -4.27066336020446,
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"direct_light_strength": 1.0,
+			"height": 1080,
+			"hour": 12,
+			"name": "winter_1200",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/winter_1200.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 179.04662548201,
+			"solar_elevation_degrees": 11.0758029963444,
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"hour": 17,
+			"name": "winter_1700",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/winter_1700.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 243.931235628032,
+			"solar_elevation_degrees": -10.5299666693373,
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"hour": 20,
+			"name": "winter_2000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/winter_2000.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 280.223762366138,
+			"solar_elevation_degrees": -35.2072035505,
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"hour": 23,
+			"name": "winter_2300",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/winter_2300.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 333.358227486657,
+			"solar_elevation_degrees": -55.4444546073236,
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"hour": 2,
+			"name": "winter_0200",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_cycle/screenshots/winter_0200.png",
+			"save_error": 0,
+			"solar_azimuth_degrees": 45.2610128998216,
+			"solar_elevation_degrees": -51.1029523723008,
+			"width": 1920
+		}
+	],
+	"engine": {
+		"build": "official",
+		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+		"hex": 263938,
+		"major": 4,
+		"minor": 7,
+		"patch": 2,
+		"status": "stable",
+		"string": "4.7.2-stable (official)",
+		"timestamp": 0
+	},
+	"processor": "Apple M2 Pro",
+	"quality": "High",
+	"renderer": "Apple M2 Pro (Apple8)",
+	"vsync_during_capture": "disabled",
+	"water_phase_frozen": true,
+	"window_size": [
+		1920,
+		1080
+	]
+}

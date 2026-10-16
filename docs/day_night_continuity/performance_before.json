@@ -1,0 +1,63 @@
+{
+	"cases": [
+		{
+			"average_fps": 93.0250225682581,
+			"average_frame_time_ms": 10.7497958333333,
+			"draw_calls_last_frame": 147.0,
+			"elapsed_seconds": 2.579951,
+			"frames": 240,
+			"name": "summer_noon",
+			"p95_frame_time_ms": 20.757
+		},
+		{
+			"average_fps": 96.8839693362237,
+			"average_frame_time_ms": 10.321625,
+			"draw_calls_last_frame": 146.0,
+			"elapsed_seconds": 2.47719,
+			"frames": 240,
+			"name": "summer_sunset",
+			"p95_frame_time_ms": 21.961
+		},
+		{
+			"average_fps": 99.1403703719003,
+			"average_frame_time_ms": 10.0867083333333,
+			"draw_calls_last_frame": 146.0,
+			"elapsed_seconds": 2.42081,
+			"frames": 240,
+			"name": "winter_noon",
+			"p95_frame_time_ms": 17.09
+		},
+		{
+			"average_fps": 86.4532136820856,
+			"average_frame_time_ms": 11.56695,
+			"draw_calls_last_frame": 146.0,
+			"elapsed_seconds": 2.776068,
+			"frames": 240,
+			"name": "winter_night",
+			"p95_frame_time_ms": 23.726
+		}
+	],
+	"draw_calls": 146.0,
+	"engine": {
+		"build": "official",
+		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+		"hex": 263938,
+		"major": 4,
+		"minor": 7,
+		"patch": 2,
+		"status": "stable",
+		"string": "4.7.2-stable (official)",
+		"timestamp": 0
+	},
+	"fps_cap_during_measurement": "unlimited",
+	"gpu_time_ms": "not exposed by the runtime Performance monitors used here",
+	"processor": "Apple M2 Pro",
+	"quality": "High",
+	"renderer": "Apple M2 Pro (Apple8)",
+	"vsync_during_measurement": "disabled",
+	"weather": "Clear",
+	"window_size": [
+		1920,
+		1080
+	]
+}

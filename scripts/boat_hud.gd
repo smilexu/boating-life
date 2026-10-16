@@ -4,16 +4,23 @@ extends CanvasLayer
 ## converted to knots only for display (1 m/s = 1.94384 kn).
 
 const COMPASS_HUD_SCRIPT := preload("res://scripts/compass_hud.gd")
+const LocalTimeControlScript := preload("res://scripts/local_world_time_control.gd")
+const MoonPositionScript := preload("res://scripts/moon_position.gd")
+const SolarPositionScript := preload("res://scripts/solar_position.gd")
+const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 
 @export_node_path("Node3D") var controller_path := NodePath("../MotionRoot")
 @export_node_path("Node") var weather_controller_path := NodePath("../../WeatherController")
+@export_node_path("Node") var day_night_visual_controller_path := NodePath("../../DayNightVisualController")
 @export_node_path("Node") var wave_sampler_path := NodePath("../../WaveSampler")
 @export_node_path("Node") var quality_manager_path := NodePath("../../QualityManager")
 
 var _controller: BoatController
 var _weather_controller: Node
+var _day_night_visual_controller: Node
 var _wave_sampler: Node
 var _quality_manager: Node
+var _world_time_control: WorldTimeControlPort
 var _status_panel: PanelContainer
 var _status_label: Label
 var _fps_label: Label
@@ -22,9 +29,12 @@ var _debug_scroll: ScrollContainer
 var _debug_layout: VBoxContainer
 var _weather_label: Label
 var _sun_label: Label
+var _moon_label: Label
 var _cloud_label: Label
 var _wave_label: Label
 var _performance_label: Label
+var _world_time_label: Label
+var _world_time_feedback: Label
 var _sun_elevation_slider: HSlider
 var _sun_azimuth_slider: HSlider
 var _cloud_slider: HSlider
@@ -32,6 +42,16 @@ var _wave_slider: HSlider
 var _quality_option: OptionButton
 var _frame_limit_option: OptionButton
 var _window_mode_button: Button
+var _cycle_hour_spin: SpinBox
+var _cycle_minute_spin: SpinBox
+var _time_scale_option: OptionButton
+var _time_pause_toggle: CheckButton
+var _calendar_year_spin: SpinBox
+var _calendar_month_spin: SpinBox
+var _calendar_day_spin: SpinBox
+var _time_admin_controls: Array[Control] = []
+var _has_custom_time_scale_item := false
+var _custom_time_scale_value := -1.0
 var _clouds_toggle: CheckButton
 var _fps_elapsed := 0.0
 var _runtime_elapsed := 0.0
@@ -44,8 +64,11 @@ func _ready() -> void:
 		push_error("Boat HUD could not find its controller at %s." % controller_path)
 		return
 	_weather_controller = get_node_or_null(weather_controller_path)
+	_day_night_visual_controller = get_node_or_null(day_night_visual_controller_path)
 	_wave_sampler = get_node_or_null(wave_sampler_path)
 	_quality_manager = get_node_or_null(quality_manager_path)
+	var time_manager := get_node_or_null("/root/WorldTimeManager")
+	_world_time_control = LocalTimeControlScript.new(time_manager) as WorldTimeControlPort
 
 	_status_panel = PanelContainer.new()
 	_status_panel.position = Vector2(24.0, 24.0)
@@ -135,6 +158,7 @@ func _update_fps_display() -> void:
 
 func _build_debug_panel() -> void:
 	_debug_panel = PanelContainer.new()
+	_debug_panel.name = "DebugPanel"
 	_debug_panel.position = Vector2(24.0, 196.0)
 	_debug_panel.custom_minimum_size = Vector2(390.0, 0.0)
 	_debug_panel.visible = false
@@ -173,12 +197,10 @@ func _build_debug_panel() -> void:
 		preset_row.add_child(button)
 	layout.add_child(preset_row)
 
-	_sun_elevation_slider = _add_slider_row(layout, "太阳高度", 3.0, 75.0, 0.5)
-	_sun_elevation_slider.value = 10.0
-	_sun_elevation_slider.value_changed.connect(_on_sun_elevation_changed)
-	_sun_azimuth_slider = _add_slider_row(layout, "太阳方位", 0.0, 360.0, 1.0)
-	_sun_azimuth_slider.value = 28.0
-	_sun_azimuth_slider.value_changed.connect(_on_sun_azimuth_changed)
+	_sun_elevation_slider = _add_slider_row(layout, "太阳高度（时间驱动）", -90.0, 90.0, 0.1)
+	_sun_elevation_slider.editable = false
+	_sun_azimuth_slider = _add_slider_row(layout, "太阳方位（真北顺时针）", 0.0, 360.0, 0.1)
+	_sun_azimuth_slider.editable = false
 	_cloud_slider = _add_slider_row(layout, "云量", 0.0, 1.0, 0.01)
 	_cloud_slider.value = 0.18
 	_cloud_slider.value_changed.connect(_on_cloud_changed)
@@ -202,18 +224,58 @@ func _build_debug_panel() -> void:
 	_window_mode_button = Button.new()
 	_window_mode_button.pressed.connect(_on_window_mode_pressed)
 	layout.add_child(_window_mode_button)
+	_add_world_time_controls(layout)
+	_add_astronomy_debug_controls(layout)
 
 	_sun_label = _make_debug_label()
+	_moon_label = _make_debug_label()
 	_cloud_label = _make_debug_label()
 	_wave_label = _make_debug_label()
 	_performance_label = _make_debug_label()
 	layout.add_child(_sun_label)
+	layout.add_child(_moon_label)
 	layout.add_child(_cloud_label)
 	layout.add_child(_wave_label)
 	layout.add_child(_performance_label)
 	add_child(_debug_panel)
 	_refresh_weather_controls()
 	_refresh_settings_controls()
+
+
+func _add_astronomy_debug_controls(parent: VBoxContainer) -> void:
+	var title := Label.new()
+	title.text = "日月与星空测试"
+	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_color_override("font_color", Color(0.94, 0.96, 0.94))
+	parent.add_child(title)
+	var note := _make_debug_label()
+	note.text = "相位按世界日历日期；月亮沿日轮时刻连续运行。下方日期覆盖可恢复现实日历。"
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(note)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	var moonrise := Button.new()
+	moonrise.name = "NextMoonrise"
+	moonrise.text = "下一次月出"
+	moonrise.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	moonrise.pressed.connect(_jump_to_next_moonrise)
+	row.add_child(moonrise)
+	var full_moon := Button.new()
+	full_moon.name = "FullMoonTest"
+	full_moon.text = "满月夜"
+	full_moon.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	full_moon.pressed.connect(_jump_to_lunar_phase.bind(true))
+	row.add_child(full_moon)
+	var new_moon := Button.new()
+	new_moon.name = "NewMoonTest"
+	new_moon.text = "新月夜"
+	new_moon.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	new_moon.pressed.connect(_jump_to_lunar_phase.bind(false))
+	row.add_child(new_moon)
+	parent.add_child(row)
+	_time_admin_controls.append(moonrise)
+	_time_admin_controls.append(full_moon)
+	_time_admin_controls.append(new_moon)
 
 
 func _add_slider_row(parent: VBoxContainer, row_title: String, low: float, high: float, increment: float) -> HSlider:
@@ -237,6 +299,132 @@ func _make_debug_label() -> Label:
 	var label := Label.new()
 	label.add_theme_color_override("font_color", Color(0.86, 0.92, 0.92))
 	return label
+
+
+func _add_world_time_controls(parent: VBoxContainer) -> void:
+	var section_title := Label.new()
+	section_title.text = "世界时间管理员"
+	section_title.add_theme_font_size_override("font_size", 16)
+	section_title.add_theme_color_override("font_color", Color(0.94, 0.96, 0.94))
+	parent.add_child(section_title)
+	_world_time_label = _make_debug_label()
+	_world_time_label.name = "WorldTimeStatus"
+	_world_time_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(_world_time_label)
+
+	var cycle_row := HBoxContainer.new()
+	cycle_row.add_theme_constant_override("separation", 6)
+	var cycle_title := Label.new()
+	cycle_title.text = "日轮时间"
+	cycle_title.custom_minimum_size.x = 76.0
+	cycle_row.add_child(cycle_title)
+	_cycle_hour_spin = _make_spin_box(0.0, 23.0, 1.0, 54.0)
+	_cycle_hour_spin.name = "CycleHour"
+	cycle_row.add_child(_cycle_hour_spin)
+	var hour_suffix := Label.new()
+	hour_suffix.text = "时"
+	cycle_row.add_child(hour_suffix)
+	_cycle_minute_spin = _make_spin_box(0.0, 59.0, 1.0, 54.0)
+	_cycle_minute_spin.name = "CycleMinute"
+	cycle_row.add_child(_cycle_minute_spin)
+	var minute_suffix := Label.new()
+	minute_suffix.text = "分"
+	cycle_row.add_child(minute_suffix)
+	var set_time_button := Button.new()
+	set_time_button.name = "ApplyCycleTime"
+	set_time_button.text = "应用时间"
+	set_time_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	set_time_button.pressed.connect(_on_cycle_time_apply_pressed)
+	cycle_row.add_child(set_time_button)
+	parent.add_child(cycle_row)
+	_time_admin_controls.append(_cycle_hour_spin)
+	_time_admin_controls.append(_cycle_minute_spin)
+	_time_admin_controls.append(set_time_button)
+
+	var quick_row := HBoxContainer.new()
+	quick_row.add_theme_constant_override("separation", 6)
+	var quick_title := Label.new()
+	quick_title.text = "快速跳时"
+	parent.add_child(quick_title)
+	for quick_time in [[6, 0], [12, 0], [18, 0], [0, 0]]:
+		var quick_button := Button.new()
+		quick_button.name = "QuickTime_%02d_00" % int(quick_time[0])
+		quick_button.text = "%02d:00" % int(quick_time[0])
+		quick_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		quick_button.pressed.connect(_on_quick_time_pressed.bind(int(quick_time[0]), int(quick_time[1])))
+		quick_row.add_child(quick_button)
+		_time_admin_controls.append(quick_button)
+	parent.add_child(quick_row)
+
+	_time_scale_option = _add_option_row(parent, "日轮倍率", ["1×", "6×", "12×", "24×", "60×"])
+	_time_scale_option.name = "TimeScaleOption"
+	_time_scale_option.item_selected.connect(_on_time_scale_selected)
+	_time_admin_controls.append(_time_scale_option)
+	var time_actions := HBoxContainer.new()
+	time_actions.add_theme_constant_override("separation", 8)
+	_time_pause_toggle = CheckButton.new()
+	_time_pause_toggle.name = "PauseToggle"
+	_time_pause_toggle.text = "暂停日轮"
+	_time_pause_toggle.toggled.connect(_on_time_pause_toggled)
+	_time_pause_toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	time_actions.add_child(_time_pause_toggle)
+	var default_rate_button := Button.new()
+	default_rate_button.name = "DefaultTimeScale"
+	default_rate_button.text = "恢复默认 24×"
+	default_rate_button.pressed.connect(_on_default_time_scale_pressed)
+	time_actions.add_child(default_rate_button)
+	parent.add_child(time_actions)
+	_time_admin_controls.append(_time_pause_toggle)
+	_time_admin_controls.append(default_rate_button)
+
+	var date_note := Label.new()
+	date_note.text = "日期调试覆盖（固定显示日期，不改变真实天气时钟）"
+	date_note.add_theme_color_override("font_color", Color(0.79, 0.87, 0.89))
+	date_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(date_note)
+	var date_row := HBoxContainer.new()
+	date_row.add_theme_constant_override("separation", 6)
+	_calendar_year_spin = _make_spin_box(1.0, 9999.0, 1.0, 68.0)
+	_calendar_month_spin = _make_spin_box(1.0, 12.0, 1.0, 50.0)
+	_calendar_day_spin = _make_spin_box(1.0, 31.0, 1.0, 50.0)
+	_calendar_year_spin.name = "CalendarYear"
+	_calendar_month_spin.name = "CalendarMonth"
+	_calendar_day_spin.name = "CalendarDay"
+	date_row.add_child(_calendar_year_spin)
+	date_row.add_child(_calendar_month_spin)
+	date_row.add_child(_calendar_day_spin)
+	var date_apply_button := Button.new()
+	date_apply_button.name = "ApplyCalendarOverride"
+	date_apply_button.text = "应用覆盖"
+	date_apply_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	date_apply_button.pressed.connect(_on_calendar_override_pressed)
+	date_row.add_child(date_apply_button)
+	parent.add_child(date_row)
+	_time_admin_controls.append(_calendar_year_spin)
+	_time_admin_controls.append(_calendar_month_spin)
+	_time_admin_controls.append(_calendar_day_spin)
+	_time_admin_controls.append(date_apply_button)
+	var clear_override_button := Button.new()
+	clear_override_button.name = "ClearCalendarOverride"
+	clear_override_button.text = "取消覆盖 · 恢复现实日历"
+	clear_override_button.pressed.connect(_on_clear_calendar_override_pressed)
+	parent.add_child(clear_override_button)
+	_time_admin_controls.append(clear_override_button)
+	_world_time_feedback = _make_debug_label()
+	_world_time_feedback.name = "WorldTimeFeedback"
+	parent.add_child(_world_time_feedback)
+	_refresh_world_time_controls()
+
+
+func _make_spin_box(low: float, high: float, step: float, minimum_width: float) -> SpinBox:
+	var spin := SpinBox.new()
+	spin.min_value = low
+	spin.max_value = high
+	spin.step = step
+	spin.rounded = true
+	spin.custom_minimum_size.x = minimum_width
+	spin.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	return spin
 
 
 func _add_option_row(parent: VBoxContainer, row_title: String, options: Array[String]) -> OptionButton:
@@ -299,25 +487,32 @@ func _refresh_weather_controls() -> void:
 	if _weather_controller == null:
 		_weather_label.text = "天气控制器未连接"
 		return
-	_sun_elevation_slider.set_value_no_signal(float(_weather_controller.call("get_sun_elevation")))
-	_sun_azimuth_slider.set_value_no_signal(float(_weather_controller.call("get_sun_azimuth")))
+	_refresh_solar_controls()
 	_cloud_slider.set_value_no_signal(float(_weather_controller.call("get_cloud_coverage")))
 	_wave_slider.set_value_no_signal(float(_wave_sampler.get("wave_strength")) if _wave_sampler != null else 1.0)
 	_weather_label.text = "当前天气：%s   ·   按 1 / 2 / 3 切换" % _weather_controller.get("current_weather_name")
 
 
 func _update_debug_status() -> void:
+	_refresh_world_time_controls()
 	if _weather_controller != null:
 		_weather_label.text = "当前天气：%s   ·   按 1 / 2 / 3 切换" % _weather_controller.get("current_weather_name")
-		_sun_label.text = "太阳：高度 %.1f°  ·  方位 %.0f°" % [
-			float(_weather_controller.call("get_sun_elevation")),
-			float(_weather_controller.call("get_sun_azimuth")),
+		var sun_elevation := _get_solar_value("elevation_degrees")
+		var sun_azimuth := _get_solar_value("azimuth_degrees")
+		_sun_label.text = "太阳：高度 %.1f°  ·  方位 %.0f°" % [sun_elevation, sun_azimuth]
+		var lunar: Dictionary = _day_night_visual_controller.call("get_moon_state") if _day_night_visual_controller != null else {}
+		var solar: Dictionary = _day_night_visual_controller.call("get_solar_state") if _day_night_visual_controller != null else {}
+		_moon_label.text = "月亮：高度 %+.1f° · 方位 %.0f° · %s · 照亮 %.0f%%\n日光 %.2f · 月光 %.3f · 星空 %.0f%%" % [
+			float(lunar.get("elevation_degrees", -90.0)),
+			float(lunar.get("azimuth_degrees", 0.0)),
+		_phase_name_zh(str(lunar.get("phase_name", "Unavailable"))),
+			float(lunar.get("illumination_fraction", 0.0)) * 100.0,
+			float(solar.get("direct_light_strength", 0.0)),
+			float(lunar.get("moonlight_strength", 0.0)),
+			float(lunar.get("star_strength", 0.0)) * 100.0,
 		]
 		_cloud_label.text = "云量：%.0f%%" % (float(_weather_controller.call("get_cloud_coverage")) * 100.0)
-		if not _sun_elevation_slider.has_focus():
-			_sun_elevation_slider.set_value_no_signal(float(_weather_controller.call("get_sun_elevation")))
-		if not _sun_azimuth_slider.has_focus():
-			_sun_azimuth_slider.set_value_no_signal(float(_weather_controller.call("get_sun_azimuth")))
+		_refresh_solar_controls()
 		if not _cloud_slider.has_focus():
 			_cloud_slider.set_value_no_signal(float(_weather_controller.call("get_cloud_coverage")))
 	if _wave_sampler != null:
@@ -364,20 +559,287 @@ func _update_debug_status() -> void:
 	_refresh_settings_controls()
 
 
+func _refresh_world_time_controls() -> void:
+	if _world_time_label == null:
+		return
+	if _world_time_control == null:
+		_world_time_label.text = "世界时间控制端口不可用"
+		return
+	var snapshot := _world_time_control.get_snapshot()
+	if snapshot.is_empty():
+		_world_time_label.text = "世界时间状态不可用"
+		_set_time_controls_enabled(false)
+		return
+	var date: Dictionary = snapshot.get("calendar_date", {})
+	var cycle_seconds := float(snapshot.get("cycle_seconds", 0.0))
+	var cycle_whole_seconds := int(floor(cycle_seconds))
+	var hour := int(cycle_whole_seconds / 3600)
+	var minute := int((cycle_whole_seconds % 3600) / 60)
+	var second := cycle_whole_seconds % 60
+	var global_cycle_number := int(snapshot.get("day_cycle_index", 0)) + 1
+	var today_ordinal := int(snapshot.get("local_day_cycle_ordinal", 0))
+	var ordinal_text := "今日第 %d 轮" % today_ordinal if today_ordinal > 0 else "今日尚未开始新日轮"
+	var scale := float(snapshot.get("time_scale", 24.0))
+	var paused := bool(snapshot.get("paused", false))
+	var has_override := bool(snapshot.get("calendar_override_enabled", false))
+	var authority := _world_time_control.get_authority_label()
+	_world_time_label.text = "%04d-%02d-%02d · 全局第 %d 轮 · %s\n%02d:%02d:%02d · %.0f× · %s\n权威来源：%s · 日期调试覆盖：%s" % [
+		int(date.get("year", 0)),
+		int(date.get("month", 0)),
+		int(date.get("day", 0)),
+		global_cycle_number,
+		ordinal_text,
+		hour,
+		minute,
+		second,
+		scale,
+		"已暂停" if paused else "运行中",
+		authority,
+		"已启用" if has_override else "关闭",
+	]
+	if not _time_pause_toggle.has_focus():
+		_time_pause_toggle.set_pressed_no_signal(paused)
+	if not _control_has_focus(_cycle_hour_spin):
+		_cycle_hour_spin.set_value_no_signal(hour)
+	if not _control_has_focus(_cycle_minute_spin):
+		_cycle_minute_spin.set_value_no_signal(minute)
+	if not _control_has_focus(_calendar_year_spin):
+		_calendar_year_spin.set_value_no_signal(int(date.get("year", 2026)))
+	if not _control_has_focus(_calendar_month_spin):
+		_calendar_month_spin.set_value_no_signal(int(date.get("month", 1)))
+	if not _control_has_focus(_calendar_day_spin):
+		_calendar_day_spin.set_value_no_signal(int(date.get("day", 1)))
+	_sync_time_scale_option(scale)
+	var can_modify := _world_time_control.can_modify()
+	_set_time_controls_enabled(can_modify)
+	if _world_time_feedback.text.is_empty():
+		_world_time_feedback.text = "本地开发权限通过控制适配器提供。"
+
+
+func _set_time_controls_enabled(enabled: bool) -> void:
+	for control in _time_admin_controls:
+		if control is BaseButton:
+			(control as BaseButton).disabled = not enabled
+		elif control is SpinBox:
+			(control as SpinBox).editable = enabled
+
+
+func _sync_time_scale_option(scale: float) -> void:
+	var selected_scale_index := -1
+	for index in range(TIME_SCALE_PRESETS.size()):
+		var preset_scale := float(TIME_SCALE_PRESETS[index])
+		if is_equal_approx(scale, preset_scale):
+			selected_scale_index = index
+	if selected_scale_index < 0:
+		if not _has_custom_time_scale_item or not is_equal_approx(_custom_time_scale_value, scale):
+			if _has_custom_time_scale_item:
+				_time_scale_option.remove_item(TIME_SCALE_PRESETS.size())
+			_time_scale_option.add_item("当前 %.2f×" % scale)
+			_has_custom_time_scale_item = true
+			_custom_time_scale_value = scale
+		selected_scale_index = TIME_SCALE_PRESETS.size()
+	elif _has_custom_time_scale_item:
+		_time_scale_option.remove_item(TIME_SCALE_PRESETS.size())
+		_has_custom_time_scale_item = false
+		_custom_time_scale_value = -1.0
+	_time_scale_option.select(selected_scale_index)
+
+
+func _control_has_focus(control: Control) -> bool:
+	var focus_owner := get_viewport().gui_get_focus_owner()
+	return focus_owner == control or (focus_owner != null and control.is_ancestor_of(focus_owner))
+
+
+func _on_cycle_time_apply_pressed() -> void:
+	_apply_cycle_time(int(_cycle_hour_spin.value), int(_cycle_minute_spin.value))
+
+
+func _on_quick_time_pressed(hour: int, minute: int) -> void:
+	_cycle_hour_spin.set_value_no_signal(hour)
+	_cycle_minute_spin.set_value_no_signal(minute)
+	_apply_cycle_time(hour, minute)
+
+
+func _apply_cycle_time(hour: int, minute: int) -> void:
+	var succeeded := _world_time_control != null and _world_time_control.request_set_cycle_time(hour, minute)
+	_world_time_feedback.text = "日轮时间已设置为 %02d:%02d。" % [hour, minute] if succeeded else "无法设置日轮时间。"
+	_refresh_world_time_controls()
+
+
+func _on_time_scale_selected(index: int) -> void:
+	if index < 0 or index >= TIME_SCALE_PRESETS.size():
+		return
+	var selected_scale := float(TIME_SCALE_PRESETS[index])
+	var succeeded := _world_time_control != null and _world_time_control.request_set_time_scale(selected_scale)
+	_world_time_feedback.text = "日轮倍率已设置为 %.0f×。" % selected_scale if succeeded else "无法设置日轮倍率。"
+	_refresh_world_time_controls()
+
+
+func _on_default_time_scale_pressed() -> void:
+	var succeeded := _world_time_control != null and _world_time_control.request_set_time_scale(24.0)
+	_world_time_feedback.text = "已恢复默认日轮倍率 24×。" if succeeded else "无法恢复默认倍率。"
+	_refresh_world_time_controls()
+
+
+func _on_time_pause_toggled(paused: bool) -> void:
+	var succeeded := _world_time_control != null and _world_time_control.request_set_paused(paused)
+	_world_time_feedback.text = "日轮已暂停。" if succeeded and paused else "日轮已恢复。" if succeeded else "无法更改暂停状态。"
+	_refresh_world_time_controls()
+
+
+func _on_calendar_override_pressed() -> void:
+	var succeeded := _world_time_control != null and _world_time_control.request_set_calendar_override(
+		int(_calendar_year_spin.value),
+		int(_calendar_month_spin.value),
+		int(_calendar_day_spin.value)
+	)
+	_world_time_feedback.text = "已启用固定日期调试覆盖。" if succeeded else "日期无效或权限不足，未应用覆盖。"
+	_refresh_world_time_controls()
+
+
+func _on_clear_calendar_override_pressed() -> void:
+	var succeeded := _world_time_control != null and _world_time_control.request_clear_calendar_override()
+	_world_time_feedback.text = "已恢复权威现实日历。" if succeeded else "无法恢复现实日历。"
+	_refresh_world_time_controls()
+
+
 func _on_weather_button_pressed(index: int) -> void:
 	if _weather_controller != null:
 		_weather_controller.call("set_weather_by_index", index)
 		_refresh_weather_controls()
 
 
-func _on_sun_elevation_changed(value: float) -> void:
-	if _weather_controller != null:
-		_weather_controller.call("set_sun_elevation", value)
+func _refresh_solar_controls() -> void:
+	if _sun_elevation_slider == null or _sun_azimuth_slider == null:
+		return
+	_sun_elevation_slider.set_value_no_signal(_get_solar_value("elevation_degrees"))
+	_sun_azimuth_slider.set_value_no_signal(_get_solar_value("azimuth_degrees"))
 
 
-func _on_sun_azimuth_changed(value: float) -> void:
-	if _weather_controller != null:
-		_weather_controller.call("set_sun_azimuth", value)
+func _get_solar_value(key: String) -> float:
+	if _day_night_visual_controller == null or not is_instance_valid(_day_night_visual_controller):
+		return 0.0
+	var state: Dictionary = _day_night_visual_controller.call("get_solar_state")
+	return float(state.get(key, 0.0))
+
+
+func _jump_to_next_moonrise() -> void:
+	if not _can_run_astronomy_debug():
+		return
+	var snapshot := _world_time_control.get_snapshot()
+	var date: Dictionary = snapshot.get("calendar_date", {})
+	var cycle_seconds := float(snapshot.get("cycle_seconds", 0.0))
+	var geo := _get_astronomy_georeference()
+	if date.is_empty() or geo == null:
+		_world_time_feedback.text = "无法读取当前日期或地图位置。"
+		return
+	var previous: Dictionary = MoonPositionScript.calculate(date, cycle_seconds, geo.origin_latitude_deg, geo.origin_longitude_deg)
+	var found_seconds := -1.0
+	for minute_offset in range(1, 1441):
+		var candidate_seconds := fposmod(cycle_seconds + float(minute_offset * 60), 86400.0)
+		var current: Dictionary = MoonPositionScript.calculate(date, candidate_seconds, geo.origin_latitude_deg, geo.origin_longitude_deg)
+		if float(previous.get("elevation_degrees", -90.0)) < 0.0 and float(current.get("elevation_degrees", -90.0)) >= 0.0:
+			found_seconds = candidate_seconds
+			break
+		previous = current
+	if found_seconds < 0.0:
+		_world_time_feedback.text = "当前日期和测试日轮中没有找到月出交点。"
+		return
+	var target_hour := int(found_seconds / 3600.0)
+	var target_minute := int(fposmod(found_seconds, 3600.0) / 60.0)
+	var succeeded := _world_time_control.request_set_cycle_time(target_hour, target_minute)
+	_world_time_feedback.text = "已跳到下一次估算月出 %02d:%02d。" % [target_hour, target_minute] if succeeded else "跳转失败：当前控制端没有管理员权限。"
+	_refresh_world_time_controls()
+
+
+func _jump_to_lunar_phase(find_full_moon: bool) -> void:
+	if not _can_run_astronomy_debug():
+		return
+	var snapshot := _world_time_control.get_snapshot()
+	var start_date: Dictionary = snapshot.get("calendar_date", {})
+	var geo := _get_astronomy_georeference()
+	if start_date.is_empty() or geo == null:
+		_world_time_feedback.text = "无法读取当前日期或地图位置。"
+		return
+	var best_score := INF
+	var best_date: Dictionary = {}
+	var best_seconds := -1.0
+	for day_offset in range(0, 36):
+		var candidate_date := _shift_gregorian_date(start_date, day_offset)
+		var phase_state: Dictionary = MoonPositionScript.calculate(candidate_date, 12.0 * 3600.0, geo.origin_latitude_deg, geo.origin_longitude_deg)
+		var illumination := float(phase_state.get("illumination_fraction", 0.0))
+		var phase_score := 1.0 - illumination if find_full_moon else illumination
+		for time_step in range(36, 48): # 18:00 through 23:30 Stockholm civil time.
+			var seconds := float(time_step * 1800)
+			var moon: Dictionary = MoonPositionScript.calculate(candidate_date, seconds, geo.origin_latitude_deg, geo.origin_longitude_deg)
+			var sun: Dictionary = SolarPositionScript.calculate(candidate_date, seconds, geo.origin_latitude_deg, geo.origin_longitude_deg)
+			var moon_elevation := float(moon.get("elevation_degrees", -90.0))
+			var sun_elevation := float(sun.get("elevation_degrees", 90.0))
+			var visibility_penalty := maxf(0.0, 8.0 - moon_elevation) * 0.002 + maxf(0.0, sun_elevation + 6.0) * 0.003
+			var score := phase_score + visibility_penalty
+			if moon_elevation > 0.0 and sun_elevation < -3.0 and score < best_score:
+				best_score = score
+				best_date = candidate_date
+				best_seconds = seconds
+	if best_date.is_empty():
+		_world_time_feedback.text = "搜索期内没有合适的月相夜景时间。"
+		return
+	var date_applied := _world_time_control.request_set_calendar_override(int(best_date["year"]), int(best_date["month"]), int(best_date["day"]))
+	var hour := int(best_seconds / 3600.0)
+	var minute := int(fposmod(best_seconds, 3600.0) / 60.0)
+	var time_applied := _world_time_control.request_set_cycle_time(hour, minute)
+	var name := "满月" if find_full_moon else "新月"
+	_world_time_feedback.text = "已启用日期调试覆盖：%04d-%02d-%02d %02d:%02d（%s测试）。“取消覆盖”可恢复现实日历。" % [int(best_date["year"]), int(best_date["month"]), int(best_date["day"]), hour, minute, name] if date_applied and time_applied else "月相测试跳转失败：当前控制端没有管理员权限。"
+	_refresh_world_time_controls()
+
+
+func _can_run_astronomy_debug() -> bool:
+	if _world_time_control == null or not _world_time_control.can_modify():
+		_world_time_feedback.text = "此控制端不允许修改权威世界时间。"
+		return false
+	return true
+
+
+func _get_astronomy_georeference() -> GeoReference:
+	if _day_night_visual_controller == null:
+		return null
+	return _day_night_visual_controller.get("georeference") as GeoReference
+
+
+func _shift_gregorian_date(source: Dictionary, days: int) -> Dictionary:
+	var year := int(source.get("year", 2026))
+	var month := int(source.get("month", 1))
+	var day := int(source.get("day", 1))
+	for _step in range(days):
+		day += 1
+		var month_days := _days_in_month(year, month)
+		if day > month_days:
+			day = 1
+			month += 1
+			if month > 12:
+				month = 1
+				year += 1
+	return {"year": year, "month": month, "day": day}
+
+
+func _days_in_month(year: int, month: int) -> int:
+	var days := [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+	if month == 2 and (year % 4 == 0 and (year % 100 != 0 or year % 400 == 0)):
+		return 29
+	return int(days[clampi(month - 1, 0, 11)])
+
+
+func _phase_name_zh(phase_name: String) -> String:
+	match phase_name:
+		"New Moon": return "新月"
+		"Waxing Crescent": return "蛾眉月（盈）"
+		"First Quarter": return "上弦月"
+		"Waxing Gibbous": return "盈凸月"
+		"Full Moon": return "满月"
+		"Waning Gibbous": return "亏凸月"
+		"Last Quarter": return "下弦月"
+		"Waning Crescent": return "残月"
+		_: return "不可用"
 
 
 func _on_cloud_changed(value: float) -> void:

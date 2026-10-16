@@ -1,0 +1,376 @@
+{
+	"captures": [
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"daylight_strength": 0.100960269570351,
+			"deep_night_available": false,
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"name": "summer_pre_dawn_0200",
+			"note": "",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/summer_pre_dawn_0200.png",
+			"phase": "pre_dawn",
+			"save_error": 0,
+			"solar_azimuth_degrees": 10.7402994597804,
+			"solar_elevation_degrees": -11.9759936235456,
+			"stockholm_time": "0200",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"daylight_strength": 0.841399788856506,
+			"deep_night_available": false,
+			"direct_light_strength": 0.273866057395935,
+			"height": 1080,
+			"name": "summer_sunrise_0448",
+			"note": "",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/summer_sunrise_0448.png",
+			"phase": "sunrise",
+			"save_error": 0,
+			"solar_azimuth_degrees": 48.1642049746111,
+			"solar_elevation_degrees": -0.413338143882829,
+			"stockholm_time": "0448",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"daylight_strength": 1.0,
+			"deep_night_available": false,
+			"direct_light_strength": 1.0,
+			"height": 1080,
+			"name": "summer_noon_1315",
+			"note": "Daily maximum solar elevation",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/summer_noon_1315.png",
+			"phase": "noon",
+			"save_error": 0,
+			"solar_azimuth_degrees": 180.088274678479,
+			"solar_elevation_degrees": 55.9559105436655,
+			"stockholm_time": "1315",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"daylight_strength": 1.0,
+			"deep_night_available": false,
+			"direct_light_strength": 1.0,
+			"height": 1080,
+			"name": "summer_afternoon_1714",
+			"note": "Descending solar elevation near 62% of the daily maximum",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/summer_afternoon_1714.png",
+			"phase": "afternoon",
+			"save_error": 0,
+			"solar_azimuth_degrees": 257.468262444089,
+			"solar_elevation_degrees": 34.6130951472187,
+			"stockholm_time": "1714",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"daylight_strength": 1.0,
+			"deep_night_available": false,
+			"direct_light_strength": 0.856521427631378,
+			"height": 1080,
+			"name": "summer_golden_hour_2037",
+			"note": "Descending low sun; target is adapted to the season",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/summer_golden_hour_2037.png",
+			"phase": "golden_hour",
+			"save_error": 0,
+			"solar_azimuth_degrees": 298.721156332767,
+			"solar_elevation_degrees": 6.91303743322998,
+			"stockholm_time": "2037",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"daylight_strength": 0.835051000118256,
+			"deep_night_available": false,
+			"direct_light_strength": 0.251292705535889,
+			"height": 1080,
+			"name": "summer_sunset_2142",
+			"note": "",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/summer_sunset_2142.png",
+			"phase": "sunset",
+			"save_error": 0,
+			"solar_azimuth_degrees": 311.875419067496,
+			"solar_elevation_degrees": -0.554421037209204,
+			"stockholm_time": "2142",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"daylight_strength": 0.375835716724396,
+			"deep_night_available": false,
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"name": "summer_blue_hour_2253",
+			"note": "",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/summer_blue_hour_2253.png",
+			"phase": "blue_hour",
+			"save_error": 0,
+			"solar_azimuth_degrees": 327.076982813913,
+			"solar_elevation_degrees": -7.05205394548532,
+			"stockholm_time": "2253",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 7,
+				"year": 2026
+			},
+			"daylight_strength": 0.0886371433734894,
+			"deep_night_available": false,
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"name": "summer_deep_night_0115",
+			"note": "Deep astronomical night is unavailable in July if the sun never reaches -18 degrees",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/summer_deep_night_0115.png",
+			"phase": "deep_night",
+			"save_error": 0,
+			"solar_azimuth_degrees": 0.0650198911910698,
+			"solar_elevation_degrees": -12.5681430513758,
+			"stockholm_time": "0115",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"daylight_strength": 0.102667815983295,
+			"deep_night_available": true,
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"name": "winter_pre_dawn_0657",
+			"note": "",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/winter_pre_dawn_0657.png",
+			"phase": "pre_dawn",
+			"save_error": 0,
+			"solar_azimuth_degrees": 113.885327910548,
+			"solar_elevation_degrees": -11.9333034919787,
+			"stockholm_time": "0657",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"daylight_strength": 0.838023483753204,
+			"deep_night_available": true,
+			"direct_light_strength": 0.261861622333527,
+			"height": 1080,
+			"name": "winter_sunrise_0835",
+			"note": "",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/winter_sunrise_0835.png",
+			"phase": "sunrise",
+			"save_error": 0,
+			"solar_azimuth_degrees": 133.386568797009,
+			"solar_elevation_degrees": -0.488363462520036,
+			"stockholm_time": "0835",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"daylight_strength": 0.999999940395355,
+			"deep_night_available": true,
+			"direct_light_strength": 0.953907310962677,
+			"height": 1080,
+			"name": "winter_noon_1204",
+			"note": "Daily maximum solar elevation",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/winter_noon_1204.png",
+			"phase": "noon",
+			"save_error": 0,
+			"solar_azimuth_degrees": 179.982769549097,
+			"solar_elevation_degrees": 11.0804172350197,
+			"stockholm_time": "1204",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"daylight_strength": 0.999999940395355,
+			"deep_night_available": true,
+			"direct_light_strength": 0.854358196258545,
+			"height": 1080,
+			"name": "winter_afternoon_1407",
+			"note": "Descending solar elevation near 62% of the daily maximum",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/winter_afternoon_1407.png",
+			"phase": "afternoon",
+			"save_error": 0,
+			"solar_azimuth_degrees": 208.220063627556,
+			"solar_elevation_degrees": 6.85895682237036,
+			"stockholm_time": "1407",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"daylight_strength": 0.98650586605072,
+			"deep_night_available": true,
+			"direct_light_strength": 0.754376649856567,
+			"height": 1080,
+			"name": "winter_golden_hour_1437",
+			"note": "Descending low sun; target is adapted to the season",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/winter_golden_hour_1437.png",
+			"phase": "golden_hour",
+			"save_error": 0,
+			"solar_azimuth_degrees": 214.779334765234,
+			"solar_elevation_degrees": 4.65059094849798,
+			"stockholm_time": "1437",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"daylight_strength": 0.833427250385284,
+			"deep_night_available": true,
+			"direct_light_strength": 0.245519265532494,
+			"height": 1080,
+			"name": "winter_sunset_1534",
+			"note": "",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/winter_sunset_1534.png",
+			"phase": "sunset",
+			"save_error": 0,
+			"solar_azimuth_degrees": 226.781346737052,
+			"solar_elevation_degrees": -0.590503709562232,
+			"stockholm_time": "1534",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"daylight_strength": 0.37400296330452,
+			"deep_night_available": true,
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"name": "winter_blue_hour_1632",
+			"note": "",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/winter_blue_hour_1632.png",
+			"phase": "blue_hour",
+			"save_error": 0,
+			"solar_azimuth_degrees": 238.442959188218,
+			"solar_elevation_degrees": -7.07496216414825,
+			"stockholm_time": "1632",
+			"width": 1920
+		},
+		{
+			"date": {
+				"day": 15,
+				"month": 12,
+				"year": 2026
+			},
+			"daylight_strength": 0.0149999996647239,
+			"deep_night_available": true,
+			"direct_light_strength": 0.0,
+			"height": 1080,
+			"name": "winter_deep_night_2359",
+			"note": "Deep astronomical night is unavailable in July if the sun never reaches -18 degrees",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/winter_deep_night_2359.png",
+			"phase": "deep_night",
+			"save_error": 0,
+			"solar_azimuth_degrees": 357.732577375639,
+			"solar_elevation_degrees": -57.5319823936096,
+			"stockholm_time": "2359",
+			"width": 1920
+		}
+	],
+	"engine": {
+		"build": "official",
+		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+		"hex": 263938,
+		"major": 4,
+		"minor": 7,
+		"patch": 2,
+		"status": "stable",
+		"string": "4.7.2-stable (official)",
+		"timestamp": 0
+	},
+	"fixed_production_camera": true,
+	"phase": "after",
+	"processor": "Apple M2 Pro",
+	"quality": "High",
+	"renderer": "Apple M2 Pro (Apple8)",
+	"vsync_during_capture": "disabled",
+	"water_phase_frozen": true,
+	"weather": "Clear for seasonal phase captures; see weather_regressions for transition captures",
+	"weather_regressions": [
+		{
+			"date": "2026-07-15",
+			"name": "summer_partly_cloudy_golden_hour",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/weather_regressions/summer_partly_cloudy_golden_hour.png",
+			"save_error": 0,
+			"solar_elevation_degrees": 6.91303743322998,
+			"stockholm_time": "20:37",
+			"weather": "PartlyCloudy"
+		},
+		{
+			"date": "2026-07-15",
+			"name": "summer_overcast_golden_hour",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/weather_regressions/summer_overcast_golden_hour.png",
+			"save_error": 0,
+			"solar_elevation_degrees": 6.91303743322998,
+			"stockholm_time": "20:37",
+			"weather": "Overcast"
+		},
+		{
+			"date": "2026-07-15",
+			"name": "summer_overcast_blue_hour",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/day_night_continuity/after/weather_regressions/summer_overcast_blue_hour.png",
+			"save_error": 0,
+			"solar_elevation_degrees": -7.05205394548532,
+			"stockholm_time": "22:53",
+			"weather": "Overcast"
+		}
+	],
+	"window_size": [
+		1920,
+		1080
+	]
+}

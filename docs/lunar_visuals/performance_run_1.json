@@ -1,0 +1,17 @@
+{
+	"engine": "Godot 4.7.2 stable",
+	"renderer": "Apple M2 Pro (Apple8), Forward+ / Metal 3.2",
+	"processor": "Apple M2 Pro",
+	"window_size": [1920, 1080],
+	"quality": "High",
+	"vsync_during_measurement": "disabled",
+	"fps_cap_during_measurement": "unlimited",
+	"gpu_time_ms": "not exposed by the runtime Performance monitors used here",
+	"cases": [
+		{"name": "summer_noon", "frames": 240, "average_fps": 59.4609566970628, "average_frame_time_ms": 16.8177583333333, "p95_frame_time_ms": 20.77, "draw_calls_last_frame": 147.0},
+		{"name": "summer_sunset", "frames": 240, "average_fps": 74.5851202685064, "average_frame_time_ms": 13.4075, "p95_frame_time_ms": 19.515, "draw_calls_last_frame": 146.0},
+		{"name": "winter_noon", "frames": 240, "average_fps": 96.1470665529995, "average_frame_time_ms": 10.4007333333333, "p95_frame_time_ms": 11.016, "draw_calls_last_frame": 146.0},
+		{"name": "winter_night", "frames": 240, "average_fps": 96.1017140541549, "average_frame_time_ms": 10.4056416666667, "p95_frame_time_ms": 11.159, "draw_calls_last_frame": 146.0},
+		{"name": "full_moon_night", "frames": 240, "average_fps": 78.4849269697755, "average_frame_time_ms": 12.7413, "p95_frame_time_ms": 20.103, "draw_calls_last_frame": 146.0}
+	]
+}

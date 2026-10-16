@@ -1,0 +1,72 @@
+{
+	"cases": [
+		{
+			"average_fps": 60.1231171130683,
+			"average_frame_time_ms": 16.6325375,
+			"draw_calls_last_frame": 147.0,
+			"elapsed_seconds": 3.991809,
+			"frames": 240,
+			"name": "summer_noon",
+			"p95_frame_time_ms": 23.801
+		},
+		{
+			"average_fps": 63.0631340801059,
+			"average_frame_time_ms": 15.857125,
+			"draw_calls_last_frame": 146.0,
+			"elapsed_seconds": 3.80571,
+			"frames": 240,
+			"name": "summer_sunset",
+			"p95_frame_time_ms": 22.989
+		},
+		{
+			"average_fps": 61.6834651303372,
+			"average_frame_time_ms": 16.2118,
+			"draw_calls_last_frame": 146.0,
+			"elapsed_seconds": 3.890832,
+			"frames": 240,
+			"name": "winter_noon",
+			"p95_frame_time_ms": 19.474
+		},
+		{
+			"average_fps": 81.4185278715976,
+			"average_frame_time_ms": 12.2822166666667,
+			"draw_calls_last_frame": 146.0,
+			"elapsed_seconds": 2.947732,
+			"frames": 240,
+			"name": "winter_night",
+			"p95_frame_time_ms": 16.296
+		},
+		{
+			"average_fps": 59.9869678312387,
+			"average_frame_time_ms": 16.6702875,
+			"draw_calls_last_frame": 146.0,
+			"elapsed_seconds": 4.000869,
+			"frames": 240,
+			"name": "full_moon_night",
+			"p95_frame_time_ms": 24.909
+		}
+	],
+	"draw_calls": 146.0,
+	"engine": {
+		"build": "official",
+		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+		"hex": 263938,
+		"major": 4,
+		"minor": 7,
+		"patch": 2,
+		"status": "stable",
+		"string": "4.7.2-stable (official)",
+		"timestamp": 0
+	},
+	"fps_cap_during_measurement": "unlimited",
+	"gpu_time_ms": "not exposed by the runtime Performance monitors used here",
+	"processor": "Apple M2 Pro",
+	"quality": "High",
+	"renderer": "Apple M2 Pro (Apple8)",
+	"vsync_during_measurement": "disabled",
+	"weather": "Clear except where full moon case date implies no weather change",
+	"window_size": [
+		1920,
+		1080
+	]
+}

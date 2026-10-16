@@ -1,0 +1,120 @@
+{
+	"algorithm": "NOAA fractional-year solar position approximation",
+	"checks_passed": 155,
+	"failures": [],
+	"godot_world_frame": "X=east, Y=up, -Z=north",
+	"hourly_solar_above_horizon_samples": {
+		"2026-07-15": 17,
+		"2026-12-15": 7
+	},
+	"location": {
+		"latitude_degrees": 55.7,
+		"longitude_degrees": 12.75
+	},
+	"samples": [
+		{
+			"azimuth_degrees": 50.6386756300585,
+			"date": "2026-07-15",
+			"declination_degrees": 21.708282226344,
+			"elevation_degrees": 0.86900916185494,
+			"time": "05:00"
+		},
+		{
+			"azimuth_degrees": 86.3748984996118,
+			"date": "2026-07-15",
+			"declination_degrees": 21.6893309761973,
+			"elevation_degrees": 24.0789222661261,
+			"time": "08:00"
+		},
+		{
+			"azimuth_degrees": 150.154996967246,
+			"date": "2026-07-15",
+			"declination_degrees": 21.6639122099704,
+			"elevation_degrees": 53.2306725514559,
+			"time": "12:00"
+		},
+		{
+			"azimuth_degrees": 254.233192556427,
+			"date": "2026-07-15",
+			"declination_degrees": 21.6318973662707,
+			"elevation_degrees": 36.5264743091479,
+			"time": "17:00"
+		},
+		{
+			"azimuth_degrees": 291.438044043846,
+			"date": "2026-07-15",
+			"declination_degrees": 21.6125599251054,
+			"elevation_degrees": 11.6342661716709,
+			"time": "20:00"
+		},
+		{
+			"azimuth_degrees": 328.629500771671,
+			"date": "2026-07-15",
+			"declination_degrees": 21.5931262238455,
+			"elevation_degrees": -7.57745562059278,
+			"time": "23:00"
+		},
+		{
+			"azimuth_degrees": 10.7402994597804,
+			"date": "2026-07-15",
+			"declination_degrees": 21.7271366434442,
+			"elevation_degrees": -11.9759936235456,
+			"time": "02:00"
+		},
+		{
+			"azimuth_degrees": 90.8378601522211,
+			"date": "2026-12-15",
+			"declination_degrees": -23.2025722429644,
+			"elevation_degrees": -27.911407661732,
+			"time": "05:00"
+		},
+		{
+			"azimuth_degrees": 126.286563227992,
+			"date": "2026-12-15",
+			"declination_degrees": -23.2098745166217,
+			"elevation_degrees": -4.27066336020446,
+			"time": "08:00"
+		},
+		{
+			"azimuth_degrees": 179.04662548201,
+			"date": "2026-12-15",
+			"declination_degrees": -23.219423861684,
+			"elevation_degrees": 11.0758029963444,
+			"time": "12:00"
+		},
+		{
+			"azimuth_degrees": 243.931235628032,
+			"date": "2026-12-15",
+			"declination_degrees": -23.2310597790702,
+			"elevation_degrees": -10.5299666693373,
+			"time": "17:00"
+		},
+		{
+			"azimuth_degrees": 280.223762366138,
+			"date": "2026-12-15",
+			"declination_degrees": -23.2378808193299,
+			"elevation_degrees": -35.2072035505,
+			"time": "20:00"
+		},
+		{
+			"azimuth_degrees": 333.358227486657,
+			"date": "2026-12-15",
+			"declination_degrees": -23.2445814077073,
+			"elevation_degrees": -55.4444546073236,
+			"time": "23:00"
+		},
+		{
+			"azimuth_degrees": 45.2610128998216,
+			"date": "2026-12-15",
+			"declination_degrees": -23.195149808994,
+			"elevation_degrees": -51.1029523723008,
+			"time": "02:00"
+		}
+	],
+	"timezone": "Europe/Stockholm",
+	"visual_profile_samples": {
+		"ambient_daylight_at_minus_4_degrees": 0.619817316532135,
+		"cloud_daylight_at_minus_4_degrees": 0.649269342422485,
+		"sun_warmth_at_minus_4_degrees": 0.559634625911713
+	}
+}
