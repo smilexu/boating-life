@@ -119,8 +119,27 @@ uniform float deep_depth_threshold : hint_range(1.0, 80.0) = 20.0;
 // 3=waves/no albedo pattern/with bathymetry, 4=normal, 5=Fresnel,
 // 6=depth validity, 7=diffuse/shadows only, 8=specular/reflection only,
 // 9=diffuse with flat normal, 10=specular with flat normal, 11=full with flat normal,
-// 12=flat color while preserving the configured alpha fades.
+// 12=flat color while preserving the configured alpha fades,
+// 13=shallow-transmission weight (red) and valid bathymetry (green).
 uniform int water_diagnostic_mode = 0;
+group_uniforms;
+
+group_uniforms ShallowTransparency;
+// Kept off by the shader default as a safe fallback; the production material opts in.
+uniform bool shallow_transparency_enabled = false;
+uniform float shallow_max_depth : hint_range(0.0, 20.0) = 6.0;
+uniform float shallow_fade_start : hint_range(0.0, 20.0) = 4.0;
+uniform float shallow_min_alpha : hint_range(0.0, 1.0) = 0.62;
+uniform float shallow_transmission_strength : hint_range(0.0, 1.0) = 0.60;
+// Mildly attenuates bottom visibility along the estimated surface-to-bottom
+// view path; grazing angles lengthen that path and preserve surface reflection.
+uniform float shallow_absorption_per_meter : hint_range(0.0, 0.25) = 0.06;
+// The bathymetry grid is measured below LAT; align its vertical path with the
+// visual water plane used by ShallowSeabedManager.
+uniform float shallow_surface_above_lat_m : hint_range(0.0, 2.0) = 0.5;
+// Allows for chart datum, wave height and modest bottom relief without exposing
+// objects that are clearly deeper than the local water column.
+uniform float shallow_bottom_depth_padding : hint_range(0.0, 5.0) = 1.5;
 group_uniforms;
 
 group_uniforms SnellWindow;
@@ -547,18 +566,46 @@ void fragment() {
 #endif
 
 	bool use_depth_color = enable_depth_color;
+	float bathymetry_depth_m = 64.0;
+	float bathymetry_validity = 0.0;
+	float shallow_transmission_weight = 0.0;
+	float shallow_surface_alpha = 1.0;
+	bool needs_bathymetry = enable_depth_color || shallow_transparency_enabled || water_diagnostic_mode == 6 || water_diagnostic_mode == 13;
+	if (needs_bathymetry) {
+		vec2 bathymetry = sample_bathymetry(vec2(world_coordinates.x, -world_coordinates.z));
+		bathymetry_depth_m = bathymetry.x;
+		bathymetry_validity = smoothstep(valid_coverage_min, valid_coverage_max, bathymetry.y);
+	}
 	if (water_diagnostic_mode == 1 || water_diagnostic_mode == 2) {
 		use_depth_color = false;
 	} else if (water_diagnostic_mode == 3) {
 		use_depth_color = true;
 	}
-	if (use_depth_color) {
-		vec2 bathymetry = sample_bathymetry(vec2(world_coordinates.x, -world_coordinates.z));
-		float valid_water = smoothstep(valid_coverage_min, valid_coverage_max, bathymetry.y);
-		if (valid_water > 0.0) {
-			vec3 depth_color = bathymetry_tint(bathymetry.x, surface_color.rgb);
-			surface_color.rgb = mix(surface_color.rgb, depth_color, depth_color_strength * valid_water);
-		}
+	if (use_depth_color && bathymetry_validity > 0.0) {
+		vec3 depth_color = bathymetry_tint(bathymetry_depth_m, surface_color.rgb);
+		surface_color.rgb = mix(surface_color.rgb, depth_color, depth_color_strength * bathymetry_validity);
+	}
+
+	// Shallow transmission is object-gated: valid 0–6 m water only becomes
+	// translucent where the opaque depth buffer contains geometry within the
+	// local water column. This preserves the original surface over open water.
+	if (shallow_transparency_enabled && bathymetry_validity > 0.0 && bathymetry_depth_m < shallow_max_depth) {
+		float depth_fade = 1.0 - smoothstep(shallow_fade_start, shallow_max_depth, bathymetry_depth_m);
+		float view_incidence = max(abs(dot(normalize(NORMAL), normalize(VIEW))), 0.20);
+		float vertical_bottom_gap = max(bathymetry_depth_m + shallow_surface_above_lat_m - world_coordinates.y, 0.0);
+		float expected_bottom_gap = vertical_bottom_gap / view_incidence;
+		float path_transmission = exp(-shallow_absorption_per_meter * expected_bottom_gap);
+		float object_gap = depth_from_water_to_object(SCREEN_UV, INV_PROJECTION_MATRIX, VERTEX);
+		float object_is_below_surface = smoothstep(0.02, 0.18, object_gap);
+		float bottom_limit_start = expected_bottom_gap + shallow_bottom_depth_padding;
+		float bottom_limit_end = bottom_limit_start + max(shallow_bottom_depth_padding, 0.25);
+		float object_is_near_bottom = 1.0 - smoothstep(bottom_limit_start, bottom_limit_end, object_gap);
+		shallow_transmission_weight = clamp(
+			depth_fade * shallow_transmission_strength * path_transmission * bathymetry_validity * object_is_below_surface * object_is_near_bottom,
+			0.0,
+			1.0
+		);
+		shallow_surface_alpha = mix(1.0, shallow_min_alpha, shallow_transmission_weight);
 	}
 
 	// Screen-reading shader features
@@ -605,6 +652,9 @@ void fragment() {
 	ALBEDO = surface_color.rgb * albedo_detail;
 	ALPHA *= surface_color.a * albedo_tex.a;
 #endif
+	if (shallow_transparency_enabled && water_diagnostic_mode == 0) {
+		ALPHA *= shallow_surface_alpha;
+	}
 
 	/* Sea Foam
 	 * override refraction and add to albedo
@@ -719,6 +769,14 @@ void fragment() {
 		METALLIC = 0.0;
 		ROUGHNESS = 1.0;
 		SPECULAR = 0.0;
+	} else if (water_diagnostic_mode == 13) {
+		// Visual validation for depth and depth-buffer gating; no scene color changes.
+		ALBEDO = vec3(0.0);
+		EMISSION = vec3(shallow_transmission_weight, bathymetry_validity, 1.0 - shallow_transmission_weight);
+		METALLIC = 0.0;
+		ROUGHNESS = 1.0;
+		SPECULAR = 0.0;
+		ALPHA = 1.0;
 	}
 
 }

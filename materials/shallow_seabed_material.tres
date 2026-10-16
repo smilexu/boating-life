@@ -1,0 +1,9 @@
+[gd_resource type="ShaderMaterial" load_steps=2 format=3]
+
+[ext_resource type="Shader" path="res://shaders/shallow_seabed.gdshader" id="1_shader"]
+
+[resource]
+shader = ExtResource("1_shader")
+shader_parameter/show_lod_debug = false
+shader_parameter/color_variation_strength = 0.12
+shader_parameter/sand_ripple_strength = 0.035

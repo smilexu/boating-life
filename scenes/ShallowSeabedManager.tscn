@@ -1,0 +1,30 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/shallow_seabed_manager.gd" id="1_manager"]
+[ext_resource type="Resource" path="res://resources/oresund_georeference.tres" id="2_geo"]
+[ext_resource type="ShaderMaterial" path="res://materials/shallow_seabed_material.tres" id="3_material"]
+
+[node name="ShallowSeabedManager" type="Node3D"]
+script = ExtResource("1_manager")
+georeference = ExtResource("2_geo")
+seabed_material = ExtResource("3_material")
+system_enabled = true
+tile_size_m = 128.0
+near_radius_m = 300.0
+far_radius_m = 600.0
+unload_radius_m = 704.0
+coarse_scan_spacing_m = 32.0
+generation_jobs_per_frame = 1
+mesh_depth_limit_m = 9.0
+water_surface_above_lat_m = 0.5
+near_vertex_spacing_m = 16.0
+far_vertex_spacing_m = 32.0
+lod_hysteresis_m = 32.0
+broad_relief_amplitude_m = 0.15
+fine_relief_amplitude_m = 0.04
+enable_procedural_rocks = true
+maximum_rock_depth_m = 5.8
+rock_candidate_spacing_m = 16.0
+rock_density_near = 1.0
+rock_density_far = 0.32
+

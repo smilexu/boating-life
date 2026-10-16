@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
@@ -18,6 +18,7 @@
 [ext_resource type="PackedScene" path="res://scenes/DepthChartHUD.tscn" id="16_depth_chart_hud"]
 [ext_resource type="Script" path="res://scripts/day_night_visual_controller.gd" id="17_day_night"]
 [ext_resource type="Resource" path="res://resources/day_night_visual_profile.tres" id="18_day_night_profile"]
+[ext_resource type="PackedScene" path="res://scenes/ShallowSeabedManager.tscn" id="19_seabed_manager"]
 
 [sub_resource type="Compositor" id="Compositor_volumetric_clouds"]
 compositor_effects = Array[CompositorEffect]([ExtResource("11_cloud_effect")])
@@ -118,3 +119,5 @@ position = Vector3(13424.56, 0, 10459.39)
 rotation_degrees = Vector3(0, 90, 0)
 
 [node name="DepthChartHUD" parent="." instance=ExtResource("16_depth_chart_hud")]
+
+[node name="ShallowSeabedManager" parent="." instance=ExtResource("19_seabed_manager")]
