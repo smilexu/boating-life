@@ -118,7 +118,8 @@ uniform float deep_depth_threshold : hint_range(1.0, 80.0) = 20.0;
 // 0=full, 1=flat base, 2=waves/no albedo pattern/no bathymetry,
 // 3=waves/no albedo pattern/with bathymetry, 4=normal, 5=Fresnel,
 // 6=depth validity, 7=diffuse/shadows only, 8=specular/reflection only,
-// 9=diffuse with flat normal, 10=specular with flat normal, 11=full with flat normal.
+// 9=diffuse with flat normal, 10=specular with flat normal, 11=full with flat normal,
+// 12=flat color while preserving the configured alpha fades.
 uniform int water_diagnostic_mode = 0;
 group_uniforms;
 
@@ -710,6 +711,14 @@ void fragment() {
 	} else if (water_diagnostic_mode == 11) {
 		// Compare full shading with a constant upward surface normal.
 		NORMAL = flat_water_normal_view;
+	} else if (water_diagnostic_mode == 12) {
+		// Isolate the ocean silhouette while preserving its configured distance
+		// and near fades. Mode 1 intentionally forces alpha to 1 for geometry tests.
+		ALBEDO = vec3(0.0);
+		EMISSION = albedo.rgb;
+		METALLIC = 0.0;
+		ROUGHNESS = 1.0;
+		SPECULAR = 0.0;
 	}
 
 }

@@ -1,0 +1,46 @@
+{
+	"captures": [
+		{
+			"name": "22_sky_only_day_hemisphere_baseline",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/22_sky_only_day_hemisphere_baseline.png",
+			"save_error": 0,
+			"state": "day_baseline"
+		},
+		{
+			"name": "23_sky_only_day_horizons_equal",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/23_sky_only_day_horizons_equal.png",
+			"save_error": 0,
+			"state": "day_ground_equal_sky"
+		},
+		{
+			"name": "24_sky_only_day_cloud_compositor_off",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/24_sky_only_day_cloud_compositor_off.png",
+			"save_error": 0,
+			"state": "day_compositor_off"
+		},
+		{
+			"name": "25_sky_only_night_hemisphere_baseline",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/25_sky_only_night_hemisphere_baseline.png",
+			"save_error": 0,
+			"state": "night_baseline"
+		},
+		{
+			"name": "26_sky_only_night_horizons_equal",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/26_sky_only_night_horizons_equal.png",
+			"save_error": 0,
+			"state": "night_ground_equal_sky"
+		}
+	],
+	"day_ground_horizon": "(0.62, 0.75, 0.83)",
+	"day_sky_horizon": "(0.4, 0.64, 0.82)",
+	"night_ground_horizon": "(0.006, 0.0085, 0.019)",
+	"night_sky_horizon": "(0.0048, 0.0075, 0.018)",
+	"ocean_visible": false,
+	"processor": "Apple M2 Pro",
+	"renderer": "Apple M2 Pro (Apple8)",
+	"terrain_visible": false,
+	"viewport_px": [
+		1920,
+		1080
+	]
+}

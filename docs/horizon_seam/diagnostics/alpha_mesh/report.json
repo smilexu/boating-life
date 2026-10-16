@@ -1,0 +1,187 @@
+{
+	"alpha_fade_preserved": true,
+	"captures": [
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"name": "third",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/third.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"name": "third_no_far",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/third_no_far.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"name": "third_no_near",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/third_no_near.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"name": "third_without_transition",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/third_without_transition.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"name": "third_without_mid",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/third_without_mid.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"name": "third_without_far",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/third_without_far.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		},
+		{
+			"distance_fade": [
+				8000.0,
+				12000.0
+			],
+			"name": "third_fade_8000_12000",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/third_fade_8000_12000.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"name": "wide",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/wide.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"name": "wide_no_far",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/wide_no_far.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"name": "wide_no_near",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/wide_no_near.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"name": "wide_without_transition",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/wide_without_transition.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"name": "wide_without_mid",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/wide_without_mid.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"name": "wide_without_far",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/wide_without_far.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		},
+		{
+			"distance_fade": [
+				42000.0,
+				58000.0
+			],
+			"name": "wide_fade_42000_58000",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/alpha_mesh/wide_fade_42000_58000.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 12
+		}
+	],
+	"date": "2026-07-15",
+	"horizon_fade_enabled": false,
+	"original_distance_fade_m": [
+		3600.0,
+		4000.0
+	],
+	"renderer": "Apple M2 Pro (Apple8)",
+	"time": "12:00",
+	"viewport_px": [
+		1920,
+		1080
+	],
+	"water_diagnostic_mode": 12,
+	"weather": "Clear"
+}

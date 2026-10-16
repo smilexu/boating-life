@@ -1,0 +1,194 @@
+{
+	"baseline_distance_fade_m": [
+		3600.0,
+		4000.0
+	],
+	"camera_far_m": 80000.0,
+	"captures": [
+		{
+			"camera_mode": "third_person",
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"fog_enabled": true,
+			"name": "01_clear_third_person_before",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/01_clear_third_person_before.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 0
+		},
+		{
+			"camera_mode": "third_person",
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"fog_enabled": true,
+			"name": "02_clear_third_person_terrain_hidden",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/02_clear_third_person_terrain_hidden.png",
+			"save_error": 0,
+			"terrain_visible": false,
+			"water_diagnostic_mode": 0
+		},
+		{
+			"camera_mode": "third_person",
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"fog_enabled": true,
+			"name": "03_clear_third_person_flat_water",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/03_clear_third_person_flat_water.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 1
+		},
+		{
+			"camera_mode": "third_person",
+			"distance_fade": [
+				52000.0,
+				56000.0
+			],
+			"fog_enabled": true,
+			"name": "04_clear_third_person_extended_fade",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/04_clear_third_person_extended_fade.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 0
+		},
+		{
+			"camera_mode": "third_person",
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"fog_enabled": false,
+			"name": "05_clear_third_person_fog_off",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/05_clear_third_person_fog_off.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 0
+		},
+		{
+			"camera_mode": "third_person",
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"fog_enabled": true,
+			"name": "06_clear_third_person_normal_debug",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/06_clear_third_person_normal_debug.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 4
+		},
+		{
+			"camera_mode": "wide_open_water",
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"fog_enabled": true,
+			"name": "07_clear_wide_before",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/07_clear_wide_before.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 0
+		},
+		{
+			"camera_mode": "wide_open_water",
+			"distance_fade": [
+				52000.0,
+				56000.0
+			],
+			"fog_enabled": true,
+			"name": "08_clear_wide_extended_fade",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/08_clear_wide_extended_fade.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 0
+		},
+		{
+			"camera_mode": "wide_open_water",
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"fog_enabled": true,
+			"name": "09_clear_wide_terrain_hidden",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/09_clear_wide_terrain_hidden.png",
+			"save_error": 0,
+			"terrain_visible": false,
+			"water_diagnostic_mode": 0
+		},
+		{
+			"camera_mode": "wide_open_water",
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"fog_enabled": true,
+			"name": "10_clear_wide_normal_debug",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/10_clear_wide_normal_debug.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 4
+		},
+		{
+			"camera_mode": "third_person",
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"fog_enabled": true,
+			"name": "11_sunset_after",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/11_sunset_after.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 0
+		},
+		{
+			"camera_mode": "third_person",
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"fog_enabled": true,
+			"name": "12_moon_night_after",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/12_moon_night_after.png",
+			"save_error": 0,
+			"terrain_visible": true,
+			"water_diagnostic_mode": 0
+		}
+	],
+	"diagnostic_distance_fade_m": [
+		52000.0,
+		56000.0
+	],
+	"engine": {
+		"build": "official",
+		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+		"hex": 263938,
+		"major": 4,
+		"minor": 7,
+		"patch": 2,
+		"status": "stable",
+		"string": "4.7.2-stable (official)",
+		"timestamp": 0
+	},
+	"fog_depth_range_m": [
+		150.0,
+		3200.0
+	],
+	"ocean_far_edge_m": 60000,
+	"processor": "Apple M2 Pro",
+	"quality": "High",
+	"renderer": "Apple M2 Pro (Apple8)",
+	"viewport_px": [
+		1920,
+		1080
+	],
+	"wave_phase": "frozen",
+	"weather_for_isolation": "Clear"
+}

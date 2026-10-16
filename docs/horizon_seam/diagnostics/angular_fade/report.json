@@ -1,0 +1,110 @@
+{
+	"captures": [
+		{
+			"camera_position": "(13438.02, 4.758923, 10459.39)",
+			"camera_rotation": "(-0.279246, 1.570796, 0.0)",
+			"distance_fade_m": [
+				3600.0,
+				4000.0
+			],
+			"far_edge_m": 60000.0,
+			"fps": 60.0,
+			"horizon_fade_enabled": false,
+			"name": "third_person_baseline_3600_4000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/angular_fade/third_person_baseline_3600_4000.png",
+			"save_error": 0,
+			"water_diagnostic_mode": 0,
+			"wave_frozen": true
+		},
+		{
+			"camera_position": "(13438.02, 4.758923, 10459.39)",
+			"camera_rotation": "(-0.279246, 1.570796, 0.0)",
+			"distance_fade_m": [
+				80000.0,
+				82000.0
+			],
+			"far_edge_m": 60000.0,
+			"fps": 60.0,
+			"horizon_fade_enabled": true,
+			"name": "third_person_horizon_fade_edge_60000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/angular_fade/third_person_horizon_fade_edge_60000.png",
+			"save_error": 0,
+			"water_diagnostic_mode": 0,
+			"wave_frozen": true
+		},
+		{
+			"camera_position": "(13438.02, 4.758923, 10459.39)",
+			"camera_rotation": "(-0.279246, 1.570796, 0.0)",
+			"distance_fade_m": [
+				80000.0,
+				82000.0
+			],
+			"far_edge_m": 80000.0,
+			"fps": 33.0,
+			"horizon_fade_enabled": true,
+			"name": "third_person_horizon_fade_edge_80000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/angular_fade/third_person_horizon_fade_edge_80000.png",
+			"save_error": 0,
+			"water_diagnostic_mode": 0,
+			"wave_frozen": true
+		},
+		{
+			"camera_position": "(13424.56, 300.0, 10459.39)",
+			"camera_rotation": "(-0.017998, 1.570796, 0.0)",
+			"distance_fade_m": [
+				3600.0,
+				4000.0
+			],
+			"far_edge_m": 60000.0,
+			"fps": 16.0,
+			"horizon_fade_enabled": false,
+			"name": "wide_baseline_3600_4000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/angular_fade/wide_baseline_3600_4000.png",
+			"save_error": 0,
+			"water_diagnostic_mode": 0,
+			"wave_frozen": true
+		},
+		{
+			"camera_position": "(13424.56, 300.0, 10459.39)",
+			"camera_rotation": "(-0.017998, 1.570796, 0.0)",
+			"distance_fade_m": [
+				80000.0,
+				82000.0
+			],
+			"far_edge_m": 60000.0,
+			"fps": 16.0,
+			"horizon_fade_enabled": true,
+			"name": "wide_horizon_fade_edge_60000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/angular_fade/wide_horizon_fade_edge_60000.png",
+			"save_error": 0,
+			"water_diagnostic_mode": 0,
+			"wave_frozen": true
+		},
+		{
+			"camera_position": "(13424.56, 300.0, 10459.39)",
+			"camera_rotation": "(-0.017998, 1.570796, 0.0)",
+			"distance_fade_m": [
+				80000.0,
+				82000.0
+			],
+			"far_edge_m": 80000.0,
+			"fps": 42.0,
+			"horizon_fade_enabled": true,
+			"name": "wide_horizon_fade_edge_80000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/angular_fade/wide_horizon_fade_edge_80000.png",
+			"save_error": 0,
+			"water_diagnostic_mode": 0,
+			"wave_frozen": true
+		}
+	],
+	"horizon_fade_end_sine": 0.0262,
+	"horizon_fade_start_sine": 0.0009,
+	"processor": "Apple M2 Pro",
+	"quality": "High",
+	"renderer": "Apple M2 Pro (Apple8)",
+	"viewport_px": [
+		1920,
+		1080
+	],
+	"weather": "Clear"
+}

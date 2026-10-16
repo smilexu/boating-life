@@ -1,0 +1,165 @@
+{
+	"captures": [
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"far_edge": 60000,
+			"name": "39_third_person_alpha_fade_current",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/39_third_person_alpha_fade_current.png",
+			"save_error": 0,
+			"state": "fade_3600_4000",
+			"water_diagnostic_mode": 1
+		},
+		{
+			"distance_fade": [
+				80000.0,
+				82000.0
+			],
+			"far_edge": 60000,
+			"name": "40_third_person_alpha_fade_beyond_mesh",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/40_third_person_alpha_fade_beyond_mesh.png",
+			"save_error": 0,
+			"state": "fade_after_mesh",
+			"water_diagnostic_mode": 1
+		},
+		{
+			"distance_fade": [
+				80000.0,
+				82000.0
+			],
+			"far_edge": 60000,
+			"name": "41_third_person_full_shading_fade_beyond_mesh",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/41_third_person_full_shading_fade_beyond_mesh.png",
+			"save_error": 0,
+			"state": "full_fade_after_mesh",
+			"water_diagnostic_mode": 0
+		},
+		{
+			"distance_fade": [
+				80000.0,
+				82000.0
+			],
+			"far_edge": 1200,
+			"name": "42_third_person_mesh_edge_1200m",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/42_third_person_mesh_edge_1200m.png",
+			"save_error": 0,
+			"state": "mesh_edge_1200",
+			"water_diagnostic_mode": 0
+		},
+		{
+			"distance_fade": [
+				80000.0,
+				82000.0
+			],
+			"far_edge": 60000,
+			"name": "44_third_person_true_sky_only",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/44_third_person_true_sky_only.png",
+			"save_error": 0,
+			"state": "ocean_and_terrain_meshes_hidden",
+			"water_diagnostic_mode": 1
+		},
+		{
+			"distance_fade": [
+				80000.0,
+				82000.0
+			],
+			"far_edge": 60000,
+			"name": "45_third_person_water_only",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/45_third_person_water_only.png",
+			"save_error": 0,
+			"state": "terrain_meshes_hidden",
+			"water_diagnostic_mode": 1
+		},
+		{
+			"distance_fade": [
+				80000.0,
+				82000.0
+			],
+			"far_edge": 60000,
+			"name": "46_third_person_terrain_only",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/46_third_person_terrain_only.png",
+			"save_error": 0,
+			"state": "ocean_meshes_hidden",
+			"water_diagnostic_mode": 1
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"far_edge": 60000,
+			"name": "47_wide_ocean_and_terrain_baseline",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/47_wide_ocean_and_terrain_baseline.png",
+			"save_error": 0,
+			"state": "all_geometry_visible",
+			"water_diagnostic_mode": 0
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"far_edge": 60000,
+			"name": "48_wide_ocean_only",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/48_wide_ocean_only.png",
+			"save_error": 0,
+			"state": "terrain_meshes_hidden",
+			"water_diagnostic_mode": 0
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"far_edge": 60000,
+			"name": "49_wide_terrain_only",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/49_wide_terrain_only.png",
+			"save_error": 0,
+			"state": "ocean_meshes_hidden",
+			"water_diagnostic_mode": 0
+		},
+		{
+			"distance_fade": [
+				3600.0,
+				4000.0
+			],
+			"far_edge": 60000,
+			"name": "50_wide_true_sky_only",
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/50_wide_true_sky_only.png",
+			"save_error": 0,
+			"state": "ocean_and_terrain_meshes_hidden",
+			"water_diagnostic_mode": 0
+		}
+	],
+	"fade_after_mesh_m": [
+		80000.0,
+		82000.0
+	],
+	"low_test_far_edge_m": 1200.0,
+	"ocean_mesh_count": 52,
+	"original_fade_m": [
+		3600.0,
+		4000.0
+	],
+	"original_far_edge_m": 60000,
+	"processor": "Apple M2 Pro",
+	"renderer": "Apple M2 Pro (Apple8)",
+	"terrain_mesh_count": 58,
+	"viewport_px": [
+		1920,
+		1080
+	]
+}

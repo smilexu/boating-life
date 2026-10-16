@@ -1,0 +1,73 @@
+{
+	"captures": [
+		{
+			"fade_max_m": 4000.0,
+			"fade_min_m": 3600.0,
+			"fps": 53.0,
+			"name": "third_3600_4000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/fade_compare/third_3600_4000.png",
+			"save_error": 0,
+			"water_shader_mode": 0,
+			"wave_frozen": true
+		},
+		{
+			"fade_max_m": 58000.0,
+			"fade_min_m": 42000.0,
+			"fps": 53.0,
+			"name": "third_42000_58000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/fade_compare/third_42000_58000.png",
+			"save_error": 0,
+			"water_shader_mode": 0,
+			"wave_frozen": true
+		},
+		{
+			"fade_max_m": 60000.0,
+			"fade_min_m": 48000.0,
+			"fps": 22.0,
+			"name": "third_48000_60000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/fade_compare/third_48000_60000.png",
+			"save_error": 0,
+			"water_shader_mode": 0,
+			"wave_frozen": true
+		},
+		{
+			"fade_max_m": 4000.0,
+			"fade_min_m": 3600.0,
+			"fps": 22.0,
+			"name": "wide_3600_4000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/fade_compare/wide_3600_4000.png",
+			"save_error": 0,
+			"water_shader_mode": 0,
+			"wave_frozen": true
+		},
+		{
+			"fade_max_m": 58000.0,
+			"fade_min_m": 42000.0,
+			"fps": 22.0,
+			"name": "wide_42000_58000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/fade_compare/wide_42000_58000.png",
+			"save_error": 0,
+			"water_shader_mode": 0,
+			"wave_frozen": true
+		},
+		{
+			"fade_max_m": 60000.0,
+			"fade_min_m": 48000.0,
+			"fps": 22.0,
+			"name": "wide_48000_60000",
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/fade_compare/wide_48000_60000.png",
+			"save_error": 0,
+			"water_shader_mode": 0,
+			"wave_frozen": true
+		}
+	],
+	"environment_fog_depth_end_m": 3200.0,
+	"processor": "Apple M2 Pro",
+	"quality": "High",
+	"renderer": "Apple M2 Pro (Apple8)",
+	"viewport_px": [
+		1920,
+		1080
+	],
+	"weather": "Clear"
+}

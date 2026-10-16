@@ -38,7 +38,13 @@ void sky() {
 		COLOR = mix(sky_horizon_color, sky_top_color, sky_blend);
 	} else {
 		float ground_blend = pow(clamp(-altitude, 0.0, 1.0), ground_gradient_power);
-		COLOR = mix(ground_horizon_color, ground_bottom_color, ground_blend);
+		// Join the lower hemisphere to the exact upper-sky horizon color first.
+		// Weather/day-night palettes intentionally use a different ground haze
+		// color; applying it abruptly at EYEDIR.y == 0 creates a screen-wide
+		// one-pixel seam when the ocean/terrain fades out near the horizon.
+		float horizon_haze_mix = smoothstep(0.0, 0.035, -altitude);
+		vec3 continuous_ground_horizon = mix(sky_horizon_color, ground_horizon_color, horizon_haze_mix);
+		COLOR = mix(continuous_ground_horizon, ground_bottom_color, ground_blend);
 	}
 
 	float sun_alignment = dot(normalize(EYEDIR), normalize(sun_direction));

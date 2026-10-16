@@ -1,0 +1,114 @@
+{
+	"camera": {
+		"third_person_position": "(13438.02, 4.758923, 10459.39)",
+		"third_person_rotation": "(-0.279246, 1.570796, 0.0)",
+		"wide_position": "(13424.56, 300.0, 10459.39)",
+		"wide_rotation": "(-0.017997, 2.356194, 0.0)"
+	},
+	"captures": [
+		{
+			"farplane_visible": true,
+			"name": "13_third_person_flat_baseline",
+			"near_lods_visible": true,
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/13_third_person_flat_baseline.png",
+			"save_error": 0,
+			"terrain_visible": true
+		},
+		{
+			"farplane_visible": false,
+			"name": "14_third_person_farplane_hidden",
+			"near_lods_visible": true,
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/14_third_person_farplane_hidden.png",
+			"save_error": 0,
+			"terrain_visible": true
+		},
+		{
+			"farplane_visible": true,
+			"name": "15_third_person_near_lods_hidden",
+			"near_lods_visible": false,
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/15_third_person_near_lods_hidden.png",
+			"save_error": 0,
+			"terrain_visible": true
+		},
+		{
+			"farplane_visible": true,
+			"name": "16_wide_flat_baseline",
+			"near_lods_visible": true,
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/16_wide_flat_baseline.png",
+			"save_error": 0,
+			"terrain_visible": true
+		},
+		{
+			"farplane_visible": false,
+			"name": "17_wide_farplane_hidden",
+			"near_lods_visible": true,
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/17_wide_farplane_hidden.png",
+			"save_error": 0,
+			"terrain_visible": true
+		},
+		{
+			"farplane_visible": true,
+			"name": "18_wide_near_lods_hidden",
+			"near_lods_visible": false,
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/18_wide_near_lods_hidden.png",
+			"save_error": 0,
+			"terrain_visible": true
+		},
+		{
+			"farplane_visible": false,
+			"name": "19_wide_ocean_hidden",
+			"near_lods_visible": false,
+			"ocean_visible": false,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/19_wide_ocean_hidden.png",
+			"save_error": 0,
+			"terrain_visible": true
+		},
+		{
+			"farplane_visible": false,
+			"name": "20_wide_ocean_and_terrain_hidden",
+			"near_lods_visible": false,
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/20_wide_ocean_and_terrain_hidden.png",
+			"save_error": 0,
+			"terrain_visible": false
+		},
+		{
+			"farplane_visible": true,
+			"name": "21_wide_rotated_flat_baseline",
+			"near_lods_visible": true,
+			"ocean_visible": true,
+			"path": "/Users/smixu1/dev/boat-life-simulator/docs/horizon_seam/diagnostics/21_wide_rotated_flat_baseline.png",
+			"save_error": 0,
+			"terrain_visible": true
+		}
+	],
+	"engine": {
+		"build": "official",
+		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+		"hex": 263938,
+		"major": 4,
+		"minor": 7,
+		"patch": 2,
+		"status": "stable",
+		"string": "4.7.2-stable (official)",
+		"timestamp": 0
+	},
+	"geometry_counts": {
+		"farplane_meshes": 3,
+		"near_lod_meshes": 49
+	},
+	"processor": "Apple M2 Pro",
+	"quality": "High",
+	"renderer": "Apple M2 Pro (Apple8)",
+	"viewport_px": [
+		1920,
+		1080
+	],
+	"water_diagnostic_mode": 1
+}
