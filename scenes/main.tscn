@@ -1,4 +1,4 @@
-[gd_scene load_steps=28 format=3]
+[gd_scene load_steps=38 format=3]
 
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
@@ -23,6 +23,16 @@
 [ext_resource type="Script" path="res://scripts/fish_school_renderer.gd" id="21_fish_renderer"]
 [ext_resource type="Script" path="res://scripts/fish_resource_map.gd" id="22_fish_map"]
 [ext_resource type="Script" path="res://scripts/dolphin_world_manager.gd" id="23_dolphin_manager"]
+[ext_resource type="PackedScene" path="res://scenes/MalmoHarbor.tscn" id="24_malmo_harbor"]
+[ext_resource type="Script" path="res://scripts/navigation_depth_provider.gd" id="25_navigation_depth_provider"]
+[ext_resource type="Script" path="res://scripts/navigation_depth_monitor.gd" id="26_navigation_depth_monitor"]
+[ext_resource type="Script" path="res://scripts/cargo_economy_manager.gd" id="27_cargo_economy_manager"]
+[ext_resource type="PackedScene" path="res://scenes/CopenhagenHarbor.tscn" id="28_copenhagen_harbor"]
+[ext_resource type="Script" path="res://scripts/port_route_manager.gd" id="29_route_manager"]
+[ext_resource type="Resource" path="res://resources/ports/malmo_port_definition.tres" id="30_malmo_port_definition"]
+[ext_resource type="Resource" path="res://resources/ports/copenhagen_port_definition.tres" id="31_copenhagen_port_definition"]
+[ext_resource type="Resource" path="res://resources/routes/malmo_to_copenhagen.tres" id="32_malmo_copenhagen_route"]
+[ext_resource type="Resource" path="res://resources/routes/copenhagen_to_malmo.tres" id="33_copenhagen_malmo_route"]
 
 [sub_resource type="Compositor" id="Compositor_volumetric_clouds"]
 compositor_effects = Array[CompositorEffect]([ExtResource("11_cloud_effect")])
@@ -115,12 +125,45 @@ script = ExtResource("14_bathymetry_manager")
 georeference = ExtResource("15_georeference")
 water_material = ExtResource("5_water_material")
 
+[node name="NavigationDepthProvider" type="Node" parent="."]
+script = ExtResource("25_navigation_depth_provider")
+georeference = ExtResource("15_georeference")
+bathymetry_manager_path = NodePath("../BathymetryManager")
+safety_margin_m = 0.5
+game_surface_above_lat_m = 0.0
+
 [node name="OresundRegion" parent="." instance=ExtResource("13_oresund_region")]
 
 ; Start roughly 329 m offshore from Malmö's coast (WGS84 55.60587 N, 12.96300 E), facing east toward land.
 [node name="PlayerBoat" parent="." instance=ExtResource("6_boat")]
 position = Vector3(13424.56, 0, 10459.39)
 rotation_degrees = Vector3(0, 90, 0)
+
+[node name="MalmoHarbor" parent="." instance=ExtResource("24_malmo_harbor")]
+
+[node name="CopenhagenHarbor" parent="." instance=ExtResource("28_copenhagen_harbor")]
+
+[node name="CargoEconomyManager" type="Node" parent="."]
+script = ExtResource("27_cargo_economy_manager")
+harbor_path = NodePath("../MalmoHarbor")
+boat_path = NodePath("../PlayerBoat/MotionRoot")
+cargo_loadout_path = NodePath("../PlayerBoat/MotionRoot/CargoLoadout")
+
+[node name="PortRouteManager" type="Node3D" parent="."]
+script = ExtResource("29_route_manager")
+georeference = ExtResource("15_georeference")
+port_definitions = Array[ExtResource("30_malmo_port_definition")]([ExtResource("30_malmo_port_definition"), ExtResource("31_copenhagen_port_definition")])
+route_definitions = Array[ExtResource("32_malmo_copenhagen_route")]([ExtResource("32_malmo_copenhagen_route"), ExtResource("33_copenhagen_malmo_route")])
+debug_enabled = false
+
+[node name="NavigationDepthMonitor" type="Node" parent="."]
+script = ExtResource("26_navigation_depth_monitor")
+provider_path = NodePath("../NavigationDepthProvider")
+boat_path = NodePath("../PlayerBoat/MotionRoot")
+update_interval_seconds = 0.5
+lookahead_seconds = 3.0
+minimum_lookahead_m = 8.0
+maximum_lookahead_m = 50.0
 
 [node name="DepthChartHUD" parent="." instance=ExtResource("16_depth_chart_hud")]
 

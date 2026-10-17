@@ -17,6 +17,8 @@ const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 @export_node_path("Node") var fish_resource_manager_path := NodePath("../../FishResourceManager")
 @export_node_path("Node3D") var fish_school_renderer_path := NodePath("../../FishResourceManager/FishSchoolRenderer")
 @export_node_path("Node") var dolphin_world_manager_path := NodePath("../../DolphinWorldManager")
+@export_node_path("Node") var navigation_depth_monitor_path := NodePath("../../NavigationDepthMonitor")
+@export_node_path("Node") var cargo_economy_manager_path := NodePath("../../CargoEconomyManager")
 
 var _controller: BoatController
 var _weather_controller: Node
@@ -26,11 +28,15 @@ var _quality_manager: Node
 var _fish_resource_manager: FishResourceManager
 var _fish_school_renderer: FishSchoolRenderer
 var _dolphin_world_manager: Node
+var _navigation_depth_monitor: NavigationDepthMonitor
+var _cargo_economy_manager: CargoEconomyManager
 var _selected_fish_school_id := ""
 var _world_time_control: WorldTimeControlPort
 var _status_panel: PanelContainer
 var _status_label: Label
 var _fps_label: Label
+var _depth_label: Label
+var _cargo_task_label: Label
 var _debug_panel: PanelContainer
 var _debug_scroll: ScrollContainer
 var _debug_layout: VBoxContainer
@@ -82,12 +88,14 @@ func _ready() -> void:
 	_fish_resource_manager = get_node_or_null(fish_resource_manager_path) as FishResourceManager
 	_fish_school_renderer = get_node_or_null(fish_school_renderer_path) as FishSchoolRenderer
 	_dolphin_world_manager = get_node_or_null(dolphin_world_manager_path)
+	_navigation_depth_monitor = get_node_or_null(navigation_depth_monitor_path) as NavigationDepthMonitor
+	_cargo_economy_manager = get_node_or_null(cargo_economy_manager_path) as CargoEconomyManager
 	var time_manager := get_node_or_null("/root/WorldTimeManager")
 	_world_time_control = LocalTimeControlScript.new(time_manager) as WorldTimeControlPort
 
 	_status_panel = PanelContainer.new()
 	_status_panel.position = Vector2(24.0, 24.0)
-	_status_panel.custom_minimum_size = Vector2(470.0, 138.0)
+	_status_panel.custom_minimum_size = Vector2(470.0, 170.0)
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.035, 0.12, 0.16, 0.82)
 	panel_style.set_corner_radius_all(8)
@@ -113,6 +121,18 @@ func _ready() -> void:
 	fps_font.font_names = PackedStringArray(["Menlo", "Consolas", "Courier New", "monospace"])
 	_fps_label.add_theme_font_override("font", fps_font)
 	status_layout.add_child(_fps_label)
+	_depth_label = Label.new()
+	_depth_label.name = "ReferenceDepthStatus"
+	_depth_label.add_theme_color_override("font_color", Color(0.82, 0.93, 0.92, 1.0))
+	_depth_label.add_theme_font_size_override("font_size", 14)
+	_depth_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_layout.add_child(_depth_label)
+	_cargo_task_label = Label.new()
+	_cargo_task_label.name = "CargoTaskStatus"
+	_cargo_task_label.add_theme_color_override("font_color", Color(0.84, 0.88, 0.77, 1.0))
+	_cargo_task_label.add_theme_font_size_override("font_size", 14)
+	_cargo_task_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	status_layout.add_child(_cargo_task_label)
 	add_child(_status_panel)
 	_build_debug_panel()
 	_add_compass_widget()
@@ -163,6 +183,59 @@ func _update_status() -> void:
 		_controller.speed_mps,
 		knots,
 		mode_text
+	]
+	_update_navigation_depth_status()
+	_update_cargo_task_status()
+
+
+func _update_cargo_task_status() -> void:
+	if _cargo_task_label == null:
+		return
+	if _cargo_economy_manager == null:
+		_cargo_task_label.text = "货运：未接入"
+		return
+	var active := _cargo_economy_manager.get_active_contracts()
+	var destination_names := PackedStringArray()
+	for card in active:
+		var definition := card.get("definition") as CargoContractDefinition
+		if definition == null:
+			continue
+		var destination := _cargo_economy_manager.get_port_display_name(str(definition.destination_port_id))
+		if not destination_names.has(destination):
+			destination_names.append(destination)
+	var loadout := _controller.get_node_or_null("CargoLoadout") as CargoLoadoutController
+	var used_space := loadout.get_used_space_units() if loadout != null else 0
+	var capacity := _controller.draft_profile.cargo_capacity_space_units if _controller.draft_profile != null else 0
+	var target := " · 目的港 %s" % " / ".join(destination_names) if not destination_names.is_empty() else ""
+	_cargo_task_label.text = "货运 %d/%d  ·  舱位 %d/%d%s" % [
+		active.size(), CargoEconomyManager.ACTIVE_CONTRACT_LIMIT, used_space, capacity, target,
+	]
+
+
+func _update_navigation_depth_status() -> void:
+	if _depth_label == null:
+		return
+	if _navigation_depth_monitor == null:
+		_depth_label.text = "游戏参考水深未知 · 监视器未配置 · 非航海安全信息"
+		return
+	var snapshot := _navigation_depth_monitor.get_snapshot()
+	var current: Dictionary = snapshot.get("current", {})
+	var ahead: Dictionary = snapshot.get("ahead", {})
+	var draft := float(snapshot.get("draft_m", -1.0))
+	var margin := float(snapshot.get("safety_margin_m", 0.0))
+	var status := str(snapshot.get("status", NavigationDepthProvider.STATUS_UNKNOWN))
+	var ahead_status := str(ahead.get("status", NavigationDepthProvider.STATUS_UNKNOWN))
+	if not bool(current.get("valid", false)):
+		_depth_label.text = "游戏参考水深未知 · %s\n吃水 %s · 前方 %.0f m：%s · 非航海安全信息" % [
+			str(current.get("reason", "No valid data")),
+			"未配置" if draft < 0.0 else "%.2f m" % draft,
+			float(snapshot.get("lookahead_distance_m", 0.0)), ahead_status,
+		]
+		return
+	var source_tag := "港口游戏覆盖" if current.has("override_id") else "EMODnet LAT 粗网格"
+	_depth_label.text = "参考水深 %.1f m · 吃水 %.2f m · 余量 %.1f m · %s\n前方 %.0f m：%s · %s（非航海安全信息）" % [
+		float(current.get("depth_m", 0.0)), draft, margin, status,
+		float(snapshot.get("lookahead_distance_m", 0.0)), ahead_status, source_tag,
 	]
 
 
@@ -966,6 +1039,8 @@ func _update_hud_layout() -> void:
 	_status_panel.custom_minimum_size.x = panel_width
 	_status_label.custom_minimum_size.x = panel_width - 32.0
 	_fps_label.custom_minimum_size.x = panel_width - 32.0
+	if _depth_label != null:
+		_depth_label.custom_minimum_size.x = panel_width - 32.0
 	if _debug_panel != null:
 		_debug_panel.custom_minimum_size.x = minf(390.0, maxf(280.0, viewport_width - 48.0))
 		var available_height := maxf(280.0, viewport_size.y - _debug_panel.position.y - 16.0)

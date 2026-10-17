@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="VesselDraftProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/vessel_draft_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+vessel_display_name = "测试帆船"
+empty_draft_m = 0.65
+full_load_draft_m = 1.15
+max_cargo_weight_kg = 1200.0

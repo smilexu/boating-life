@@ -1,0 +1,51 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/malmo_harbor_greybox.gd" id="1_harbor_script"]
+[ext_resource type="Resource" path="res://resources/oresund_georeference.tres" id="2_georeference"]
+[ext_resource type="Script" path="res://scripts/port_service_controller.gd" id="3_service_controller"]
+[ext_resource type="Resource" path="res://resources/ports/malmo_port_services.tres" id="4_service_config"]
+[ext_resource type="Resource" path="res://resources/ports/malmo_port_definition.tres" id="5_port_definition"]
+
+[node name="MalmoHarbor" type="Node3D"]
+script = ExtResource("1_harbor_script")
+georeference = ExtResource("2_georeference")
+service_config = ExtResource("4_service_config")
+port_definition = ExtResource("5_port_definition")
+port_id = "malmo_greybox_v1"
+port_latitude_deg = 55.619
+port_longitude_deg = 12.977
+test_offset_east_north_m = Vector2(0, 0)
+entrance_offset_east_north_m = Vector2(-95, 0)
+approach_offset_east_north_m = Vector2(-260, 0)
+berth_offset_east_north_m = Vector2(-80.5, 7.3)
+service_offset_east_north_m = Vector2(-32, 8)
+berth_heading_degrees = -90.0
+entrance_width_m = 40.0
+breakwater_length_m = 100.0
+breakwater_width_m = 6.0
+main_quay_length_m = 130.0
+main_quay_width_m = 10.0
+main_pier_length_m = 63.0
+pier_width_m = 6.5
+berth_length_m = 22.0
+berth_width_m = 10.5
+berth_interaction_radius_m = 8.7
+docking_speed_threshold_mps = 0.8
+docking_heading_tolerance_degrees = 20.0
+hull_clearance_m = 0.5
+quay_top_y_m = 1.5
+pier_top_y_m = 1.25
+visual_lat_alignment_m = 0.5
+show_debug_by_default = false
+developer_tools_enabled = true
+enable_gameplay_depth_overrides = true
+entrance_channel_depth_m = 4.5
+basin_depth_m = 3.0
+berth_depth_m = 1.6
+
+[node name="PortServiceController" type="CanvasLayer" parent="."]
+script = ExtResource("3_service_controller")
+harbor_path = NodePath("..")
+boat_path = NodePath("../../PlayerBoat/MotionRoot")
+camera_rig_path = NodePath("../../PlayerBoat/FollowCameraRig")
+economy_manager_path = NodePath("../../CargoEconomyManager")

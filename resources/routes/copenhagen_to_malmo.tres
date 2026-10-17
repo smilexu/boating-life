@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="RouteDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/route_definition.gd" id="1_route"]
+[ext_resource type="Script" path="res://scripts/route_waypoint.gd" id="2_waypoint"]
+
+[sub_resource type="Resource" id="Waypoint_OresundSouth"]
+script = ExtResource("2_waypoint")
+waypoint_id = &"oresund_southbound_01"
+latitude_deg = 55.6786458
+longitude_deg = 12.7786458
+arrival_radius_m = 180.0
+navigation_notes = "Independently defined southbound crossing waypoint north of Saltholm. Check local conditions and obstacles manually; not a safe-navigation instruction."
+
+[resource]
+script = ExtResource("1_route")
+route_id = &"copenhagen_to_malmo_v1"
+display_name = "København → Malmö"
+origin_port_id = &"kobenhavn_test"
+destination_port_id = &"malmo_greybox_v1"
+departure_point_id = &"copenhagen_departure_wait_v1"
+departure_latitude_deg = 55.6785350
+departure_longitude_deg = 12.6516075
+arrival_point_id = &"malmo_arrival_wait_v1"
+arrival_latitude_deg = 55.6190079
+arrival_longitude_deg = 12.9728726
+waypoints = Array[ExtResource("2_waypoint")]([SubResource("Waypoint_OresundSouth")])
+validation_status = "unverified_gameplay_route"
+data_source = "Gameplay route prototype through cells that the local EMODnet DTM 2024 LAT grid reports as water at least 2 m deep. Grid is coarse (~66 m east × ~116 m north); no bridge, obstacle, current, traffic or authority-route validation. Not for real navigation."

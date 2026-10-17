@@ -137,6 +137,24 @@ func get_depth_at_geodetic(latitude_deg: float, longitude_deg: float, check_osm_
 	}
 
 
+func get_source_metadata_at(latitude_deg: float = 55.7) -> Dictionary:
+	var metres_per_degree_latitude := 111132.0
+	var metres_per_degree_longitude := 111320.0 * maxf(absf(cos(deg_to_rad(latitude_deg))), 0.000001)
+	return {
+		"source": source_description,
+		"vertical_datum": "LAT",
+		"coordinate_system": "WGS84 longitude/latitude (EPSG:4326)",
+		"rows": _rows,
+		"columns": _columns,
+		"latitude_step_deg": _latitude_step,
+		"longitude_step_deg": _longitude_step,
+		"resolution_north_m": _latitude_step * metres_per_degree_latitude,
+		"resolution_east_m": _longitude_step * metres_per_degree_longitude,
+		"navigation_grade": false,
+		"quality_class": "Coarse regional DTM reference; not for navigation or safety",
+	}
+
+
 func is_land_at_east_north(east_m: float, north_m: float) -> bool:
 	if _land_mask == null or _land_mask_meta.is_empty():
 		return false

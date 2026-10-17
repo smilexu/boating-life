@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="PortServiceConfig" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/port_service_config.gd" id="1_config"]
+
+[resource]
+script = ExtResource("1_config")
+port_id = &"kobenhavn_test"
+display_name = "København"
+available_services = PackedStringArray("cargo_exchange", "fuel", "shipyard", "ship_market")
+service_display_names = {
+"cargo_exchange": "货运交易所",
+"fuel": "燃油补给",
+"shipyard": "维修船厂",
+"ship_market": "船舶市场"
+}
+service_availability = {
+"cargo_exchange": true,
+"fuel": true,
+"shipyard": true,
+"ship_market": true
+}
+cargo_contract_definitions = []

@@ -13,9 +13,9 @@ const SAMPLE_NAMES := ["FL", "FR", "RL", "RR"]
 @export_range(0.5, 1.5, 0.05) var damping_ratio := 0.92
 
 @export_category("Sample Points")
-@export_range(0.5, 2.5, 0.05) var fore_sample_distance := 1.65
-@export_range(0.5, 2.5, 0.05) var aft_sample_distance := 1.55
-@export_range(0.25, 1.2, 0.05) var half_beam := 0.72
+@export_range(0.5, 4.0, 0.05) var fore_sample_distance := 1.65
+@export_range(0.5, 4.0, 0.05) var aft_sample_distance := 1.55
+@export_range(0.25, 2.0, 0.05) var half_beam := 0.72
 
 @export_category("Debug")
 @export var debug_show_samples := false:
@@ -25,6 +25,7 @@ const SAMPLE_NAMES := ["FL", "FR", "RL", "RR"]
 			_set_debug_visible(value)
 
 var _motion_root: Node3D
+var _boat_controller: BoatController
 var _wave_sampler: WaveSampler
 var _sample_offsets: Array[Vector3] = []
 var _debug_markers: Array[Node3D] = []
@@ -40,6 +41,7 @@ var _roll_velocity := 0.0
 
 func _ready() -> void:
 	_motion_root = get_parent() as Node3D
+	_boat_controller = _motion_root as BoatController
 	_wave_sampler = get_tree().get_first_node_in_group("wave_sampler") as WaveSampler
 	_heave = position.y
 	_build_sample_offsets()
@@ -71,7 +73,8 @@ func _process(delta: float) -> void:
 	var right_height := (heights[1] + heights[3]) * 0.5
 	var mean_height := (front_height + rear_height) * 0.5
 
-	var target_heave := (mean_height - _motion_root.global_position.y) * buoyancy_strength
+	var wave_heave := (mean_height - _motion_root.global_position.y) * buoyancy_strength
+	var target_heave := wave_heave - get_visual_cargo_sink_m()
 	var target_pitch := atan2(
 		(front_height - rear_height) * buoyancy_strength,
 		fore_sample_distance + aft_sample_distance
@@ -100,6 +103,13 @@ func _process(delta: float) -> void:
 	rotation = Vector3(_pitch, 0.0, _roll)
 	if debug_show_samples:
 		_update_debug_markers(world_points, heights)
+
+
+func get_visual_cargo_sink_m() -> float:
+	if _boat_controller == null or _boat_controller.draft_profile == null:
+		return 0.0
+	var profile := _boat_controller.draft_profile
+	return maxf(_boat_controller.get_current_draft_m() - maxf(profile.empty_draft_m, 0.0), 0.0)
 
 
 func _build_sample_offsets() -> void:

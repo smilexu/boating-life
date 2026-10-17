@@ -1,0 +1,30 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/malmo_harbor_greybox.gd" id="1_harbor_script"]
+[ext_resource type="Resource" path="res://resources/oresund_georeference.tres" id="2_georeference"]
+[ext_resource type="Script" path="res://scripts/port_service_controller.gd" id="3_service_controller"]
+[ext_resource type="Resource" path="res://resources/ports/copenhagen_port_services.tres" id="4_service_config"]
+[ext_resource type="Resource" path="res://resources/ports/copenhagen_port_definition.tres" id="5_port_definition"]
+
+[node name="CopenhagenHarbor" type="Node3D"]
+script = ExtResource("1_harbor_script")
+georeference = ExtResource("2_georeference")
+service_config = ExtResource("4_service_config")
+port_definition = ExtResource("5_port_definition")
+debug_teleport_action = "copenhagen_port_debug_teleport"
+show_debug_by_default = false
+developer_tools_enabled = true
+enable_gameplay_depth_overrides = true
+entrance_width_m = 40.0
+breakwater_length_m = 100.0
+main_quay_length_m = 130.0
+main_pier_length_m = 63.0
+berth_length_m = 22.0
+berth_width_m = 10.5
+
+[node name="PortServiceController" type="CanvasLayer" parent="."]
+script = ExtResource("3_service_controller")
+harbor_path = NodePath("..")
+boat_path = NodePath("../../PlayerBoat/MotionRoot")
+camera_rig_path = NodePath("../../PlayerBoat/FollowCameraRig")
+economy_manager_path = NodePath("../../CargoEconomyManager")

@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="PortServiceConfig" load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/port_service_config.gd" id="1_config"]
+[ext_resource type="Script" path="res://scripts/cargo_contract_definition.gd" id="2_contract_script"]
+[ext_resource type="Resource" path="res://resources/cargo_contracts/malmo_spare_parts.tres" id="3_parts"]
+[ext_resource type="Resource" path="res://resources/cargo_contracts/malmo_provisions.tres" id="4_provisions"]
+[ext_resource type="Resource" path="res://resources/cargo_contracts/malmo_building_materials.tres" id="5_building"]
+
+[resource]
+script = ExtResource("1_config")
+port_id = &"malmo_greybox_v1"
+display_name = "Malmö"
+available_services = PackedStringArray("cargo_exchange", "fuel", "shipyard", "ship_market")
+service_display_names = {
+"cargo_exchange": "货运交易所",
+"fuel": "燃油补给",
+"shipyard": "维修船厂",
+"ship_market": "船舶市场"
+}
+service_availability = {
+"cargo_exchange": true,
+"fuel": true,
+"shipyard": true,
+"ship_market": true
+}
+cargo_contract_definitions = Array[ExtResource("2_contract_script")]([ExtResource("3_parts"), ExtResource("4_provisions"), ExtResource("5_building")])

@@ -18,6 +18,8 @@ var _bathymetry: BathymetryManager
 var _georeference: GeoReference
 var _boat: Node3D
 var _dolphin_manager: Node
+var _route_definition: RouteDefinition
+var _route_georeference: GeoReference
 var _extent := Rect2()
 var _map_rect := Rect2()
 var _raster: ImageTexture
@@ -64,6 +66,12 @@ func configure(manager: FishResourceManager, bathymetry: BathymetryManager, geor
 	refresh_data()
 	queue_redraw()
 	_raster_built = false
+
+
+func set_route_overlay(route: RouteDefinition, georeference: GeoReference) -> void:
+	_route_definition = route
+	_route_georeference = georeference
+	queue_redraw()
 
 
 func ensure_raster() -> void:
@@ -190,6 +198,7 @@ func _draw() -> void:
 		draw_string(get_theme_default_font(), _map_rect.position + Vector2(14.0, 44.0), "正在构建离线水深底图 · %.0f%%" % progress, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 14, Color("#d4e4d6"))
 	_draw_contours()
 	_draw_coastlines()
+	_draw_route()
 	_draw_resource_cells()
 	_draw_dolphins()
 	_draw_boat()
@@ -318,6 +327,26 @@ func _draw_dolphins() -> void:
 		draw_line(point + Vector2(-1.0, -4.0), point + Vector2(-3.0, -8.0), color, 2.0, true)
 		draw_arc(point, 16.0, 0.0, TAU, 30, Color(color.r, color.g, color.b, 0.45), 1.2, true)
 		draw_string(get_theme_default_font(), point + Vector2(19.0, 4.0), "海豚 ×%d" % int(pod.get("population", 0)), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 12, color)
+
+
+func _draw_route() -> void:
+	if _route_definition == null or _route_georeference == null:
+		return
+	var world_points := _route_definition.get_world_points(_route_georeference)
+	if world_points.size() < 2:
+		return
+	var map_points := PackedVector2Array()
+	for world_point in world_points:
+		map_points.append(_world_to_map(Vector2(world_point.x, -world_point.z)))
+	draw_polyline(map_points, Color(0.01, 0.10, 0.13, 0.9), 7.0, true)
+	draw_polyline(map_points, Color("#f4c46d"), 3.0, true)
+	for index in range(map_points.size()):
+		var point := map_points[index]
+		var endpoint := index == 0 or index == map_points.size() - 1
+		draw_circle(point, 7.0 if endpoint else 5.0, Color("#102c38"))
+		draw_arc(point, 7.0 if endpoint else 5.0, 0.0, TAU, 20, Color("#fff1c7"), 1.5, true)
+		var label := "起" if index == 0 else "终" if index == map_points.size() - 1 else "WP%d" % index
+		draw_string(get_theme_default_font(), point + Vector2(8.0, -7.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 11, Color("#fff1c7"))
 
 
 func _draw_boat() -> void:

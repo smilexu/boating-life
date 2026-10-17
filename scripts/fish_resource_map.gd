@@ -12,15 +12,19 @@ var _bathymetry: BathymetryManager
 var _georeference: GeoReference
 var _boat: Node3D
 var _dolphin_manager: Node
+var _route_manager: PortRouteManager
+var _economy_manager: CargoEconomyManager
 var _root: Control
 var _map_canvas: FishResourceMapCanvas
 var _selected_species: Array[String] = []
 var _species_buttons: Dictionary = {}
 var _details_label: Label
 var _summary_label: Label
+var _route_label: Label
 var _footer_label: Label
 var _refresh_elapsed := 0.0
 var _map_open := false
+var _route_refresh_elapsed := 0.0
 
 
 func _ready() -> void:
@@ -29,6 +33,8 @@ func _ready() -> void:
 	_bathymetry = get_node_or_null(bathymetry_path) as BathymetryManager
 	_boat = get_node_or_null(boat_path) as Node3D
 	_dolphin_manager = get_node_or_null("../DolphinWorldManager")
+	_route_manager = get_node_or_null("../PortRouteManager") as PortRouteManager
+	_economy_manager = get_node_or_null("../CargoEconomyManager") as CargoEconomyManager
 	if _manager != null:
 		_georeference = _manager.get_georeference()
 		_build_ui()
@@ -56,6 +62,7 @@ func is_map_open() -> bool:
 
 func set_map_open(open: bool) -> void:
 	_map_open = open
+	set_process(open)
 	if _root != null:
 		_root.visible = open
 	if _map_canvas != null:
@@ -65,6 +72,7 @@ func set_map_open(open: bool) -> void:
 		if _map_canvas != null:
 			_map_canvas.ensure_raster()
 		refresh_data()
+		_refresh_route_overlay()
 		get_viewport().set_input_as_handled()
 
 
@@ -77,6 +85,56 @@ func refresh_data() -> void:
 			_summary_label.text = "当前筛选：%d 个鱼类资源点 · %d 个海豚群" % [count, dolphin_count]
 		if _footer_label != null and _manager != null:
 			_footer_label.text = "%s Authority · Seed %d · Revision %d · 鱼类为预测资源点；海豚标记显示本地权威群体位置" % [_manager.get_authority_source(), _manager.get_world_seed(), _manager.get_state_revision()]
+	_refresh_route_overlay()
+
+
+func _process(delta: float) -> void:
+	if not _map_open:
+		return
+	_route_refresh_elapsed += delta
+	if _route_refresh_elapsed >= 1.0:
+		_route_refresh_elapsed = fmod(_route_refresh_elapsed, 1.0)
+		_refresh_route_overlay()
+
+
+func _refresh_route_overlay() -> void:
+	if _map_canvas == null or _route_manager == null or _economy_manager == null:
+		if _map_canvas != null:
+			_map_canvas.set_route_overlay(null, _georeference)
+		if _route_label != null:
+			_route_label.text = "当前没有跨港运输路线。"
+		return
+	var active_contracts := _economy_manager.get_active_contracts()
+	var chosen_route: RouteDefinition
+	for card in active_contracts:
+		var definition := card.get("definition") as CargoContractDefinition
+		if definition == null:
+			continue
+		chosen_route = _route_manager.get_route_between(str(definition.origin_port_id), str(definition.destination_port_id))
+		if chosen_route != null:
+			break
+	_map_canvas.set_route_overlay(chosen_route, _georeference)
+	if _route_label == null:
+		return
+	if chosen_route == null:
+		_route_label.text = "当前合同没有已配置的预设航线。"
+		return
+	var cruise_speed := 0.0
+	if _boat is BoatController and _boat.draft_profile != null:
+		cruise_speed = _boat.draft_profile.cruise_speed_mps
+	var summary := _route_manager.get_route_summary(chosen_route, cruise_speed)
+	var remaining := chosen_route.get_remaining_distance_m(_boat.global_position, _georeference) if _boat != null else float(summary.get("distance_m", 0.0))
+	var eta_seconds := float(summary.get("estimated_seconds", -1.0))
+	var eta_text := "未知" if eta_seconds < 0.0 else _format_duration(eta_seconds)
+	_route_label.text = "%s\n全程 %.1f km · 剩余约 %.1f km\n巡航参考 %.1f m/s · 预计 %s\n状态：未验证的游戏航线" % [
+		chosen_route.display_name, float(summary.get("distance_m", 0.0)) / 1000.0,
+		remaining / 1000.0, cruise_speed, eta_text,
+	]
+
+
+func _format_duration(seconds: float) -> String:
+	var minutes := int(round(seconds / 60.0))
+	return "%d 小时 %02d 分" % [int(minutes / 60), minutes % 60] if minutes >= 60 else "%d 分" % minutes
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -165,6 +223,10 @@ func _build_ui() -> void:
 	_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_summary_label.add_theme_color_override("font_color", Color("#a6c1bc"))
 	side_layout.add_child(_summary_label)
+	_route_label = Label.new()
+	_route_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_route_label.add_theme_color_override("font_color", Color("#f0d39a"))
+	side_layout.add_child(_route_label)
 	var detail_heading := Label.new()
 	detail_heading.text = "区域信息"
 	detail_heading.add_theme_font_size_override("font_size", 17)

@@ -60,6 +60,11 @@ func _exit_tree() -> void:
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
+func release_mouse_look() -> void:
+	_mouse_look_active = false
+	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+
+
 func _get_focus_position() -> Vector3:
 	var target_transform := _target.global_transform
 	return target_transform.origin + Vector3.UP * look_height

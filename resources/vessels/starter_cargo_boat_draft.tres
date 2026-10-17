@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="VesselDraftProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/vessel_draft_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+vessel_display_name = "StarterCargoBoat · 初始货运船"
+vessel_id = &"starter_cargo_boat"
+cargo_capacity_space_units = 2
+empty_draft_m = 0.32
+full_load_draft_m = 0.75
+max_cargo_weight_kg = 500.0
+cruise_speed_mps = 7.0
+vessel_length_m = 7.2
+vessel_beam_m = 2.555
+vessel_height_m = 3.834

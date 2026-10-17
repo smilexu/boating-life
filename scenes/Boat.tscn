@@ -1,30 +1,53 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://scripts/boat_controller.gd" id="1_controller"]
 [ext_resource type="Script" path="res://scripts/boat_follow_camera.gd" id="2_follow_camera"]
 [ext_resource type="Script" path="res://scripts/boat_hud.gd" id="3_hud"]
-[ext_resource type="PackedScene" path="res://assets/boats/base_boat.fbx" id="4_base_boat"]
+[ext_resource type="PackedScene" path="res://assets/boats/first_boat_optimized.glb" id="4_first_boat"]
 [ext_resource type="Script" path="res://scripts/boat_buoyancy.gd" id="5_buoyancy"]
 [ext_resource type="PackedScene" path="res://scenes/WakeSystem.tscn" id="6_wake_system"]
+[ext_resource type="Resource" path="res://resources/vessels/starter_cargo_boat_draft.tres" id="7_draft_profile"]
+[ext_resource type="Script" path="res://scripts/cargo_loadout_controller.gd" id="8_cargo_loadout"]
+[ext_resource type="PackedScene" path="res://scenes/StandardCargoContainer.tscn" id="9_container_scene"]
+[ext_resource type="Resource" path="res://resources/cargo/test_standard_container.tres" id="10_test_cargo"]
 
 [node name="Boat" type="Node3D"]
 
 [node name="MotionRoot" type="Node3D" parent="."]
 script = ExtResource("1_controller")
+draft_profile = ExtResource("7_draft_profile")
 
 [node name="VisualRoot" type="Node3D" parent="MotionRoot"]
 script = ExtResource("5_buoyancy")
+fore_sample_distance = 2.7
+aft_sample_distance = 2.7
+half_beam = 1.1
 
-[node name="BaseBoatModel" parent="MotionRoot/VisualRoot" instance=ExtResource("4_base_boat")]
-position = Vector3(0, -0.5, 0)
-scale = Vector3(5, 5, 5)
+[node name="BoatModelFrame" type="Node3D" parent="MotionRoot/VisualRoot"]
+position = Vector3(0, -0.32, -0.293)
+rotation = Vector3(0, 1.5707963, 0)
+scale = Vector3(6.647381, 6.647381, 6.647381)
+
+[node name="FirstBoatModel" parent="MotionRoot/VisualRoot/BoatModelFrame" instance=ExtResource("4_first_boat")]
+
+[node name="CargoSlots" type="Node3D" parent="MotionRoot/VisualRoot"]
+position = Vector3(0, 0.4, 0)
+
+[node name="CargoSlot_01" type="Marker3D" parent="MotionRoot/VisualRoot/CargoSlots"]
+position = Vector3(0, 0.22, 1.04)
+
+[node name="CargoSlot_02" type="Marker3D" parent="MotionRoot/VisualRoot/CargoSlots"]
+position = Vector3(0, 0.22, 2.23)
+
+[node name="CargoLoadout" type="Node" parent="MotionRoot"]
+script = ExtResource("8_cargo_loadout")
+slot_paths = Array[NodePath]([NodePath("../VisualRoot/CargoSlots/CargoSlot_01"), NodePath("../VisualRoot/CargoSlots/CargoSlot_02")])
+container_scene = ExtResource("9_container_scene")
+test_cargo_item = ExtResource("10_test_cargo")
 
 [node name="WakeSystem" parent="MotionRoot/VisualRoot" instance=ExtResource("6_wake_system")]
 
-[editable path="MotionRoot/VisualRoot/BaseBoatModel"]
-
-[node name="node_0" parent="MotionRoot/VisualRoot/BaseBoatModel" index="0"]
-layers = 2
+[editable path="MotionRoot/VisualRoot/BoatModelFrame/FirstBoatModel"]
 
 [node name="BoatSkyFill" type="OmniLight3D" parent="MotionRoot/VisualRoot"]
 position = Vector3(0, 2.2, 1.0)
@@ -50,4 +73,5 @@ script = ExtResource("3_hud")
 controller_path = NodePath("../MotionRoot")
 weather_controller_path = NodePath("../../WeatherController")
 wave_sampler_path = NodePath("../../WaveSampler")
+navigation_depth_monitor_path = NodePath("../../NavigationDepthMonitor")
 

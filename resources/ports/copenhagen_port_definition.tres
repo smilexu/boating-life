@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="PortDefinition" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/port_definition.gd" id="1_port"]
+[ext_resource type="Resource" path="res://resources/ports/copenhagen_port_services.tres" id="2_services"]
+
+[resource]
+script = ExtResource("1_port")
+port_id = &"kobenhavn_test"
+display_name = "København"
+latitude_deg = 55.6785302542
+longitude_deg = 12.6458850322
+layout_rotation_degrees = 180.0
+entrance_offset_east_north_m = Vector2(-95, 0)
+approach_offset_east_north_m = Vector2(-260, 0)
+departure_offset_east_north_m = Vector2(-360, 0)
+service_offset_east_north_m = Vector2(-32, 8)
+berth_definitions = Array[Dictionary]([{"berth_id": &"copenhagen_p1", "display_name": "泊位 P1", "offset_east_north_m": Vector2(-80.5, 7.3), "heading_degrees": -90.0, "length_m": 22.0, "width_m": 10.5, "interaction_radius_m": 8.7, "docking_speed_threshold_mps": 0.8, "heading_tolerance_degrees": 20.0, "hull_clearance_m": 0.5, "depth_m": 2.0}])
+navigation_depth_overrides = {"entrance_channel": {"depth_m": 4.0, "priority": 100, "source": "Gameplay-configured test corridor (unverified)"}, "basin": {"depth_m": 3.0, "priority": 110, "source": "Gameplay-configured port basin (unverified)"}, "berth": {"depth_m": 2.0, "priority": 120, "source": "Gameplay-configured berth (unverified)"}}
+depth_override_id_prefix = "copenhagen"
+environment_configuration = {"vertical_datum": "LAT", "environment_id": "oresund_copenhagen_test", "location_note": "Prøvestenen vicinity; greybox placement is game-designed"}
+service_config = ExtResource("2_services")

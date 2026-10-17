@@ -1,0 +1,26 @@
+[gd_resource type="Resource" script_class="CargoContractDefinition" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/cargo_contract_definition.gd" id="1_contract"]
+[ext_resource type="Script" path="res://scripts/cargo_item_definition.gd" id="2_item"]
+
+[sub_resource type="Resource" id="CargoItemDefinition_spare_parts"]
+script = ExtResource("2_item")
+cargo_id = &"spare_parts_crate"
+display_name = "船舶维修零件"
+weight_kg = 180.0
+space_units = 1
+visual_asset_id = &"standard_container"
+
+[resource]
+script = ExtResource("1_contract")
+contract_id = &"malmo_copenhagen_spare_parts_a"
+origin_port_id = &"malmo_greybox_v1"
+origin_port_display_name = "Malmö"
+destination_port_id = &"kobenhavn_test"
+destination_port_display_name = "København"
+display_name = "维修零件运输"
+cargo_type = "船舶维修零件"
+cargo_items = Array[ExtResource("2_item")]([SubResource("CargoItemDefinition_spare_parts")])
+required_space = 1
+total_weight_kg = 180.0
+reward_cents = 22000
