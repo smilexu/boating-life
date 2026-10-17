@@ -319,10 +319,16 @@ func _update_fish_motion_status() -> void:
 		_fish_motion_status.text = "鱼群渲染器不可用。"
 		return
 	var stats := _fish_school_renderer.get_render_statistics()
-	_fish_motion_status.text = "运动平滑 %s · AI %.2f Hz · 可见 %d 条\nAI 更新 %.2f ms · MultiMesh 提交 %.2f ms/帧" % [
+	_fish_motion_status.text = "运动平滑 %s · AI %.2f Hz · 可见 %d 条 · 近表层群 %d · 水纹 %d\n针鱼视觉/逻辑 %d/%d · 鲱鱼视觉/逻辑 %d/%d\nAI 更新 %.2f ms · MultiMesh 提交 %.2f ms/帧" % [
 		"开" if _fish_school_renderer.smooth_motion_enabled else "关",
 		float(stats.get("movement_update_hz", 0.0)),
 		int(stats.get("visible_fish", 0)),
+		int(stats.get("near_surface_schools", 0)),
+		int(stats.get("surface_ripple_count", 0)),
+		int(stats.get("visual_needlefish_schools", 0)),
+		int(stats.get("logical_needlefish_schools", 0)),
+		int(stats.get("visual_herring_schools", 0)),
+		int(stats.get("logical_herring_schools", 0)),
 		float(stats.get("ai_update_ms", 0.0)),
 		float(stats.get("multimesh_submit_ms", 0.0)),
 	]
@@ -345,7 +351,9 @@ func _update_fish_observation_status() -> void:
 		int(behaviors.get("hover", 0)),
 		int(behaviors.get("flee", 0)),
 	]
-	_fish_observation_status.text = "选中群体 · 实际显示 %.0f cm · 数量 %d（可见 %d）\n距水面 %.2f m · 图表水深 %.2f m · 距海床 %.2f m\n生境：%s · 行为：%s" % [
+	var visibility_text := "视觉鱼" if str(stats.get("render_state", "visual")) == "visual" else "逻辑鱼（无 3D 渲染）"
+	_fish_observation_status.text = "选中群体 · %s · 显示长度 %.0f cm · 数量 %d（可见 %d）\n距水面 %.2f m · 图表水深 %.2f m · 距海床 %.2f m\n生境：%s · 行为：%s · 活动：%s" % [
+		visibility_text,
 		float(stats.get("average_visual_length_m", 0.0)) * 100.0,
 		int(stats.get("school_population", 0)),
 		int(stats.get("visible_fish", 0)),
@@ -354,6 +362,7 @@ func _update_fish_observation_status() -> void:
 		float(stats.get("seabed_clearance_m", 0.0)),
 		str(stats.get("habitat_region", "unknown")),
 		behavior_text,
+		str(stats.get("activity_label", "巡游")),
 	]
 
 
@@ -365,6 +374,9 @@ func _on_fish_observation_pressed(species_id: String) -> void:
 	var bathymetry := _fish_resource_manager.get_bathymetry_manager()
 	if profile == null or bathymetry == null:
 		_fish_location_feedback.text = "鱼种配置或水深数据不可用。"
+		return
+	if species_id in ["needlefish", "herring"]:
+		_on_surface_species_observation_pressed(profile, bathymetry)
 		return
 	var origin := _controller.global_position
 	var nearest_school: Dictionary = {}
@@ -435,6 +447,114 @@ func _on_fish_observation_pressed(species_id: String) -> void:
 	]
 
 
+func _on_surface_species_observation_pressed(profile: FishSpeciesProfile, bathymetry: BathymetryManager) -> void:
+	var origin := _controller.global_position
+	var nearest_school: Dictionary = {}
+	var nearest_rank := 99
+	var nearest_distance := INF
+	var target_position := Vector3.ZERO
+	var local_search_radius := _fish_school_renderer.observation_search_radius_m if _fish_school_renderer != null else 5000.0
+	var preferred_search_radius := _fish_school_renderer.preferred_observation_search_radius_m if _fish_school_renderer != null else 1500.0
+	for school in _fish_resource_manager.get_all_school_snapshots():
+		if str(school.get("species_id", "")) != profile.species_id:
+			continue
+		if _fish_resource_manager.get_school_render_state(school) != "visual":
+			continue
+		var activity_depth := float(school.get("activity_depth_m", INF))
+		if activity_depth > 6.0:
+			continue
+		var position_data: Array = school.get("world_position", [])
+		if position_data.size() != 3:
+			continue
+		var school_position := Vector3(float(position_data[0]), origin.y, float(position_data[2]))
+		var distance := Vector2(school_position.x - origin.x, school_position.z - origin.z).length()
+		if distance > local_search_radius:
+			continue
+		var activity_state := str(school.get("surface_activity_state", ""))
+		var has_surface_activity := activity_depth <= 2.0 and activity_state in ["near_surface", "ascending", "descending"]
+		var has_clear_surface_activity := activity_depth <= 1.2 and has_surface_activity
+		var activity_rank := 2
+		if has_clear_surface_activity:
+			activity_rank = 0
+		elif has_surface_activity:
+			activity_rank = 1
+		# Search local schools first so a distant active group does not displace
+		# a nearby visual group the player can already observe.
+		var distance_rank := 0 if distance <= preferred_search_radius else 1
+		var rank := distance_rank * 3 + activity_rank
+		if rank < nearest_rank or (rank == nearest_rank and distance < nearest_distance):
+			nearest_rank = rank
+			nearest_distance = distance
+			nearest_school = school
+			target_position = school_position
+	if nearest_school.is_empty():
+		_fish_location_feedback.text = "%.0f km 内没有可观察的%s视觉鱼群；深水逻辑鱼群仍保留在世界资源中。" % [local_search_radius / 1000.0, profile.display_name]
+		return
+	var destination_result := _find_surface_species_observation_position(target_position, origin, bathymetry)
+	if not bool(destination_result.get("valid", false)):
+		_fish_location_feedback.text = "找到了%s视觉鱼群，但鱼群附近没有安全水面位置。" % profile.display_name
+		return
+	var destination: Vector3 = destination_result["position"]
+	_controller.speed_mps = 0.0
+	_controller.is_autopilot = false
+	_controller.is_motion_paused = false
+	_controller.global_position = destination
+	var direction := Vector2(target_position.x - destination.x, target_position.z - destination.z).normalized()
+	if direction.length_squared() > 0.001:
+		_controller.global_rotation.y = atan2(-direction.x, -direction.y)
+	var wake := _controller.get_node_or_null("VisualRoot/WakeSystem")
+	if wake != null and wake.has_method("reset_wake"):
+		wake.call("reset_wake")
+	if _fish_school_renderer != null and _fish_school_renderer.is_observation_active():
+		_fish_school_renderer.end_observation()
+	_selected_fish_school_id = str(nearest_school.get("school_id", ""))
+	var activity_depth := float(nearest_school.get("activity_depth_m", 0.0))
+	var activity_label := "正在近表层活动" if nearest_rank <= 1 else "位于可见水层"
+	_fish_location_feedback.text = "已到%s%s：船距群中心 %.0f m · 鱼群深度 %.1f m · 海图水深 %.1f m · 群体 %d 条 · 出发点距群 %.1f km。保持船上镜头；需要水下近景时再手动切换。" % [
+		profile.display_name,
+		activity_label,
+		float(destination_result.get("school_distance_m", 0.0)),
+		activity_depth,
+		float(nearest_school.get("depth_m", 0.0)),
+		int(nearest_school.get("population", 0)),
+		nearest_distance / 1000.0,
+	]
+
+
+func _find_surface_species_observation_position(school_position: Vector3, boat_position: Vector3, bathymetry: BathymetryManager) -> Dictionary:
+	var base_direction := Vector2(boat_position.x - school_position.x, boat_position.z - school_position.z)
+	if base_direction.length_squared() < 0.001:
+		var forward := -_controller.global_transform.basis.z
+		base_direction = Vector2(-forward.x, -forward.z)
+	base_direction = base_direction.normalized()
+	var best_position := Vector3.ZERO
+	var best_depth := 0.0
+	var best_score := INF
+	for distance_m in [18.0, 20.0, 23.0]:
+		for angle_degrees in [-150.0, -120.0, -90.0, -60.0, -30.0, 0.0, 30.0, 60.0, 90.0, 120.0, 150.0, 180.0]:
+			var offset := base_direction.rotated(deg_to_rad(float(angle_degrees))) * float(distance_m)
+			var candidate := Vector3(school_position.x + offset.x, boat_position.y, school_position.z + offset.y)
+			var sample := bathymetry.get_depth_at_world_position(candidate)
+			if not bool(sample.get("valid", false)):
+				continue
+			var depth := float(sample.get("depth_m", 0.0))
+			if depth < 1.5:
+				continue
+			var score := absf(float(distance_m) - 18.0) + absf(float(angle_degrees)) * 0.002
+			if score < best_score:
+				best_score = score
+				best_position = candidate
+				best_depth = depth
+	if not is_finite(best_score):
+		return {"valid": false}
+	return {
+		"valid": true,
+		"position": best_position,
+		"depth_m": best_depth,
+		"school_distance_m": Vector2(best_position.x - school_position.x, best_position.z - school_position.z).length(),
+	}
+
+
 func _find_stickleback_overhead_position(school_position: Vector3, boat_position: Vector3, bathymetry: BathymetryManager) -> Dictionary:
 	var sample := bathymetry.get_depth_at_world_position(school_position)
 	if not bool(sample.get("valid", false)):
@@ -458,7 +578,7 @@ func _on_fish_observation_camera_pressed() -> void:
 			_fish_location_feedback.text = "先选择一个鱼种，传送到鱼群后再进入观察视角。"
 		return
 	if not _fish_school_renderer.begin_observation(_selected_fish_school_id) and _fish_location_feedback != null:
-		_fish_location_feedback.text = "所选鱼群已不可用，请重新选择鱼种。"
+		_fish_location_feedback.text = "所选鱼群当前不在 6 米视觉层或已不可用，请重新选择近表层鱼群。"
 
 
 func _on_fish_observation_camera_return_pressed() -> void:

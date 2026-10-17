@@ -26,6 +26,16 @@ extends Resource
 @export_range(0.03, 2.0, 0.01) var target_visual_length_m := 0.35
 ## Optional client-side visual size variation. A zero range keeps the target size.
 @export var visual_length_range_m := Vector2.ZERO
+## Rendering-only scale. It must never be used as the ecological body length.
+@export_range(0.25, 4.0, 0.05) var visual_scale_multiplier := 1.0
+## PBR roughness for the fish material. No emission is used for visibility.
+@export_range(0.05, 1.0, 0.01) var visual_roughness := 0.68
+## Target fraction of time a school spends in the near-surface activity layer.
+@export_range(0.0, 1.0, 0.01) var surface_activity_time_share := 0.0
+@export var surface_activity_depth_m := Vector2(0.5, 2.0)
+@export var deep_activity_depth_m := Vector2(7.0, 20.0)
+@export var surface_activity_duration_seconds := Vector2(30.0, 90.0)
+@export_range(0.05, 1.5, 0.05) var activity_vertical_speed_mps := 0.5
 ## Used by small coastal fish with a configured near-surface activity layer.
 @export var preferred_swim_depth_m := Vector2(0.45, 1.5)
 @export var flee_swim_depth_m := Vector2(0.4, 0.9)

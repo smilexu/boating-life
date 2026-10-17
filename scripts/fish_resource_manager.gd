@@ -123,7 +123,15 @@ func get_map_distribution(species_ids: Array[String] = []) -> Array[Dictionary]:
 		result = _authority.get_map_snapshot(species_ids)
 	for item in result:
 		item["visibility"] = "predicted"
+		item["render_state"] = get_school_render_state(item)
 	return result
+
+
+func get_school_render_state(school: Dictionary) -> String:
+	var species_id := str(school.get("species_id", ""))
+	if species_id not in ["needlefish", "herring"]:
+		return "visual"
+	return "visual" if float(school.get("activity_depth_m", INF)) <= 6.0 else "logical"
 
 
 func get_resource_density_at(world_position: Vector3, species_id: String = "") -> Dictionary:

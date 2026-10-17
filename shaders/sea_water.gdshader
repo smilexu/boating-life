@@ -142,6 +142,15 @@ uniform float shallow_surface_above_lat_m : hint_range(0.0, 2.0) = 0.5;
 uniform float shallow_bottom_depth_padding : hint_range(0.0, 5.0) = 1.5;
 group_uniforms;
 
+group_uniforms SurfaceFishVisibility;
+// Client-provided local school bounds. The shader only reduces opacity where
+// a submerged object is actually present close below the surface, so deep
+// seabed and empty water remain opaque. Count zero disables the feature.
+uniform int surface_fish_reveal_count = 0;
+uniform vec4 surface_fish_reveal_spheres[8]; // world X, world Z, radius, school weight
+uniform float surface_fish_reveal_strength : hint_range(0.0, 1.0) = 0.68;
+group_uniforms;
+
 group_uniforms SnellWindow;
 uniform vec4 albedo_snell: source_color;
 uniform vec3 snell_direction = vec3(0.0, 1.0, 0.0);
@@ -570,6 +579,7 @@ void fragment() {
 	float bathymetry_validity = 0.0;
 	float shallow_transmission_weight = 0.0;
 	float shallow_surface_alpha = 1.0;
+	float surface_fish_alpha = 1.0;
 	bool needs_bathymetry = enable_depth_color || shallow_transparency_enabled || water_diagnostic_mode == 6 || water_diagnostic_mode == 13;
 	if (needs_bathymetry) {
 		vec2 bathymetry = sample_bathymetry(vec2(world_coordinates.x, -world_coordinates.z));
@@ -606,6 +616,35 @@ void fragment() {
 			1.0
 		);
 		shallow_surface_alpha = mix(1.0, shallow_min_alpha, shallow_transmission_weight);
+	}
+
+	// In open water, expose only nearby fish silhouettes. This runs only inside
+	// a few client-supplied school bounds, and the depth-buffer gate prevents
+	// the alpha change from revealing the seabed or empty water.
+	if (surface_fish_reveal_count > 0 && water_diagnostic_mode == 0
+			&& (bathymetry_validity <= 0.0 || bathymetry_depth_m >= shallow_max_depth)) {
+		float local_school_weight = 0.0;
+		for (int index = 0; index < 8; index++) {
+			if (index >= surface_fish_reveal_count) {
+				break;
+			}
+			vec4 school = surface_fish_reveal_spheres[index];
+			vec2 school_delta = world_coordinates.xz - school.xy;
+			float distance_squared = dot(school_delta, school_delta);
+			float radius_squared = school.z * school.z;
+			if (distance_squared < radius_squared) {
+				float inner_radius = school.z * 0.62;
+				float school_edge = 1.0 - smoothstep(inner_radius * inner_radius, radius_squared, distance_squared);
+				local_school_weight = max(local_school_weight, school_edge * school.w);
+			}
+		}
+		if (local_school_weight > 0.01) {
+			float fish_object_gap = depth_from_water_to_object(SCREEN_UV, INV_PROJECTION_MATRIX, VERTEX);
+			float submerged_object = smoothstep(0.04, 0.18, fish_object_gap);
+			float close_to_surface = 1.0 - smoothstep(2.5, 4.0, fish_object_gap);
+			float reveal_weight = clamp(local_school_weight * submerged_object * close_to_surface * surface_fish_reveal_strength, 0.0, 1.0);
+			surface_fish_alpha = mix(1.0, 0.68, reveal_weight);
+		}
 	}
 
 	// Screen-reading shader features
@@ -654,6 +693,9 @@ void fragment() {
 #endif
 	if (shallow_transparency_enabled && water_diagnostic_mode == 0) {
 		ALPHA *= shallow_surface_alpha;
+	}
+	if (surface_fish_reveal_count > 0 && water_diagnostic_mode == 0) {
+		ALPHA *= surface_fish_alpha;
 	}
 
 	/* Sea Foam

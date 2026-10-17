@@ -8,6 +8,7 @@ uniform float model_head_sign = 1.0;
 uniform float model_length = 1.2;
 uniform float wave_amplitude = 0.02;
 uniform float tail_frequency_hz = 1.5;
+uniform float surface_roughness = 0.68;
 uniform bool animation_enabled = true;
 uniform bool use_stickleback_body_tones = false;
 uniform float dorsal_center_z = 0.0;
@@ -57,6 +58,6 @@ void fragment() {
 		body_color *= body_tone;
 	}
 	ALBEDO = body_color;
-	ROUGHNESS = 0.68;
+	ROUGHNESS = surface_roughness;
 	METALLIC = 0.0;
 }

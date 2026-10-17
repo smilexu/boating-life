@@ -249,14 +249,16 @@ func _draw_resource_cells() -> void:
 		var profile: FishSpeciesProfile = _profiles.get(str(school["species_id"]))
 		if profile == null:
 			continue
+		var render_state := str(school.get("render_state", "visual"))
 		var grid := Vector2i(
 			floori((point.x - _map_rect.position.x) / RESOURCE_CLUSTER_PIXELS),
 			floori((point.y - _map_rect.position.y) / RESOURCE_CLUSTER_PIXELS)
 		)
-		var cluster_key := "%s:%d:%d" % [profile.species_id, grid.x, grid.y]
+		var cluster_key := "%s:%s:%d:%d" % [profile.species_id, render_state, grid.x, grid.y]
 		if not clusters.has(cluster_key):
 			clusters[cluster_key] = {
 				"species_id": profile.species_id,
+				"render_state": render_state,
 				"color": profile.map_color,
 				"position_sum": Vector2.ZERO,
 				"school_count": 0,
@@ -272,9 +274,16 @@ func _draw_resource_cells() -> void:
 		var population := int(cluster["population"])
 		var radius := clampf(3.0 + log(maxf(1.0, float(school_count))) * 1.5 + log(maxf(1.0, float(population))) * 0.35, 3.0, 11.0)
 		var color: Color = cluster["color"]
-		draw_circle(point, radius + 3.0, Color(color.r, color.g, color.b, 0.16))
-		draw_circle(point, radius, Color(color.r, color.g, color.b, 0.88))
-		draw_arc(point, radius + 0.5, 0.0, TAU, 24, Color(0.94, 0.97, 0.92, 0.9), 0.8, true)
+		if str(cluster["render_state"]) == "logical":
+			var logical_color := color.lerp(Color("#9aabb1"), 0.68)
+			draw_arc(point, radius, 0.0, TAU, 20, Color(logical_color.r, logical_color.g, logical_color.b, 0.78), 1.4, true)
+			for segment in range(4):
+				var start_angle := float(segment) * TAU * 0.25 + 0.12
+				draw_arc(point, radius + 1.2, start_angle, start_angle + TAU * 0.12, 6, Color("#d1dcdf"), 1.0, true)
+		else:
+			draw_circle(point, radius + 3.0, Color(color.r, color.g, color.b, 0.16))
+			draw_circle(point, radius, Color(color.r, color.g, color.b, 0.88))
+			draw_arc(point, radius + 0.5, 0.0, TAU, 24, Color(0.94, 0.97, 0.92, 0.9), 0.8, true)
 
 
 func _draw_boat() -> void:

@@ -219,6 +219,8 @@ func _create_school(cell: Vector2i, east: float, north: float, depth: float, pro
 	state.direction_radians = rng.randf_range(-PI, PI)
 	state.movement_speed_mps = rng.randf_range(profile.movement_speed_min_mps, profile.movement_speed_max_mps)
 	state.movement_state = "schooling" if profile.species_id == "herring" else "cruise"
+	if profile.species_id in ["needlefish", "herring"]:
+		_initialize_surface_activity(state, profile, rng)
 	state.resource_state = "available"
 	state.last_updated_unix = int(Time.get_unix_time_from_system())
 	return state
@@ -262,6 +264,8 @@ func _advance_schools(step: float) -> void:
 
 func _advance_school(state: FishSchoolState, step: float) -> bool:
 	var profile: FishSpeciesProfile = _profiles_by_id[state.species_id]
+	if state.species_id in ["needlefish", "herring"]:
+		_advance_surface_activity(state, profile, step)
 	var target_heading: float = state.direction_radians + sin(_simulation_seconds * 0.012 + float(state.seed & 1023)) * 0.025
 	var drift_speed: float = state.movement_speed_mps * 0.16
 	var direction := Vector2(cos(target_heading), sin(target_heading))
@@ -282,6 +286,87 @@ func _advance_school(state: FishSchoolState, step: float) -> bool:
 		state.direction_radians = wrapf(state.direction_radians + (0.9 + hash01(state.seed, int(_simulation_seconds), _seed) * 1.8), -PI, PI)
 	state.last_updated_unix = int(Time.get_unix_time_from_system())
 	return true
+
+
+func _initialize_surface_activity(state: FishSchoolState, profile: FishSpeciesProfile, rng: RandomNumberGenerator) -> void:
+	state.surface_activity_cycle_index = 0
+	var max_depth := maxf(0.5, state.depth_m - 1.0)
+	var surface_depth := _sample_surface_depth(profile, rng, max_depth)
+	var deep_depth := _sample_deep_depth(profile, rng, max_depth)
+	if rng.randf() < profile.surface_activity_time_share:
+		state.surface_activity_state = "near_surface"
+		state.activity_depth_m = surface_depth
+		state.activity_depth_target_m = surface_depth
+		state.surface_activity_remaining_seconds = _surface_duration(profile, state.seed, 0)
+	else:
+		state.surface_activity_state = "deep"
+		state.activity_depth_m = deep_depth
+		state.activity_depth_target_m = deep_depth
+		state.surface_activity_remaining_seconds = _deep_duration(profile, state.seed, 0)
+	_set_activity_movement_label(state, profile)
+
+
+func _advance_surface_activity(state: FishSchoolState, profile: FishSpeciesProfile, step: float) -> void:
+	var max_depth := maxf(0.5, state.depth_m - 0.8)
+	state.activity_depth_target_m = minf(state.activity_depth_target_m, max_depth)
+	state.activity_depth_m = minf(state.activity_depth_m, max_depth)
+	var activity_state := state.surface_activity_state
+	state.surface_activity_remaining_seconds = maxf(0.0, state.surface_activity_remaining_seconds - step)
+	if activity_state == "near_surface" and state.surface_activity_remaining_seconds <= 0.0:
+		state.surface_activity_state = "descending"
+		state.activity_depth_target_m = _deep_depth_for_cycle(profile, state.seed, state.surface_activity_cycle_index, max_depth)
+	elif activity_state == "deep" and state.surface_activity_remaining_seconds <= 0.0:
+		state.surface_activity_cycle_index += 1
+		state.surface_activity_state = "ascending"
+		state.activity_depth_target_m = _surface_depth_for_cycle(profile, state.seed, state.surface_activity_cycle_index, max_depth)
+	var transition_speed := profile.activity_vertical_speed_mps * step
+	state.activity_depth_m = move_toward(state.activity_depth_m, state.activity_depth_target_m, transition_speed)
+	if state.surface_activity_state == "ascending" and absf(state.activity_depth_m - state.activity_depth_target_m) <= 0.05:
+		state.surface_activity_state = "near_surface"
+		state.surface_activity_remaining_seconds = _surface_duration(profile, state.seed, state.surface_activity_cycle_index)
+	elif state.surface_activity_state == "descending" and absf(state.activity_depth_m - state.activity_depth_target_m) <= 0.05:
+		state.surface_activity_state = "deep"
+		state.surface_activity_remaining_seconds = _deep_duration(profile, state.seed, state.surface_activity_cycle_index)
+	_set_activity_movement_label(state, profile)
+
+
+func _surface_depth_for_cycle(profile: FishSpeciesProfile, seed: int, cycle: int, max_depth: float) -> float:
+	var value := hash01(seed, cycle, _seed + profile.species_index * 104729 + 31)
+	return minf(lerpf(profile.surface_activity_depth_m.x, profile.surface_activity_depth_m.y, value), max_depth)
+
+
+func _deep_depth_for_cycle(profile: FishSpeciesProfile, seed: int, cycle: int, max_depth: float) -> float:
+	var value := hash01(seed, cycle, _seed + profile.species_index * 104729 + 67)
+	return minf(lerpf(profile.deep_activity_depth_m.x, profile.deep_activity_depth_m.y, value), max_depth)
+
+
+func _sample_surface_depth(profile: FishSpeciesProfile, rng: RandomNumberGenerator, max_depth: float) -> float:
+	return minf(rng.randf_range(profile.surface_activity_depth_m.x, profile.surface_activity_depth_m.y), max_depth)
+
+
+func _sample_deep_depth(profile: FishSpeciesProfile, rng: RandomNumberGenerator, max_depth: float) -> float:
+	return minf(rng.randf_range(profile.deep_activity_depth_m.x, profile.deep_activity_depth_m.y), max_depth)
+
+
+func _surface_duration(profile: FishSpeciesProfile, seed: int, cycle: int) -> float:
+	var value := hash01(seed, cycle, _seed + profile.species_index * 65537 + 101)
+	return lerpf(profile.surface_activity_duration_seconds.x, profile.surface_activity_duration_seconds.y, value)
+
+
+func _deep_duration(profile: FishSpeciesProfile, seed: int, cycle: int) -> float:
+	var surface_duration := _surface_duration(profile, seed, cycle)
+	var share := clampf(profile.surface_activity_time_share, 0.05, 0.95)
+	var variation := lerpf(0.82, 1.18, hash01(seed, cycle, _seed + profile.species_index * 65537 + 131))
+	return surface_duration * ((1.0 - share) / share) * variation
+
+
+func _set_activity_movement_label(state: FishSchoolState, profile: FishSpeciesProfile) -> void:
+	var prefix := "surface_schooling" if profile.species_id == "herring" else "surface_cruise"
+	var suffix := "deep_schooling" if profile.species_id == "herring" else "deep_cruise"
+	if state.surface_activity_state in ["near_surface", "ascending"]:
+		state.movement_state = prefix if state.surface_activity_state == "near_surface" else "ascending"
+	else:
+		state.movement_state = suffix if state.surface_activity_state == "deep" else "descending"
 
 
 func _habitat_region_for_depth(depth: float, seagrass_weight: float = 0.0) -> String:

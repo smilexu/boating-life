@@ -171,7 +171,7 @@ func _build_ui() -> void:
 	_details_label.add_theme_color_override("font_color", Color("#b2c5c1"))
 	side_layout.add_child(_details_label)
 	var legend := Label.new()
-	legend.text = "● 针鱼  ● 鲱鱼  ● 三刺鱼\n底图：EMODnet DTM 2024 / LAT\n海岸线：现有 OSM land mask"
+	legend.text = "● 针鱼  ● 鲱鱼  ● 三刺鱼\n实心：0–6 m 视觉鱼群   ◌ 虚线空心：深水逻辑鱼群\n底图：EMODnet DTM 2024 / LAT · 海岸线：OSM land mask"
 	legend.add_theme_color_override("font_color", Color("#98b0ae"))
 	side_layout.add_child(legend)
 	_footer_label = Label.new()
@@ -213,13 +213,32 @@ func _update_school_details(school: Dictionary) -> void:
 	var profile := _manager.get_species_profile(str(school.get("species_id", "")))
 	if profile == null:
 		return
-	_details_label.text = "%s / %s\n典型生境：%s\n预测水深：%.1f m\n群体规模：%s（%d 条模拟个体）\n资源状态：%s · 预测生态资源点" % [
+	var render_state := str(school.get("render_state", "visual"))
+	var surface_species := str(school.get("species_id", "")) in ["needlefish", "herring"]
+	var render_label := ("视觉鱼（0–6 m）" if render_state == "visual" else "逻辑鱼（深于 6 m；不绘制 3D 鱼体）") if surface_species else "生态资源点"
+	var position_data: Array = school.get("world_position", [])
+	var gps_text := "位置未知"
+	var behavior_text := str(school.get("movement_state", "unknown"))
+	if surface_species:
+		behavior_text = str(school.get("surface_activity_state", behavior_text))
+	var depth_value := float(school.get("activity_depth_m", 0.0)) if surface_species else float(school.get("depth_m", 0.0))
+	var depth_label := "活动深度" if surface_species else "预测水深"
+	if position_data.size() >= 3 and _georeference != null:
+		var geodetic := _georeference.world_to_geodetic(Vector3(float(position_data[0]), 0.0, float(position_data[2])))
+		gps_text = "GPS %.5f°%s, %.5f°%s" % [absf(geodetic.x), "N" if geodetic.x >= 0.0 else "S", absf(geodetic.y), "E" if geodetic.y >= 0.0 else "W"]
+	_details_label.text = "%s / %s\n%s · %s\n典型生境：%s\n%s：%.1f m · 海图水深：%.1f m\n%s\n群体规模：%s（%d 条模拟个体）\n行为：%s · 资源状态：%s\n预测生态资源点" % [
 		profile.display_name,
 		profile.english_name,
+		render_label,
+		behavior_text,
 		profile.habitat_description,
+		depth_label,
+		depth_value,
 		float(school.get("depth_m", 0.0)),
+		gps_text,
 		_population_band(int(school.get("population", 0))),
 		int(school.get("population", 0)),
+	behavior_text,
 		str(school.get("resource_state", "available")),
 	]
 
