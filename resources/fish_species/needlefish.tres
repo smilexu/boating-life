@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="FishSpeciesProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/fish_species_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+species_id = "needlefish"
+species_index = 0
+display_name = "针鱼"
+english_name = "Needlefish"
+habitat_description = "近表层沿岸及浅海开放水域；本图为按现有水深数据计算的游戏生态预测。"
+model_path = "res://assets/fishes/needlefish.glb"
+model_forward_axis = 0
+model_head_x = 0.40
+minimum_depth_m = 2.0
+maximum_depth_m = 42.0
+preferred_depth_min_m = 4.0
+preferred_depth_max_m = 19.0
+spawn_chance = 0.24
+population_min = 3
+population_max = 10
+movement_speed_min_mps = 1.1
+movement_speed_max_mps = 2.6
+vertical_layer = "surface"
+target_visual_length_m = 0.78
+body_wave_amplitude_m = 0.026
+tail_frequency_hz = 2.0
+map_color = Color(0.95, 0.55, 0.31, 1)

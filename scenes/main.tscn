@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=27 format=3]
 
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
@@ -19,6 +19,9 @@
 [ext_resource type="Script" path="res://scripts/day_night_visual_controller.gd" id="17_day_night"]
 [ext_resource type="Resource" path="res://resources/day_night_visual_profile.tres" id="18_day_night_profile"]
 [ext_resource type="PackedScene" path="res://scenes/ShallowSeabedManager.tscn" id="19_seabed_manager"]
+[ext_resource type="Script" path="res://scripts/fish_resource_manager.gd" id="20_fish_manager"]
+[ext_resource type="Script" path="res://scripts/fish_school_renderer.gd" id="21_fish_renderer"]
+[ext_resource type="Script" path="res://scripts/fish_resource_map.gd" id="22_fish_map"]
 
 [sub_resource type="Compositor" id="Compositor_volumetric_clouds"]
 compositor_effects = Array[CompositorEffect]([ExtResource("11_cloud_effect")])
@@ -121,3 +124,19 @@ rotation_degrees = Vector3(0, 90, 0)
 [node name="DepthChartHUD" parent="." instance=ExtResource("16_depth_chart_hud")]
 
 [node name="ShallowSeabedManager" parent="." instance=ExtResource("19_seabed_manager")]
+
+[node name="FishResourceManager" type="Node3D" parent="."]
+script = ExtResource("20_fish_manager")
+bathymetry_manager_path = NodePath("../BathymetryManager")
+boat_path = NodePath("../PlayerBoat/MotionRoot")
+wave_sampler_path = NodePath("../WaveSampler")
+map_layer_path = NodePath("../FishResourceMap")
+
+[node name="FishSchoolRenderer" type="Node3D" parent="FishResourceManager"]
+script = ExtResource("21_fish_renderer")
+
+[node name="FishResourceMap" type="CanvasLayer" parent="."]
+script = ExtResource("22_fish_map")
+manager_path = NodePath("../FishResourceManager")
+bathymetry_path = NodePath("../BathymetryManager")
+boat_path = NodePath("../PlayerBoat/MotionRoot")

@@ -142,18 +142,23 @@ func _find_nearest_reef(manager: Node, origin: Vector3, minimum_distance: float,
 		if not is_instance_valid(tile_root):
 			continue
 		var bundle: Dictionary = tile_data.get("bundle", {})
-		var records_by_variant: Array = bundle.get("rock_records", [])
-		for records in records_by_variant:
-			for record in records:
-				var local_transform: Transform3D = record["transform"]
-				var world_position := tile_root.global_transform * local_transform.origin
-				var distance := Vector2(world_position.x - origin.x, world_position.z - origin.z).length()
-				if distance < minimum_distance or distance >= float(nearest["distance_m"]):
-					continue
-				nearest = {
-					"valid": true,
-					"position": world_position,
-					"distance_m": distance,
-					"tile_key": tile_key,
-				}
+		var payload: Dictionary = bundle.get("reef_payload", {})
+		for records in payload.get("asset_records", []):
+			nearest = _consider_record(nearest, records, tile_root, origin, minimum_distance, tile_key)
+	return nearest
+
+
+func _consider_record(nearest: Dictionary, records: Array, tile_root: Node3D, origin: Vector3, minimum_distance: float, tile_key: Vector2i) -> Dictionary:
+	for record in records:
+		var local_transform: Transform3D = record["transform"]
+		var world_position := tile_root.global_transform * local_transform.origin
+		var distance := Vector2(world_position.x - origin.x, world_position.z - origin.z).length()
+		if distance < minimum_distance or distance >= float(nearest["distance_m"]):
+			continue
+		nearest = {
+			"valid": true,
+			"position": world_position,
+			"distance_m": distance,
+			"tile_key": tile_key,
+		}
 	return nearest

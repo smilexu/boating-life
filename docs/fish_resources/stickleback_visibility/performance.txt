@@ -1,0 +1,8 @@
+Stickleback local rendering cost benchmark
+Date: 2026-10-16T22:41:02
+Device: Apple M2 Pro · Godot 4.7.2 · Forward+ / Metal 3.2
+Resolution: 1920x1080 · Quality: 画质优先 · repeats: 3 × 3.0s measured (1.5s warmup)
+Method: same main scene, F3 safe observation placement, same stopped boat/camera and weather; renderer and its AI processing disabled/enabled; VSync disabled and Engine.max_fps=0. GPU time is unavailable from the current public project instrumentation.
+Frame-time samples include the full frame; draw calls/primitives are Performance monitors. Fish AI / MultiMesh timings come from FishSchoolRenderer's own microsecond timers.
+Fish render + AI OFF: avg 62.5 FPS, 16.04 ms/frame, P95 20.18 ms, P99 23.03 ms, worst 23.77 ms; draw calls 190.9; primitives 1738548; visible fish 0; fish triangles 0; AI 0.000 ms/tick; MultiMesh submit 0.000 ms/update
+Fish render + AI ON: avg 60.9 FPS, 16.42 ms/frame, P95 18.46 ms, P99 23.11 ms, worst 23.27 ms; draw calls 193.0; primitives 1789816; visible fish 24; fish triangles 57600; AI 1.046 ms/tick; MultiMesh submit 0.054 ms/update

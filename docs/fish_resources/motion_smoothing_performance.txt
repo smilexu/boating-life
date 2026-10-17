@@ -1,0 +1,31 @@
+Fish visual smoothing A/B benchmark
+Godot 4.7.2 Forward+ / Metal · Apple M2 Pro · plugged into power
+1920x1080 project viewport · FishObservationCamera at the densest real school cluster within 1200m
+Same weather, time and scene for all runs; local authority and boat movement frozen; animation shader enabled.
+VSync disabled for controlled 30/60/120 FPS caps. GPU-only timing is unavailable; frame metrics include whole-engine/render wall time.
+AI tick remains 6.25 Hz (0.160s). Warmup 1.0s, sample 3.0s, repeats 3.
+cap_30_smooth_off repeat 1: fps=30.05 frame_ms=33.279 p95_ms=33.961 p99_ms=34.088 worst_ms=34.088 draw_calls=105.0 fish=221 triangles=530400 ai_ms=9.963 multimesh_tick_submit_ms=0.324 visual_submit_ms=0.0000
+cap_30_smooth_off repeat 2: fps=30.02 frame_ms=33.314 p95_ms=34.174 p99_ms=34.385 worst_ms=34.385 draw_calls=105.0 fish=221 triangles=530400 ai_ms=10.888 multimesh_tick_submit_ms=0.375 visual_submit_ms=0.0000
+cap_30_smooth_off repeat 3: fps=30.12 frame_ms=33.203 p95_ms=33.947 p99_ms=34.326 worst_ms=34.326 draw_calls=105.0 fish=221 triangles=530400 ai_ms=10.997 multimesh_tick_submit_ms=0.355 visual_submit_ms=0.0000
+cap_30_smooth_off mean: fps=30.06 frame_ms=33.265 p95_ms=34.027 p99_ms=34.266 worst_ms=34.385 draw_calls=105.0 fish=221 triangles=530400 ai_ms=10.616 multimesh_tick_submit_ms=0.351 visual_submit_ms=0.0000
+cap_30_smooth_on repeat 1: fps=30.00 frame_ms=33.329 p95_ms=33.754 p99_ms=34.314 worst_ms=34.314 draw_calls=105.0 fish=221 triangles=530400 ai_ms=9.683 multimesh_tick_submit_ms=0.522 visual_submit_ms=1.0482
+cap_30_smooth_on repeat 2: fps=30.02 frame_ms=33.315 p95_ms=33.810 p99_ms=34.764 worst_ms=34.764 draw_calls=105.0 fish=221 triangles=530400 ai_ms=9.544 multimesh_tick_submit_ms=0.545 visual_submit_ms=0.9902
+cap_30_smooth_on repeat 3: fps=30.03 frame_ms=33.299 p95_ms=33.944 p99_ms=34.381 worst_ms=34.381 draw_calls=105.0 fish=221 triangles=530400 ai_ms=9.619 multimesh_tick_submit_ms=0.509 visual_submit_ms=0.9651
+cap_30_smooth_on mean: fps=30.02 frame_ms=33.314 p95_ms=33.836 p99_ms=34.486 worst_ms=34.764 draw_calls=105.0 fish=221 triangles=530400 ai_ms=9.616 multimesh_tick_submit_ms=0.526 visual_submit_ms=1.0012
+cap_60_smooth_off repeat 1: fps=60.03 frame_ms=16.658 p95_ms=17.394 p99_ms=18.738 worst_ms=19.185 draw_calls=105.0 fish=221 triangles=530400 ai_ms=8.451 multimesh_tick_submit_ms=0.287 visual_submit_ms=0.0000
+cap_60_smooth_off repeat 2: fps=60.03 frame_ms=16.659 p95_ms=17.191 p99_ms=17.934 worst_ms=17.958 draw_calls=105.0 fish=221 triangles=530400 ai_ms=7.298 multimesh_tick_submit_ms=0.242 visual_submit_ms=0.0000
+cap_60_smooth_off repeat 3: fps=60.02 frame_ms=16.661 p95_ms=17.126 p99_ms=17.652 worst_ms=18.446 draw_calls=105.0 fish=221 triangles=530400 ai_ms=7.563 multimesh_tick_submit_ms=0.260 visual_submit_ms=0.0000
+cap_60_smooth_off mean: fps=60.03 frame_ms=16.659 p95_ms=17.237 p99_ms=18.108 worst_ms=19.185 draw_calls=105.0 fish=221 triangles=530400 ai_ms=7.771 multimesh_tick_submit_ms=0.263 visual_submit_ms=0.0000
+cap_60_smooth_on repeat 1: fps=60.18 frame_ms=16.617 p95_ms=17.108 p99_ms=17.820 worst_ms=19.885 draw_calls=105.0 fish=221 triangles=530400 ai_ms=6.322 multimesh_tick_submit_ms=0.506 visual_submit_ms=0.7901
+cap_60_smooth_on repeat 2: fps=60.06 frame_ms=16.649 p95_ms=17.071 p99_ms=19.011 worst_ms=20.073 draw_calls=105.0 fish=221 triangles=530400 ai_ms=7.484 multimesh_tick_submit_ms=0.577 visual_submit_ms=0.8667
+cap_60_smooth_on repeat 3: fps=60.02 frame_ms=16.662 p95_ms=17.524 p99_ms=18.988 worst_ms=20.290 draw_calls=105.0 fish=221 triangles=530400 ai_ms=6.796 multimesh_tick_submit_ms=0.470 visual_submit_ms=0.8651
+cap_60_smooth_on mean: fps=60.09 frame_ms=16.643 p95_ms=17.234 p99_ms=18.606 worst_ms=20.290 draw_calls=105.0 fish=221 triangles=530400 ai_ms=6.867 multimesh_tick_submit_ms=0.518 visual_submit_ms=0.8406
+cap_120_smooth_off repeat 1: fps=60.00 frame_ms=16.666 p95_ms=22.404 p99_ms=23.206 worst_ms=24.485 draw_calls=105.0 fish=221 triangles=530400 ai_ms=4.286 multimesh_tick_submit_ms=0.200 visual_submit_ms=0.0000
+cap_120_smooth_off repeat 2: fps=60.07 frame_ms=16.648 p95_ms=20.799 p99_ms=24.277 worst_ms=26.397 draw_calls=105.0 fish=221 triangles=530400 ai_ms=9.548 multimesh_tick_submit_ms=0.350 visual_submit_ms=0.0000
+cap_120_smooth_off repeat 3: fps=59.95 frame_ms=16.680 p95_ms=21.220 p99_ms=25.317 worst_ms=25.796 draw_calls=105.0 fish=221 triangles=530400 ai_ms=9.931 multimesh_tick_submit_ms=0.354 visual_submit_ms=0.0000
+cap_120_smooth_off mean: fps=60.01 frame_ms=16.665 p95_ms=21.474 p99_ms=24.267 worst_ms=26.397 draw_calls=105.0 fish=221 triangles=530400 ai_ms=7.922 multimesh_tick_submit_ms=0.301 visual_submit_ms=0.0000
+cap_120_smooth_on repeat 1: fps=60.04 frame_ms=16.657 p95_ms=20.796 p99_ms=23.657 worst_ms=24.994 draw_calls=105.0 fish=221 triangles=530400 ai_ms=8.489 multimesh_tick_submit_ms=0.663 visual_submit_ms=0.8194
+cap_120_smooth_on repeat 2: fps=60.04 frame_ms=16.657 p95_ms=20.595 p99_ms=23.866 worst_ms=24.164 draw_calls=105.0 fish=221 triangles=530400 ai_ms=8.765 multimesh_tick_submit_ms=0.623 visual_submit_ms=0.8296
+cap_120_smooth_on repeat 3: fps=60.03 frame_ms=16.658 p95_ms=21.411 p99_ms=24.892 worst_ms=25.105 draw_calls=105.0 fish=221 triangles=530400 ai_ms=7.742 multimesh_tick_submit_ms=0.651 visual_submit_ms=0.8107
+cap_120_smooth_on mean: fps=60.03 frame_ms=16.657 p95_ms=20.934 p99_ms=24.138 worst_ms=25.105 draw_calls=105.0 fish=221 triangles=530400 ai_ms=8.332 multimesh_tick_submit_ms=0.646 visual_submit_ms=0.8199
+Cluster: herring_v2_1_29, schools=12, logical fish=550, chart depth=23.32m.

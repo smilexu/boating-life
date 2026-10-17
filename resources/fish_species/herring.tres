@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="FishSpeciesProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/fish_species_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+species_id = "herring"
+species_index = 1
+display_name = "鲱鱼"
+english_name = "Herring"
+habitat_description = "中上层近海与陆架鱼群；规模较大，采用协调群游与局部避让。"
+model_path = "res://assets/fishes/herring.glb"
+model_forward_axis = 1
+model_head_x = -0.39
+minimum_depth_m = 8.0
+maximum_depth_m = 53.0
+preferred_depth_min_m = 17.0
+preferred_depth_max_m = 43.0
+spawn_chance = 0.27
+population_min = 35
+population_max = 96
+movement_speed_min_mps = 0.35
+movement_speed_max_mps = 0.9
+vertical_layer = "midwater"
+target_visual_length_m = 0.44
+body_wave_amplitude_m = 0.017
+tail_frequency_hz = 1.35
+map_color = Color(0.34, 0.74, 0.96, 1)

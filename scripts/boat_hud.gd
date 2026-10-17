@@ -14,12 +14,17 @@ const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 @export_node_path("Node") var day_night_visual_controller_path := NodePath("../../DayNightVisualController")
 @export_node_path("Node") var wave_sampler_path := NodePath("../../WaveSampler")
 @export_node_path("Node") var quality_manager_path := NodePath("../../QualityManager")
+@export_node_path("Node") var fish_resource_manager_path := NodePath("../../FishResourceManager")
+@export_node_path("Node3D") var fish_school_renderer_path := NodePath("../../FishResourceManager/FishSchoolRenderer")
 
 var _controller: BoatController
 var _weather_controller: Node
 var _day_night_visual_controller: Node
 var _wave_sampler: Node
 var _quality_manager: Node
+var _fish_resource_manager: FishResourceManager
+var _fish_school_renderer: FishSchoolRenderer
+var _selected_fish_school_id := ""
 var _world_time_control: WorldTimeControlPort
 var _status_panel: PanelContainer
 var _status_label: Label
@@ -33,6 +38,10 @@ var _moon_label: Label
 var _cloud_label: Label
 var _wave_label: Label
 var _performance_label: Label
+var _fish_location_feedback: Label
+var _fish_motion_toggle: CheckButton
+var _fish_motion_status: Label
+var _fish_observation_status: Label
 var _world_time_label: Label
 var _world_time_feedback: Label
 var _sun_elevation_slider: HSlider
@@ -67,6 +76,8 @@ func _ready() -> void:
 	_day_night_visual_controller = get_node_or_null(day_night_visual_controller_path)
 	_wave_sampler = get_node_or_null(wave_sampler_path)
 	_quality_manager = get_node_or_null(quality_manager_path)
+	_fish_resource_manager = get_node_or_null(fish_resource_manager_path) as FishResourceManager
+	_fish_school_renderer = get_node_or_null(fish_school_renderer_path) as FishSchoolRenderer
 	var time_manager := get_node_or_null("/root/WorldTimeManager")
 	_world_time_control = LocalTimeControlScript.new(time_manager) as WorldTimeControlPort
 
@@ -196,6 +207,7 @@ func _build_debug_panel() -> void:
 		button.pressed.connect(_on_weather_button_pressed.bind(preset[1]))
 		preset_row.add_child(button)
 	layout.add_child(preset_row)
+	_add_fish_observation_controls(layout)
 
 	_sun_elevation_slider = _add_slider_row(layout, "太阳高度（时间驱动）", -90.0, 90.0, 0.1)
 	_sun_elevation_slider.editable = false
@@ -240,6 +252,258 @@ func _build_debug_panel() -> void:
 	add_child(_debug_panel)
 	_refresh_weather_controls()
 	_refresh_settings_controls()
+
+
+func _add_fish_observation_controls(parent: VBoxContainer) -> void:
+	var title := Label.new()
+	title.text = "鱼群观察点 · 调试传送"
+	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_color_override("font_color", Color(0.94, 0.96, 0.94))
+	parent.add_child(title)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	for fish in [["needlefish", "前往观察针鱼"], ["herring", "前往观察鲱鱼"], ["three_spined_stickleback", "前往观察三刺鱼"]]:
+		var button := Button.new()
+		button.text = str(fish[1])
+		button.tooltip_text = "将船移到三刺鱼群上方，鱼群会在浅水层侧向躲避。" if str(fish[0]) == "three_spined_stickleback" else "将船停在鱼群惊扰范围外，并切换到真实鱼群位置的水下观察视角。"
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.pressed.connect(_on_fish_observation_pressed.bind(str(fish[0])))
+		row.add_child(button)
+	parent.add_child(row)
+	var observer_row := HBoxContainer.new()
+	observer_row.add_theme_constant_override("separation", 6)
+	var observe_button := Button.new()
+	observe_button.text = "进入水下鱼群观察视角"
+	observe_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	observe_button.pressed.connect(_on_fish_observation_camera_pressed)
+	observer_row.add_child(observe_button)
+	var return_button := Button.new()
+	return_button.text = "返回船上视角"
+	return_button.pressed.connect(_on_fish_observation_camera_return_pressed)
+	observer_row.add_child(return_button)
+	parent.add_child(observer_row)
+	_fish_location_feedback = _make_debug_label()
+	_fish_location_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_fish_location_feedback.text = "移动船只到真实鱼群观察位置；不会移动鱼群的共享生态锚点。"
+	parent.add_child(_fish_location_feedback)
+	_fish_observation_status = _make_debug_label()
+	_fish_observation_status.name = "FishObservationStatus"
+	_fish_observation_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_fish_observation_status.text = "选择三刺鱼后显示鱼群实际尺寸、水层与海床净空。"
+	parent.add_child(_fish_observation_status)
+	_fish_motion_toggle = CheckButton.new()
+	_fish_motion_toggle.name = "FishSmoothMotionToggle"
+	_fish_motion_toggle.text = "鱼群逐帧平滑运动（A/B 调试）"
+	_fish_motion_toggle.button_pressed = _fish_school_renderer != null and _fish_school_renderer.smooth_motion_enabled
+	_fish_motion_toggle.disabled = _fish_school_renderer == null
+	_fish_motion_toggle.toggled.connect(_on_fish_smoothing_toggled)
+	parent.add_child(_fish_motion_toggle)
+	_fish_motion_status = _make_debug_label()
+	_fish_motion_status.name = "FishMotionStatus"
+	parent.add_child(_fish_motion_status)
+	_update_fish_motion_status()
+
+
+func _on_fish_smoothing_toggled(enabled: bool) -> void:
+	if _fish_school_renderer == null:
+		return
+	_fish_school_renderer.set_smooth_motion_enabled(enabled)
+	_update_fish_motion_status()
+
+
+func _update_fish_motion_status() -> void:
+	_update_fish_observation_status()
+	if _fish_motion_status == null:
+		return
+	if _fish_school_renderer == null:
+		_fish_motion_status.text = "鱼群渲染器不可用。"
+		return
+	var stats := _fish_school_renderer.get_render_statistics()
+	_fish_motion_status.text = "运动平滑 %s · AI %.2f Hz · 可见 %d 条\nAI 更新 %.2f ms · MultiMesh 提交 %.2f ms/帧" % [
+		"开" if _fish_school_renderer.smooth_motion_enabled else "关",
+		float(stats.get("movement_update_hz", 0.0)),
+		int(stats.get("visible_fish", 0)),
+		float(stats.get("ai_update_ms", 0.0)),
+		float(stats.get("multimesh_submit_ms", 0.0)),
+	]
+
+
+func _update_fish_observation_status() -> void:
+	if _fish_observation_status == null:
+		return
+	if _fish_school_renderer == null or _selected_fish_school_id.is_empty():
+		_fish_observation_status.text = "鱼群观察数据：未选择鱼群。"
+		return
+	var stats := _fish_school_renderer.get_school_visual_debug(_selected_fish_school_id)
+	if stats.is_empty():
+		_fish_observation_status.text = "鱼群观察数据：鱼群正在加载或已离开可见范围。"
+		return
+	var behaviors: Dictionary = stats.get("behavior_counts", {})
+	var behavior_text := "巡游 %d · 转向 %d · 悬停 %d · 受惊 %d" % [
+		int(behaviors.get("cruise", 0)),
+		int(behaviors.get("turn", 0)),
+		int(behaviors.get("hover", 0)),
+		int(behaviors.get("flee", 0)),
+	]
+	_fish_observation_status.text = "选中群体 · 实际显示 %.0f cm · 数量 %d（可见 %d）\n距水面 %.2f m · 图表水深 %.2f m · 距海床 %.2f m\n生境：%s · 行为：%s" % [
+		float(stats.get("average_visual_length_m", 0.0)) * 100.0,
+		int(stats.get("school_population", 0)),
+		int(stats.get("visible_fish", 0)),
+		float(stats.get("depth_from_surface_m", 0.0)),
+		float(stats.get("bathymetry_depth_m", 0.0)),
+		float(stats.get("seabed_clearance_m", 0.0)),
+		str(stats.get("habitat_region", "unknown")),
+		behavior_text,
+	]
+
+
+func _on_fish_observation_pressed(species_id: String) -> void:
+	if _fish_resource_manager == null or _controller == null:
+		_fish_location_feedback.text = "鱼类资源管理器不可用。"
+		return
+	var profile := _fish_resource_manager.get_species_profile(species_id)
+	var bathymetry := _fish_resource_manager.get_bathymetry_manager()
+	if profile == null or bathymetry == null:
+		_fish_location_feedback.text = "鱼种配置或水深数据不可用。"
+		return
+	var origin := _controller.global_position
+	var nearest_school: Dictionary = {}
+	var nearest_distance := INF
+	var nearest_preferred_school: Dictionary = {}
+	var nearest_preferred_distance := INF
+	var target_position := Vector3.ZERO
+	var preferred_depth_min := float(profile.preferred_depth_min_m)
+	var preferred_depth_max := float(profile.preferred_depth_max_m)
+	for school in _fish_resource_manager.get_all_school_snapshots():
+		if str(school.get("species_id", "")) != species_id:
+			continue
+		var position_data: Array = school.get("world_position", [])
+		if position_data.size() != 3:
+			continue
+		var school_position := Vector3(float(position_data[0]), origin.y, float(position_data[2]))
+		var distance := Vector2(school_position.x - origin.x, school_position.z - origin.z).length()
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest_school = school
+			target_position = school_position
+		var school_depth := float(school.get("depth_m", 0.0))
+		if school_depth >= preferred_depth_min and school_depth <= preferred_depth_max and distance < nearest_preferred_distance:
+			nearest_preferred_distance = distance
+			nearest_preferred_school = school
+	if not nearest_preferred_school.is_empty():
+		nearest_school = nearest_preferred_school
+		nearest_distance = nearest_preferred_distance
+		var preferred_position: Array = nearest_school.get("world_position", [])
+		if preferred_position.size() == 3:
+			target_position = Vector3(float(preferred_position[0]), origin.y, float(preferred_position[2]))
+	if nearest_school.is_empty():
+		_fish_location_feedback.text = "当前世界没有可用的%s鱼群资源点。" % profile.display_name
+		return
+	var destination_result: Dictionary
+	if species_id == "three_spined_stickleback":
+		destination_result = _find_stickleback_overhead_position(target_position, origin, bathymetry)
+	else:
+		destination_result = _find_safe_fish_observation_position(target_position, origin, float(nearest_school.get("depth_m", 0.0)), species_id, bathymetry)
+	if not bool(destination_result.get("valid", false)):
+		_fish_location_feedback.text = "找到了%s鱼群，但附近没有可用水深的靠近位置。" % profile.display_name
+		return
+	var destination: Vector3 = destination_result["position"]
+	_controller.speed_mps = 0.0
+	_controller.is_autopilot = false
+	_controller.is_motion_paused = false
+	_controller.global_position = destination
+	var direction := Vector2(target_position.x - destination.x, target_position.z - destination.z).normalized()
+	if direction.length_squared() > 0.001:
+		_controller.global_rotation.y = atan2(-direction.x, -direction.y)
+	var wake := _controller.get_node_or_null("VisualRoot/WakeSystem")
+	if wake != null and wake.has_method("reset_wake"):
+		wake.call("reset_wake")
+	var school_id := str(nearest_school.get("school_id", ""))
+	_selected_fish_school_id = school_id
+	var observation_started := not school_id.is_empty() and _fish_school_renderer != null and _fish_school_renderer.begin_observation(school_id)
+	var departure_distance_km := nearest_distance / 1000.0
+	var camera_note := "已切换到水下观察视角；鱼群会在浅水层侧向散开，按‘返回船上视角’恢复。" if observation_started else "可按‘进入水下鱼群观察视角’查看。"
+	var location_label := "鱼群正上方" if species_id == "three_spined_stickleback" else "鱼群附近"
+	_fish_location_feedback.text = "已到最近%s%s：船距群中心 %.0f m · 水深 %.1f m · 群体 %d 条 · 出发点距群 %.1f km。%s" % [
+		profile.display_name,
+		location_label,
+		float(destination_result.get("school_distance_m", 0.0)),
+		float(destination_result.get("depth_m", 0.0)),
+		int(nearest_school.get("population", 0)),
+		departure_distance_km,
+		camera_note,
+	]
+
+
+func _find_stickleback_overhead_position(school_position: Vector3, boat_position: Vector3, bathymetry: BathymetryManager) -> Dictionary:
+	var sample := bathymetry.get_depth_at_world_position(school_position)
+	if not bool(sample.get("valid", false)):
+		return {"valid": false}
+	var depth := float(sample.get("depth_m", 0.0))
+	if depth < 0.85 or depth > 6.0:
+		return {"valid": false}
+	var destination := Vector3(school_position.x, boat_position.y, school_position.z)
+	return {
+		"valid": true,
+		"position": destination,
+		"depth_m": depth,
+		"school_distance_m": 0.0,
+		"directly_over_school": true,
+	}
+
+
+func _on_fish_observation_camera_pressed() -> void:
+	if _fish_school_renderer == null or _selected_fish_school_id.is_empty():
+		if _fish_location_feedback != null:
+			_fish_location_feedback.text = "先选择一个鱼种，传送到鱼群后再进入观察视角。"
+		return
+	if not _fish_school_renderer.begin_observation(_selected_fish_school_id) and _fish_location_feedback != null:
+		_fish_location_feedback.text = "所选鱼群已不可用，请重新选择鱼种。"
+
+
+func _on_fish_observation_camera_return_pressed() -> void:
+	if _fish_school_renderer != null:
+		_fish_school_renderer.end_observation()
+
+
+func _find_safe_fish_observation_position(school_position: Vector3, boat_position: Vector3, school_depth: float, species_id: String, bathymetry: BathymetryManager) -> Dictionary:
+	var base_direction := Vector2(boat_position.x - school_position.x, boat_position.z - school_position.z)
+	if base_direction.length_squared() < 0.001:
+		var forward := -_controller.global_transform.basis.z
+		base_direction = Vector2(-forward.x, -forward.z)
+	base_direction = base_direction.normalized()
+	var flee_clearance := 12.0
+	match species_id:
+		"needlefish": flee_clearance += 85.0
+		"herring": flee_clearance += 55.0
+		"three_spined_stickleback": flee_clearance += 24.0
+	var preferred_distance := flee_clearance + 5.0
+	var best_position := Vector3.ZERO
+	var best_depth := 0.0
+	var best_score := 1.0e30
+	for distance_m in [preferred_distance, preferred_distance + 8.0, preferred_distance + 16.0, preferred_distance + 24.0]:
+		for angle_degrees in [-120.0, -90.0, -60.0, -30.0, 0.0, 30.0, 60.0, 90.0, 120.0, 150.0]:
+			var offset := base_direction.rotated(deg_to_rad(float(angle_degrees))) * float(distance_m)
+			var candidate := Vector3(school_position.x + offset.x, boat_position.y, school_position.z + offset.y)
+			var sample := bathymetry.get_depth_at_world_position(candidate)
+			if not bool(sample.get("valid", false)):
+				continue
+			var depth := float(sample.get("depth_m", 0.0))
+			if depth < 1.3:
+				continue
+			var score := absf(float(distance_m) - preferred_distance) + absf(depth - school_depth) * 2.0 + absf(float(angle_degrees)) * 0.01
+			if score < best_score:
+				best_score = score
+				best_position = candidate
+				best_depth = depth
+	if best_score >= 1.0e29:
+		return {"valid": false}
+	return {
+		"valid": true,
+		"position": best_position,
+		"depth_m": best_depth,
+		"school_distance_m": Vector2(best_position.x - school_position.x, best_position.z - school_position.z).length(),
+	}
 
 
 func _add_astronomy_debug_controls(parent: VBoxContainer) -> void:
@@ -495,6 +759,7 @@ func _refresh_weather_controls() -> void:
 
 func _update_debug_status() -> void:
 	_refresh_world_time_controls()
+	_update_fish_motion_status()
 	if _weather_controller != null:
 		_weather_label.text = "当前天气：%s   ·   按 1 / 2 / 3 切换" % _weather_controller.get("current_weather_name")
 		var sun_elevation := _get_solar_value("elevation_degrees")

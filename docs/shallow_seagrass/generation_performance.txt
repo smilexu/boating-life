@@ -1,0 +1,5 @@
+Godot 4.7.2 Forward+ / Metal · Apple M2 Pro · 1920×1080 · captures the streaming rebuild after changing density, through 8 stable frames.
+Per-frame wall time includes engine scheduling and rendering; this is a small scene test, not a controlled GPU timestamp measurement.
+{"eelgrass_instances":7175,"engine_fps_mean":54.8947368421053,"frames_until_settled":114,"generation_wall_ms":2340.247,"label":"sparse","last_tile_cpu_ms":377.614,"max_frame_ms":27.361,"maximum_generation_slice_ms":24.262,"mean_frame_ms":20.1781315789474,"seagrass_triangles":205062}
+{"eelgrass_instances":17671,"engine_fps_mean":66.0701754385965,"frames_until_settled":114,"generation_wall_ms":2435.126,"label":"normal","last_tile_cpu_ms":387.793,"max_frame_ms":27.485,"maximum_generation_slice_ms":25.203,"mean_frame_ms":21.0130175438596,"seagrass_triangles":502920}
+{"eelgrass_instances":30535,"engine_fps_mean":61.0877192982456,"frames_until_settled":114,"generation_wall_ms":2630.135,"label":"dense","last_tile_cpu_ms":402.518,"max_frame_ms":32.105,"maximum_generation_slice_ms":27.188,"mean_frame_ms":22.6677894736842,"seagrass_triangles":866880}

@@ -29,6 +29,11 @@ func _run() -> void:
 		push_error("Initial seabed stream did not settle within the frame limit.")
 		quit(1)
 		return
+	var initial_stats: Dictionary = manager.call("get_debug_stats")
+	if int(initial_stats.get("glb_assets_loaded", 0)) != 8:
+		push_error("Expected all eight reef GLBs to load, got %d." % int(initial_stats.get("glb_assets_loaded", 0)))
+		quit(1)
+		return
 	var original_signature := _tile_signature(manager, start_tile)
 	if original_signature.is_empty():
 		push_error("No generated seabed tile exists at the starting boat position.")
@@ -49,6 +54,12 @@ func _run() -> void:
 		quit(1)
 		return
 	print("[SeabedStreaming] departed to %s; initial tile unloaded; stats %s" % [str(remote_tile), str(manager.call("get_debug_stats"))])
+	# Force a fresh build on return instead of merely taking the previous tile
+	# payload from the manager's LRU cache. This exercises deterministic layout.
+	var mesh_cache: Dictionary = manager.get("_mesh_cache")
+	mesh_cache.clear()
+	var mesh_cache_lru: Array = manager.get("_mesh_cache_lru")
+	mesh_cache_lru.clear()
 
 	boat.global_position = start_position
 	if not await _wait_until_settled(manager, start_tile, 3000):
@@ -91,11 +102,21 @@ func _tile_signature(manager: Node, key: Vector2i) -> String:
 	var tile_data: Dictionary = loaded_tiles[key]
 	var bundle: Dictionary = tile_data.get("bundle", {})
 	var signature := "%d:%d:" % [int(tile_data.get("lod", -1)), int(bundle.get("triangles", -1))]
-	for variant_index in range(bundle.get("rock_records", []).size()):
-		var records: Array = bundle["rock_records"][variant_index]
-		signature += "%d=" % variant_index
-		for record in records:
-			var rock_transform: Transform3D = record["transform"]
-			var position := rock_transform.origin
-			signature += "%.4f,%.4f,%.4f;" % [position.x, position.y, position.z]
+	var payload: Dictionary = bundle.get("reef_payload", {})
+	signature += "GLB:%d:" % int(payload.get("cluster_count", 0))
+	for asset_index in range(payload.get("asset_records", []).size()):
+		signature += "A%d=" % asset_index
+		signature += _record_signature(payload["asset_records"][asset_index])
+	return signature
+
+
+func _record_signature(records: Array) -> String:
+	var signature := ""
+	for record in records:
+		var transform: Transform3D = record["transform"]
+		var position := transform.origin
+		signature += "%.4f,%.4f,%.4f/%.3f,%.3f,%.3f;" % [
+			position.x, position.y, position.z,
+			transform.basis.x.length(), transform.basis.y.length(), transform.basis.z.length()
+		]
 	return signature
