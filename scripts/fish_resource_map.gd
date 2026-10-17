@@ -2,6 +2,11 @@ class_name FishResourceMap
 extends CanvasLayer
 
 const MAP_CANVAS_SCRIPT := preload("res://scripts/fish_resource_map_canvas.gd")
+const ROUTE_EDITOR_SCRIPT := preload("res://scripts/route_editor_panel.gd")
+const MAP_SETTINGS_PATH := "user://fish_resource_map_settings.cfg"
+const MAP_SETTINGS_SECTION := "fish_tracking"
+const MAP_SETTINGS_ENABLED_SPECIES_KEY := "enabled_species"
+const MAP_SETTINGS_DOLPHINS_ENABLED_KEY := "enabled_dolphins"
 
 @export_node_path("Node") var manager_path := NodePath("../FishResourceManager")
 @export_node_path("Node") var bathymetry_path := NodePath("../BathymetryManager")
@@ -16,12 +21,17 @@ var _route_manager: PortRouteManager
 var _economy_manager: CargoEconomyManager
 var _root: Control
 var _map_canvas: FishResourceMapCanvas
+var _map_tabs: TabContainer
 var _selected_species: Array[String] = []
+var _dolphins_enabled := true
 var _species_buttons: Dictionary = {}
 var _details_label: Label
 var _summary_label: Label
 var _route_label: Label
+var _route_editor: RouteEditorPanel
+var _route_editor_toggle: Button
 var _footer_label: Label
+var _map_settings := ConfigFile.new()
 var _refresh_elapsed := 0.0
 var _map_open := false
 var _route_refresh_elapsed := 0.0
@@ -35,6 +45,7 @@ func _ready() -> void:
 	_dolphin_manager = get_node_or_null("../DolphinWorldManager")
 	_route_manager = get_node_or_null("../PortRouteManager") as PortRouteManager
 	_economy_manager = get_node_or_null("../CargoEconomyManager") as CargoEconomyManager
+	_load_tracking_preferences()
 	if _manager != null:
 		_georeference = _manager.get_georeference()
 		_build_ui()
@@ -53,6 +64,7 @@ func configure(manager: FishResourceManager, bathymetry: BathymetryManager, geor
 			_build_ui()
 		else:
 			_map_canvas.configure(_manager, _bathymetry, _georeference, _boat, _dolphin_manager)
+			_map_canvas.set_dolphins_enabled(_dolphins_enabled)
 			refresh_data()
 
 
@@ -62,6 +74,10 @@ func is_map_open() -> bool:
 
 func set_map_open(open: bool) -> void:
 	_map_open = open
+	if not open and _route_editor != null:
+		_route_editor.set_editor_open(false)
+		if _route_editor_toggle != null:
+			_route_editor_toggle.text = "开发者：打开航线编辑器"
 	set_process(open)
 	if _root != null:
 		_root.visible = open
@@ -79,12 +95,9 @@ func set_map_open(open: bool) -> void:
 func refresh_data() -> void:
 	if _map_canvas != null:
 		_map_canvas.set_species_filter(_selected_species)
-		var count := _map_canvas.get_school_count()
-		var dolphin_count := _map_canvas.get_dolphin_count()
-		if _summary_label != null:
-			_summary_label.text = "当前筛选：%d 个鱼类资源点 · %d 个海豚群" % [count, dolphin_count]
+		_update_summary_label()
 		if _footer_label != null and _manager != null:
-			_footer_label.text = "%s Authority · Seed %d · Revision %d · 鱼类为预测资源点；海豚标记显示本地权威群体位置" % [_manager.get_authority_source(), _manager.get_world_seed(), _manager.get_state_revision()]
+			_footer_label.text = "%s Authority · Seed %d · Revision %d · 鱼类为预测资源点；勾选海豚群可追踪当前本地权威位置" % [_manager.get_authority_source(), _manager.get_world_seed(), _manager.get_state_revision()]
 	_refresh_route_overlay()
 
 
@@ -94,10 +107,34 @@ func _process(delta: float) -> void:
 	_route_refresh_elapsed += delta
 	if _route_refresh_elapsed >= 1.0:
 		_route_refresh_elapsed = fmod(_route_refresh_elapsed, 1.0)
+		if _map_canvas != null:
+			_map_canvas.refresh_dolphin_data()
+			_update_summary_label()
 		_refresh_route_overlay()
 
 
+func _update_summary_label() -> void:
+	if _summary_label == null or _map_canvas == null:
+		return
+	_summary_label.text = "当前筛选：%d 个鱼类资源点 · %d 个海豚群" % [
+		_map_canvas.get_school_count(),
+		_map_canvas.get_dolphin_count(),
+	]
+
+
 func _refresh_route_overlay() -> void:
+	if _map_tabs != null and _map_tabs.current_tab != 1:
+		if _map_canvas != null:
+			_map_canvas.set_route_overlay(null, _georeference)
+		if _route_label != null:
+			_route_label.text = "切换到“航路编辑”标签查看航线。"
+		return
+	if _route_editor != null and _route_editor.is_editor_open():
+		var edited_route := _route_editor.get_selected_route()
+		_map_canvas.set_route_overlay(edited_route, _georeference)
+		if _route_label != null:
+			_route_label.text = "开发者预览：%s\n%s · %d 个中间航点" % [edited_route.display_name, edited_route.validation_status, edited_route.waypoints.size()] if edited_route != null else "请选择或新建一条开发航线。"
+		return
 	if _map_canvas == null or _route_manager == null or _economy_manager == null:
 		if _map_canvas != null:
 			_map_canvas.set_route_overlay(null, _georeference)
@@ -126,9 +163,12 @@ func _refresh_route_overlay() -> void:
 	var remaining := chosen_route.get_remaining_distance_m(_boat.global_position, _georeference) if _boat != null else float(summary.get("distance_m", 0.0))
 	var eta_seconds := float(summary.get("estimated_seconds", -1.0))
 	var eta_text := "未知" if eta_seconds < 0.0 else _format_duration(eta_seconds)
-	_route_label.text = "%s\n全程 %.1f km · 剩余约 %.1f km\n巡航参考 %.1f m/s · 预计 %s\n状态：未验证的游戏航线" % [
+	var validation_text := "游戏内已验证" if chosen_route.validation_status == RouteDefinition.STATUS_VALIDATED else "未验证的游戏航线"
+	_route_label.text = "%s\n全程 %.1f km · 剩余约 %.1f km\n巡航参考 %.1f m/s · 预计 %s\n状态：%s%s" % [
 		chosen_route.display_name, float(summary.get("distance_m", 0.0)) / 1000.0,
 		remaining / 1000.0, cruise_speed, eta_text,
+		validation_text,
+		" · 可自动巡航" if _route_manager.is_route_cruise_eligible(chosen_route) else " · 自动巡航关闭",
 	]
 
 
@@ -182,7 +222,7 @@ func _build_ui() -> void:
 	close_button.pressed.connect(func() -> void: set_map_open(false))
 	header.add_child(close_button)
 	var subtitle := Label.new()
-	subtitle.text = "鱼类可能出现区域 · 由真实 EMODnet 水深与 OSM 海岸掩膜约束的本地生态预测"
+	subtitle.text = "鱼类资源预测与海豚当前位置 · 底图由 EMODnet 水深和 OSM 海岸掩膜约束"
 	subtitle.add_theme_color_override("font_color", Color("#9db8b6"))
 	outer.add_child(subtitle)
 	var body := HBoxContainer.new()
@@ -194,6 +234,7 @@ func _build_ui() -> void:
 	_map_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_map_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_map_canvas.configure(_manager, _bathymetry, _georeference, _boat, _dolphin_manager)
+	_map_canvas.set_dolphins_enabled(_dolphins_enabled)
 	_map_canvas.school_selected.connect(_on_school_selected)
 	_map_canvas.school_hovered.connect(_on_school_hovered)
 	body.add_child(_map_canvas)
@@ -201,47 +242,99 @@ func _build_ui() -> void:
 	side.custom_minimum_size = Vector2(318.0, 0.0)
 	side.add_theme_stylebox_override("panel", _side_style())
 	body.add_child(side)
-	var side_layout := VBoxContainer.new()
-	side_layout.add_theme_constant_override("separation", 9)
-	side.add_child(side_layout)
+	_map_tabs = TabContainer.new()
+	_map_tabs.name = "MapDataTabs"
+	_map_tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_map_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_map_tabs.tab_changed.connect(_on_map_tab_changed)
+	side.add_child(_map_tabs)
+	var fish_tab := ScrollContainer.new()
+	fish_tab.name = "鱼类资源"
+	fish_tab.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	fish_tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fish_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_map_tabs.add_child(fish_tab)
+	var fish_layout := VBoxContainer.new()
+	fish_layout.add_theme_constant_override("separation", 9)
+	fish_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	fish_tab.add_child(fish_layout)
+	var route_tab := ScrollContainer.new()
+	route_tab.name = "航路编辑"
+	route_tab.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	route_tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	route_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_map_tabs.add_child(route_tab)
+	_map_tabs.current_tab = 0
+	_map_canvas.set_resource_overlay_enabled(true)
+	var route_layout := VBoxContainer.new()
+	route_layout.add_theme_constant_override("separation", 9)
+	route_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	route_tab.add_child(route_layout)
 	var species_heading := Label.new()
 	species_heading.text = "鱼种筛选"
 	species_heading.add_theme_font_size_override("font_size", 17)
 	species_heading.add_theme_color_override("font_color", Color("#dce9dc"))
-	side_layout.add_child(species_heading)
+	fish_layout.add_child(species_heading)
+	var fish_hint := Label.new()
+	fish_hint.text = "鱼类追踪默认关闭；海豚群默认显示当前位置。筛选选择会自动保存。"
+	fish_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	fish_hint.add_theme_color_override("font_color", Color("#9db8b6"))
+	fish_layout.add_child(fish_hint)
 	for profile in _manager.get_species_profiles():
-		_selected_species.append(profile.species_id)
 		var species_id := profile.species_id
 		var check := CheckButton.new()
 		check.text = "%s  ·  %s" % [profile.display_name, profile.english_name]
-		check.button_pressed = true
+		check.button_pressed = _selected_species.has(species_id)
 		check.add_theme_color_override("font_color", profile.map_color.lightened(0.18))
 		check.toggled.connect(func(pressed: bool) -> void: _set_species_enabled(species_id, pressed))
-		side_layout.add_child(check)
+		fish_layout.add_child(check)
 		_species_buttons[species_id] = check
+	var dolphin_check := CheckButton.new()
+	dolphin_check.name = "DolphinTracking"
+	dolphin_check.text = "海豚群  ·  Dolphin pod"
+	dolphin_check.button_pressed = _dolphins_enabled
+	dolphin_check.add_theme_color_override("font_color", Color("#a9e5df"))
+	dolphin_check.toggled.connect(_set_dolphins_enabled)
+	fish_layout.add_child(dolphin_check)
 	_summary_label = Label.new()
 	_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_summary_label.add_theme_color_override("font_color", Color("#a6c1bc"))
-	side_layout.add_child(_summary_label)
+	fish_layout.add_child(_summary_label)
 	_route_label = Label.new()
 	_route_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_route_label.add_theme_color_override("font_color", Color("#f0d39a"))
-	side_layout.add_child(_route_label)
+	_route_label.text = "切换到“航路编辑”标签查看航线。"
+	route_layout.add_child(_route_label)
+	if _route_manager != null and (OS.has_feature("editor") or OS.has_feature("debug")):
+		_route_editor_toggle = Button.new()
+		_route_editor_toggle.text = "开发者：打开航线编辑器"
+		route_layout.add_child(_route_editor_toggle)
+		_route_editor = ROUTE_EDITOR_SCRIPT.new() as RouteEditorPanel
+		_route_editor.name = "RouteEditorPanel"
+		_route_editor.visible = false
+		_route_editor.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		_route_editor.configure(_route_manager, _map_canvas, _georeference)
+		route_layout.add_child(_route_editor)
+		_route_editor_toggle.pressed.connect(func() -> void:
+			_route_editor.set_editor_open(not _route_editor.is_editor_open())
+			_route_editor_toggle.text = "开发者：关闭航线编辑器" if _route_editor.is_editor_open() else "开发者：打开航线编辑器"
+			_refresh_route_overlay()
+		)
 	var detail_heading := Label.new()
 	detail_heading.text = "区域信息"
 	detail_heading.add_theme_font_size_override("font_size", 17)
 	detail_heading.add_theme_color_override("font_color", Color("#dce9dc"))
-	side_layout.add_child(detail_heading)
+	fish_layout.add_child(detail_heading)
 	_details_label = Label.new()
-	_details_label.text = "点击地图上的资源点查看鱼种、预测深度与群体规模。"
+	_details_label.text = "点击鱼类资源点或海豚群标记查看物种、位置与群体信息。"
 	_details_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_details_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_details_label.add_theme_color_override("font_color", Color("#b2c5c1"))
-	side_layout.add_child(_details_label)
+	fish_layout.add_child(_details_label)
 	var legend := Label.new()
 	legend.text = "● 针鱼  ● 鲱鱼  ● 三刺鱼   ◇ 海豚群\n实心：0–6 m 视觉鱼群   ◌ 虚线空心：深水逻辑鱼群\n海豚标记随共享群体位置更新。底图：EMODnet DTM 2024 / LAT"
 	legend.add_theme_color_override("font_color", Color("#98b0ae"))
-	side_layout.add_child(legend)
+	fish_layout.add_child(legend)
 	_footer_label = Label.new()
 	_footer_label.add_theme_color_override("font_color", Color("#809b9b"))
 	outer.add_child(_footer_label)
@@ -262,7 +355,53 @@ func _set_species_enabled(species_id: String, enabled: bool) -> void:
 		_selected_species.append(species_id)
 	elif not enabled:
 		_selected_species.erase(species_id)
+	_save_tracking_preferences()
 	refresh_data()
+
+
+func _set_dolphins_enabled(enabled: bool) -> void:
+	_dolphins_enabled = enabled
+	if _map_canvas != null:
+		_map_canvas.set_dolphins_enabled(enabled)
+	_save_tracking_preferences()
+	_update_summary_label()
+
+
+func _on_map_tab_changed(tab_index: int) -> void:
+	if _map_canvas != null:
+		_map_canvas.set_resource_overlay_enabled(tab_index == 0)
+	if tab_index != 1 and _route_editor != null and _route_editor.is_editor_open():
+		_route_editor.set_editor_open(false)
+		if _route_editor_toggle != null:
+			_route_editor_toggle.text = "开发者：打开航线编辑器"
+	_refresh_route_overlay()
+
+
+func _load_tracking_preferences() -> void:
+	var error := _map_settings.load(MAP_SETTINGS_PATH)
+	if error == ERR_FILE_NOT_FOUND:
+		return
+	if error != OK:
+		push_warning("Could not load fish map tracking preferences: %s" % error_string(error))
+		return
+	var saved: Variant = _map_settings.get_value(MAP_SETTINGS_SECTION, MAP_SETTINGS_ENABLED_SPECIES_KEY, PackedStringArray())
+	if saved is PackedStringArray or saved is Array:
+		for item in saved:
+			var species_id := str(item)
+			if not species_id.is_empty() and not _selected_species.has(species_id):
+				_selected_species.append(species_id)
+	_dolphins_enabled = bool(_map_settings.get_value(MAP_SETTINGS_SECTION, MAP_SETTINGS_DOLPHINS_ENABLED_KEY, true))
+
+
+func _save_tracking_preferences() -> void:
+	var enabled_species := PackedStringArray()
+	for species_id in _selected_species:
+		enabled_species.append(species_id)
+	_map_settings.set_value(MAP_SETTINGS_SECTION, MAP_SETTINGS_ENABLED_SPECIES_KEY, enabled_species)
+	_map_settings.set_value(MAP_SETTINGS_SECTION, MAP_SETTINGS_DOLPHINS_ENABLED_KEY, _dolphins_enabled)
+	var error := _map_settings.save(MAP_SETTINGS_PATH)
+	if error != OK:
+		push_warning("Could not save fish map tracking preferences: %s" % error_string(error))
 
 
 func _on_school_selected(school: Dictionary) -> void:

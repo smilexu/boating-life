@@ -6,6 +6,7 @@
 [sub_resource type="Resource" id="Waypoint_OresundSouth"]
 script = ExtResource("2_waypoint")
 waypoint_id = &"oresund_southbound_01"
+display_name = "厄勒海峡南向航点"
 latitude_deg = 55.6786458
 longitude_deg = 12.7786458
 arrival_radius_m = 180.0
@@ -24,5 +25,7 @@ arrival_point_id = &"malmo_arrival_wait_v1"
 arrival_latitude_deg = 55.6190079
 arrival_longitude_deg = 12.9728726
 waypoints = Array[ExtResource("2_waypoint")]([SubResource("Waypoint_OresundSouth")])
-validation_status = "unverified_gameplay_route"
-data_source = "Gameplay route prototype through cells that the local EMODnet DTM 2024 LAT grid reports as water at least 2 m deep. Grid is coarse (~66 m east × ~116 m north); no bridge, obstacle, current, traffic or authority-route validation. Not for real navigation."
+cruise_allowed = false
+validation_status = "NEEDS_REVIEW"
+updated_version = 2
+data_source = "Independently authored southbound prototype. Needs a separate complete manual in-game validation before autopilot can use it. The local EMODnet DTM 2024 LAT grid is coarse (~66 m east × ~116 m north); no real hydrographic, bridge, obstacle, current, traffic or authority-route validation. Not for real navigation."

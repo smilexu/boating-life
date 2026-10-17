@@ -1,6 +1,8 @@
 class_name BoatController
 extends Node3D
 
+signal manual_takeover_requested
+
 ## Navigation transform for the player boat.
 ## One Godot unit represents one meter. The motion origin sits on the calm-water
 ## plane at the boat centerline; the normalized model's bow points along local
@@ -18,6 +20,7 @@ const DEFAULT_VESSEL_BEAM_M := 2.327
 @export_range(0.0, 2.0, 0.05) var coast_deceleration_mps2 := 0.18
 @export_range(5.0, 60.0, 1.0) var turn_rate_degrees_per_second := 28.0
 @export_range(1.0, 12.0, 0.5) var cruise_speed_mps := 7.0
+@export_range(0.1, 0.8, 0.05) var reverse_speed_ratio := 0.45
 
 @export_category("Navigation reference · gameplay only")
 @export var draft_profile: VesselDraftProfile
@@ -28,13 +31,30 @@ var is_autopilot := false
 var is_motion_paused := false
 var is_port_docked := false
 
-var _autopilot_heading_radians := 0.0
+var _autopilot_steering_input := 0.0
+var _autopilot_target_speed_mps := 0.0
+var _autopilot_speed_cap_mps := 0.0
 
 
 func get_current_draft_m() -> float:
 	if draft_profile == null:
 		return -1.0
 	return draft_profile.draft_for_cargo_weight(current_cargo_weight_kg)
+
+
+func get_reverse_max_speed_mps() -> float:
+	return max_speed_mps * clampf(reverse_speed_ratio, 0.1, 0.8)
+
+
+func get_autopilot_speed_cap_mps() -> float:
+	return maxf(max_speed_mps, _autopilot_speed_cap_mps)
+
+
+func set_autopilot_speed_cap_mps(speed_cap_mps: float) -> void:
+	if not is_finite(speed_cap_mps) or speed_cap_mps <= 0.0:
+		_autopilot_speed_cap_mps = 0.0
+	else:
+		_autopilot_speed_cap_mps = maxf(max_speed_mps, speed_cap_mps)
 
 
 func get_vessel_length_m() -> float:
@@ -78,7 +98,7 @@ func set_port_docked(docked: bool) -> void:
 	if docked:
 		speed_mps = 0.0
 		is_motion_paused = true
-		is_autopilot = false
+		disengage_autopilot()
 
 
 func _process(delta: float) -> void:
@@ -90,14 +110,16 @@ func _process(delta: float) -> void:
 	if Input.is_action_just_pressed("boat_pause"):
 		is_motion_paused = not is_motion_paused
 
-	if Input.is_action_just_pressed("boat_toggle_autopilot"):
-		_toggle_autopilot()
+	if is_autopilot and _has_manual_drive_input():
+		manual_takeover_requested.emit()
+		if is_autopilot:
+			disengage_autopilot()
 
 	if is_motion_paused:
 		return
 
 	if is_autopilot:
-		_update_autopilot(delta)
+		_update_autopilot_motion(delta)
 	else:
 		_update_manual_controls(delta)
 
@@ -109,10 +131,16 @@ func _process(delta: float) -> void:
 
 func _update_manual_controls(delta: float) -> void:
 	var throttle := Input.get_axis("boat_brake", "boat_accelerate")
-	if throttle > 0.0:
-		speed_mps = move_toward(speed_mps, max_speed_mps, acceleration_mps2 * throttle * delta)
-	elif throttle < 0.0:
-		speed_mps = move_toward(speed_mps, 0.0, braking_mps2 * absf(throttle) * delta)
+	if absf(throttle) > 0.001:
+		var target_speed := 0.0
+		if throttle > 0.0:
+			target_speed = max_speed_mps if speed_mps >= 0.0 else 0.0
+		else:
+			target_speed = -get_reverse_max_speed_mps() if speed_mps <= 0.0 else 0.0
+		var changing_direction := speed_mps * target_speed < -0.001
+		var slowing_down := absf(target_speed) < absf(speed_mps) or changing_direction
+		var acceleration := braking_mps2 if slowing_down else acceleration_mps2
+		speed_mps = move_toward(speed_mps, target_speed, acceleration * absf(throttle) * delta)
 	else:
 		speed_mps = move_toward(speed_mps, 0.0, coast_deceleration_mps2 * delta)
 
@@ -124,15 +152,32 @@ func _update_manual_controls(delta: float) -> void:
 		rotation.y += steering * reverse_factor * deg_to_rad(turn_rate_degrees_per_second) * speed_factor * delta
 
 
-func _update_autopilot(delta: float) -> void:
-	speed_mps = move_toward(speed_mps, cruise_speed_mps, acceleration_mps2 * delta)
-	var heading_error := wrapf(_autopilot_heading_radians - rotation.y, -PI, PI)
-	var max_heading_change := deg_to_rad(turn_rate_degrees_per_second) * delta
-	rotation.y += clampf(heading_error, -max_heading_change, max_heading_change)
+func submit_autopilot_command(steering_input: float, target_speed_mps: float) -> void:
+	_autopilot_steering_input = clampf(steering_input, -1.0, 1.0)
+	_autopilot_target_speed_mps = clampf(target_speed_mps, 0.0, get_autopilot_speed_cap_mps())
+	is_autopilot = true
 
 
-func _toggle_autopilot() -> void:
-	is_autopilot = not is_autopilot
-	if is_autopilot:
-		_autopilot_heading_radians = rotation.y
+func disengage_autopilot() -> void:
+	is_autopilot = false
+	_autopilot_steering_input = 0.0
+	_autopilot_target_speed_mps = 0.0
+	_autopilot_speed_cap_mps = 0.0
+
+
+func _update_autopilot_motion(delta: float) -> void:
+	var target_speed := clampf(_autopilot_target_speed_mps, 0.0, get_autopilot_speed_cap_mps())
+	var acceleration := acceleration_mps2 if target_speed >= speed_mps else braking_mps2
+	speed_mps = move_toward(speed_mps, target_speed, acceleration * delta)
+	var speed_factor := clampf(absf(speed_mps) / 3.0, 0.0, 1.0)
+	rotation.y += _autopilot_steering_input * deg_to_rad(turn_rate_degrees_per_second) * speed_factor * delta
+
+
+func _has_manual_drive_input() -> bool:
+	var focused_control := get_viewport().gui_get_focus_owner()
+	if is_instance_valid(focused_control):
+		return false
+	return Input.get_axis("boat_brake", "boat_accelerate") != 0.0 \
+		or Input.is_action_pressed("boat_turn_left") \
+		or Input.is_action_pressed("boat_turn_right")
 

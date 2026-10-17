@@ -3,6 +3,9 @@ extends Control
 
 signal school_hovered(school: Dictionary)
 signal school_selected(school: Dictionary)
+signal route_edit_map_clicked(world_position: Vector3, is_inside_map: bool, is_land: bool)
+signal route_waypoint_selected(waypoint_index: int)
+signal route_waypoint_moved(waypoint_index: int, world_position: Vector3, is_inside_map: bool, is_land: bool)
 
 # The coastline and contour vectors remain full resolution. The background
 # bathymetry is only a coarse color aid, so avoid thousands of startup samples.
@@ -20,6 +23,16 @@ var _boat: Node3D
 var _dolphin_manager: Node
 var _route_definition: RouteDefinition
 var _route_georeference: GeoReference
+var _route_validation_hit_world_position := Vector3.ZERO
+var _route_validation_hit_label := ""
+var _has_route_validation_hit := false
+var _resource_overlay_enabled := true
+var _dolphins_enabled := true
+var _editing_route: RouteDefinition
+var _route_edit_enabled := false
+var _route_edit_operation := "ADD"
+var _selected_route_waypoint_index := -1
+var _dragging_route_waypoint_index := -1
 var _extent := Rect2()
 var _map_rect := Rect2()
 var _raster: ImageTexture
@@ -62,7 +75,6 @@ func configure(manager: FishResourceManager, bathymetry: BathymetryManager, geor
 	_selected_species.clear()
 	for profile in manager.get_species_profiles():
 		_profiles[profile.species_id] = profile
-		_selected_species.append(profile.species_id)
 	refresh_data()
 	queue_redraw()
 	_raster_built = false
@@ -72,6 +84,48 @@ func set_route_overlay(route: RouteDefinition, georeference: GeoReference) -> vo
 	_route_definition = route
 	_route_georeference = georeference
 	queue_redraw()
+
+
+func set_route_validation_hit(world_position: Vector3, label: String, enabled: bool) -> void:
+	_route_validation_hit_world_position = world_position
+	_route_validation_hit_label = label
+	_has_route_validation_hit = enabled
+	queue_redraw()
+
+
+func set_route_editing(route: RouteDefinition, georeference: GeoReference, enabled: bool, operation: String, selected_waypoint_index: int) -> void:
+	_editing_route = route
+	_route_georeference = georeference
+	_route_edit_enabled = enabled
+	_route_edit_operation = operation
+	_selected_route_waypoint_index = selected_waypoint_index
+	if not enabled:
+		_dragging_route_waypoint_index = -1
+	queue_redraw()
+
+
+func map_local_position_to_world(map_position: Vector2) -> Dictionary:
+	if _georeference == null or _bathymetry == null or _extent.size.x <= 0.0 or _extent.size.y <= 0.0:
+		return {"valid": false, "is_land": false, "world_position": Vector3.ZERO, "reason": "地图或陆地掩膜不可用"}
+	var drawn_rect := _get_world_map_rect()
+	if not drawn_rect.has_point(map_position):
+		return {"valid": false, "is_land": false, "world_position": Vector3.ZERO}
+	var scale := drawn_rect.size.x / maxf(_extent.size.x, 1.0)
+	if scale <= 0.0:
+		return {"valid": false, "is_land": false, "world_position": Vector3.ZERO}
+	var east := _extent.position.x + (map_position.x - drawn_rect.position.x) / scale
+	var north := _extent.end.y - (map_position.y - drawn_rect.position.y) / scale
+	var world_position := Vector3(east, 0.0, -north)
+	var geo := _georeference.world_to_geodetic(world_position)
+	var within_region := geo.x >= _georeference.south_latitude_deg and geo.x <= _georeference.north_latitude_deg and geo.y >= _georeference.west_longitude_deg and geo.y <= _georeference.east_longitude_deg
+	var is_land := _bathymetry != null and _bathymetry.is_land_at_east_north(east, north)
+	return {
+		"valid": within_region,
+		"is_land": is_land,
+		"world_position": world_position,
+		"latitude_deg": geo.x,
+		"longitude_deg": geo.y,
+	}
 
 
 func ensure_raster() -> void:
@@ -126,12 +180,32 @@ func set_species_filter(species_ids: Array[String]) -> void:
 	queue_redraw()
 
 
+func set_dolphins_enabled(enabled: bool) -> void:
+	_dolphins_enabled = enabled
+	if enabled:
+		refresh_dolphin_data()
+	else:
+		queue_redraw()
+
+
+func set_resource_overlay_enabled(enabled: bool) -> void:
+	_resource_overlay_enabled = enabled
+	queue_redraw()
+
+
 func refresh_data() -> void:
 	if _manager == null:
 		return
-	_schools = _manager.get_map_distribution(_selected_species) if not _selected_species.is_empty() else []
+	if _selected_species.is_empty():
+		_schools.clear()
+	else:
+		_schools = _manager.get_map_distribution(_selected_species)
+	refresh_dolphin_data()
+
+
+func refresh_dolphin_data() -> void:
 	_dolphins.clear()
-	if is_instance_valid(_dolphin_manager) and _dolphin_manager.has_method("get_map_snapshot"):
+	if _dolphins_enabled and is_instance_valid(_dolphin_manager) and _dolphin_manager.has_method("get_map_snapshot"):
 		var dolphin_data: Variant = _dolphin_manager.call("get_map_snapshot")
 		if dolphin_data is Array:
 			for item in dolphin_data:
@@ -145,7 +219,7 @@ func get_school_count() -> int:
 
 
 func get_dolphin_count() -> int:
-	return _dolphins.size()
+	return _dolphins.size() if _dolphins_enabled else 0
 
 
 func get_selected_school() -> Dictionary:
@@ -199,8 +273,11 @@ func _draw() -> void:
 	_draw_contours()
 	_draw_coastlines()
 	_draw_route()
-	_draw_resource_cells()
-	_draw_dolphins()
+	_draw_route_validation_hit()
+	if _resource_overlay_enabled:
+		_draw_resource_cells()
+		if _dolphins_enabled:
+			_draw_dolphins()
 	_draw_boat()
 	draw_rect(_map_rect, Color(0.67, 0.83, 0.81, 0.78), false, 1.5)
 	var font := get_theme_default_font()
@@ -210,6 +287,39 @@ func _draw() -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
+	if _route_edit_enabled:
+		# Read pointer coordinates in this Control's local space. This keeps the
+		# map hit-test correct regardless of CanvasLayer/window scaling.
+		var pointer_position := get_local_mouse_position()
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+			var mapped := map_local_position_to_world(pointer_position)
+			if event.pressed:
+				if _route_edit_operation == "DRAG":
+					_dragging_route_waypoint_index = _nearest_edit_waypoint_index(pointer_position)
+					if _dragging_route_waypoint_index >= 0:
+						_selected_route_waypoint_index = _dragging_route_waypoint_index
+					route_waypoint_selected.emit(_selected_route_waypoint_index)
+				else:
+					route_edit_map_clicked.emit(mapped.get("world_position", Vector3.ZERO), bool(mapped.get("valid", false)), bool(mapped.get("is_land", false)))
+			else:
+				_dragging_route_waypoint_index = -1
+			accept_event()
+			queue_redraw()
+		elif event is InputEventMouseMotion and _dragging_route_waypoint_index >= 0:
+			var mapped_motion := map_local_position_to_world(pointer_position)
+			route_waypoint_moved.emit(
+				_dragging_route_waypoint_index,
+				mapped_motion.get("world_position", Vector3.ZERO),
+				bool(mapped_motion.get("valid", false)),
+				bool(mapped_motion.get("is_land", false))
+			)
+			accept_event()
+		elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+			_dragging_route_waypoint_index = -1
+			accept_event()
+		return
+	if not _resource_overlay_enabled:
+		return
 	if event is InputEventMouseMotion:
 		var hovered := _nearest_school(event.position)
 		if str(hovered.get("school_id", "")) != str(_hovered_school.get("school_id", "")):
@@ -330,23 +440,53 @@ func _draw_dolphins() -> void:
 
 
 func _draw_route() -> void:
-	if _route_definition == null or _route_georeference == null:
+	var drawing_route := _editing_route if _route_edit_enabled and _editing_route != null else _route_definition
+	if drawing_route == null or _route_georeference == null:
 		return
-	var world_points := _route_definition.get_world_points(_route_georeference)
+	var world_points := drawing_route.get_world_points(_route_georeference)
 	if world_points.size() < 2:
 		return
 	var map_points := PackedVector2Array()
 	for world_point in world_points:
 		map_points.append(_world_to_map(Vector2(world_point.x, -world_point.z)))
+	var route_color := Color("#8bd6c8") if _route_edit_enabled else Color("#f4c46d")
 	draw_polyline(map_points, Color(0.01, 0.10, 0.13, 0.9), 7.0, true)
-	draw_polyline(map_points, Color("#f4c46d"), 3.0, true)
+	draw_polyline(map_points, route_color, 3.0, true)
 	for index in range(map_points.size()):
 		var point := map_points[index]
 		var endpoint := index == 0 or index == map_points.size() - 1
 		draw_circle(point, 7.0 if endpoint else 5.0, Color("#102c38"))
-		draw_arc(point, 7.0 if endpoint else 5.0, 0.0, TAU, 20, Color("#fff1c7"), 1.5, true)
-		var label := "起" if index == 0 else "终" if index == map_points.size() - 1 else "WP%d" % index
+		var selected := _route_edit_enabled and index > 0 and index < map_points.size() - 1 and index - 1 == _selected_route_waypoint_index
+		draw_arc(point, 9.0 if selected else 7.0 if endpoint else 5.0, 0.0, TAU, 20, Color("#fff1c1") if selected else route_color, 2.0 if selected else 1.5, true)
+		var label := drawing_route.departure_display_name if index == 0 else drawing_route.arrival_display_name if index == map_points.size() - 1 else (drawing_route.waypoints[index - 1].display_name if drawing_route.waypoints[index - 1] != null and not drawing_route.waypoints[index - 1].display_name.is_empty() else "WP%d" % index)
 		draw_string(get_theme_default_font(), point + Vector2(8.0, -7.0), label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 11, Color("#fff1c7"))
+
+
+func _draw_route_validation_hit() -> void:
+	if not _has_route_validation_hit:
+		return
+	var point := _world_to_map(Vector2(_route_validation_hit_world_position.x, -_route_validation_hit_world_position.z))
+	if not _map_rect.has_point(point):
+		return
+	draw_circle(point, 9.0, Color("#ff4d55"))
+	draw_line(point + Vector2(-13.0, -13.0), point + Vector2(13.0, 13.0), Color.WHITE, 2.5, true)
+	draw_line(point + Vector2(-13.0, 13.0), point + Vector2(13.0, -13.0), Color.WHITE, 2.5, true)
+	draw_string(get_theme_default_font(), point + Vector2(14.0, -10.0), _route_validation_hit_label, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 12, Color("#ffd9d9"))
+
+
+func _nearest_edit_waypoint_index(screen_position: Vector2) -> int:
+	if _editing_route == null or _route_georeference == null or not _map_rect.has_point(screen_position):
+		return -1
+	var points := _editing_route.get_world_points(_route_georeference)
+	var nearest_index := -1
+	var nearest_distance := 18.0
+	for map_index in range(1, points.size() - 1):
+		var map_point := _world_to_map(Vector2(points[map_index].x, -points[map_index].z))
+		var distance := map_point.distance_to(screen_position)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest_index = map_index - 1
+	return nearest_index
 
 
 func _draw_boat() -> void:
@@ -394,15 +534,16 @@ func _nearest_school(screen_position: Vector2) -> Dictionary:
 		if distance < nearest_distance:
 			nearest_distance = distance
 			nearest = school
-	for pod in _dolphins:
-		var world_position: Array = pod.get("world_position", [])
-		if world_position.size() < 3:
-			continue
-		var point := _world_to_map(Vector2(float(world_position[0]), -float(world_position[2])))
-		var distance := point.distance_to(screen_position)
-		if distance < nearest_distance:
-			nearest_distance = distance
-			nearest = pod
+	if _dolphins_enabled:
+		for pod in _dolphins:
+			var world_position: Array = pod.get("world_position", [])
+			if world_position.size() < 3:
+				continue
+			var point := _world_to_map(Vector2(float(world_position[0]), -float(world_position[2])))
+			var distance := point.distance_to(screen_position)
+			if distance < nearest_distance:
+				nearest_distance = distance
+				nearest = pod
 	return nearest
 
 

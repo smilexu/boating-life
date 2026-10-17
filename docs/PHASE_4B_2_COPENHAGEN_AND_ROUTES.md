@@ -15,16 +15,16 @@
 
 ## 航线数据
 
-航线作为 `RouteDefinition` 资源保存 WGS84 出发点、到达点及有序 `RouteWaypoint`。运行时经 `GeoReference` 转成 ENU 世界坐标，再按实际 XZ 路径段求和。每条路线状态为 `unverified_gameplay_route`。
+航线作为 `RouteDefinition` 资源保存 WGS84 出发点、到达点及有序 `RouteWaypoint`。运行时经 `GeoReference` 转成 ENU 世界坐标，再按实际 XZ 路径段求和。Phase 4B-2 原始双港路线均处于待人工验证状态。Phase 4B-3 根据用户对 Malmö → København 实际跨港交付的验收，将该方向开放为游戏内自动巡航路线；København → Malmö 仍需独立完整航行验证。两者都不是现实海事安全航线。
 
 | routeId | 主要航路点（WGS84） | 距离 | ETA（7 m/s） |
 |---|---|---:|---:|
-| `malmo_to_copenhagen_v1` | 55.6786458° N, 12.7776042° E | 约 21.910 km | 约 52.2 分钟 |
-| `copenhagen_to_malmo_v1` | 55.6786458° N, 12.7786458° E | 约 21.906 km | 约 52.2 分钟 |
+| `malmo_to_copenhagen_v1` | 55.6786458° N, 12.7776042° E | 约 21.910 km | 约 52.2 分钟；Phase 4B-3 可自动巡航 |
+| `copenhagen_to_malmo_v1` | 55.6786458° N, 12.7786458° E | 约 21.906 km | 约 52.2 分钟；仍待复核 |
 
 往返路线分别定义出港等待点、航路点和进港等待点，避免把一条路线简单倒放。ETA 使用 `StarterCargoBoat` 船型独立配置的 `cruise_speed_mps = 7.0`，不改变船舶 12 m/s 最大航速。估算不含进出港操纵、风浪及其他事件。
 
-自动巡航阶段可调用：
+路线几何接口可用于手动导航、地图显示与自动巡航：
 
 - `PortRouteManager.get_route_between(origin_port_id, destination_port_id)`
 - `RouteDefinition.get_world_points(georeference)`
@@ -34,7 +34,7 @@
 
 ## 海图与调试
 
-玩家持有任一跨港活动货运合同时，按 **F4** 打开现有海图即可看到相应预设路线、航路点、目的港、全程/剩余距离和参考 ETA；没有匹配的活动合同时不显示路线。地图折线由路线资源和同一 `GeoReference` 投影生成。
+玩家持有任一跨港活动货运合同时，按 **F4** 打开现有海图即可看到相应预设路线、航路点、目的港、全程/剩余距离和参考 ETA；没有匹配的活动合同时不显示业务路线。地图折线由路线资源和同一 `GeoReference` 投影生成。Phase 4B-3 还提供开发者航线编辑器，见 [Phase 4B-3 自动巡航与航线编辑器](PHASE_4B_3_AUTOPILOT_AND_ROUTE_EDITOR.md)。
 
 开发模式快捷键：
 

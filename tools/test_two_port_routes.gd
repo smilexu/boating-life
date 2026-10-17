@@ -76,7 +76,9 @@ func _run() -> void:
 	print("Route estimate: Malmö → København %.3f km · %.1f minutes at %.1f m/s; return %.3f km" % [route_distance / 1000.0, route_time / 60.0, boat.draft_profile.cruise_speed_mps, cph_to_malmo.get_total_distance_m(geo) / 1000.0])
 	if not _expect(absf(malmo_to_cph.get_remaining_distance_m(out_points[0], geo) - route_distance) < 0.5 and malmo_to_cph.get_remaining_distance_m(out_points[-1], geo) < 0.5, "remaining route distance reaches zero at arrival and equals total at departure"):
 		return
-	if not _expect(malmo_to_cph.validation_status == "unverified_gameplay_route" and cph_to_malmo.validation_status == "unverified_gameplay_route", "both routes remain explicitly unverified"):
+	if not _expect(malmo_to_cph.validation_status == RouteDefinition.STATUS_VALIDATED and malmo_to_cph.cruise_allowed, "the user-accepted Malmö-to-København route is enabled for gameplay autopilot"):
+		return
+	if not _expect(cph_to_malmo.validation_status == RouteDefinition.STATUS_NEEDS_REVIEW and not cph_to_malmo.cruise_allowed, "the reverse route remains disabled until its own full crossing is manually validated"):
 		return
 	var reverse_midpoint := cph_to_malmo.waypoints[0]
 	if not _expect(not is_equal_approx(reverse_midpoint.latitude_deg, malmo_to_cph.waypoints[0].latitude_deg) or not is_equal_approx(reverse_midpoint.longitude_deg, malmo_to_cph.waypoints[0].longitude_deg), "southbound route is independently represented"):

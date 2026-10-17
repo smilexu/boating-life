@@ -19,6 +19,7 @@ const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 @export_node_path("Node") var dolphin_world_manager_path := NodePath("../../DolphinWorldManager")
 @export_node_path("Node") var navigation_depth_monitor_path := NodePath("../../NavigationDepthMonitor")
 @export_node_path("Node") var cargo_economy_manager_path := NodePath("../../CargoEconomyManager")
+@export_node_path("Node") var autopilot_controller_path := NodePath("../../AutopilotController")
 
 var _controller: BoatController
 var _weather_controller: Node
@@ -30,6 +31,7 @@ var _fish_school_renderer: FishSchoolRenderer
 var _dolphin_world_manager: Node
 var _navigation_depth_monitor: NavigationDepthMonitor
 var _cargo_economy_manager: CargoEconomyManager
+var _autopilot_controller: AutopilotController
 var _selected_fish_school_id := ""
 var _world_time_control: WorldTimeControlPort
 var _status_panel: PanelContainer
@@ -74,6 +76,9 @@ var _clouds_toggle: CheckButton
 var _fps_elapsed := 0.0
 var _runtime_elapsed := 0.0
 var _debug_refresh_elapsed := 0.0
+var _autopilot_refresh_elapsed := 0.0
+var _autopilot_panel: PanelContainer
+var _autopilot_label: Label
 
 
 func _ready() -> void:
@@ -90,6 +95,7 @@ func _ready() -> void:
 	_dolphin_world_manager = get_node_or_null(dolphin_world_manager_path)
 	_navigation_depth_monitor = get_node_or_null(navigation_depth_monitor_path) as NavigationDepthMonitor
 	_cargo_economy_manager = get_node_or_null(cargo_economy_manager_path) as CargoEconomyManager
+	_autopilot_controller = get_node_or_null(autopilot_controller_path) as AutopilotController
 	var time_manager := get_node_or_null("/root/WorldTimeManager")
 	_world_time_control = LocalTimeControlScript.new(time_manager) as WorldTimeControlPort
 
@@ -134,6 +140,7 @@ func _ready() -> void:
 	_cargo_task_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_layout.add_child(_cargo_task_label)
 	add_child(_status_panel)
+	_build_autopilot_panel()
 	_build_debug_panel()
 	_add_compass_widget()
 	_update_status()
@@ -157,11 +164,91 @@ func _process(delta: float) -> void:
 		_update_fps_display()
 	if _controller != null:
 		_update_status()
+	_autopilot_refresh_elapsed += delta
+	if _autopilot_refresh_elapsed >= 0.2:
+		_autopilot_refresh_elapsed = fmod(_autopilot_refresh_elapsed, 0.2)
+		_update_autopilot_panel()
 	if _debug_panel != null and _debug_panel.visible:
 		_debug_refresh_elapsed += delta
 		if _debug_refresh_elapsed >= 0.5:
 			_debug_refresh_elapsed = fmod(_debug_refresh_elapsed, 0.5)
 			_update_debug_status()
+
+
+func _build_autopilot_panel() -> void:
+	_autopilot_panel = PanelContainer.new()
+	_autopilot_panel.name = "AutopilotStatusPanel"
+	_autopilot_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_autopilot_panel.offset_left = -420.0
+	_autopilot_panel.offset_top = 24.0
+	_autopilot_panel.offset_right = -24.0
+	_autopilot_panel.offset_bottom = 170.0
+	_autopilot_panel.visible = false
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.12, 0.16, 0.84)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 14.0
+	style.content_margin_right = 14.0
+	style.content_margin_top = 10.0
+	style.content_margin_bottom = 10.0
+	_autopilot_panel.add_theme_stylebox_override("panel", style)
+	var layout := VBoxContainer.new()
+	_autopilot_panel.add_child(layout)
+	_autopilot_label = Label.new()
+	_autopilot_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_autopilot_label.add_theme_color_override("font_color", Color("#e6f1e8"))
+	layout.add_child(_autopilot_label)
+	var takeover := Button.new()
+	takeover.name = "ManualTakeoverButton"
+	takeover.text = "手动接管 · T"
+	takeover.pressed.connect(_on_manual_takeover_pressed)
+	layout.add_child(takeover)
+	add_child(_autopilot_panel)
+	_update_autopilot_panel()
+
+
+func _update_autopilot_panel() -> void:
+	if _autopilot_panel == null or _autopilot_controller == null:
+		return
+	var snapshot := _autopilot_controller.get_status_snapshot()
+	var state := str(snapshot.get("state", AutopilotController.STATE_IDLE))
+	var active := _controller != null and _controller.is_autopilot
+	var message_age := float(snapshot.get("message_age_seconds", INF))
+	_autopilot_panel.visible = active or state == AutopilotController.STATE_COMPLETED or (message_age < 4.0 and not str(snapshot.get("message", "")).is_empty())
+	if not _autopilot_panel.visible:
+		return
+	if not active and state != AutopilotController.STATE_COMPLETED:
+		_autopilot_label.text = str(snapshot.get("message", ""))
+		return
+	var state_text: String = {
+		AutopilotController.STATE_ACQUIRING: "接入航线",
+		AutopilotController.STATE_CRUISING: "自动巡航中",
+		AutopilotController.STATE_APPROACHING: "接近港外等待点",
+		AutopilotController.STATE_SAFETY_HOLD: "水深/偏航保护",
+		AutopilotController.STATE_COMPLETED: "已到达 · 手动进港",
+	}.get(state, "自动巡航")
+	var origin := _cargo_economy_manager.get_port_display_name(str(snapshot.get("origin_port_id", ""))) if _cargo_economy_manager != null else str(snapshot.get("origin_port_id", ""))
+	var destination := _cargo_economy_manager.get_port_display_name(str(snapshot.get("destination_port_id", ""))) if _cargo_economy_manager != null else str(snapshot.get("destination_port_id", ""))
+	var eta_seconds := float(snapshot.get("eta_seconds", -1.0))
+	var eta_minutes := int(round(eta_seconds / 60.0)) if eta_seconds >= 0.0 else -1
+	var eta_text := "%d h %02d min" % [int(eta_minutes / 60), eta_minutes % 60] if eta_minutes >= 60 else "%d min" % eta_minutes if eta_minutes >= 0 else "未知"
+	var cruise_adjustment_hint := " · + / - 临时调速" if OS.has_feature("editor") or OS.has_feature("debug") else ""
+	var route_notice := str(snapshot.get("safety_hold_reason", ""))
+	if route_notice.is_empty():
+		route_notice = str(snapshot.get("depth_notice", ""))
+	_autopilot_label.text = "%s  ·  %s\n%s → %s\n目标：%s  ·  航段 %d/%d\n进度 %.0f%%  ·  剩余 %.1f km\n航速 %.1f / 目标 %.1f m/s%s  ·  预计 %s%s" % [
+		state_text, str(snapshot.get("route_name", "")), origin, destination,
+		str(snapshot.get("target_waypoint", "等待点")), int(snapshot.get("segment_index", 0)), int(snapshot.get("segment_count", 0)),
+		float(snapshot.get("progress_fraction", 0.0)) * 100.0, float(snapshot.get("remaining_m", 0.0)) / 1000.0,
+		float(snapshot.get("actual_speed_mps", 0.0)), float(snapshot.get("target_speed_mps", 0.0)), cruise_adjustment_hint, eta_text,
+		"\n" + route_notice if not route_notice.is_empty() else "",
+	]
+
+
+func _on_manual_takeover_pressed() -> void:
+	if _autopilot_controller != null:
+		_autopilot_controller.request_manual_takeover()
+		_update_autopilot_panel()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -179,7 +266,7 @@ func _update_status() -> void:
 	var mode_text := "自动巡航" if _controller.is_autopilot else "手动驾驶"
 	if _controller.is_motion_paused:
 		mode_text += " · 已暂停"
-	_status_label.text = "航速  %.1f m/s  ·  %.1f kn\n模式  %s\nW/S 加速减速  ·  A/D 转向  ·  Space 暂停  ·  T 自动巡航\n右键拖动观察  ·  1/2/3 天气  ·  M 地图调试  ·  F3 视觉调试  ·  F10 水面诊断" % [
+	_status_label.text = "航速  %.1f m/s  ·  %.1f kn\n模式  %s\nW 前进  ·  S 减速/倒车  ·  A/D 转向  ·  Space 暂停  ·  T 自动巡航\n右键拖动观察  ·  1/2/3 天气  ·  M 地图调试  ·  F3 视觉调试  ·  F10 水面诊断" % [
 		_controller.speed_mps,
 		knots,
 		mode_text

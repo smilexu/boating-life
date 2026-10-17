@@ -1,4 +1,4 @@
-[gd_scene load_steps=38 format=3]
+[gd_scene load_steps=39 format=3]
 
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
@@ -33,6 +33,7 @@
 [ext_resource type="Resource" path="res://resources/ports/copenhagen_port_definition.tres" id="31_copenhagen_port_definition"]
 [ext_resource type="Resource" path="res://resources/routes/malmo_to_copenhagen.tres" id="32_malmo_copenhagen_route"]
 [ext_resource type="Resource" path="res://resources/routes/copenhagen_to_malmo.tres" id="33_copenhagen_malmo_route"]
+[ext_resource type="Script" path="res://scripts/autopilot_controller.gd" id="34_autopilot"]
 
 [sub_resource type="Compositor" id="Compositor_volumetric_clouds"]
 compositor_effects = Array[CompositorEffect]([ExtResource("11_cloud_effect")])
@@ -152,9 +153,21 @@ cargo_loadout_path = NodePath("../PlayerBoat/MotionRoot/CargoLoadout")
 [node name="PortRouteManager" type="Node3D" parent="."]
 script = ExtResource("29_route_manager")
 georeference = ExtResource("15_georeference")
+bathymetry_path = NodePath("../BathymetryManager")
+depth_provider_path = NodePath("../NavigationDepthProvider")
 port_definitions = Array[ExtResource("30_malmo_port_definition")]([ExtResource("30_malmo_port_definition"), ExtResource("31_copenhagen_port_definition")])
 route_definitions = Array[ExtResource("32_malmo_copenhagen_route")]([ExtResource("32_malmo_copenhagen_route"), ExtResource("33_copenhagen_malmo_route")])
 debug_enabled = false
+
+[node name="AutopilotController" type="Node" parent="."]
+script = ExtResource("34_autopilot")
+boat_path = NodePath("../PlayerBoat/MotionRoot")
+route_manager_path = NodePath("../PortRouteManager")
+depth_provider_path = NodePath("../NavigationDepthProvider")
+map_path = NodePath("../FishResourceMap")
+route_access_distance_m = 50.0
+route_ambiguity_distance_m = 15.0
+maximum_start_heading_error_degrees = 70.0
 
 [node name="NavigationDepthMonitor" type="Node" parent="."]
 script = ExtResource("26_navigation_depth_monitor")
