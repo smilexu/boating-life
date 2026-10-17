@@ -1,4 +1,4 @@
-[gd_scene load_steps=27 format=3]
+[gd_scene load_steps=28 format=3]
 
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
@@ -22,6 +22,7 @@
 [ext_resource type="Script" path="res://scripts/fish_resource_manager.gd" id="20_fish_manager"]
 [ext_resource type="Script" path="res://scripts/fish_school_renderer.gd" id="21_fish_renderer"]
 [ext_resource type="Script" path="res://scripts/fish_resource_map.gd" id="22_fish_map"]
+[ext_resource type="Script" path="res://scripts/dolphin_world_manager.gd" id="23_dolphin_manager"]
 
 [sub_resource type="Compositor" id="Compositor_volumetric_clouds"]
 compositor_effects = Array[CompositorEffect]([ExtResource("11_cloud_effect")])
@@ -134,6 +135,12 @@ map_layer_path = NodePath("../FishResourceMap")
 
 [node name="FishSchoolRenderer" type="Node3D" parent="FishResourceManager"]
 script = ExtResource("21_fish_renderer")
+
+[node name="DolphinWorldManager" type="Node3D" parent="."]
+script = ExtResource("23_dolphin_manager")
+bathymetry_path = NodePath("../BathymetryManager")
+boat_path = NodePath("../PlayerBoat/MotionRoot")
+wave_sampler_path = NodePath("../WaveSampler")
 
 [node name="FishResourceMap" type="CanvasLayer" parent="."]
 script = ExtResource("22_fish_map")

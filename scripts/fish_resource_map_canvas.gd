@@ -17,10 +17,12 @@ var _manager: FishResourceManager
 var _bathymetry: BathymetryManager
 var _georeference: GeoReference
 var _boat: Node3D
+var _dolphin_manager: Node
 var _extent := Rect2()
 var _map_rect := Rect2()
 var _raster: ImageTexture
 var _schools: Array[Dictionary] = []
+var _dolphins: Array[Dictionary] = []
 var _profiles: Dictionary = {}
 var _selected_species: Array[String] = []
 var _hovered_school: Dictionary = {}
@@ -47,11 +49,12 @@ func _ready() -> void:
 	set_process(false)
 
 
-func configure(manager: FishResourceManager, bathymetry: BathymetryManager, georeference: GeoReference, boat: Node3D) -> void:
+func configure(manager: FishResourceManager, bathymetry: BathymetryManager, georeference: GeoReference, boat: Node3D, dolphin_manager: Node = null) -> void:
 	_manager = manager
 	_bathymetry = bathymetry
 	_georeference = georeference
 	_boat = boat
+	_dolphin_manager = dolphin_manager
 	_extent = georeference.region_bounds_east_north()
 	_profiles.clear()
 	_selected_species.clear()
@@ -119,11 +122,22 @@ func refresh_data() -> void:
 	if _manager == null:
 		return
 	_schools = _manager.get_map_distribution(_selected_species) if not _selected_species.is_empty() else []
+	_dolphins.clear()
+	if is_instance_valid(_dolphin_manager) and _dolphin_manager.has_method("get_map_snapshot"):
+		var dolphin_data: Variant = _dolphin_manager.call("get_map_snapshot")
+		if dolphin_data is Array:
+			for item in dolphin_data:
+				if item is Dictionary:
+					_dolphins.append(item)
 	queue_redraw()
 
 
 func get_school_count() -> int:
 	return _schools.size()
+
+
+func get_dolphin_count() -> int:
+	return _dolphins.size()
 
 
 func get_selected_school() -> Dictionary:
@@ -177,6 +191,7 @@ func _draw() -> void:
 	_draw_contours()
 	_draw_coastlines()
 	_draw_resource_cells()
+	_draw_dolphins()
 	_draw_boat()
 	draw_rect(_map_rect, Color(0.67, 0.83, 0.81, 0.78), false, 1.5)
 	var font := get_theme_default_font()
@@ -286,6 +301,25 @@ func _draw_resource_cells() -> void:
 			draw_arc(point, radius + 0.5, 0.0, TAU, 24, Color(0.94, 0.97, 0.92, 0.9), 0.8, true)
 
 
+func _draw_dolphins() -> void:
+	for pod in _dolphins:
+		var world_position: Array = pod.get("world_position", [])
+		if world_position.size() < 3:
+			continue
+		var point := _world_to_map(Vector2(float(world_position[0]), -float(world_position[2])))
+		if not _map_rect.has_point(point):
+			continue
+		var color := Color("#e8c78b") if bool(pod.get("is_following", false)) else Color("#a9e5df")
+		# Distinct small cetacean glyph: arched body, pointed rostrum and tail flukes.
+		draw_arc(point + Vector2(0.0, 1.0), 8.0, PI * 1.08, PI * 1.92, 18, color, 2.6, true)
+		draw_line(point + Vector2(6.0, 0.2), point + Vector2(12.0, -1.4), color, 2.2, true)
+		var fluke := PackedVector2Array([point + Vector2(-6.0, 0.0), point + Vector2(-12.0, -5.0), point + Vector2(-10.0, 1.0), point + Vector2(-12.0, 5.0)])
+		draw_colored_polygon(fluke, color)
+		draw_line(point + Vector2(-1.0, -4.0), point + Vector2(-3.0, -8.0), color, 2.0, true)
+		draw_arc(point, 16.0, 0.0, TAU, 30, Color(color.r, color.g, color.b, 0.45), 1.2, true)
+		draw_string(get_theme_default_font(), point + Vector2(19.0, 4.0), "海豚 ×%d" % int(pod.get("population", 0)), HORIZONTAL_ALIGNMENT_LEFT, -1.0, 12, color)
+
+
 func _draw_boat() -> void:
 	if _boat == null:
 		return
@@ -331,6 +365,15 @@ func _nearest_school(screen_position: Vector2) -> Dictionary:
 		if distance < nearest_distance:
 			nearest_distance = distance
 			nearest = school
+	for pod in _dolphins:
+		var world_position: Array = pod.get("world_position", [])
+		if world_position.size() < 3:
+			continue
+		var point := _world_to_map(Vector2(float(world_position[0]), -float(world_position[2])))
+		var distance := point.distance_to(screen_position)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest = pod
 	return nearest
 
 

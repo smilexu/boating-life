@@ -11,6 +11,7 @@ var _manager: FishResourceManager
 var _bathymetry: BathymetryManager
 var _georeference: GeoReference
 var _boat: Node3D
+var _dolphin_manager: Node
 var _root: Control
 var _map_canvas: FishResourceMapCanvas
 var _selected_species: Array[String] = []
@@ -23,25 +24,29 @@ var _map_open := false
 
 
 func _ready() -> void:
+	add_to_group("fish_resource_map")
 	_manager = get_node_or_null(manager_path) as FishResourceManager
 	_bathymetry = get_node_or_null(bathymetry_path) as BathymetryManager
 	_boat = get_node_or_null(boat_path) as Node3D
+	_dolphin_manager = get_node_or_null("../DolphinWorldManager")
 	if _manager != null:
 		_georeference = _manager.get_georeference()
 		_build_ui()
 	set_map_open(false)
 
 
-func configure(manager: FishResourceManager, bathymetry: BathymetryManager, georeference: GeoReference, boat: Node3D) -> void:
+func configure(manager: FishResourceManager, bathymetry: BathymetryManager, georeference: GeoReference, boat: Node3D, dolphin_manager: Node = null) -> void:
 	_manager = manager
 	_bathymetry = bathymetry
 	_georeference = georeference
 	_boat = boat
+	if dolphin_manager != null:
+		_dolphin_manager = dolphin_manager
 	if is_node_ready():
 		if _root == null:
 			_build_ui()
 		else:
-			_map_canvas.configure(_manager, _bathymetry, _georeference, _boat)
+			_map_canvas.configure(_manager, _bathymetry, _georeference, _boat, _dolphin_manager)
 			refresh_data()
 
 
@@ -67,10 +72,11 @@ func refresh_data() -> void:
 	if _map_canvas != null:
 		_map_canvas.set_species_filter(_selected_species)
 		var count := _map_canvas.get_school_count()
+		var dolphin_count := _map_canvas.get_dolphin_count()
 		if _summary_label != null:
-			_summary_label.text = "当前筛选：%d 个稳定资源点" % count
+			_summary_label.text = "当前筛选：%d 个鱼类资源点 · %d 个海豚群" % [count, dolphin_count]
 		if _footer_label != null and _manager != null:
-			_footer_label.text = "%s Authority · Seed %d · Revision %d · 预测栖息区，不是实测鱼群" % [_manager.get_authority_source(), _manager.get_world_seed(), _manager.get_state_revision()]
+			_footer_label.text = "%s Authority · Seed %d · Revision %d · 鱼类为预测资源点；海豚标记显示本地权威群体位置" % [_manager.get_authority_source(), _manager.get_world_seed(), _manager.get_state_revision()]
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -129,7 +135,7 @@ func _build_ui() -> void:
 	_map_canvas.name = "ResourceDistributionMap"
 	_map_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_map_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_map_canvas.configure(_manager, _bathymetry, _georeference, _boat)
+	_map_canvas.configure(_manager, _bathymetry, _georeference, _boat, _dolphin_manager)
 	_map_canvas.school_selected.connect(_on_school_selected)
 	_map_canvas.school_hovered.connect(_on_school_hovered)
 	body.add_child(_map_canvas)
@@ -171,7 +177,7 @@ func _build_ui() -> void:
 	_details_label.add_theme_color_override("font_color", Color("#b2c5c1"))
 	side_layout.add_child(_details_label)
 	var legend := Label.new()
-	legend.text = "● 针鱼  ● 鲱鱼  ● 三刺鱼\n实心：0–6 m 视觉鱼群   ◌ 虚线空心：深水逻辑鱼群\n底图：EMODnet DTM 2024 / LAT · 海岸线：OSM land mask"
+	legend.text = "● 针鱼  ● 鲱鱼  ● 三刺鱼   ◇ 海豚群\n实心：0–6 m 视觉鱼群   ◌ 虚线空心：深水逻辑鱼群\n海豚标记随共享群体位置更新。底图：EMODnet DTM 2024 / LAT"
 	legend.add_theme_color_override("font_color", Color("#98b0ae"))
 	side_layout.add_child(legend)
 	_footer_label = Label.new()
@@ -210,6 +216,22 @@ func _on_school_hovered(school: Dictionary) -> void:
 
 
 func _update_school_details(school: Dictionary) -> void:
+	if bool(school.get("is_dolphin", false)):
+		var position_data: Array = school.get("world_position", [])
+		var gps_text := "位置未知"
+		if position_data.size() >= 3 and _georeference != null:
+			var geodetic := _georeference.world_to_geodetic(Vector3(float(position_data[0]), 0.0, float(position_data[2])))
+			gps_text = "GPS %.5f°%s, %.5f°%s" % [absf(geodetic.x), "N" if geodetic.x >= 0.0 else "S", absf(geodetic.y), "E" if geodetic.y >= 0.0 else "W"]
+		_details_label.text = "海豚群 · Dolphin pod\n固定世界 pod：%s\n群体数量：%d 只\n活动状态：%s%s\n平均活动深度：%.1f m\n状态更新时间：本地模拟 %.1f s\n%s\nLocal Authority · F3 可召唤调试伴游" % [
+			str(school.get("pod_id", "")),
+			int(school.get("population", 0)),
+			str(school.get("movement_state", "巡游")),
+			" · 正在伴游" if bool(school.get("is_following", false)) else "",
+			float(school.get("activity_depth_m", 0.0)),
+			float(school.get("last_updated", 0.0)),
+			gps_text,
+		]
+		return
 	var profile := _manager.get_species_profile(str(school.get("species_id", "")))
 	if profile == null:
 		return

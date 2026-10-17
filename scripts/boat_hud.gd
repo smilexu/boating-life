@@ -16,6 +16,7 @@ const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 @export_node_path("Node") var quality_manager_path := NodePath("../../QualityManager")
 @export_node_path("Node") var fish_resource_manager_path := NodePath("../../FishResourceManager")
 @export_node_path("Node3D") var fish_school_renderer_path := NodePath("../../FishResourceManager/FishSchoolRenderer")
+@export_node_path("Node") var dolphin_world_manager_path := NodePath("../../DolphinWorldManager")
 
 var _controller: BoatController
 var _weather_controller: Node
@@ -24,6 +25,7 @@ var _wave_sampler: Node
 var _quality_manager: Node
 var _fish_resource_manager: FishResourceManager
 var _fish_school_renderer: FishSchoolRenderer
+var _dolphin_world_manager: Node
 var _selected_fish_school_id := ""
 var _world_time_control: WorldTimeControlPort
 var _status_panel: PanelContainer
@@ -42,6 +44,7 @@ var _fish_location_feedback: Label
 var _fish_motion_toggle: CheckButton
 var _fish_motion_status: Label
 var _fish_observation_status: Label
+var _dolphin_status: Label
 var _world_time_label: Label
 var _world_time_feedback: Label
 var _sun_elevation_slider: HSlider
@@ -78,6 +81,7 @@ func _ready() -> void:
 	_quality_manager = get_node_or_null(quality_manager_path)
 	_fish_resource_manager = get_node_or_null(fish_resource_manager_path) as FishResourceManager
 	_fish_school_renderer = get_node_or_null(fish_school_renderer_path) as FishSchoolRenderer
+	_dolphin_world_manager = get_node_or_null(dolphin_world_manager_path)
 	var time_manager := get_node_or_null("/root/WorldTimeManager")
 	_world_time_control = LocalTimeControlScript.new(time_manager) as WorldTimeControlPort
 
@@ -208,6 +212,7 @@ func _build_debug_panel() -> void:
 		preset_row.add_child(button)
 	layout.add_child(preset_row)
 	_add_fish_observation_controls(layout)
+	_add_dolphin_controls(layout)
 
 	_sun_elevation_slider = _add_slider_row(layout, "太阳高度（时间驱动）", -90.0, 90.0, 0.1)
 	_sun_elevation_slider.editable = false
@@ -302,6 +307,109 @@ func _add_fish_observation_controls(parent: VBoxContainer) -> void:
 	_fish_motion_status.name = "FishMotionStatus"
 	parent.add_child(_fish_motion_status)
 	_update_fish_motion_status()
+
+
+func _add_dolphin_controls(parent: VBoxContainer) -> void:
+	var title := Label.new()
+	title.text = "海豚 · 世界生态调试"
+	title.add_theme_font_size_override("font_size", 16)
+	title.add_theme_color_override("font_color", Color(0.94, 0.96, 0.94))
+	parent.add_child(title)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	var follow_button := Button.new()
+	follow_button.text = "召唤海豚跟船"
+	follow_button.tooltip_text = "开发观察工具：必要时只移动船到固定海域，海豚会从原位置游近。保持船上视角。"
+	follow_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	follow_button.disabled = _dolphin_world_manager == null
+	follow_button.pressed.connect(_on_dolphin_follow_pressed)
+	row.add_child(follow_button)
+	var leap_button := Button.new()
+	leap_button.text = "触发一次跃出"
+	leap_button.tooltip_text = "只触发一只现存海豚的调试跃出动作，不新增或传送海豚。"
+	leap_button.disabled = _dolphin_world_manager == null
+	leap_button.pressed.connect(_on_dolphin_leap_pressed)
+	row.add_child(leap_button)
+	parent.add_child(row)
+	_dolphin_status = _make_debug_label()
+	_dolphin_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	parent.add_child(_dolphin_status)
+	_update_dolphin_status()
+
+
+func _on_dolphin_follow_pressed() -> void:
+	if _dolphin_world_manager == null or not _dolphin_world_manager.has_method("debug_summon_follow"):
+		if _dolphin_status != null:
+			_dolphin_status.text = "海豚管理器不可用。"
+		return
+	var result: Dictionary = _dolphin_world_manager.call("debug_summon_follow", _controller)
+	if _fish_location_feedback != null:
+		_fish_location_feedback.text = str(result.get("reason", "已开始海豚伴游观察。")) if not bool(result.get("accepted", false)) else ("F3 调试：船已移到安全活动海域；海豚从原位置游近，未传送海豚。保持船上镜头。" if bool(result.get("teleported_boat", false)) else "F3 调试：已请求现存海豚自然靠近伴游。保持船上镜头。")
+	_update_dolphin_status()
+
+
+func _on_dolphin_leap_pressed() -> void:
+	if _dolphin_world_manager == null or not _dolphin_world_manager.has_method("trigger_debug_leap"):
+		return
+	var started := bool(_dolphin_world_manager.call("trigger_debug_leap"))
+	if _fish_location_feedback != null:
+		if started:
+			_fish_location_feedback.text = "已安排一只现存海豚先上浮，再执行一次跃出动作。"
+		else:
+			var stats: Dictionary = _dolphin_world_manager.call("get_debug_status") if _dolphin_world_manager.has_method("get_debug_status") else {}
+			_fish_location_feedback.text = "低速绕船期间暂停跃出；船速达到 2.0 m/s 并稳定 1 秒后恢复。" if str(stats.get("follow_mode", "")) == "orbit" else "当前没有可用海豚或其正在跃出。"
+	_update_dolphin_status()
+
+
+func _update_dolphin_status() -> void:
+	if _dolphin_status == null:
+		return
+	if _dolphin_world_manager == null or not _dolphin_world_manager.has_method("get_debug_status"):
+		_dolphin_status.text = "海豚世界状态不可用。"
+		return
+	var stats: Dictionary = _dolphin_world_manager.call("get_debug_status")
+	var scheduled := int(stats.get("follow_leaps_scheduled", 0))
+	var completed := int(stats.get("follow_leaps_completed", 0))
+	var remaining := int(stats.get("follow_leaps_remaining", 0))
+	var next_leap := float(stats.get("follow_next_leap_in", -1.0))
+	var follow_leap_text := "伴游跃出：%d/%d 完成 · 排队 %d" % [completed, scheduled, remaining]
+	if next_leap >= 0.0:
+		follow_leap_text += " · 下次约 %.1f 秒" % next_leap
+	elif bool(stats.get("following", false)) and str(stats.get("follow_mode", "")) == "orbit":
+		follow_leap_text += " · 绕船期间暂停新跃出"
+	var follow_mode_label := "未进行"
+	if bool(stats.get("following", false)):
+		follow_mode_label = "低速绕船" if str(stats.get("follow_mode", "cruise")) == "orbit" else "跟船巡游"
+		follow_mode_label += "（≤ %.1f / ≥ %.1f m/s）" % [
+			float(stats.get("follow_orbit_enter_mps", 1.5)),
+			float(stats.get("follow_cruise_resume_mps", 2.0)),
+		]
+	var motion: Dictionary = stats.get("leap_motion", {})
+	var motion_text := "Leap Transform：DolphinVisual.advance_visual（单一写入者）"
+	if not motion.is_empty():
+		motion_text = "跃出轨迹：%s · t %.2f/%.2f s · vy %+.2f m/s · Y %.2f m / 水面 %.2f m" % [
+			str(motion.get("leap_phase", "")),
+			float(motion.get("leap_elapsed", 0.0)),
+			float(motion.get("leap_duration", 0.0)),
+			float(motion.get("vertical_speed", 0.0)),
+			float(motion.get("world_y", 0.0)),
+			float(motion.get("surface_y", 0.0)),
+		]
+	_dolphin_status.text = "%s Authority · 固定世界实体 %d · 当前绘制 %d · 露背 %d · 跃出 %d\n伴游：%s · 剩余 %.0f 秒\n%s\n%s\n水花触发：接触帧 %d · 表层 %d · 出入水 %d · 活跃发射器 %d" % [
+		str(stats.get("authority", "Unavailable")),
+		int(stats.get("population", 0)),
+		int(stats.get("rendered", 0)),
+		int(stats.get("surface_count", 0)),
+		int(stats.get("leap_count", 0)),
+		follow_mode_label,
+		float(stats.get("follow_remaining", 0.0)),
+		follow_leap_text,
+		motion_text,
+		int(stats.get("surface_contact_count", 0)),
+		int(stats.get("micro_splash_emissions", 0)),
+		int(stats.get("impact_splash_emissions", 0)),
+		int(stats.get("active_splash_emitters", 0)),
+	]
 
 
 func _on_fish_smoothing_toggled(enabled: bool) -> void:
@@ -880,6 +988,7 @@ func _refresh_weather_controls() -> void:
 func _update_debug_status() -> void:
 	_refresh_world_time_controls()
 	_update_fish_motion_status()
+	_update_dolphin_status()
 	if _weather_controller != null:
 		_weather_label.text = "当前天气：%s   ·   按 1 / 2 / 3 切换" % _weather_controller.get("current_weather_name")
 		var sun_elevation := _get_solar_value("elevation_degrees")

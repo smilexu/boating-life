@@ -817,6 +817,13 @@ func _smooth_surface_school_snapshot(school: Dictionary) -> Dictionary:
 func _update_surface_fish_reveal() -> void:
 	if _water_material == null:
 		return
+	# The local water reveal also supports the few nearby dolphin visuals. Their
+	# shared positions stay owned by DolphinWorldManager; only this camera-local
+	# render hint is merged here.
+	for dolphin_manager in get_tree().get_nodes_in_group("dolphin_world_manager"):
+		if dolphin_manager != self and dolphin_manager.has_method("get_surface_reveal_candidates"):
+			for candidate in dolphin_manager.call("get_surface_reveal_candidates"):
+				_surface_reveal_candidates.append(candidate)
 	_surface_reveal_candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		return float(a["distance_squared"]) < float(b["distance_squared"])
 	)
