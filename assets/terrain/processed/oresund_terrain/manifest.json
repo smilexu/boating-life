@@ -3,7 +3,7 @@
   "format": "OZTR little-endian binary chunks (position XYZ, normal XYZ, color RGBA; uint32 indices)",
   "source": "Mapzen Terrain Tiles / Tilezen Terrarium PNG from the AWS Open Data elevation-tiles-prod bucket",
   "source_url_template": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
-  "accessed_at_utc": "2026-10-18T16:55:47.650753+00:00",
+  "accessed_at_utc": "2026-10-18T21:27:54.295662+00:00",
   "task7_land_data": "assets/geodata/processed/oresund_region.json · OpenStreetMap natural=coastline · ODbL-1.0",
   "wgs84_bounds": {
     "west": 12.25,
