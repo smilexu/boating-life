@@ -1,6 +1,8 @@
 class_name OresundBridge
 extends Node3D
 
+const BRIDGE_SURFACE_SHADER: Shader = preload("res://shaders/oresund_bridge_surface.gdshader")
+
 ## GPS-anchored, streamed greybox of the Øresund Bridge.
 ## All horizontal placement comes from the bundled OSM support/coastline data.
 ## The existing project has no runtime floating-origin service; call
@@ -72,13 +74,12 @@ var _peberholm_approach_start_slope := 0.0
 var _peberholm_flora_removed_count := 0
 var _sea_level_y := 0.0
 var _endpoint_extension_m := 0.0
-var _near_material: StandardMaterial3D
-var _far_material: StandardMaterial3D
-var _road_material: StandardMaterial3D
-var _rail_material: StandardMaterial3D
-var _concrete_material: StandardMaterial3D
-var _foundation_material: StandardMaterial3D
-var _cable_material: StandardMaterial3D
+var _near_material: ShaderMaterial
+var _far_material: ShaderMaterial
+var _road_material: ShaderMaterial
+var _guardrail_material: ShaderMaterial
+var _concrete_material: ShaderMaterial
+var _cable_material: ShaderMaterial
 var _island_outline_material: StandardMaterial3D
 var _portal_material: StandardMaterial3D
 var _high_span_root: Node3D
@@ -325,15 +326,25 @@ func _update_sea_reference() -> void:
 
 
 func _make_materials() -> void:
-	_near_material = _make_material(Color("#879095"))
-	_far_material = _make_material(Color("#788187"))
-	_road_material = _make_material(Color("#4c555b"))
-	_rail_material = _make_material(Color("#3e464b"))
-	_concrete_material = _make_material(Color("#a7aaab"))
-	_foundation_material = _make_material(Color("#727a7d"))
-	_cable_material = _make_material(Color("#777f83"))
+	_near_material = _make_surface_material(Color("#333C44"), 0.22, 0.68, 0.035, 0.10)
+	_far_material = _make_surface_material(Color("#424A50"), 0.12, 0.78, 0.025, 0.08)
+	_road_material = _make_surface_material(Color("#505259"), 0.0, 0.94, 0.07, 0.15)
+	_concrete_material = _make_surface_material(Color("#A6A49C"), 0.0, 0.91, 0.075, 0.055)
+	_guardrail_material = _make_surface_material(Color("#A9B1B6"), 0.48, 0.58, 0.025, 0.3)
+	_cable_material = _make_surface_material(Color("#41474E"), 0.14, 0.75, 0.02, 0.1)
 	_island_outline_material = _make_material(Color("#a59f8d"), true)
 	_portal_material = _make_material(Color("#20282d"), true)
+
+
+func _make_surface_material(color: Color, metallic: float, roughness: float, variation: float, noise_scale: float = 0.08) -> ShaderMaterial:
+	var material := ShaderMaterial.new()
+	material.shader = BRIDGE_SURFACE_SHADER
+	material.set_shader_parameter("base_color", color)
+	material.set_shader_parameter("metallic", metallic)
+	material.set_shader_parameter("base_roughness", roughness)
+	material.set_shader_parameter("variation_amount", variation)
+	material.set_shader_parameter("noise_scale", noise_scale)
+	return material
 
 
 func _make_material(color: Color, unshaded: bool = false) -> StandardMaterial3D:
@@ -738,14 +749,14 @@ func _build_cell_visual(root: Node3D, station_start: float, station_end: float, 
 		var lower_end := Vector3(finish.x, underside_end + LOWER_DECK_THICKNESS_M * 0.5, finish.z)
 		var upper_start := Vector3(start.x, underside_start + 8.0, start.z)
 		var upper_end := Vector3(finish.x, underside_end + 8.0, finish.z)
-		var lower_material := _rail_material if lod == LOD_FAR else _near_material
+		var lower_material := _far_material if lod == LOD_FAR else _near_material
 		_add_box_segment(root, lower_start, lower_end, LOWER_DECK_WIDTH_M, LOWER_DECK_THICKNESS_M, lower_material, "LowerDeck", lod == LOD_NEAR)
 		_add_box_segment(root, upper_start, upper_end, 24.0, 2.4, _road_material, "RoadDeck", lod == LOD_NEAR)
 		if lod == LOD_NEAR:
 			var tangent := _horizontal_direction(start, finish)
 			var right := Vector3.UP.cross(tangent).normalized()
-			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _foundation_material, "RoadGuard", false)
-			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _foundation_material, "RoadGuard", false)
+			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "RoadGuard", false)
+			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "RoadGuard", false)
 		if lod != LOD_FAR:
 			for pier in _pier_runtime:
 				var pier_station := float(pier["station_m"])
@@ -769,14 +780,14 @@ func _build_malmo_approach_cell_visual(root: Node3D, distance_start: float, dist
 		var lower_end := Vector3(finish.x, underside_end + LOWER_DECK_THICKNESS_M * 0.5, finish.z)
 		var upper_start := Vector3(start.x, underside_start + 8.0, start.z)
 		var upper_end := Vector3(finish.x, underside_end + 8.0, finish.z)
-		var lower_material := _rail_material if lod == LOD_FAR else _near_material
+		var lower_material := _far_material if lod == LOD_FAR else _near_material
 		_add_box_segment(root, lower_start, lower_end, LOWER_DECK_WIDTH_M, LOWER_DECK_THICKNESS_M, lower_material, "MalmoApproachLowerDeck", lod == LOD_NEAR)
 		_add_box_segment(root, upper_start, upper_end, 24.0, 2.4, _road_material, "MalmoApproachRoadDeck", lod == LOD_NEAR)
 		if lod == LOD_NEAR:
 			var tangent := _horizontal_direction(start, finish)
 			var right := Vector3.UP.cross(tangent).normalized()
-			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _foundation_material, "MalmoApproachRoadGuard", false)
-			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _foundation_material, "MalmoApproachRoadGuard", false)
+			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "MalmoApproachRoadGuard", false)
+			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "MalmoApproachRoadGuard", false)
 		distance = next_distance
 	_build_malmo_approach_interlayer_supports(root, distance_start, distance_end, lod)
 	_build_malmo_approach_piers(root, distance_start, distance_end, lod)
@@ -798,14 +809,14 @@ func _build_peberholm_approach_cell_visual(root: Node3D, distance_start: float, 
 		var lower_end := Vector3(finish.x, underside_end + LOWER_DECK_THICKNESS_M * 0.5, finish.z)
 		var upper_start := Vector3(start.x, underside_start + 8.0, start.z)
 		var upper_end := Vector3(finish.x, underside_end + 8.0, finish.z)
-		var lower_material := _rail_material if lod == LOD_FAR else _near_material
+		var lower_material := _far_material if lod == LOD_FAR else _near_material
 		_add_box_segment(root, lower_start, lower_end, LOWER_DECK_WIDTH_M, LOWER_DECK_THICKNESS_M, lower_material, "PeberholmApproachLowerDeck", lod == LOD_NEAR)
 		_add_box_segment(root, upper_start, upper_end, 24.0, 2.4, _road_material, "PeberholmApproachRoadDeck", lod == LOD_NEAR)
 		if lod == LOD_NEAR and minf(underside_start + ROAD_DECK_TOP_OFFSET_M, underside_end + ROAD_DECK_TOP_OFFSET_M) > 5.0:
 			var tangent := _horizontal_direction(start, finish)
 			var right := Vector3.UP.cross(tangent).normalized()
-			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _foundation_material, "PeberholmApproachRoadGuard", false)
-			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _foundation_material, "PeberholmApproachRoadGuard", false)
+			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "PeberholmApproachRoadGuard", false)
+			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "PeberholmApproachRoadGuard", false)
 		distance = next_distance
 	_build_peberholm_approach_interlayer_supports(root, distance_start, distance_end, lod)
 	_build_peberholm_approach_piers(root, distance_start, distance_end, lod)
@@ -830,8 +841,8 @@ func _build_peberholm_approach_interlayer_supports(parent: Node3D, distance_star
 			var lower_end := Vector3(finish.x, _peberholm_approach_underside_height(next_beam_distance) + LOWER_DECK_THICKNESS_M, finish.z) + right * side
 			var upper_start := Vector3(start.x, _peberholm_approach_underside_height(beam_distance) + ROAD_DECK_SOFFIT_OFFSET_M, start.z) + right * side
 			var upper_end := Vector3(finish.x, _peberholm_approach_underside_height(next_beam_distance) + ROAD_DECK_SOFFIT_OFFSET_M, finish.z) + right * side
-			_add_box_segment(parent, lower_start, lower_end, 0.45, 0.45, _foundation_material, "PeberholmApproachLowerBeam", false)
-			_add_box_segment(parent, upper_start, upper_end, 0.45, 0.45, _foundation_material, "PeberholmApproachRoadBeam", false)
+			_add_box_segment(parent, lower_start, lower_end, 0.45, 0.45, _near_material, "PeberholmApproachLowerBeam", false)
+			_add_box_segment(parent, upper_start, upper_end, 0.45, 0.45, _near_material, "PeberholmApproachRoadBeam", false)
 		beam_distance = next_beam_distance
 	var support_distance := ceilf(distance_start / support_spacing) * support_spacing
 	while support_distance < distance_end - 0.01:
@@ -843,7 +854,7 @@ func _build_peberholm_approach_interlayer_supports(parent: Node3D, distance_star
 			var yaw := float(_peberholm_approach_tangent().signed_angle_to(Vector3.FORWARD, Vector3.UP))
 			for side_sign in [-1.0, 1.0]:
 				var post_position := Vector3(position.x, (lower_top + road_bottom) * 0.5, position.z) + Vector3.UP.cross(_peberholm_approach_tangent()).normalized() * float(side_sign) * side_offset
-				_add_oriented_box(parent, "PeberholmApproachInterlayerSupport", post_position, Vector3(0.45, post_height, 0.45), yaw, _foundation_material, false)
+				_add_oriented_box(parent, "PeberholmApproachInterlayerSupport", post_position, Vector3(0.45, post_height, 0.45), yaw, _near_material, false)
 		support_distance += support_spacing
 
 
@@ -874,7 +885,7 @@ func _add_peberholm_approach_pier(parent: Node3D, distance: float, ground_height
 	var support_suffix := "%04dm" % roundi(distance)
 	var pier_size := Vector3(11.0, height, 8.0)
 	_add_oriented_box(parent, "PeberholmApproachShorePier_%s" % support_suffix, Vector3(center.x, (deck_bottom + ground_y) * 0.5, center.z), pier_size, yaw, _concrete_material, false)
-	_add_oriented_box(parent, "PeberholmApproachShorePierFooting_%s" % support_suffix, Vector3(center.x, ground_y - 1.5, center.z), Vector3(18.0, 3.0, 15.0), yaw, _foundation_material, false)
+	_add_oriented_box(parent, "PeberholmApproachShorePierFooting_%s" % support_suffix, Vector3(center.x, ground_y - 1.5, center.z), Vector3(18.0, 3.0, 15.0), yaw, _concrete_material, false)
 	if with_collision:
 		var body := StaticBody3D.new()
 		body.name = "PeberholmApproachShorePier_%s_Collision" % support_suffix
@@ -914,7 +925,7 @@ func _add_peberholm_ground_entry_portal(parent: Node3D, portal_distance: float) 
 			Vector3(wing_end.x, wall_center_y, wing_end.z) + wing_offset,
 			1.6,
 			3.0,
-			_foundation_material,
+			_concrete_material,
 			"PeberholmGroundEntryRetainingWing",
 			false
 		)
@@ -937,8 +948,8 @@ func _build_malmo_approach_interlayer_supports(parent: Node3D, distance_start: f
 			var lower_end := Vector3(finish.x, _malmo_approach_underside_height(next_beam_distance) + LOWER_DECK_THICKNESS_M, finish.z) + right * side
 			var upper_start := Vector3(start.x, _malmo_approach_underside_height(beam_distance) + ROAD_DECK_SOFFIT_OFFSET_M, start.z) + right * side
 			var upper_end := Vector3(finish.x, _malmo_approach_underside_height(next_beam_distance) + ROAD_DECK_SOFFIT_OFFSET_M, finish.z) + right * side
-			_add_box_segment(parent, lower_start, lower_end, 0.45, 0.45, _foundation_material, "MalmoApproachLowerLongitudinalBeam", false)
-			_add_box_segment(parent, upper_start, upper_end, 0.45, 0.45, _foundation_material, "MalmoApproachRoadLongitudinalBeam", false)
+			_add_box_segment(parent, lower_start, lower_end, 0.45, 0.45, _near_material, "MalmoApproachLowerLongitudinalBeam", false)
+			_add_box_segment(parent, upper_start, upper_end, 0.45, 0.45, _near_material, "MalmoApproachRoadLongitudinalBeam", false)
 		beam_distance = next_beam_distance
 	var support_distance := ceilf(distance_start / support_spacing) * support_spacing
 	while support_distance < distance_end - 0.01:
@@ -952,7 +963,7 @@ func _build_malmo_approach_interlayer_supports(parent: Node3D, distance_start: f
 			var post_yaw := float(tangent.signed_angle_to(Vector3.FORWARD, Vector3.UP))
 			for side_sign in [-1.0, 1.0]:
 				var post_position := Vector3(position.x, (lower_top + road_bottom) * 0.5, position.z) + right * float(side_sign) * side_offset
-				_add_oriented_box(parent, "MalmoApproachInterlayerSupport", post_position, Vector3(0.45, post_height, 0.45), post_yaw, _foundation_material, false)
+				_add_oriented_box(parent, "MalmoApproachInterlayerSupport", post_position, Vector3(0.45, post_height, 0.45), post_yaw, _near_material, false)
 		support_distance += support_spacing
 
 
@@ -983,7 +994,7 @@ func _add_malmo_approach_pier(parent: Node3D, distance: float, ground_height_abo
 	var yaw := float(tangent.signed_angle_to(Vector3.FORWARD, Vector3.UP))
 	var pier_size := Vector3(11.0, height, 8.0)
 	_add_oriented_box(parent, "MalmoApproachShorePier", Vector3(center.x, (deck_bottom + ground_y) * 0.5, center.z), pier_size, yaw, _concrete_material, false)
-	_add_oriented_box(parent, "MalmoApproachShorePierFooting", Vector3(center.x, ground_y - 1.5, center.z), Vector3(18.0, 3.0, 15.0), yaw, _foundation_material, false)
+	_add_oriented_box(parent, "MalmoApproachShorePierFooting", Vector3(center.x, ground_y - 1.5, center.z), Vector3(18.0, 3.0, 15.0), yaw, _concrete_material, false)
 	if with_collision:
 		var body := StaticBody3D.new()
 		body.name = "MalmoApproachShorePier_Collision"
@@ -1029,8 +1040,8 @@ func _build_interlayer_supports(parent: Node3D, station_start: float, station_en
 			var lower_end := Vector3(finish.x, _underside_height_at_station(next_beam_station) + LOWER_DECK_THICKNESS_M, finish.z) + end_right * side
 			var upper_start := Vector3(start.x, _underside_height_at_station(beam_station) + ROAD_DECK_SOFFIT_OFFSET_M, start.z) + start_right * side
 			var upper_end := Vector3(finish.x, _underside_height_at_station(next_beam_station) + ROAD_DECK_SOFFIT_OFFSET_M, finish.z) + end_right * side
-			_add_box_segment(parent, lower_start, lower_end, 0.45, 0.45, _foundation_material, "LowerDeckLongitudinalBeam", false)
-			_add_box_segment(parent, upper_start, upper_end, 0.45, 0.45, _foundation_material, "RoadDeckLongitudinalBeam", false)
+			_add_box_segment(parent, lower_start, lower_end, 0.45, 0.45, _near_material, "LowerDeckLongitudinalBeam", false)
+			_add_box_segment(parent, upper_start, upper_end, 0.45, 0.45, _near_material, "RoadDeckLongitudinalBeam", false)
 		beam_station = next_beam_station
 	var support_station := ceilf(station_start / support_spacing) * support_spacing
 	while support_station < station_end - 0.01:
@@ -1043,7 +1054,7 @@ func _build_interlayer_supports(parent: Node3D, station_start: float, station_en
 		var post_yaw := float(tangent.signed_angle_to(Vector3.FORWARD, Vector3.UP))
 		for side_sign in [-1.0, 1.0]:
 			var post_position := Vector3(position.x, (lower_top + road_bottom) * 0.5, position.z) + right * float(side_sign) * side_offset
-			_add_oriented_box(parent, "InterlayerSupport", post_position, Vector3(0.45, post_height, 0.45), post_yaw, _foundation_material, false)
+			_add_oriented_box(parent, "InterlayerSupport", post_position, Vector3(0.45, post_height, 0.45), post_yaw, _near_material, false)
 		support_station += support_spacing
 
 
@@ -1096,7 +1107,7 @@ func _add_pier(parent: Node3D, pier: Dictionary, with_collision: bool) -> void:
 	else:
 		_add_oriented_box(parent, "Pier_%s" % str(record.get("way_id", "OSM")), Vector3(center.x, (deck_bottom + bed_y) * 0.5, center.z), size, pier_yaw, _concrete_material, false)
 	var foundation_size := Vector3(size.x + 7.0, 3.0, size.z + 7.0)
-	_add_oriented_box(parent, "PierFoundation_%s" % str(record.get("way_id", "OSM")), Vector3(center.x, _sea_level_y - 2.0, center.z), foundation_size, pier_yaw, _foundation_material, false)
+	_add_oriented_box(parent, "PierFoundation_%s" % str(record.get("way_id", "OSM")), Vector3(center.x, _sea_level_y - 2.0, center.z), foundation_size, pier_yaw, _concrete_material, false)
 	if with_collision:
 		var body := StaticBody3D.new()
 		body.name = "Pier_%s_Collision" % str(record.get("way_id", "OSM"))
