@@ -9,6 +9,9 @@ extends Node3D
 const HIGH_BRIDGE_START_M := 3014.0
 const HIGH_BRIDGE_END_M := 4106.0
 const SPATIAL_CELL_LENGTH_M := 500.0
+const LOWER_DECK_WIDTH_M := 20.0
+const LOWER_DECK_THICKNESS_M := 1.2
+const ROAD_DECK_SOFFIT_OFFSET_M := 6.8
 const LOD_NEAR := 0
 const LOD_MID := 1
 const LOD_FAR := 2
@@ -511,18 +514,16 @@ func _build_cell_visual(root: Node3D, station_start: float, station_end: float, 
 		var finish := _position_at_station(next_station)
 		var underside_start := _underside_height_at_station(station)
 		var underside_end := _underside_height_at_station(next_station)
-		var lower_start := Vector3(start.x, underside_start + 1.6, start.z)
-		var lower_end := Vector3(finish.x, underside_end + 1.6, finish.z)
+		var lower_start := Vector3(start.x, underside_start + LOWER_DECK_THICKNESS_M * 0.5, start.z)
+		var lower_end := Vector3(finish.x, underside_end + LOWER_DECK_THICKNESS_M * 0.5, finish.z)
 		var upper_start := Vector3(start.x, underside_start + 8.0, start.z)
 		var upper_end := Vector3(finish.x, underside_end + 8.0, finish.z)
 		var lower_material := _rail_material if lod == LOD_FAR else _near_material
-		_add_box_segment(root, lower_start, lower_end, 25.0, 3.2, lower_material, "RailDeck", lod == LOD_NEAR)
+		_add_box_segment(root, lower_start, lower_end, LOWER_DECK_WIDTH_M, LOWER_DECK_THICKNESS_M, lower_material, "LowerDeck", lod == LOD_NEAR)
 		_add_box_segment(root, upper_start, upper_end, 24.0, 2.4, _road_material, "RoadDeck", lod == LOD_NEAR)
 		if lod == LOD_NEAR:
 			var tangent := _horizontal_direction(start, finish)
 			var right := Vector3.UP.cross(tangent).normalized()
-			_add_box_segment(root, lower_start + right * 12.0 + Vector3.UP * 3.1, lower_end + right * 12.0 + Vector3.UP * 3.1, 1.2, 5.4, _foundation_material, "SideGirder", false)
-			_add_box_segment(root, lower_start - right * 12.0 + Vector3.UP * 3.1, lower_end - right * 12.0 + Vector3.UP * 3.1, 1.2, 5.4, _foundation_material, "SideGirder", false)
 			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _foundation_material, "RoadGuard", false)
 			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _foundation_material, "RoadGuard", false)
 		if lod != LOD_FAR:
@@ -532,6 +533,42 @@ func _build_cell_visual(root: Node3D, station_start: float, station_end: float, 
 					_add_pier(root, pier, lod == LOD_NEAR)
 					support_index += 1
 		station = next_station
+	_build_interlayer_supports(root, station_start, station_end, lod)
+
+
+func _build_interlayer_supports(parent: Node3D, station_start: float, station_end: float, lod: int) -> void:
+	var support_spacing := 126.0 if lod == LOD_NEAR else (252.0 if lod == LOD_MID else SPATIAL_CELL_LENGTH_M)
+	var beam_spacing := 105.0 if lod == LOD_NEAR else (210.0 if lod == LOD_MID else SPATIAL_CELL_LENGTH_M)
+	var side_offset := LOWER_DECK_WIDTH_M * 0.5 - 0.7
+	var beam_station := station_start
+	while beam_station < station_end - 0.01:
+		var next_beam_station := minf(beam_station + beam_spacing, station_end)
+		var start := _position_at_station(beam_station)
+		var finish := _position_at_station(next_beam_station)
+		var start_right := Vector3.UP.cross(_tangent_at_station(beam_station)).normalized()
+		var end_right := Vector3.UP.cross(_tangent_at_station(next_beam_station)).normalized()
+		for side_sign in [-1.0, 1.0]:
+			var side := float(side_sign) * side_offset
+			var lower_start := Vector3(start.x, _underside_height_at_station(beam_station) + LOWER_DECK_THICKNESS_M, start.z) + start_right * side
+			var lower_end := Vector3(finish.x, _underside_height_at_station(next_beam_station) + LOWER_DECK_THICKNESS_M, finish.z) + end_right * side
+			var upper_start := Vector3(start.x, _underside_height_at_station(beam_station) + ROAD_DECK_SOFFIT_OFFSET_M, start.z) + start_right * side
+			var upper_end := Vector3(finish.x, _underside_height_at_station(next_beam_station) + ROAD_DECK_SOFFIT_OFFSET_M, finish.z) + end_right * side
+			_add_box_segment(parent, lower_start, lower_end, 0.45, 0.45, _foundation_material, "LowerDeckLongitudinalBeam", false)
+			_add_box_segment(parent, upper_start, upper_end, 0.45, 0.45, _foundation_material, "RoadDeckLongitudinalBeam", false)
+		beam_station = next_beam_station
+	var support_station := ceilf(station_start / support_spacing) * support_spacing
+	while support_station < station_end - 0.01:
+		var position := _position_at_station(support_station)
+		var tangent := _tangent_at_station(support_station)
+		var right := Vector3.UP.cross(tangent).normalized()
+		var lower_top := _underside_height_at_station(support_station) + LOWER_DECK_THICKNESS_M
+		var road_bottom := _underside_height_at_station(support_station) + ROAD_DECK_SOFFIT_OFFSET_M
+		var post_height := road_bottom - lower_top
+		var post_yaw := float(tangent.signed_angle_to(Vector3.FORWARD, Vector3.UP))
+		for side_sign in [-1.0, 1.0]:
+			var post_position := Vector3(position.x, (lower_top + road_bottom) * 0.5, position.z) + right * float(side_sign) * side_offset
+			_add_oriented_box(parent, "InterlayerSupport", post_position, Vector3(0.45, post_height, 0.45), post_yaw, _foundation_material, false)
+		support_station += support_spacing
 
 
 func _add_box_segment(parent: Node3D, start: Vector3, finish: Vector3, width: float, height: float, material: Material, node_name: String, with_collision: bool) -> void:
