@@ -15,6 +15,7 @@ const LOWER_DECK_WIDTH_M := 20.0
 const LOWER_DECK_THICKNESS_M := 1.2
 const ROAD_DECK_SOFFIT_OFFSET_M := 6.8
 const ROAD_DECK_TOP_OFFSET_M := 9.2
+const MAIN_PIER_LIGHT_PYLON_RADIUS_M := 470.0
 const LOD_NEAR := 0
 const LOD_MID := 1
 const LOD_FAR := 2
@@ -90,6 +91,7 @@ var _pylon_outline_materials: Dictionary = {}
 var _pylon_crossbeam_materials: Dictionary = {}
 var _night_emissive_nodes: Array[GeometryInstance3D] = []
 var _night_lights: Array[Light3D] = []
+var _pier_night_lights: Array[Light3D] = []
 var _high_span_root: Node3D
 var _high_span_lod := LOD_HIDDEN
 var _debug_panel: PanelContainer
@@ -186,6 +188,7 @@ func reproject_for_georeference_change() -> void:
 	_pylon_runtime.clear()
 	_night_emissive_nodes.clear()
 	_night_lights.clear()
+	_pier_night_lights.clear()
 	_high_span_root = null
 	_high_span_lod = LOD_HIDDEN
 	_build_centerline()
@@ -408,15 +411,18 @@ func _update_night_lighting(force: bool = false) -> void:
 	for crossbeam_material_value in _pylon_crossbeam_materials.values():
 		var crossbeam_material := crossbeam_material_value as ShaderMaterial
 		if is_instance_valid(crossbeam_material):
-			crossbeam_material.set_shader_parameter("night_emission_strength", 0.34 * _night_factor)
+			crossbeam_material.set_shader_parameter("night_emission_strength", 0.38 * _night_factor)
 	for pylon_material_value in _pylon_materials.values():
 		var pylon_material := pylon_material_value as ShaderMaterial
 		if is_instance_valid(pylon_material):
-			pylon_material.set_shader_parameter("night_emission_strength", 0.28 * _night_factor)
+			pylon_material.set_shader_parameter("night_emission_strength", 0.30 * _night_factor)
 	for visual in _night_emissive_nodes:
 		if is_instance_valid(visual):
 			visual.visible = _night_factor > 0.04
 	for light in _night_lights:
+		if is_instance_valid(light):
+			light.light_energy = float(light.get_meta("night_base_energy", 0.0)) * _night_factor
+	for light in _pier_night_lights:
 		if is_instance_valid(light):
 			light.light_energy = float(light.get_meta("night_base_energy", 0.0)) * _night_factor
 
@@ -442,7 +448,7 @@ func _make_material(color: Color, unshaded: bool = false) -> StandardMaterial3D:
 
 
 func _pylon_accent_color(accent_key: String) -> Color:
-	return Color("#518FC8") if accent_key == "blue" else Color("#C96D70")
+	return Color("#4B82B2") if accent_key == "blue" else Color("#C46768")
 
 
 func _pylon_accent_key(pylon: Dictionary) -> String:
@@ -829,6 +835,7 @@ func _set_cell_lod(index: int, lod: int) -> void:
 	var cell: Dictionary = _cells[index]
 	var previous: Variant = cell.get("runtime_root")
 	if previous is Node and is_instance_valid(previous):
+		_forget_pier_night_lights_in_subtree(previous)
 		previous.queue_free()
 	cell["runtime_root"] = null
 	cell["lod"] = lod
@@ -1241,6 +1248,7 @@ func _add_pier(parent: Node3D, pier: Dictionary, with_collision: bool) -> void:
 		_add_oriented_box(parent, "Pier_%s" % str(record.get("way_id", "OSM")), Vector3(center.x, (deck_bottom + bed_y) * 0.5, center.z), size, pier_yaw, _concrete_material, false)
 	var foundation_size := Vector3(size.x + 7.0, 3.0, size.z + 7.0)
 	_add_oriented_box(parent, "PierFoundation_%s" % str(record.get("way_id", "OSM")), Vector3(center.x, _sea_level_y - 2.0, center.z), foundation_size, pier_yaw, _concrete_material, false)
+	_add_pier_night_fill(parent, pier)
 	if with_collision:
 		var body := StaticBody3D.new()
 		body.name = "Pier_%s_Collision" % str(record.get("way_id", "OSM"))
@@ -1252,6 +1260,43 @@ func _add_pier(parent: Node3D, pier: Dictionary, with_collision: bool) -> void:
 		shape.size = size
 		collider.shape = shape
 		body.add_child(collider)
+
+
+func _add_pier_night_fill(parent: Node3D, pier: Dictionary) -> void:
+	var station := float(pier["station_m"])
+	var nearest_pylon_distance := INF
+	for pylon in _pylon_runtime:
+		nearest_pylon_distance = minf(nearest_pylon_distance, absf(station - float(pylon["station_m"])))
+	if nearest_pylon_distance > MAIN_PIER_LIGHT_PYLON_RADIUS_M:
+		return
+
+	var center: Vector3 = pier["position"]
+	var tangent: Vector3 = pier["tangent"]
+	var right := Vector3.UP.cross(tangent).normalized()
+	var record: Dictionary = pier["record"]
+	var side_sign := 1.0 if posmod(int(record.get("way_id", 0)), 2) == 0 else -1.0
+	var light := SpotLight3D.new()
+	light.name = "MainApproachPierNightFill_%s" % str(record.get("way_id", "OSM"))
+	light.light_color = Color("#D5DEE5")
+	light.light_energy = 0.0
+	light.spot_range = 36.0
+	light.spot_angle = 58.0
+	light.spot_angle_attenuation = 0.85
+	light.light_specular = 0.08
+	light.shadow_enabled = false
+	light.position = Vector3(center.x, _sea_level_y + 1.5, center.z) + right * side_sign * (float(pier["width_m"]) * 0.5 + 2.0)
+	parent.add_child(light)
+	light.look_at(Vector3(center.x, _sea_level_y + 24.0, center.z), Vector3.FORWARD)
+	light.set_meta("night_base_energy", 4.0)
+	light.light_energy = 4.0 * _night_factor
+	_pier_night_lights.append(light)
+
+
+func _forget_pier_night_lights_in_subtree(branch: Node) -> void:
+	for index in range(_pier_night_lights.size() - 1, -1, -1):
+		var light := _pier_night_lights[index]
+		if not is_instance_valid(light) or branch.is_ancestor_of(light):
+			_pier_night_lights.remove_at(index)
 
 
 func _add_deck_light_strips(
@@ -1434,16 +1479,16 @@ func _add_pylon_night_lighting(parent: Node3D, pylon: Dictionary, pylon_height: 
 	tower_fill.name = "PylonSoftNightFill"
 	tower_fill.light_color = accent_color
 	tower_fill.light_energy = 0.0
-	tower_fill.spot_range = pylon_height + 35.0
-	tower_fill.spot_angle = 30.0
+	tower_fill.spot_range = pylon_height + 20.0
+	tower_fill.spot_angle = 38.0
 	tower_fill.spot_angle_attenuation = 0.8
 	tower_fill.light_specular = 0.12
 	tower_fill.shadow_enabled = false
-	tower_fill.position = Vector3(position.x, _sea_level_y + 8.0, position.z) + right * 10.0
+	tower_fill.position = Vector3(position.x, _sea_level_y + 2.0, position.z) + right * 10.0
 	tower_fill.set_meta("night_accent", accent_key)
 	parent.add_child(tower_fill)
 	tower_fill.look_at(Vector3(position.x, _sea_level_y + pylon_height * 0.72, position.z), Vector3.FORWARD)
-	tower_fill.set_meta("night_base_energy", 9.0)
+	tower_fill.set_meta("night_base_energy", 20.0)
 	_night_lights.append(tower_fill)
 	_update_night_lighting(true)
 
