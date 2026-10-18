@@ -1,7 +1,8 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/oresund_region.gd" id="1_region"]
 [ext_resource type="Resource" path="res://resources/oresund_georeference.tres" id="2_georeference"]
+[ext_resource type="Script" path="res://scripts/coast_transition_loader.gd" id="3_coast_transition_loader"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_map_debug"]
 bg_color = Color(0.035, 0.09, 0.13, 0.9)
@@ -29,6 +30,11 @@ terrain_coastal_floor_m = 0.5
 visible = false
 
 [node name="TerrainChunks" type="Node3D" parent="."]
+
+[node name="CoastTransitions" type="Node3D" parent="."]
+script = ExtResource("3_coast_transition_loader")
+mesh_path = "res://assets/terrain/processed/oresund_terrain/coast_transition.bin"
+metadata_path = "res://assets/terrain/processed/oresund_terrain/coast_transition.json"
 
 [node name="OverviewCamera" type="Camera3D" parent="."]
 position = Vector3(0, 70000, 0)

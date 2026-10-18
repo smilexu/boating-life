@@ -43,7 +43,9 @@ func query_world_position(world_position: Vector3) -> Dictionary:
 		}
 	if _bathymetry == null:
 		return _unknown_result("BathymetryManager is unavailable", "no_data")
-	var sample := _bathymetry.get_depth_at_world_position(world_position)
+	# Conservative hole fills are exposed only to navigation queries. They stay
+	# explicitly marked and can never qualify as a fully Safe depth sample.
+	var sample := _bathymetry.get_depth_at_world_position(world_position, true)
 	if not bool(sample.get("valid", false)):
 		var land := _bathymetry.is_land_at_east_north(east_north.x, east_north.y)
 		var reason := str(sample.get("reason", "No bathymetry data"))
@@ -65,9 +67,11 @@ func query_world_position(world_position: Vector3) -> Dictionary:
 		"resolution_east_m": float(metadata.get("resolution_east_m", 0.0)),
 		"resolution_north_m": float(metadata.get("resolution_north_m", 0.0)),
 		"interpolated": bool(sample.get("interpolated", false)),
-		"value_count": float(sample.get("quality", -1.0)),
+		"estimated": bool(sample.get("estimated", false)),
+		"estimate_confidence": str(sample.get("estimate_confidence", "")),
+		"value_count": float(sample.get("value_count", -1.0)),
 		"navigation_grade": false,
-		"reason": "Coarse chart-reference depth; not for navigation or safety",
+		"reason": str(sample.get("reason", "Coarse chart-reference depth; not for navigation or safety")),
 	}
 
 
@@ -90,6 +94,9 @@ static func evaluate_depth_sample(sample: Dictionary, draft_m: float, margin_m: 
 	result["depth_m"] = depth
 	if depth + 0.0001 < draft:
 		result["status"] = STATUS_UNSAFE
+	elif bool(sample.get("estimated", false)):
+		result["status"] = STATUS_CAUTION
+		result["reason"] = "Estimated water depth is gameplay-only; this location cannot be confirmed Safe"
 	elif depth + 0.0001 < draft + margin:
 		result["status"] = STATUS_CAUTION
 	else:
@@ -196,6 +203,8 @@ func _point_in_polygon(point: Vector2, polygon: PackedVector2Array) -> bool:
 
 
 func _quality_for_sample(sample: Dictionary) -> String:
+	if bool(sample.get("estimated", false)):
+		return str(sample.get("quality_label", "Conservative estimated water depth; not navigation-grade"))
 	if bool(sample.get("interpolated", false)):
 		return "Coarse/interpolated DTM reference; not navigation-grade"
 	var count := float(sample.get("quality", -1.0))

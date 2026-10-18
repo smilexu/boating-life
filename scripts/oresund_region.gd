@@ -291,7 +291,10 @@ func _make_terrain_material() -> StandardMaterial3D:
 	material.vertex_color_use_as_albedo = true
 	material.roughness = 0.96
 	material.metallic = 0.0
-	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# The land surface is an open terrain sheet. CoastTransitionLoader now builds
+	# actual seaward slopes from the same land mask; do not render the sheet's
+	# underside through the water as a floating plate.
+	material.cull_mode = BaseMaterial3D.CULL_BACK
 	return material
 
 

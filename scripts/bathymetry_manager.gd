@@ -13,6 +13,7 @@ extends Node
 @export_file("*.json") var manifest_path := "res://assets/geodata/processed/bathymetry/manifest.json"
 @export_file("*.json") var features_path := "res://assets/geodata/processed/bathymetry/chart_features.json"
 @export_file("*.png") var land_mask_path := "res://assets/geodata/processed/bathymetry/land_mask.png"
+@export_file("*.json") var estimated_depths_path := "res://assets/geodata/processed/bathymetry/depth_estimates.json"
 
 const INVALID_DEPTH_DM := -32768
 const SOURCE_NAME := "EMODnet DTM 2024 · LAT"
@@ -39,6 +40,10 @@ var contours_by_depth: Dictionary = {}
 var contour_bounds_by_depth: Dictionary = {}
 
 var _grid_data := PackedByteArray()
+var _estimated_depth_cells: Dictionary = {}
+var _estimated_depth_metadata: Dictionary = {}
+var _estimated_depth_map_points := PackedVector2Array()
+var _unresolved_depth_map_points := PackedVector2Array()
 var _depth_texture: ImageTexture
 var _depth_texture_bounds := Vector4.ZERO
 var _land_mask: Image
@@ -81,16 +86,16 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			print("Wave time frozen: %s" % frozen)
 
 
-func get_depth_at_world_position(world_position: Vector3) -> Dictionary:
+func get_depth_at_world_position(world_position: Vector3, allow_estimated: bool = false) -> Dictionary:
 	if georeference == null:
 		return _invalid_result("GeoReference is not assigned")
 	# Ignore wave-driven Y: the DTM depth is chart datum (LAT), not wave height.
 	var calm_plane_position := Vector3(world_position.x, 0.0, world_position.z)
 	var geodetic := georeference.world_to_geodetic(calm_plane_position)
-	return get_depth_at_geodetic(geodetic.x, geodetic.y)
+	return get_depth_at_geodetic(geodetic.x, geodetic.y, true, allow_estimated)
 
 
-func get_depth_at_geodetic(latitude_deg: float, longitude_deg: float, check_osm_land_mask: bool = true) -> Dictionary:
+func get_depth_at_geodetic(latitude_deg: float, longitude_deg: float, check_osm_land_mask: bool = true, allow_estimated: bool = false) -> Dictionary:
 	if not data_available:
 		return _invalid_result("Local bathymetry cache is unavailable")
 	if check_osm_land_mask:
@@ -108,10 +113,10 @@ func get_depth_at_geodetic(latitude_deg: float, longitude_deg: float, check_osm_
 	var tx := clampf(fx - float(x0), 0.0, 1.0)
 	var ty := clampf(fy - float(y0), 0.0, 1.0)
 	var cells := [
-		_read_cell(x0, y0),
-		_read_cell(x0 + 1, y0),
-		_read_cell(x0 + 1, y0 + 1),
-		_read_cell(x0, y0 + 1),
+		_read_cell(x0, y0, allow_estimated),
+		_read_cell(x0 + 1, y0, allow_estimated),
+		_read_cell(x0 + 1, y0 + 1, allow_estimated),
+		_read_cell(x0, y0 + 1, allow_estimated),
 	]
 	for cell in cells:
 		if not bool(cell["valid"]):
@@ -119,9 +124,14 @@ func get_depth_at_geodetic(latitude_deg: float, longitude_deg: float, check_osm_
 	var south_depth := lerpf(float(cells[0]["depth_m"]), float(cells[1]["depth_m"]), tx)
 	var north_depth := lerpf(float(cells[3]["depth_m"]), float(cells[2]["depth_m"]), tx)
 	var interpolated := false
+	var estimated := false
+	var estimate_confidence := "medium"
 	var quality_values: Array[float] = []
 	for cell in cells:
 		interpolated = interpolated or bool(cell["interpolated"])
+		estimated = estimated or bool(cell.get("estimated", false))
+		if str(cell.get("estimate_confidence", "medium")) == "low":
+			estimate_confidence = "low"
 		if int(cell["value_count"]) >= 0:
 			quality_values.append(float(cell["value_count"]))
 	var quality: float = -1.0
@@ -130,10 +140,33 @@ func get_depth_at_geodetic(latitude_deg: float, longitude_deg: float, check_osm_
 	return {
 		"depth_m": lerpf(south_depth, north_depth, ty),
 		"valid": true,
-		"source": SOURCE_NAME,
+		"source": "EMODnet DTM 2024 + conservative game estimate" if estimated else SOURCE_NAME,
 		"quality": quality,
+		"quality_label": "Estimated %s-confidence water depth; not chart data" % estimate_confidence if estimated else "",
+		"value_count": quality,
 		"interpolated": interpolated,
+		"estimated": estimated,
+		"estimate_confidence": estimate_confidence if estimated else "",
 		"vertical_datum": "LAT",
+		"navigation_grade": false,
+		"reason": "At least one interpolation cell is a conservative estimate; treat as Caution" if estimated else "Coarse chart-reference depth; not for navigation or safety",
+	}
+
+
+func get_estimated_depth_cell_count() -> int:
+	return _estimated_depth_cells.size()
+
+
+func get_depth_quality_overlay_data() -> Dictionary:
+	## Map-only visualization of generated estimates and remaining water gaps.
+	## These markers do not change the underlying DTM or navigation quality.
+	return {
+		"estimated_points": _estimated_depth_map_points.duplicate(),
+		"unresolved_points": _unresolved_depth_map_points.duplicate(),
+		"estimated_count": _estimated_depth_map_points.size(),
+		"unresolved_count": _unresolved_depth_map_points.size(),
+		"estimate_method": str(_estimated_depth_metadata.get("method", "")),
+		"quality": str(_estimated_depth_metadata.get("quality", "")),
 	}
 
 
@@ -181,10 +214,21 @@ func get_contour_levels() -> Array[String]:
 	return levels
 
 
-func _read_cell(column: int, row: int) -> Dictionary:
+func _read_cell(column: int, row: int, allow_estimated: bool = false) -> Dictionary:
 	var byte_offset := (row * _columns + column) * 4
 	var depth_dm := _grid_data.decode_s16(byte_offset)
 	if depth_dm == INVALID_DEPTH_DM:
+		if allow_estimated:
+			var estimate: Dictionary = _estimated_depth_cells.get(row * _columns + column, {})
+			if not estimate.is_empty():
+				return {
+					"valid": true,
+					"depth_m": float(estimate["depth_dm"]) * 0.1,
+					"interpolated": true,
+					"value_count": -1,
+					"estimated": true,
+					"estimate_confidence": str(estimate["confidence"]),
+				}
 		return {"valid": false}
 	var interpolation_flag := _grid_data.decode_u8(byte_offset + 2)
 	var value_count := _grid_data.decode_u8(byte_offset + 3)
@@ -193,6 +237,8 @@ func _read_cell(column: int, row: int) -> Dictionary:
 		"depth_m": float(depth_dm) * 0.1,
 		"interpolated": interpolation_flag == 1,
 		"value_count": int(value_count) if value_count != 255 else -1,
+		"estimated": false,
+		"estimate_confidence": "",
 	}
 
 
@@ -228,8 +274,102 @@ func _load_grid() -> void:
 		return
 	source_description = str(metadata.get("source", SOURCE_NAME))
 	data_available = true
+	_load_estimated_depths(binary_path)
 	_load_depth_texture(metadata)
 	print("Bathymetry loaded: %d×%d cells · %s" % [_columns, _rows, source_description])
+	if not _estimated_depth_cells.is_empty():
+		print("Bathymetry conservative estimates loaded: %d cells · navigation queries report Caution" % _estimated_depth_cells.size())
+
+
+func _load_estimated_depths(binary_path: String) -> void:
+	_estimated_depth_cells.clear()
+	_estimated_depth_metadata.clear()
+	_estimated_depth_map_points.clear()
+	_unresolved_depth_map_points.clear()
+	if not FileAccess.file_exists(estimated_depths_path):
+		return
+	var file := FileAccess.open(estimated_depths_path, FileAccess.READ)
+	if file == null:
+		push_warning("Estimated bathymetry is unavailable; original unknown cells remain Unknown.")
+		return
+	var parsed: Variant = JSON.parse_string(file.get_as_text())
+	if not parsed is Dictionary or int(parsed.get("schema_version", -1)) != 1:
+		push_warning("Estimated bathymetry has an unsupported format; original unknown cells remain Unknown.")
+		return
+	if int(parsed.get("grid_rows", -1)) != _rows or int(parsed.get("grid_columns", -1)) != _columns:
+		push_warning("Estimated bathymetry dimensions do not match the source grid; estimates ignored.")
+		return
+	var land_bytes := FileAccess.get_file_as_bytes(land_mask_path) if FileAccess.file_exists(land_mask_path) else PackedByteArray()
+	if _land_mask == null or land_bytes.is_empty() or str(parsed.get("source_land_mask_sha256", "")) != _sha256_hex(land_bytes):
+		push_warning("Estimated bathymetry land-mask source does not match; estimates ignored.")
+		return
+	if str(parsed.get("source_grid_sha256", "")) != _sha256_hex(FileAccess.get_file_as_bytes(binary_path)):
+		push_warning("Estimated bathymetry DTM source does not match; estimates ignored.")
+		return
+	var estimate_value: Variant = parsed.get("estimates", [])
+	if not estimate_value is Array:
+		push_warning("Estimated bathymetry records are invalid; original unknown cells remain Unknown.")
+		return
+	var estimate_records: Array = estimate_value
+	for record in estimate_records:
+		if not record is Array or record.size() < 6:
+			continue
+		var row := int(record[0])
+		var column := int(record[1])
+		var depth_dm := int(record[2])
+		var neighbors := int(record[3])
+		var confidence := str(record[4])
+		if row < 0 or row >= _rows or column < 0 or column >= _columns:
+			continue
+		if depth_dm < 0 or depth_dm > 32767 or neighbors < 3 or confidence not in ["low", "medium"]:
+			continue
+		var source_cell_offset := (row * _columns + column) * 4
+		if _grid_data.decode_s16(source_cell_offset) != INVALID_DEPTH_DM:
+			continue
+		_estimated_depth_cells[row * _columns + column] = {
+			"depth_dm": depth_dm,
+			"confidence": confidence,
+			"neighbor_spread_dm": int(record[5]),
+		}
+		_estimated_depth_map_points.append(_grid_cell_to_east_north(row, column))
+	var unresolved_value: Variant = parsed.get("unresolved_water_cells", [])
+	if unresolved_value is Array:
+		for record in unresolved_value:
+			if not record is Array or record.size() < 2:
+				continue
+			var row := int(record[0])
+			var column := int(record[1])
+			if row < 0 or row >= _rows or column < 0 or column >= _columns:
+				continue
+			var source_cell_offset := (row * _columns + column) * 4
+			if _grid_data.decode_s16(source_cell_offset) != INVALID_DEPTH_DM:
+				continue
+			if _estimated_depth_cells.has(row * _columns + column):
+				continue
+			var position := _grid_cell_to_east_north(row, column)
+			if is_land_at_east_north(position.x, position.y):
+				continue
+			_unresolved_depth_map_points.append(position)
+	_estimated_depth_metadata = parsed.duplicate(true)
+	if not unresolved_value is Array:
+		push_warning("Estimated bathymetry contains no unresolved-cell list; red quality markers are unavailable.")
+
+
+func _grid_cell_to_east_north(row: int, column: int) -> Vector2:
+	if georeference == null:
+		return Vector2.ZERO
+	var latitude := _south_latitude + float(row) * _latitude_step
+	var longitude := _west_longitude + float(column) * _longitude_step
+	var world_position := georeference.geodetic_to_world(latitude, longitude)
+	return Vector2(world_position.x, -world_position.z)
+
+
+func _sha256_hex(bytes: PackedByteArray) -> String:
+	var context := HashingContext.new()
+	if context.start(HashingContext.HASH_SHA256) != OK:
+		return ""
+	context.update(bytes)
+	return context.finish().hex_encode()
 
 
 func _load_depth_texture(metadata: Dictionary) -> void:

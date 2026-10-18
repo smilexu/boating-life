@@ -94,7 +94,7 @@ func _build_panel() -> void:
 	layout.add_child(_chart_view)
 
 	var attribution := Label.new()
-	attribution.text = "EMODnet DTM 2024 · LAT  |  不作安全导航用途"
+	attribution.text = "EMODnet DTM 2024 · LAT  |  暖色=邻近估算  |  不作安全导航用途"
 	attribution.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	attribution.add_theme_color_override("font_color", Color(0.60, 0.73, 0.73, 0.9))
 	attribution.add_theme_font_size_override("font_size", 10)
@@ -117,7 +117,7 @@ func _update_layout() -> void:
 func _update_depth_readout() -> void:
 	if _manager == null or _boat == null or _chart_view == null:
 		return
-	var result := _manager.get_depth_at_world_position(_boat.global_position)
+	var result := _manager.get_depth_at_world_position(_boat.global_position, true)
 	if not bool(result.get("valid", false)):
 		_depth_value.text = "-- m"
 		var reason := str(result.get("reason", ""))
@@ -129,7 +129,9 @@ func _update_depth_readout() -> void:
 			_quality_label.text = "DATA UNAVAILABLE"
 		return
 	_depth_value.text = "%.1f m" % float(result["depth_m"])
-	if bool(result.get("interpolated", false)):
+	if bool(result.get("estimated", false)):
+		_quality_label.text = "邻近水深估算 · %s 置信度 · LAT" % ("低" if str(result.get("estimate_confidence", "low")) == "low" else "中")
+	elif bool(result.get("interpolated", false)):
 		_quality_label.text = "估算值 · DTM 插值 · LAT"
 	else:
 		var samples := int(result.get("quality", -1.0))

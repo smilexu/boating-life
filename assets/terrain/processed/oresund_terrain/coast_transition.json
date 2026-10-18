@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "source": "Static coastal transition generated from open terrain edges matched to the exact OSM land-mask boundary used to clip terrain",
+  "quality": "Gameplay visual geometry; not surveyed coastal engineering",
+  "terrain_open_edge_count": 18229,
+  "osm_coastline_segment_count": 7269,
+  "matched_coast_edge_count": 15924,
+  "unmatched_terrain_open_edge_count": 2305,
+  "matched_coast_length_m": 718581.3,
+  "top_height_min_m": 0.5,
+  "top_height_max_m": 67.724,
+  "lower_edge_y_m": -0.3,
+  "max_slope_width_m": 16.0,
+  "transition_vertex_count": 62780,
+  "transition_triangle_count": 95472,
+  "winding_error_count": 0,
+  "minimum_lighting_normal_y": 0.0,
+  "coastline_match_tolerance_m": 0.05,
+  "source_terrain_manifest_sha256": "71022f6a945d7edb292025adaf69dfe23ee37424128482fb2c267529b46e2a10",
+  "source_land_mask": "Exact coastline boundary reconstructed from the OSM land mesh used by build_terrain.py; crop edges excluded",
+  "source_coastline_sha256": "fe4073a3123b80f487c316a7e72b5a57dcf2cc367a9ef80a0f06a649f5cf80a4",
+  "mesh_sha256": "9a1319d0c56e819d140ee31e0b48408e93b10c52f3639769473d9d4b3f5076d1"
+}

@@ -261,9 +261,9 @@ func validate_route(route_id: String) -> Dictionary:
 					break
 				if depth_provider != null:
 					var sample := depth_provider.query_world_position(sample_position)
-					if not bool(sample.get("valid", false)):
+					if not bool(sample.get("valid", false)) or bool(sample.get("estimated", false)):
 						unknown_depth = true
-					else:
+					if bool(sample.get("valid", false)):
 						var sample_depth_m := float(sample.get("depth_m", 0.0))
 						if sample_depth_m < unsafe_draft_m:
 							unsafe_depth = true

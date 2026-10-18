@@ -95,7 +95,7 @@ func _rebuild_chart(center: Vector2) -> void:
 				color = _unknown_pixel(x, y)
 			else:
 				var world_geo := _manager.georeference.world_to_geodetic(Vector3(east, 0.0, -north))
-				var sample := _manager.get_depth_at_geodetic(world_geo.x, world_geo.y, false)
+				var sample := _manager.get_depth_at_geodetic(world_geo.x, world_geo.y, false, true)
 				color = _depth_color(sample, x, y)
 			_raster_image.set_pixel(x, y, color)
 		_chart_texture = ImageTexture.create_from_image(_raster_image)
@@ -116,7 +116,9 @@ func _depth_color(sample: Dictionary, x: int, y: int) -> Color:
 		color = Color("#317e8c")
 	elif depth >= 2.0:
 		color = Color("#4e9f9e")
-	if bool(sample.get("interpolated", false)):
+	if bool(sample.get("estimated", false)):
+		color = color.lerp(Color("#d6a85e"), 0.48)
+	elif bool(sample.get("interpolated", false)):
 		color = color.lerp(Color("#9abbb7"), 0.08)
 	return color
 

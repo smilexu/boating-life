@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "scan_scope": "Existing Oresund region: current EMODnet grid, OSM land mask/coastlines, and all generated terrain chunks",
+  "depth_holes": {
+    "grid_shape": [
+      721,
+      932
+    ],
+    "grid_resolution_approx_m": [
+      116.0,
+      66.1
+    ],
+    "source_valid_cells": 270230,
+    "known_osm_land_grid_centers": 397279,
+    "known_osm_water_grid_centers": 274429,
+    "unknown_water_cells": 4751,
+    "estimated_water_cells": 2935,
+    "estimated_near_coast_cells": 1510,
+    "estimated_interior_cells": 1425,
+    "estimate_confidence_counts": {
+      "medium": 1375,
+      "low": 1560
+    },
+    "unknown_cells_without_three_visible_neighbors": 1812,
+    "unknown_cells_rejected_for_depth_spread": 4,
+    "unknown_cells_not_estimated": 1816,
+    "unresolved_water_cell_count": 1816,
+    "original_grid_sha256": "1b1d2b3a29f34e6ed50e6958fd5f5f9ed5203bef6127229618be1ce19242de78",
+    "estimate_method": "Minimum of up to four nearest valid water cells with a water-only line of sight; subtract 1 m inland or 2 m in the coastal buffer; gaps over 12 m neighbor spread stay unknown"
+  },
+  "shoreline_gaps": {
+    "terrain_open_edge_count": 18229,
+    "osm_coastline_segment_count": 7269,
+    "matched_coast_edge_count": 15924,
+    "unmatched_terrain_open_edge_count": 2305,
+    "matched_coast_length_m": 718581.3,
+    "top_height_min_m": 0.5,
+    "top_height_max_m": 67.724,
+    "lower_edge_y_m": -0.3,
+    "max_slope_width_m": 16.0,
+    "transition_vertex_count": 62780,
+    "transition_triangle_count": 95472,
+    "winding_error_count": 0,
+    "minimum_lighting_normal_y": 0.0,
+    "coastline_match_tolerance_m": 0.05,
+    "source_terrain_manifest_sha256": "71022f6a945d7edb292025adaf69dfe23ee37424128482fb2c267529b46e2a10",
+    "source_land_mask": "Exact coastline boundary reconstructed from the OSM land mesh used by build_terrain.py; crop edges excluded",
+    "source_coastline_sha256": "fe4073a3123b80f487c316a7e72b5a57dcf2cc367a9ef80a0f06a649f5cf80a4",
+    "mesh_sha256": "9a1319d0c56e819d140ee31e0b48408e93b10c52f3639769473d9d4b3f5076d1"
+  },
+  "outputs": {
+    "depth_estimates": "assets/geodata/processed/bathymetry/depth_estimates.json",
+    "coast_transition_mesh": "assets/terrain/processed/oresund_terrain/coast_transition.bin",
+    "coast_transition_metadata": "assets/terrain/processed/oresund_terrain/coast_transition.json"
+  },
+  "limitations": [
+    "Estimated depths are gameplay-only, conservative interpolation from nearby water cells, and not navigation-grade.",
+    "Terrain openings not matched to the source land-mask boundary within 0.05 m are left untouched; they are likely crop boundaries or data holes and require separate review.",
+    "The static coast transition closes the matched terrain/OSM shoreline gap visually; it does not add vessel collision."
+  ]
+}

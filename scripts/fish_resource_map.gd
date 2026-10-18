@@ -2,6 +2,7 @@ class_name FishResourceMap
 extends CanvasLayer
 
 const MAP_CANVAS_SCRIPT := preload("res://scripts/fish_resource_map_canvas.gd")
+const DEPTH_QUALITY_MAP_SCRIPT := preload("res://scripts/depth_quality_map_canvas.gd")
 const ROUTE_EDITOR_SCRIPT := preload("res://scripts/route_editor_panel.gd")
 const MAP_SETTINGS_PATH := "user://fish_resource_map_settings.cfg"
 const MAP_SETTINGS_SECTION := "fish_tracking"
@@ -20,7 +21,9 @@ var _dolphin_manager: Node
 var _route_manager: PortRouteManager
 var _economy_manager: CargoEconomyManager
 var _root: Control
+var _map_host: Control
 var _map_canvas: FishResourceMapCanvas
+var _depth_quality_canvas: DepthQualityMapCanvas
 var _map_tabs: TabContainer
 var _selected_species: Array[String] = []
 var _dolphins_enabled := true
@@ -31,6 +34,9 @@ var _route_label: Label
 var _route_editor: RouteEditorPanel
 var _route_editor_toggle: Button
 var _footer_label: Label
+var _title_label: Label
+var _subtitle_label: Label
+var _depth_quality_summary: Label
 var _map_settings := ConfigFile.new()
 var _refresh_elapsed := 0.0
 var _map_open := false
@@ -65,6 +71,8 @@ func configure(manager: FishResourceManager, bathymetry: BathymetryManager, geor
 		else:
 			_map_canvas.configure(_manager, _bathymetry, _georeference, _boat, _dolphin_manager)
 			_map_canvas.set_dolphins_enabled(_dolphins_enabled)
+			if _depth_quality_canvas != null:
+				_depth_quality_canvas.configure(_bathymetry, _georeference, _boat)
 			refresh_data()
 
 
@@ -82,11 +90,16 @@ func set_map_open(open: bool) -> void:
 	if _root != null:
 		_root.visible = open
 	if _map_canvas != null:
-		_map_canvas.set_raster_build_enabled(open)
-		_map_canvas.set_boat_pulse_enabled(open)
+		var resource_map_active := open and (_map_tabs == null or _map_tabs.current_tab != 2)
+		_map_canvas.set_raster_build_enabled(resource_map_active)
+		_map_canvas.set_boat_pulse_enabled(resource_map_active)
+	if _depth_quality_canvas != null:
+		_depth_quality_canvas.set_chart_active(open and _map_tabs != null and _map_tabs.current_tab == 2)
 	if open:
-		if _map_canvas != null:
+		if _map_canvas != null and (_map_tabs == null or _map_tabs.current_tab != 2):
 			_map_canvas.ensure_raster()
+		if _depth_quality_canvas != null and _map_tabs != null and _map_tabs.current_tab == 2:
+			_depth_quality_canvas.ensure_raster()
 		refresh_data()
 		_refresh_route_overlay()
 		get_viewport().set_input_as_handled()
@@ -97,7 +110,8 @@ func refresh_data() -> void:
 		_map_canvas.set_species_filter(_selected_species)
 		_update_summary_label()
 		if _footer_label != null and _manager != null:
-			_footer_label.text = "%s Authority · Seed %d · Revision %d · 鱼类为预测资源点；勾选海豚群可追踪当前本地权威位置" % [_manager.get_authority_source(), _manager.get_world_seed(), _manager.get_state_revision()]
+			_update_footer_label()
+	_update_depth_quality_summary()
 	_refresh_route_overlay()
 
 
@@ -212,32 +226,47 @@ func _build_ui() -> void:
 	var header := HBoxContainer.new()
 	outer.add_child(header)
 	var title := Label.new()
-	title.text = "FISH RESOURCES  ·  ØRESUND"
+	title.name = "MapTitle"
+	title.text = "海图与环境数据  ·  ØRESUND"
 	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", Color("#dce9dc"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
+	_title_label = title
 	var close_button := Button.new()
 	close_button.text = "关闭  ·  F4 / Esc"
 	close_button.pressed.connect(func() -> void: set_map_open(false))
 	header.add_child(close_button)
 	var subtitle := Label.new()
+	subtitle.name = "MapSubtitle"
 	subtitle.text = "鱼类资源预测与海豚当前位置 · 底图由 EMODnet 水深和 OSM 海岸掩膜约束"
 	subtitle.add_theme_color_override("font_color", Color("#9db8b6"))
 	outer.add_child(subtitle)
+	_subtitle_label = subtitle
 	var body := HBoxContainer.new()
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 16)
 	outer.add_child(body)
+	_map_host = Control.new()
+	_map_host.name = "MapCanvasHost"
+	_map_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_map_host.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_map_host.mouse_filter = Control.MOUSE_FILTER_PASS
+	body.add_child(_map_host)
 	_map_canvas = MAP_CANVAS_SCRIPT.new() as FishResourceMapCanvas
 	_map_canvas.name = "ResourceDistributionMap"
-	_map_canvas.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_map_canvas.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_map_canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_map_canvas.configure(_manager, _bathymetry, _georeference, _boat, _dolphin_manager)
 	_map_canvas.set_dolphins_enabled(_dolphins_enabled)
 	_map_canvas.school_selected.connect(_on_school_selected)
 	_map_canvas.school_hovered.connect(_on_school_hovered)
-	body.add_child(_map_canvas)
+	_map_host.add_child(_map_canvas)
+	_depth_quality_canvas = DEPTH_QUALITY_MAP_SCRIPT.new() as DepthQualityMapCanvas
+	_depth_quality_canvas.name = "DepthQualityMap"
+	_depth_quality_canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_depth_quality_canvas.configure(_bathymetry, _georeference, _boat)
+	_depth_quality_canvas.visible = false
+	_map_host.add_child(_depth_quality_canvas)
 	var side := PanelContainer.new()
 	side.custom_minimum_size = Vector2(318.0, 0.0)
 	side.add_theme_stylebox_override("panel", _side_style())
@@ -264,12 +293,23 @@ func _build_ui() -> void:
 	route_tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	route_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_map_tabs.add_child(route_tab)
-	_map_tabs.current_tab = 0
-	_map_canvas.set_resource_overlay_enabled(true)
 	var route_layout := VBoxContainer.new()
 	route_layout.add_theme_constant_override("separation", 9)
 	route_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	route_tab.add_child(route_layout)
+	var depth_tab := ScrollContainer.new()
+	depth_tab.name = "水深图"
+	depth_tab.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	depth_tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	depth_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_map_tabs.add_child(depth_tab)
+	var depth_layout := VBoxContainer.new()
+	depth_layout.add_theme_constant_override("separation", 10)
+	depth_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	depth_tab.add_child(depth_layout)
+	_map_tabs.current_tab = 0
+	_map_canvas.set_resource_overlay_enabled(true)
+	_depth_quality_canvas.set_chart_active(false)
 	var species_heading := Label.new()
 	species_heading.text = "鱼种筛选"
 	species_heading.add_theme_font_size_override("font_size", 17)
@@ -335,12 +375,52 @@ func _build_ui() -> void:
 	legend.text = "● 针鱼  ● 鲱鱼  ● 三刺鱼   ◇ 海豚群\n实心：0–6 m 视觉鱼群   ◌ 虚线空心：深水逻辑鱼群\n海豚标记随共享群体位置更新。底图：EMODnet DTM 2024 / LAT"
 	legend.add_theme_color_override("font_color", Color("#98b0ae"))
 	fish_layout.add_child(legend)
+	var depth_heading := Label.new()
+	depth_heading.text = "海图数据质量"
+	depth_heading.add_theme_font_size_override("font_size", 17)
+	depth_heading.add_theme_color_override("font_color", Color("#dce9dc"))
+	depth_layout.add_child(depth_heading)
+	var depth_instructions := Label.new()
+	depth_instructions.text = "完整 Øresund 水深图。滚轮缩放，按住鼠标左键拖动。点击“重置”回到全图。"
+	depth_instructions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	depth_instructions.add_theme_color_override("font_color", Color("#b2c5c1"))
+	depth_layout.add_child(depth_instructions)
+	_depth_quality_summary = Label.new()
+	_depth_quality_summary.name = "DepthQualitySummary"
+	_depth_quality_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_depth_quality_summary.add_theme_color_override("font_color", Color("#dce9dc"))
+	depth_layout.add_child(_depth_quality_summary)
+	depth_layout.add_child(_quality_legend_row(Color("#ffd166"), "黄色：邻近水深估算回填"))
+	depth_layout.add_child(_quality_legend_row(Color("#ff5964"), "红色：仍未知，无法可靠估算"))
+	var depth_note := Label.new()
+	depth_note.text = "暖色标记代表水深数据质量，不是水深危险边界。黄色值是游戏估算，不是原始测量；红色单元仍没有可用水深。底图基准 LAT，DTM 分辨率约 66 × 116 m，不用于真实航海安全判断。"
+	depth_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	depth_note.add_theme_color_override("font_color", Color("#9db8b6"))
+	depth_layout.add_child(depth_note)
+	var depth_controls := HBoxContainer.new()
+	depth_controls.add_theme_constant_override("separation", 6)
+	depth_layout.add_child(depth_controls)
+	var zoom_in_button := Button.new()
+	zoom_in_button.text = "+ 放大"
+	zoom_in_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	zoom_in_button.pressed.connect(func() -> void: _depth_quality_canvas.zoom_in())
+	depth_controls.add_child(zoom_in_button)
+	var zoom_out_button := Button.new()
+	zoom_out_button.text = "− 缩小"
+	zoom_out_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	zoom_out_button.pressed.connect(func() -> void: _depth_quality_canvas.zoom_out())
+	depth_controls.add_child(zoom_out_button)
+	var reset_button := Button.new()
+	reset_button.text = "重置全图"
+	reset_button.pressed.connect(func() -> void: _depth_quality_canvas.reset_view())
+	depth_controls.add_child(reset_button)
 	_footer_label = Label.new()
 	_footer_label.add_theme_color_override("font_color", Color("#809b9b"))
 	outer.add_child(_footer_label)
 	get_viewport().size_changed.connect(_update_layout)
 	_update_layout()
 	refresh_data()
+	_update_depth_quality_summary()
 
 
 func _update_layout() -> void:
@@ -348,6 +428,8 @@ func _update_layout() -> void:
 		_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	if _map_canvas != null:
 		_map_canvas.queue_redraw()
+	if _depth_quality_canvas != null:
+		_depth_quality_canvas.queue_redraw()
 
 
 func _set_species_enabled(species_id: String, enabled: bool) -> void:
@@ -369,12 +451,69 @@ func _set_dolphins_enabled(enabled: bool) -> void:
 
 func _on_map_tab_changed(tab_index: int) -> void:
 	if _map_canvas != null:
+		_map_canvas.visible = tab_index != 2
+	if _map_canvas != null:
 		_map_canvas.set_resource_overlay_enabled(tab_index == 0)
+		var resource_map_active := _map_open and tab_index != 2
+		_map_canvas.set_raster_build_enabled(resource_map_active)
+		_map_canvas.set_boat_pulse_enabled(resource_map_active)
+		if resource_map_active:
+			_map_canvas.ensure_raster()
+	if _depth_quality_canvas != null:
+		_depth_quality_canvas.visible = tab_index == 2
+		_depth_quality_canvas.set_chart_active(_map_open and tab_index == 2)
+	if _title_label != null:
+		_title_label.text = ["鱼类资源与海豚  ·  ØRESUND", "航路编辑  ·  ØRESUND", "海图水深与数据质量  ·  ØRESUND"][clampi(tab_index, 0, 2)]
+	if _subtitle_label != null:
+		_subtitle_label.text = [
+			"鱼类资源预测与海豚当前位置 · 底图由 EMODnet 水深和 OSM 海岸掩膜约束",
+			"查看预设航线与开发者编辑工具。路线数据使用同一 GeoReference。",
+			"完整区域水深底图 · 滚轮缩放 · 按住鼠标左键拖动 · 黄色估算 / 红色仍未知",
+		][clampi(tab_index, 0, 2)]
 	if tab_index != 1 and _route_editor != null and _route_editor.is_editor_open():
 		_route_editor.set_editor_open(false)
 		if _route_editor_toggle != null:
 			_route_editor_toggle.text = "开发者：打开航线编辑器"
 	_refresh_route_overlay()
+	_update_footer_label()
+	_update_depth_quality_summary()
+
+
+func _quality_legend_row(color: Color, text: String) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	var swatch := ColorRect.new()
+	swatch.color = color
+	swatch.custom_minimum_size = Vector2(15.0, 15.0)
+	row.add_child(swatch)
+	var label := Label.new()
+	label.text = text
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.add_theme_color_override("font_color", color.lightened(0.2))
+	row.add_child(label)
+	return row
+
+
+func _update_depth_quality_summary() -> void:
+	if _depth_quality_summary == null or _depth_quality_canvas == null:
+		return
+	_depth_quality_summary.text = "黄色估算单元：%s 个\n红色仍未知单元：%s 个" % [
+		_format_count(_depth_quality_canvas.get_estimated_cell_count()),
+		_format_count(_depth_quality_canvas.get_unresolved_cell_count()),
+	]
+
+
+func _format_count(value: int) -> String:
+	return "%d,%03d" % [int(value / 1000), value % 1000] if value >= 1000 else "%d" % value
+
+
+func _update_footer_label() -> void:
+	if _footer_label == null:
+		return
+	if _map_tabs != null and _map_tabs.current_tab == 2:
+		_footer_label.text = "黄色为邻近水深游戏估算 · 红色为剩余未知水域 · EMODnet DTM 2024 / LAT · 不用于真实航海安全判断"
+	elif _manager != null:
+		_footer_label.text = "%s Authority · Seed %d · Revision %d · 鱼类为预测资源点；勾选海豚群可追踪当前本地权威位置" % [_manager.get_authority_source(), _manager.get_world_seed(), _manager.get_state_revision()]
 
 
 func _load_tracking_preferences() -> void:

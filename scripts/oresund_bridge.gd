@@ -18,6 +18,7 @@ const LOD_HIDDEN := -1
 @export_file("*.json") var layout_data_path := "res://resources/oresund_bridge_layout.json"
 @export_node_path("Node3D") var player_boat_path := NodePath("../PlayerBoat/MotionRoot")
 @export_node_path("Node") var wave_sampler_path := NodePath("../WaveSampler")
+@export_node_path("Node") var navigation_depth_provider_path := NodePath("../NavigationDepthProvider")
 @export_range(500.0, 8000.0, 100.0) var near_lod_radius_m := 3500.0
 @export_range(4000.0, 25000.0, 500.0) var mid_lod_radius_m := 15000.0
 @export_range(15000.0, 70000.0, 1000.0) var far_lod_radius_m := 45000.0
@@ -41,6 +42,7 @@ const LOD_HIDDEN := -1
 
 var _boat: Node3D
 var _wave_sampler: Node
+var _navigation_depth_provider: Node
 var _layout: Dictionary = {}
 var _pier_records: Array[Dictionary] = []
 var _pylon_records: Array[Dictionary] = []
@@ -77,6 +79,7 @@ func _ready() -> void:
 		return
 	_boat = get_node_or_null(player_boat_path) as Node3D
 	_wave_sampler = get_node_or_null(wave_sampler_path)
+	_navigation_depth_provider = get_node_or_null(navigation_depth_provider_path)
 	_update_sea_reference()
 	_make_materials()
 	if not _load_layout():
@@ -893,22 +896,23 @@ func _teleport_to_next_test_location() -> void:
 	var gate_station := (_high_bridge_start_m() + _high_bridge_end_m()) * 0.5
 	var gate_center := _position_at_station(gate_station)
 	var tangent := _tangent_at_station(gate_station)
-	var across := Vector3(-tangent.z, 0.0, tangent.x).normalized()
 	var destination := gate_center
-	var desired_forward := across
+	var desired_forward := tangent
 	match _teleport_index:
 		0:
-			destination = gate_center + across * 650.0
-			desired_forward = -across
-			_last_teleport_name = "大桥附近观察水域"
-		1:
-			destination = _group_world_position("main_pylon_west") + across * 420.0
-			desired_forward = -across
-			_last_teleport_name = "主桥塔与斜拉索观察点"
-		_:
 			destination = gate_center
-			desired_forward = across
-			_last_teleport_name = "主航道净空下方"
+			desired_forward = tangent
+		1:
+			var malmo_endpoint := _position_at_station(_total_length_m)
+			var malmo_tangent := _tangent_at_station(_total_length_m)
+			destination = _find_endpoint_observation_position(malmo_endpoint, malmo_tangent)
+			desired_forward = _horizontal_direction(destination, malmo_endpoint)
+		_:
+			var peberholm_endpoint := _position_at_station(0.0)
+			var peberholm_tangent := _tangent_at_station(0.0)
+			destination = _find_endpoint_observation_position(peberholm_endpoint, peberholm_tangent)
+			desired_forward = _horizontal_direction(destination, peberholm_endpoint)
+	_last_teleport_name = ["主桥跨中观察点", "Malmö 桥端观察点", "Peberholm 桥端观察点"][_teleport_index]
 	destination.y = _sea_level_y
 	if _boat.has_method("disengage_autopilot"):
 		_boat.call("disengage_autopilot")
@@ -927,6 +931,33 @@ func _teleport_to_next_test_location() -> void:
 	_update_debug_panel()
 
 
+func _find_endpoint_observation_position(endpoint: Vector3, tangent: Vector3) -> Vector3:
+	var across := Vector3(-tangent.z, 0.0, tangent.x).normalized()
+	if across.length_squared() < 0.001:
+		across = Vector3.RIGHT
+	var fallback := endpoint + across * 650.0
+	if _navigation_depth_provider == null or not _navigation_depth_provider.has_method("query_world_position"):
+		return fallback
+	var offsets := [150.0, 225.0, 300.0, 400.0, 525.0, 650.0, 800.0]
+	for distance_value in offsets:
+		var distance := float(distance_value)
+		var positive: Vector3 = endpoint + across * distance
+		var negative: Vector3 = endpoint - across * distance
+		positive.y = _sea_level_y
+		negative.y = _sea_level_y
+		var positive_sample: Dictionary = _navigation_depth_provider.call("query_world_position", positive)
+		var negative_sample: Dictionary = _navigation_depth_provider.call("query_world_position", negative)
+		var positive_is_water := bool(positive_sample.get("valid", false)) and str(positive_sample.get("data_state", "")) == "water"
+		var negative_is_water := bool(negative_sample.get("valid", false)) and str(negative_sample.get("data_state", "")) == "water"
+		if positive_is_water and negative_is_water:
+			return positive if float(positive_sample.get("depth_m", 0.0)) >= float(negative_sample.get("depth_m", 0.0)) else negative
+		if positive_is_water:
+			return positive
+		if negative_is_water:
+			return negative
+	return fallback
+
+
 func _update_debug_panel() -> void:
 	if _debug_label == null:
 		return
@@ -940,6 +971,6 @@ func _update_debug_panel() -> void:
 		+ "长度 %.0f m · 桥墩 %d · 桥塔 %d · 主航道净空 %.1f m\n" % [_total_length_m, _pier_runtime.size(), _pylon_runtime.size(), float(gate["clearance_m"])]
 		+ "主塔组间距 %.1f m · 自由跨内桥墩 %d · 本船高度 %.1f m · 名义余量 %.1f m\n" % [float(gate["pylon_group_separation_m"]), int(gate["osm_pier_count_inside_free_span"]), float(gate["vessel_height_m"]), float(gate["nominal_vertical_clearance_margin_m"])]
 		+ "端点延伸估算 %.1f m / 端 · 最近测试定位：%s\n" % [_endpoint_extension_m, _last_teleport_name]
-		+ "F5 显示/隐藏桥梁诊断标记 · Shift+F5 循环测试定位 (桥附近 → 桥塔 → 主航道下方)\n"
+		+ "F5 显示/隐藏桥梁诊断标记 · Shift+F5 循环定位 (主桥跨中 → Malmö 端 → Peberholm 端)\n"
 		+ "© OpenStreetMap contributors · ODbL-1.0 · 垂直基准采用游戏静水面解释"
 	)
