@@ -49,6 +49,19 @@ The processor converts sample positions from the same WGS84 ECEF/ENU frame used 
 
 The source tile heights are vertically aligned with one uniform `-0.52 m` offset: the median DEM height 60 m inland of the existing OSM shoreline is aligned to +1.0 m. Vertices below +0.5 m are clamped above the sea plane to prevent land faces from remaining submerged. `OresundRegion.terrain_vertical_offset_m` is an additional Inspector adjustment. These are presentation adjustments, not a surveyed vertical datum conversion.
 
+### Peberholm gameplay elevation
+
+Peberholm uses a local, gameplay-only height profile in `resources/terrain_elevation_profiles.json`. The configured OSM outline selects its matching component from the exact land polygons rendered by the game; that component remains the land boundary while only its heights are replaced. The profile places the shoreline at +1.25 m and eases to a +3.0 m interior plateau over 50 m. This makes the artificial island read as land above the existing Y=0 sea plane without changing the global DEM alignment, rendered island footprint, bridge layout, or any other coast. The values are art/gameplay choices and are not surveyed elevations.
+
+Rebuild both the terrain and its matching static shore transition after changing the profile:
+
+```sh
+.venv/bin/python tools/terrain/build_terrain.py --zoom 11
+.venv/bin/python tools/terrain/build_coast_support.py
+```
+
+The coast transition builder takes its top edge from the generated terrain chunks, so it stays joined to the raised shoreline. It extends seaward to the existing -0.3 m lower edge. This profile changes rendered terrain only; it does not add land collision to the boat or alter bathymetry/navigation depth.
+
 ## Godot display and materials
 
 `scenes/OresundRegion.tscn` loads the generated chunks into a `TerrainChunks` parent. Each chunk is one `ArrayMesh`/`MeshInstance3D`, with shared grid edges, sampled terrain normals, and no per-pixel nodes. If generated data is unavailable, the existing flat coastline mesh remains as a fallback. The main scene continues to use its existing dynamic ocean.

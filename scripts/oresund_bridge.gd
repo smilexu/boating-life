@@ -473,6 +473,9 @@ func _build_peberholm_outline() -> void:
 	var outline := MeshInstance3D.new()
 	outline.name = "Peberholm_OSM_Coastline_Outline"
 	outline.mesh = line_mesh
+	# Survey overlay, not part of the bridge or island. F3 island diagnosis
+	# enables it explicitly; do not draw this Y=+1m line through normal water.
+	outline.visible = false
 	_peberholm_root.add_child(outline)
 
 

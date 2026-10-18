@@ -20,6 +20,7 @@ const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 @export_node_path("Node") var navigation_depth_monitor_path := NodePath("../../NavigationDepthMonitor")
 @export_node_path("Node") var cargo_economy_manager_path := NodePath("../../CargoEconomyManager")
 @export_node_path("Node") var autopilot_controller_path := NodePath("../../AutopilotController")
+@export_node_path("Node") var oresund_region_path := NodePath("../../OresundRegion")
 
 var _controller: BoatController
 var _weather_controller: Node
@@ -32,6 +33,7 @@ var _dolphin_world_manager: Node
 var _navigation_depth_monitor: NavigationDepthMonitor
 var _cargo_economy_manager: CargoEconomyManager
 var _autopilot_controller: AutopilotController
+var _oresund_region: Node
 var _selected_fish_school_id := ""
 var _world_time_control: WorldTimeControlPort
 var _status_panel: PanelContainer
@@ -79,6 +81,8 @@ var _debug_refresh_elapsed := 0.0
 var _autopilot_refresh_elapsed := 0.0
 var _autopilot_panel: PanelContainer
 var _autopilot_label: Label
+var _peberholm_debug_button: Button
+var _peberholm_debug_feedback: Label
 
 
 func _ready() -> void:
@@ -96,6 +100,7 @@ func _ready() -> void:
 	_navigation_depth_monitor = get_node_or_null(navigation_depth_monitor_path) as NavigationDepthMonitor
 	_cargo_economy_manager = get_node_or_null(cargo_economy_manager_path) as CargoEconomyManager
 	_autopilot_controller = get_node_or_null(autopilot_controller_path) as AutopilotController
+	_oresund_region = get_node_or_null(oresund_region_path)
 	var time_manager := get_node_or_null("/root/WorldTimeManager")
 	_world_time_control = LocalTimeControlScript.new(time_manager) as WorldTimeControlPort
 
@@ -251,11 +256,35 @@ func _on_manual_takeover_pressed() -> void:
 		_update_autopilot_panel()
 
 
+func _on_peberholm_debug_button_pressed() -> void:
+	if not is_instance_valid(_oresund_region) or not _oresund_region.has_method("toggle_peberholm_render_debug"):
+		_peberholm_debug_feedback.text = "找不到 Peberholm 诊断控制器。"
+		return
+	var was_enabled := bool(_oresund_region.call("is_peberholm_render_debug_enabled"))
+	var enabled := bool(_oresund_region.call("toggle_peberholm_render_debug"))
+	_sync_peberholm_debug_control()
+	if enabled:
+		_peberholm_debug_feedback.text = "诊断已开启：绿色为岛顶，红色为岸坡。"
+	elif was_enabled:
+		_peberholm_debug_feedback.text = "诊断已关闭，原始地形显示已恢复。"
+	else:
+		_peberholm_debug_feedback.text = "未能开启诊断，请查看运行日志。"
+
+
+func _sync_peberholm_debug_control() -> void:
+	if not is_instance_valid(_oresund_region):
+		return
+	if _peberholm_debug_button != null and _oresund_region.has_method("is_peberholm_render_debug_enabled"):
+		var debug_enabled := bool(_oresund_region.call("is_peberholm_render_debug_enabled"))
+		_peberholm_debug_button.text = "关闭顶面 / 岸坡颜色诊断" if debug_enabled else "开启顶面 / 岸坡颜色诊断"
+
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F3:
 		_debug_panel.visible = not _debug_panel.visible
 		if _debug_panel.visible:
 			_update_debug_status()
+			_sync_peberholm_debug_control()
 		get_viewport().set_input_as_handled()
 
 
@@ -359,6 +388,8 @@ func _build_debug_panel() -> void:
 	title.add_theme_font_size_override("font_size", 18)
 	title.add_theme_color_override("font_color", Color(0.94, 0.96, 0.94))
 	layout.add_child(title)
+	if OS.is_debug_build():
+		_add_peberholm_render_debug_control(layout)
 
 	_weather_label = _make_debug_label()
 	layout.add_child(_weather_label)
@@ -417,6 +448,23 @@ func _build_debug_panel() -> void:
 	add_child(_debug_panel)
 	_refresh_weather_controls()
 	_refresh_settings_controls()
+
+
+func _add_peberholm_render_debug_control(parent: VBoxContainer) -> void:
+	var section_title := Label.new()
+	section_title.text = "Peberholm 地形渲染诊断"
+	section_title.add_theme_font_size_override("font_size", 16)
+	section_title.add_theme_color_override("font_color", Color(0.94, 0.96, 0.94))
+	parent.add_child(section_title)
+	_peberholm_debug_button = Button.new()
+	_peberholm_debug_button.name = "PeberholmRenderDiagnosticToggle"
+	_peberholm_debug_button.text = "开启顶面 / 岸坡颜色诊断"
+	_peberholm_debug_button.disabled = not is_instance_valid(_oresund_region)
+	_peberholm_debug_button.pressed.connect(_on_peberholm_debug_button_pressed)
+	parent.add_child(_peberholm_debug_button)
+	_peberholm_debug_feedback = _make_debug_label()
+	_peberholm_debug_feedback.text = "绿色显示岛顶，红色显示岸坡。"
+	parent.add_child(_peberholm_debug_feedback)
 
 
 func _add_fish_observation_controls(parent: VBoxContainer) -> void:

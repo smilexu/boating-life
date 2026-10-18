@@ -3,7 +3,7 @@
   "format": "OZTR little-endian binary chunks (position XYZ, normal XYZ, color RGBA; uint32 indices)",
   "source": "Mapzen Terrain Tiles / Tilezen Terrarium PNG from the AWS Open Data elevation-tiles-prod bucket",
   "source_url_template": "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
-  "accessed_at_utc": "2026-10-14T23:11:03.741781+00:00",
+  "accessed_at_utc": "2026-10-18T16:55:47.650753+00:00",
   "task7_land_data": "assets/geodata/processed/oresund_region.json · OpenStreetMap natural=coastline · ODbL-1.0",
   "wgs84_bounds": {
     "west": 12.25,
@@ -500,6 +500,21 @@
     "applied_uniform_offset_m": -0.5194488763809204,
     "coastal_floor_m": 0.5,
     "inspector_extra_offset_m": "OresundRegion.terrain_vertical_offset_m"
+  },
+  "gameplay_elevation_profiles": {
+    "quality": "Gameplay-only elevation profile; not a surveyed height model.",
+    "profiles": [
+      {
+        "profile_id": "peberholm",
+        "source_outline": "resources/oresund_bridge_layout.json#peberholm.outline_lat_lon",
+        "shoreline_height_m": 1.25,
+        "plateau_height_m": 3.0,
+        "plateau_distance_from_shore_m": 50.0,
+        "polygon_area_km2": 1.232,
+        "selector_overlap_ratio": 0.98365,
+        "quality": "Gameplay-only elevation profile; not a surveyed height model."
+      }
+    ]
   },
   "reference_elevation_samples": {
     "malmo": {

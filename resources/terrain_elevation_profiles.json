@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "quality": "Gameplay-only elevation profile; not a surveyed height model.",
+  "profiles": [
+    {
+      "profile_id": "peberholm",
+      "layout_file": "resources/oresund_bridge_layout.json",
+      "outline_path": ["peberholm", "outline_lat_lon"],
+      "shoreline_height_m": 1.25,
+      "plateau_height_m": 3.0,
+      "plateau_distance_from_shore_m": 50.0
+    }
+  ]
+}

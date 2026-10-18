@@ -25,6 +25,7 @@ from fetch_tiles import REGION_PATH, TILE_ROOT, read_bounds, read_georeference, 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_ROOT = PROJECT_ROOT / "assets/terrain/processed/oresund_terrain"
 OUTPUT_MANIFEST = OUTPUT_ROOT / "manifest.json"
+ELEVATION_PROFILES_PATH = PROJECT_ROOT / "resources/terrain_elevation_profiles.json"
 GEOREFERENCE = read_georeference()
 ORIGIN_LAT = GEOREFERENCE["origin_latitude_deg"]
 ORIGIN_LON = GEOREFERENCE["origin_longitude_deg"]
@@ -33,6 +34,7 @@ WGS84_A = 6378137.0
 WGS84_F = 1.0 / 298.257223563
 WGS84_E2 = WGS84_F * (2.0 - WGS84_F)
 VERTEX_DTYPE = np.dtype("<f4")
+PROFILE_BOUNDARY_TOLERANCE_M = 0.05
 
 
 def geodetic_to_enu(latitude_deg: float, longitude_deg: float, altitude_m: float = 0.0) -> tuple[float, float, float]:
@@ -263,6 +265,109 @@ def smoothstep(low: float, high: float, value: np.ndarray) -> np.ndarray:
     return (t * t * (3.0 - 2.0 * t)).astype(np.float32)
 
 
+def load_gameplay_elevation_profiles(land: object) -> tuple[list[dict[str, object]], dict[str, object]]:
+    """Load gameified height profiles against the exact land polygons rendered by the game."""
+    if not ELEVATION_PROFILES_PATH.is_file():
+        raise RuntimeError(f"Missing gameplay elevation profile config: {ELEVATION_PROFILES_PATH}")
+    config = json.loads(ELEVATION_PROFILES_PATH.read_text(encoding="utf-8"))
+    if int(config.get("schema_version", -1)) != 1 or not isinstance(config.get("profiles"), list):
+        raise RuntimeError("Gameplay elevation profile config has an unsupported schema")
+
+    loaded: list[dict[str, object]] = []
+    metadata: list[dict[str, object]] = []
+    layout_cache: dict[Path, dict[str, object]] = {}
+    land_components = list(_iter_polygons(land))
+    for profile_data in config["profiles"]:
+        profile_id = str(profile_data.get("profile_id", ""))
+        layout_path = PROJECT_ROOT / str(profile_data.get("layout_file", ""))
+        if not profile_id or not layout_path.is_file():
+            raise RuntimeError(f"Invalid gameplay elevation profile source for {profile_id!r}")
+        if layout_path not in layout_cache:
+            layout_cache[layout_path] = json.loads(layout_path.read_text(encoding="utf-8"))
+        outline: object = layout_cache[layout_path]
+        outline_path = profile_data.get("outline_path", [])
+        if not isinstance(outline_path, list) or not outline_path:
+            raise RuntimeError(f"Profile {profile_id} has no outline path")
+        for key in outline_path:
+            if not isinstance(outline, dict) or key not in outline:
+                raise RuntimeError(f"Profile {profile_id} references a missing outline key: {key}")
+            outline = outline[key]
+        if not isinstance(outline, list) or len(outline) < 4:
+            raise RuntimeError(f"Profile {profile_id} outline must contain at least four [lat, lon] points")
+        local_outline = [geodetic_to_enu(float(point[0]), float(point[1]))[:2] for point in outline]
+        selector = Polygon(local_outline)
+        if not selector.is_valid:
+            selector = shapely.make_valid(selector)
+        if selector.is_empty or selector.area <= 0.0:
+            raise RuntimeError(f"Profile {profile_id} outline does not form a usable polygon")
+        if not land_components:
+            raise RuntimeError("The generated OSM land mask contains no polygon components")
+        polygon = max(land_components, key=lambda component: component.intersection(selector).area)
+        overlap_area = float(polygon.intersection(selector).area)
+        selector_overlap_ratio = overlap_area / float(selector.area)
+        if selector_overlap_ratio < 0.5:
+            raise RuntimeError(
+                f"Profile {profile_id} selector only overlaps the rendered land mask by {selector_overlap_ratio:.1%}"
+            )
+        shoreline_height = float(profile_data["shoreline_height_m"])
+        plateau_height = float(profile_data["plateau_height_m"])
+        transition_distance = float(profile_data["plateau_distance_from_shore_m"])
+        if transition_distance <= 0.0 or plateau_height <= shoreline_height:
+            raise RuntimeError(f"Profile {profile_id} has invalid height or transition values")
+        loaded.append({
+            "profile_id": profile_id,
+            "polygon": polygon,
+            "coverage_polygon": polygon.buffer(PROFILE_BOUNDARY_TOLERANCE_M),
+            "shoreline_height_m": shoreline_height,
+            "plateau_height_m": plateau_height,
+            "plateau_distance_from_shore_m": transition_distance,
+        })
+        metadata.append({
+            "profile_id": profile_id,
+            "source_outline": f"{profile_data['layout_file']}#{'.'.join(str(key) for key in outline_path)}",
+            "shoreline_height_m": shoreline_height,
+            "plateau_height_m": plateau_height,
+            "plateau_distance_from_shore_m": transition_distance,
+            "polygon_area_km2": round(float(polygon.area / 1_000_000.0), 3),
+            "selector_overlap_ratio": round(selector_overlap_ratio, 5),
+            "quality": str(config.get("quality", "Gameplay approximation")),
+        })
+    return loaded, {"quality": str(config.get("quality", "Gameplay approximation")), "profiles": metadata}
+
+
+def apply_gameplay_elevation_profiles(
+    east: np.ndarray,
+    north: np.ndarray,
+    heights: np.ndarray,
+    profiles: list[dict[str, object]],
+) -> np.ndarray:
+    """Replace elevations only inside land components selected by gameplay outlines."""
+    result = heights.astype(np.float32, copy=True)
+    if not profiles or result.size == 0:
+        return result
+    points = shapely.points(east, north)
+    for profile in profiles:
+        polygon = profile["polygon"]
+        # Terrain polygon vertices are quantized to millimetres and then stored
+        # as float32. A tiny round-off can put an exact shoreline vertex just
+        # outside the polygon and leave it at the old submerged source height.
+        inside = np.asarray(shapely.covers(profile["coverage_polygon"], points), dtype=bool)
+        if not np.any(inside):
+            continue
+        distance_from_shore = np.asarray(shapely.distance(polygon.boundary, points), dtype=np.float32)
+        t = np.clip(
+            distance_from_shore / float(profile["plateau_distance_from_shore_m"]),
+            0.0,
+            1.0,
+        )
+        blend = t * t * (3.0 - 2.0 * t)
+        profile_height = float(profile["shoreline_height_m"]) + (
+            float(profile["plateau_height_m"]) - float(profile["shoreline_height_m"])
+        ) * blend
+        result = np.where(inside, profile_height, result)
+    return result.astype(np.float32)
+
+
 def vertex_colors(east: np.ndarray, north: np.ndarray, heights: np.ndarray, normals: np.ndarray, coast: object) -> np.ndarray:
     points = shapely.points(east, north)
     coast_distance = shapely.distance(coast, points).astype(np.float32)
@@ -305,6 +410,7 @@ def build_chunk(
     cell_size_m: float,
     vertical_offset_m: float,
     coastal_floor_m: float,
+    gameplay_elevation_profiles: list[dict[str, object]],
     output_path: Path,
 ) -> dict[str, object] | None:
     cells_per_axis = round(chunk_size_m / cell_size_m)
@@ -374,12 +480,17 @@ def build_chunk(
     local_north = np.asarray([point[1] for point in vertices_east_north], dtype=np.float64)
     raw_height = sampler.sample(local_east, local_north)
     height = np.maximum(raw_height + vertical_offset_m, coastal_floor_m).astype(np.float32)
+    height = apply_gameplay_elevation_profiles(local_east, local_north, height, gameplay_elevation_profiles)
 
     gradient_step_m = 55.0
     height_east_plus = np.maximum(sampler.sample(local_east + gradient_step_m, local_north) + vertical_offset_m, coastal_floor_m)
     height_east_minus = np.maximum(sampler.sample(local_east - gradient_step_m, local_north) + vertical_offset_m, coastal_floor_m)
     height_north_plus = np.maximum(sampler.sample(local_east, local_north + gradient_step_m) + vertical_offset_m, coastal_floor_m)
     height_north_minus = np.maximum(sampler.sample(local_east, local_north - gradient_step_m) + vertical_offset_m, coastal_floor_m)
+    height_east_plus = apply_gameplay_elevation_profiles(local_east + gradient_step_m, local_north, height_east_plus, gameplay_elevation_profiles)
+    height_east_minus = apply_gameplay_elevation_profiles(local_east - gradient_step_m, local_north, height_east_minus, gameplay_elevation_profiles)
+    height_north_plus = apply_gameplay_elevation_profiles(local_east, local_north + gradient_step_m, height_north_plus, gameplay_elevation_profiles)
+    height_north_minus = apply_gameplay_elevation_profiles(local_east, local_north - gradient_step_m, height_north_minus, gameplay_elevation_profiles)
     inside_east_plus = shapely.contains_xy(land, local_east + gradient_step_m, local_north)
     inside_east_minus = shapely.contains_xy(land, local_east - gradient_step_m, local_north)
     inside_north_plus = shapely.contains_xy(land, local_east, local_north + gradient_step_m)
@@ -438,6 +549,18 @@ def main() -> int:
         land, region, expected_land_area_km2 = reconstruct_land_mask(region_data)
         land_area_km2 = float(land.area / 1_000_000.0)
         print(f"Reconstructed land mask: {land.geom_type}, {len(land.geoms) if hasattr(land, 'geoms') else 1} components, {land_area_km2:.2f} km² (Task 7 QA {expected_land_area_km2:.2f} km²)")
+        gameplay_elevation_profiles, gameplay_elevation_profile_metadata = load_gameplay_elevation_profiles(land)
+        for profile in gameplay_elevation_profile_metadata["profiles"]:
+            print(
+                "Gameplay elevation profile %s: shoreline %.2f m -> plateau %.2f m over %.0f m (%s)"
+                % (
+                    profile["profile_id"],
+                    profile["shoreline_height_m"],
+                    profile["plateau_height_m"],
+                    profile["plateau_distance_from_shore_m"],
+                    profile["quality"],
+                )
+            )
 
         print(f"Loading {args.zoom=} Terrarium tiles from {TILE_ROOT.relative_to(PROJECT_ROOT)}")
         mosaic, pixel_x_origin, pixel_y_origin, tile_manifest = read_terrarium_mosaic(args.zoom, bounds)
@@ -480,6 +603,7 @@ def main() -> int:
                     args.cell_size_m,
                     vertical_offset_m,
                     args.coastal_floor_m,
+                    gameplay_elevation_profiles,
                     output_path,
                 )
                 if result is not None:
@@ -542,6 +666,7 @@ def main() -> int:
                 "coastal_floor_m": args.coastal_floor_m,
                 "inspector_extra_offset_m": "OresundRegion.terrain_vertical_offset_m",
             },
+            "gameplay_elevation_profiles": gameplay_elevation_profile_metadata,
             "reference_elevation_samples": landmark_samples,
             "material_approximation": "Vertex colors use elevation, slope, distance to OSM coast, and soft city-anchor proximity; no land-cover dataset was used.",
             "chunks": chunks,
