@@ -26,6 +26,29 @@ func _run() -> void:
 	_check(absf(float(snapshot.get("bridge_length_m", 0.0)) - 7845.0) < 2.0, "projected bridge length matches official 7,845 m")
 	_check(int(snapshot.get("pier_count", 0)) == 51, "51 bundled OSM pier footprints load")
 	_check(int(snapshot.get("pylon_count", 0)) == 4, "four bundled OSM pylon footprints load")
+	_check(absf(float(snapshot.get("malmo_approach_length_m", 0.0)) - 700.0) < 0.1, "Malmö gets a 700 m visual approach without changing the official bridge length")
+	_check(absf(float(snapshot.get("malmo_approach_ramp_length_m", 0.0)) - 650.0) < 0.1, "Malmö approach eases down over 650 m before a buried runout")
+	_check(int(snapshot.get("malmo_approach_cell_count", 0)) == 2, "Malmö approach is split into streamed LOD cells")
+	_check(int(snapshot.get("malmo_approach_support_count", 0)) == 1, "the approach has one terrain-seated shore pier")
+	var main_end_underside := float(bridge.call("_underside_height_at_station", float(snapshot.get("bridge_length_m", 7845.0))))
+	var approach_start_underside := float(bridge.call("_malmo_approach_underside_height", 0.0))
+	var approach_ramp_end_underside := float(bridge.call("_malmo_approach_underside_height", 650.0))
+	var approach_terminal_underside := float(bridge.call("_malmo_approach_underside_height", 700.0))
+	_check(absf(approach_start_underside - main_end_underside) < 0.001, "approach height joins the existing bridge without a step")
+	_check(absf(approach_ramp_end_underside + 9.2 - 15.0636) < 0.01, "upper road level meets the sampled terrain at the ramp end")
+	_check(absf(approach_terminal_underside - approach_ramp_end_underside) < 0.001, "buried runout remains level beneath the rising terrain")
+	var approach_position: Vector3 = bridge.call("_malmo_approach_position", 250.0)
+	boat.global_position = approach_position
+	bridge.call("_update_lods")
+	await process_frame
+	snapshot = bridge.call("get_debug_snapshot")
+	_check(int(snapshot.get("malmo_approach_near_cells", 0)) > 0, "near LOD activates around the Malmö approach")
+	var approach_cell := bridge.get_node_or_null("BridgeSegments/MalmoVisualApproachCell_00/LOD_近")
+	_check(approach_cell != null and approach_cell.find_child("MalmoApproachLowerDeck", true, false) != null, "approach reuses the existing lower and upper deck greybox section")
+	var shore_pier := approach_cell.find_child("MalmoApproachShorePier", true, false) as MeshInstance3D if approach_cell != null else null
+	var shore_pier_box := shore_pier.mesh as BoxMesh if shore_pier != null else null
+	var shore_pier_ground_y := shore_pier.position.y - shore_pier_box.size.y * 0.5 if shore_pier_box != null else INF
+	_check(absf(shore_pier_ground_y - 5.8166) < 0.02, "shore pier base matches the sampled rendered terrain height")
 	var start_lat := float(snapshot.get("start_latitude_deg", 0.0))
 	var start_lon := float(snapshot.get("start_longitude_deg", 0.0))
 	var end_lat := float(snapshot.get("end_latitude_deg", 0.0))

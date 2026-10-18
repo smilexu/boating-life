@@ -38,6 +38,21 @@
     "approach_end_underside_above_water_m": 10.0,
     "endpoint_extension_method": "Extend OSM first/last support-centre tangent equally so projected alignment length matches official 7845 m; endpoint positions remain engineering approximations."
   },
+  "malmo_visible_approach": {
+    "length_m": 700.0,
+    "ramp_length_m": 650.0,
+    "target_road_surface_above_water_m": 15.0636,
+    "terrain_basis": "Mapzen Terrarium rendered terrain mesh, barycentrically sampled along the existing Malmö endpoint tangent at 0 m and 650 m; gameplay visual reference, not surveyed engineering elevations.",
+    "buried_runout_note": "The final 50 m continues at target height so rising terrain covers the cut end from sea-level views.",
+    "supports": [
+      {
+        "support_id": "malmo_shore_pier",
+        "station_m": 0.0,
+        "ground_height_above_water_m": 5.8166,
+        "ground_basis": "Barycentric sample of the current rendered terrain mesh at the existing Malmö bridge endpoint."
+      }
+    ]
+  },
   "pylon_groups": [
     {
       "group_id": "main_pylon_west",

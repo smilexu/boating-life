@@ -12,6 +12,7 @@ const SPATIAL_CELL_LENGTH_M := 500.0
 const LOWER_DECK_WIDTH_M := 20.0
 const LOWER_DECK_THICKNESS_M := 1.2
 const ROAD_DECK_SOFFIT_OFFSET_M := 6.8
+const ROAD_DECK_TOP_OFFSET_M := 9.2
 const LOD_NEAR := 0
 const LOD_MID := 1
 const LOD_FAR := 2
@@ -55,7 +56,13 @@ var _pylon_runtime: Array[Dictionary] = []
 var _centerline: Array[Vector3] = []
 var _centerline_stations := PackedFloat32Array()
 var _cells: Array[Dictionary] = []
+var _malmo_approach_cells: Array[Dictionary] = []
+var _malmo_approach_config: Dictionary = {}
 var _total_length_m := 0.0
+var _malmo_approach_length_m := 0.0
+var _malmo_approach_ramp_length_m := 0.0
+var _malmo_approach_target_underside_y := 0.0
+var _malmo_approach_start_slope := 0.0
 var _sea_level_y := 0.0
 var _endpoint_extension_m := 0.0
 var _near_material: StandardMaterial3D
@@ -90,6 +97,7 @@ func _ready() -> void:
 	_build_centerline()
 	_build_support_runtime_data()
 	_build_spatial_cells()
+	_build_malmo_approach_cells()
 	_build_peberholm_outline()
 	_build_debug_markers()
 	_build_debug_panel()
@@ -138,6 +146,10 @@ func reproject_for_georeference_change() -> void:
 	_centerline.clear()
 	_centerline_stations.clear()
 	_cells.clear()
+	_malmo_approach_cells.clear()
+	_malmo_approach_config.clear()
+	_malmo_approach_length_m = 0.0
+	_malmo_approach_ramp_length_m = 0.0
 	_pier_runtime.clear()
 	_pylon_runtime.clear()
 	_high_span_root = null
@@ -145,6 +157,7 @@ func reproject_for_georeference_change() -> void:
 	_build_centerline()
 	_build_support_runtime_data()
 	_build_spatial_cells()
+	_build_malmo_approach_cells()
 	_build_peberholm_outline()
 	_build_debug_markers()
 	_update_lods()
@@ -165,8 +178,24 @@ func get_debug_snapshot() -> Dictionary:
 				far_count += 1
 			_:
 				hidden_count += 1
+	var approach_near_count := 0
+	var approach_mid_count := 0
+	var approach_far_count := 0
+	var approach_hidden_count := 0
+	for cell in _malmo_approach_cells:
+		match int(cell.get("lod", LOD_HIDDEN)):
+			LOD_NEAR:
+				approach_near_count += 1
+			LOD_MID:
+				approach_mid_count += 1
+			LOD_FAR:
+				approach_far_count += 1
+			_:
+				approach_hidden_count += 1
 	var start_geo := georeference.world_to_geodetic(_centerline[0]) if not _centerline.is_empty() else Vector3.ZERO
 	var end_geo := georeference.world_to_geodetic(_centerline[-1]) if not _centerline.is_empty() else Vector3.ZERO
+	var approach_supports_variant: Variant = _malmo_approach_config.get("supports", [])
+	var approach_support_count: int = approach_supports_variant.size() if approach_supports_variant is Array else 0
 	return {
 		"bridge_length_m": _total_length_m,
 		"navigation_clearance_m": float(_layout.get("official_facts", {}).get("navigation_clearance_m", 57.0)),
@@ -176,6 +205,14 @@ func get_debug_snapshot() -> Dictionary:
 		"mid_cells": mid_count,
 		"far_cells": far_count,
 		"hidden_cells": hidden_count,
+		"malmo_approach_length_m": _malmo_approach_length_m,
+		"malmo_approach_ramp_length_m": _malmo_approach_ramp_length_m,
+		"malmo_approach_cell_count": _malmo_approach_cells.size(),
+		"malmo_approach_support_count": approach_support_count,
+		"malmo_approach_near_cells": approach_near_count,
+		"malmo_approach_mid_cells": approach_mid_count,
+		"malmo_approach_far_cells": approach_far_count,
+		"malmo_approach_hidden_cells": approach_hidden_count,
 		"high_span_lod": _lod_name(_high_span_lod),
 		"sea_level_y": _sea_level_y,
 		"endpoint_extension_m": _endpoint_extension_m,
@@ -375,6 +412,46 @@ func _build_spatial_cells() -> void:
 	_segments_root.add_child(_high_span_root)
 
 
+func _build_malmo_approach_cells() -> void:
+	var config_variant: Variant = _layout.get("malmo_visible_approach", {})
+	if not config_variant is Dictionary or config_variant.is_empty():
+		return
+	_malmo_approach_config = config_variant
+	_malmo_approach_length_m = maxf(float(_malmo_approach_config.get("length_m", 0.0)), 0.0)
+	_malmo_approach_ramp_length_m = clampf(
+		float(_malmo_approach_config.get("ramp_length_m", _malmo_approach_length_m)),
+		0.0,
+		_malmo_approach_length_m
+	)
+	if _malmo_approach_length_m <= 0.0 or _malmo_approach_ramp_length_m <= 0.0:
+		push_warning("OresundBridge: Malmö visual approach has invalid length data; skipping it.")
+		_malmo_approach_config.clear()
+		_malmo_approach_length_m = 0.0
+		_malmo_approach_ramp_length_m = 0.0
+		return
+	var road_surface_height := float(_malmo_approach_config.get("target_road_surface_above_water_m", 0.0))
+	_malmo_approach_target_underside_y = _sea_level_y + road_surface_height - ROAD_DECK_TOP_OFFSET_M
+	var assumptions: Dictionary = _layout.get("graybox_assumptions", {})
+	var clearance := float(_layout.get("official_facts", {}).get("navigation_clearance_m", 57.0))
+	var low_at_east := float(assumptions.get("approach_end_underside_above_water_m", 10.0))
+	var east_length := maxf(_total_length_m - _high_bridge_end_m(), 1.0)
+	_malmo_approach_start_slope = (low_at_east - clearance) / east_length
+	var cell_count := ceili(_malmo_approach_length_m / SPATIAL_CELL_LENGTH_M)
+	for index in range(cell_count):
+		var station_start := float(index) * SPATIAL_CELL_LENGTH_M
+		var station_end := minf(station_start + SPATIAL_CELL_LENGTH_M, _malmo_approach_length_m)
+		var cell_node := Node3D.new()
+		cell_node.name = "MalmoVisualApproachCell_%02d" % index
+		_segments_root.add_child(cell_node)
+		_malmo_approach_cells.append({
+			"node": cell_node,
+			"start_m": station_start,
+			"end_m": station_end,
+			"lod": LOD_HIDDEN,
+			"runtime_root": null,
+		})
+
+
 func _build_peberholm_outline() -> void:
 	var island: Dictionary = _layout.get("peberholm", {})
 	var coordinates: Variant = island.get("outline_lat_lon", [])
@@ -472,10 +549,32 @@ func _update_lods() -> void:
 		var lod := _lod_for_distance(distance)
 		if lod != int(cell.get("lod", LOD_HIDDEN)):
 			_set_cell_lod(index, lod)
+	for index in range(_malmo_approach_cells.size()):
+		var cell: Dictionary = _malmo_approach_cells[index]
+		var distance := _distance_to_malmo_approach_range(boat_position, float(cell["start_m"]), float(cell["end_m"]))
+		var lod := _lod_for_distance(distance)
+		if lod != int(cell.get("lod", LOD_HIDDEN)):
+			_set_malmo_approach_cell_lod(index, lod)
 	var high_distance := _distance_to_station_range(boat_position, _high_bridge_start_m(), _high_bridge_end_m())
 	var high_lod := _lod_for_distance(high_distance)
 	if high_lod != _high_span_lod:
 		_set_high_span_lod(high_lod)
+
+
+func _set_malmo_approach_cell_lod(index: int, lod: int) -> void:
+	var cell: Dictionary = _malmo_approach_cells[index]
+	var previous: Variant = cell.get("runtime_root")
+	if previous is Node and is_instance_valid(previous):
+		previous.queue_free()
+	cell["runtime_root"] = null
+	cell["lod"] = lod
+	if lod != LOD_HIDDEN:
+		var root := Node3D.new()
+		root.name = "LOD_%s" % _lod_name(lod)
+		(cell["node"] as Node3D).add_child(root)
+		cell["runtime_root"] = root
+		_build_malmo_approach_cell_visual(root, float(cell["start_m"]), float(cell["end_m"]), lod)
+	_malmo_approach_cells[index] = cell
 
 
 func _lod_for_distance(distance: float) -> int:
@@ -534,6 +633,127 @@ func _build_cell_visual(root: Node3D, station_start: float, station_end: float, 
 					support_index += 1
 		station = next_station
 	_build_interlayer_supports(root, station_start, station_end, lod)
+
+
+func _build_malmo_approach_cell_visual(root: Node3D, distance_start: float, distance_end: float, lod: int) -> void:
+	var spacing := 42.0 if lod == LOD_NEAR else (105.0 if lod == LOD_MID else 260.0)
+	var distance := distance_start
+	while distance < distance_end - 0.01:
+		var next_distance := minf(distance + spacing, distance_end)
+		var start := _malmo_approach_position(distance)
+		var finish := _malmo_approach_position(next_distance)
+		var underside_start := _malmo_approach_underside_height(distance)
+		var underside_end := _malmo_approach_underside_height(next_distance)
+		var lower_start := Vector3(start.x, underside_start + LOWER_DECK_THICKNESS_M * 0.5, start.z)
+		var lower_end := Vector3(finish.x, underside_end + LOWER_DECK_THICKNESS_M * 0.5, finish.z)
+		var upper_start := Vector3(start.x, underside_start + 8.0, start.z)
+		var upper_end := Vector3(finish.x, underside_end + 8.0, finish.z)
+		var lower_material := _rail_material if lod == LOD_FAR else _near_material
+		_add_box_segment(root, lower_start, lower_end, LOWER_DECK_WIDTH_M, LOWER_DECK_THICKNESS_M, lower_material, "MalmoApproachLowerDeck", lod == LOD_NEAR)
+		_add_box_segment(root, upper_start, upper_end, 24.0, 2.4, _road_material, "MalmoApproachRoadDeck", lod == LOD_NEAR)
+		if lod == LOD_NEAR:
+			var tangent := _horizontal_direction(start, finish)
+			var right := Vector3.UP.cross(tangent).normalized()
+			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _foundation_material, "MalmoApproachRoadGuard", false)
+			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _foundation_material, "MalmoApproachRoadGuard", false)
+		distance = next_distance
+	_build_malmo_approach_interlayer_supports(root, distance_start, distance_end, lod)
+	_build_malmo_approach_piers(root, distance_start, distance_end, lod)
+	var ramp_end := _malmo_approach_ramp_length_m
+	if ramp_end >= distance_start and ramp_end <= distance_end:
+		_add_malmo_approach_land_abutment(root, ramp_end)
+
+
+func _build_malmo_approach_interlayer_supports(parent: Node3D, distance_start: float, distance_end: float, lod: int) -> void:
+	var support_spacing := 126.0 if lod == LOD_NEAR else (252.0 if lod == LOD_MID else SPATIAL_CELL_LENGTH_M)
+	var beam_spacing := 105.0 if lod == LOD_NEAR else (210.0 if lod == LOD_MID else SPATIAL_CELL_LENGTH_M)
+	var side_offset := LOWER_DECK_WIDTH_M * 0.5 - 0.7
+	var beam_distance := distance_start
+	while beam_distance < distance_end - 0.01:
+		var next_beam_distance := minf(beam_distance + beam_spacing, distance_end)
+		var start := _malmo_approach_position(beam_distance)
+		var finish := _malmo_approach_position(next_beam_distance)
+		var tangent := _horizontal_direction(start, finish)
+		var right := Vector3.UP.cross(tangent).normalized()
+		for side_sign in [-1.0, 1.0]:
+			var side := float(side_sign) * side_offset
+			var lower_start := Vector3(start.x, _malmo_approach_underside_height(beam_distance) + LOWER_DECK_THICKNESS_M, start.z) + right * side
+			var lower_end := Vector3(finish.x, _malmo_approach_underside_height(next_beam_distance) + LOWER_DECK_THICKNESS_M, finish.z) + right * side
+			var upper_start := Vector3(start.x, _malmo_approach_underside_height(beam_distance) + ROAD_DECK_SOFFIT_OFFSET_M, start.z) + right * side
+			var upper_end := Vector3(finish.x, _malmo_approach_underside_height(next_beam_distance) + ROAD_DECK_SOFFIT_OFFSET_M, finish.z) + right * side
+			_add_box_segment(parent, lower_start, lower_end, 0.45, 0.45, _foundation_material, "MalmoApproachLowerLongitudinalBeam", false)
+			_add_box_segment(parent, upper_start, upper_end, 0.45, 0.45, _foundation_material, "MalmoApproachRoadLongitudinalBeam", false)
+		beam_distance = next_beam_distance
+	var support_distance := ceilf(distance_start / support_spacing) * support_spacing
+	while support_distance < distance_end - 0.01:
+		var position := _malmo_approach_position(support_distance)
+		var tangent := _malmo_approach_tangent()
+		var right := Vector3.UP.cross(tangent).normalized()
+		var lower_top := _malmo_approach_underside_height(support_distance) + LOWER_DECK_THICKNESS_M
+		var road_bottom := _malmo_approach_underside_height(support_distance) + ROAD_DECK_SOFFIT_OFFSET_M
+		var post_height := road_bottom - lower_top
+		if post_height > 0.1:
+			var post_yaw := float(tangent.signed_angle_to(Vector3.FORWARD, Vector3.UP))
+			for side_sign in [-1.0, 1.0]:
+				var post_position := Vector3(position.x, (lower_top + road_bottom) * 0.5, position.z) + right * float(side_sign) * side_offset
+				_add_oriented_box(parent, "MalmoApproachInterlayerSupport", post_position, Vector3(0.45, post_height, 0.45), post_yaw, _foundation_material, false)
+		support_distance += support_spacing
+
+
+func _build_malmo_approach_piers(parent: Node3D, distance_start: float, distance_end: float, lod: int) -> void:
+	if lod == LOD_FAR:
+		return
+	var supports_variant: Variant = _malmo_approach_config.get("supports", [])
+	if not supports_variant is Array:
+		return
+	for support_variant in supports_variant:
+		if not support_variant is Dictionary:
+			continue
+		var support: Dictionary = support_variant
+		var station := float(support.get("station_m", -1.0))
+		if station < distance_start - 0.01 or station >= distance_end - 0.01:
+			continue
+		_add_malmo_approach_pier(parent, station, float(support.get("ground_height_above_water_m", 0.0)), lod == LOD_NEAR)
+
+
+func _add_malmo_approach_pier(parent: Node3D, distance: float, ground_height_above_water: float, with_collision: bool) -> void:
+	var deck_bottom := _malmo_approach_underside_height(distance)
+	var ground_y := _sea_level_y + ground_height_above_water
+	var height := deck_bottom - ground_y
+	if height < 0.2:
+		return
+	var center := _malmo_approach_position(distance)
+	var tangent := _malmo_approach_tangent()
+	var yaw := float(tangent.signed_angle_to(Vector3.FORWARD, Vector3.UP))
+	var pier_size := Vector3(11.0, height, 8.0)
+	_add_oriented_box(parent, "MalmoApproachShorePier", Vector3(center.x, (deck_bottom + ground_y) * 0.5, center.z), pier_size, yaw, _concrete_material, false)
+	_add_oriented_box(parent, "MalmoApproachShorePierFooting", Vector3(center.x, ground_y - 1.5, center.z), Vector3(18.0, 3.0, 15.0), yaw, _foundation_material, false)
+	if with_collision:
+		var body := StaticBody3D.new()
+		body.name = "MalmoApproachShorePier_Collision"
+		body.position = Vector3(center.x, (deck_bottom + ground_y) * 0.5, center.z)
+		body.rotation.y = yaw
+		parent.add_child(body)
+		var collider := CollisionShape3D.new()
+		var shape := BoxShape3D.new()
+		shape.size = pier_size
+		collider.shape = shape
+		body.add_child(collider)
+
+
+func _add_malmo_approach_land_abutment(parent: Node3D, distance: float) -> void:
+	var position := _malmo_approach_position(distance)
+	var deck_bottom := _malmo_approach_underside_height(distance)
+	var yaw := float(_malmo_approach_tangent().signed_angle_to(Vector3.FORWARD, Vector3.UP))
+	_add_oriented_box(
+		parent,
+		"MalmoApproachBuriedLandAbutment",
+		Vector3(position.x, deck_bottom + ROAD_DECK_TOP_OFFSET_M * 0.5, position.z),
+		Vector3(LOWER_DECK_WIDTH_M, ROAD_DECK_TOP_OFFSET_M, 3.0),
+		yaw,
+		_concrete_material,
+		false
+	)
 
 
 func _build_interlayer_supports(parent: Node3D, station_start: float, station_end: float, lod: int) -> void:
@@ -789,6 +1009,15 @@ func _position_at_station(station: float) -> Vector3:
 	return _centerline[-1]
 
 
+func _malmo_approach_tangent() -> Vector3:
+	return _tangent_at_station(_total_length_m)
+
+
+func _malmo_approach_position(distance: float) -> Vector3:
+	var endpoint := _position_at_station(_total_length_m)
+	return endpoint + _malmo_approach_tangent() * clampf(distance, 0.0, _malmo_approach_length_m)
+
+
 func _tangent_at_station(station: float) -> Vector3:
 	if _centerline.size() < 2:
 		return Vector3.FORWARD
@@ -838,6 +1067,16 @@ func _distance_to_station_range(position: Vector3, station_start: float, station
 	return nearest
 
 
+func _distance_to_malmo_approach_range(position: Vector3, distance_start: float, distance_end: float) -> float:
+	var start := _malmo_approach_position(distance_start)
+	var finish := _malmo_approach_position(distance_end)
+	var segment := Vector2(finish.x - start.x, finish.z - start.z)
+	var offset := Vector2(position.x - start.x, position.z - start.z)
+	var length_squared := segment.length_squared()
+	var blend := clampf(offset.dot(segment) / length_squared, 0.0, 1.0) if length_squared > 0.001 else 0.0
+	return _horizontal_distance(position, start.lerp(finish, blend))
+
+
 func _underside_height_at_station(station: float) -> float:
 	var assumptions: Dictionary = _layout.get("graybox_assumptions", {})
 	var low_at_west := float(assumptions.get("approach_start_underside_above_water_m", 10.0))
@@ -849,6 +1088,19 @@ func _underside_height_at_station(station: float) -> float:
 		return _sea_level_y + clearance
 	var east_length := maxf(_total_length_m - HIGH_BRIDGE_END_M, 1.0)
 	return _sea_level_y + lerpf(clearance, low_at_east, clampf((station - HIGH_BRIDGE_END_M) / east_length, 0.0, 1.0))
+
+
+func _malmo_approach_underside_height(distance: float) -> float:
+	var start_height := _underside_height_at_station(_total_length_m)
+	if distance >= _malmo_approach_ramp_length_m:
+		return _malmo_approach_target_underside_y
+	var t := clampf(distance / maxf(_malmo_approach_ramp_length_m, 0.001), 0.0, 1.0)
+	var end_height := _malmo_approach_target_underside_y
+	var start_tangent_scaled := _malmo_approach_start_slope * _malmo_approach_ramp_length_m
+	var start_basis := 2.0 * t * t * t - 3.0 * t * t + 1.0
+	var start_tangent_basis := t * t * t - 2.0 * t * t + t
+	var end_basis := -2.0 * t * t * t + 3.0 * t * t
+	return start_basis * start_height + start_tangent_basis * start_tangent_scaled + end_basis * end_height
 
 
 func _group_world_position(group_id: String) -> Vector3:
