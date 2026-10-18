@@ -853,7 +853,7 @@ func _update_debug_label(status: Dictionary) -> void:
 		+ route_summary
 		+ "泊位水深 %s · %s\n%s\n" % [str(status.get("depth_status", NavigationDepthProvider.STATUS_UNKNOWN)), str(status.get("depth_reason", "Unknown")), berth_water]
 		+ "状态 %s · 入口宽 %.0f m · 泊位 %.0f × %.1f m\n" % [dock_state, entrance_width_m, berth_length_m, berth_width_m]
-		+ "E 靠泊/离泊 · %s 测试定位 · O 港口标记 · G 航线标记 · F12 货柜测试\n" % ("P" if debug_teleport_action == ACTION_DEBUG_TELEPORT else "K")
+		+ "E 靠泊/离泊 · %s 测试定位 · V 港口标记 · G 航线标记 · F12 货柜测试\n" % ("P" if debug_teleport_action == ACTION_DEBUG_TELEPORT else "K")
 	)
 	if _dev_delivery_button != null:
 		_dev_delivery_button.visible = _debug_enabled and developer_tools_enabled and (OS.has_feature("editor") or OS.has_feature("debug")) and _economy_manager != null and not _economy_manager.get_active_contracts().is_empty()

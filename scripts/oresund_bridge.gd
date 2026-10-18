@@ -57,12 +57,19 @@ var _centerline: Array[Vector3] = []
 var _centerline_stations := PackedFloat32Array()
 var _cells: Array[Dictionary] = []
 var _malmo_approach_cells: Array[Dictionary] = []
+var _peberholm_approach_cells: Array[Dictionary] = []
 var _malmo_approach_config: Dictionary = {}
+var _peberholm_approach_config: Dictionary = {}
 var _total_length_m := 0.0
 var _malmo_approach_length_m := 0.0
 var _malmo_approach_ramp_length_m := 0.0
 var _malmo_approach_target_underside_y := 0.0
 var _malmo_approach_start_slope := 0.0
+var _peberholm_approach_length_m := 0.0
+var _peberholm_approach_ramp_length_m := 0.0
+var _peberholm_approach_target_underside_y := 0.0
+var _peberholm_approach_start_slope := 0.0
+var _peberholm_flora_removed_count := 0
 var _sea_level_y := 0.0
 var _endpoint_extension_m := 0.0
 var _near_material: StandardMaterial3D
@@ -73,6 +80,7 @@ var _concrete_material: StandardMaterial3D
 var _foundation_material: StandardMaterial3D
 var _cable_material: StandardMaterial3D
 var _island_outline_material: StandardMaterial3D
+var _portal_material: StandardMaterial3D
 var _high_span_root: Node3D
 var _high_span_lod := LOD_HIDDEN
 var _debug_panel: PanelContainer
@@ -98,6 +106,7 @@ func _ready() -> void:
 	_build_support_runtime_data()
 	_build_spatial_cells()
 	_build_malmo_approach_cells()
+	_build_peberholm_approach_cells()
 	_build_peberholm_outline()
 	_build_debug_markers()
 	_build_debug_panel()
@@ -147,9 +156,14 @@ func reproject_for_georeference_change() -> void:
 	_centerline_stations.clear()
 	_cells.clear()
 	_malmo_approach_cells.clear()
+	_peberholm_approach_cells.clear()
 	_malmo_approach_config.clear()
+	_peberholm_approach_config.clear()
 	_malmo_approach_length_m = 0.0
 	_malmo_approach_ramp_length_m = 0.0
+	_peberholm_approach_length_m = 0.0
+	_peberholm_approach_ramp_length_m = 0.0
+	_peberholm_flora_removed_count = 0
 	_pier_runtime.clear()
 	_pylon_runtime.clear()
 	_high_span_root = null
@@ -158,6 +172,7 @@ func reproject_for_georeference_change() -> void:
 	_build_support_runtime_data()
 	_build_spatial_cells()
 	_build_malmo_approach_cells()
+	_build_peberholm_approach_cells()
 	_build_peberholm_outline()
 	_build_debug_markers()
 	_update_lods()
@@ -196,6 +211,22 @@ func get_debug_snapshot() -> Dictionary:
 	var end_geo := georeference.world_to_geodetic(_centerline[-1]) if not _centerline.is_empty() else Vector3.ZERO
 	var approach_supports_variant: Variant = _malmo_approach_config.get("supports", [])
 	var approach_support_count: int = approach_supports_variant.size() if approach_supports_variant is Array else 0
+	var peberholm_approach_near_count := 0
+	var peberholm_approach_mid_count := 0
+	var peberholm_approach_far_count := 0
+	var peberholm_approach_hidden_count := 0
+	for cell in _peberholm_approach_cells:
+		match int(cell.get("lod", LOD_HIDDEN)):
+			LOD_NEAR:
+				peberholm_approach_near_count += 1
+			LOD_MID:
+				peberholm_approach_mid_count += 1
+			LOD_FAR:
+				peberholm_approach_far_count += 1
+			_:
+				peberholm_approach_hidden_count += 1
+	var peberholm_approach_supports_variant: Variant = _peberholm_approach_config.get("supports", [])
+	var peberholm_approach_support_count: int = peberholm_approach_supports_variant.size() if peberholm_approach_supports_variant is Array else 0
 	return {
 		"bridge_length_m": _total_length_m,
 		"navigation_clearance_m": float(_layout.get("official_facts", {}).get("navigation_clearance_m", 57.0)),
@@ -213,6 +244,18 @@ func get_debug_snapshot() -> Dictionary:
 		"malmo_approach_mid_cells": approach_mid_count,
 		"malmo_approach_far_cells": approach_far_count,
 		"malmo_approach_hidden_cells": approach_hidden_count,
+		"peberholm_approach_length_m": _peberholm_approach_length_m,
+		"peberholm_approach_ramp_length_m": _peberholm_approach_ramp_length_m,
+		"peberholm_approach_target_underside_y": _peberholm_approach_target_underside_y,
+		"peberholm_approach_road_surface_y": _peberholm_approach_target_underside_y + ROAD_DECK_TOP_OFFSET_M,
+		"peberholm_approach_cell_count": _peberholm_approach_cells.size(),
+		"peberholm_approach_support_count": peberholm_approach_support_count,
+		"peberholm_approach_near_cells": peberholm_approach_near_count,
+		"peberholm_approach_mid_cells": peberholm_approach_mid_count,
+		"peberholm_approach_far_cells": peberholm_approach_far_count,
+		"peberholm_approach_hidden_cells": peberholm_approach_hidden_count,
+		"peberholm_flora_removed_count": _peberholm_flora_removed_count,
+		"peberholm_entry_portal_world": _peberholm_approach_position(maxf(_peberholm_approach_length_m - float(_peberholm_approach_config.get("portal_distance_from_end_m", 40.0)), 0.0)) if _peberholm_approach_length_m > 0.0 else Vector3.ZERO,
 		"high_span_lod": _lod_name(_high_span_lod),
 		"sea_level_y": _sea_level_y,
 		"endpoint_extension_m": _endpoint_extension_m,
@@ -290,6 +333,7 @@ func _make_materials() -> void:
 	_foundation_material = _make_material(Color("#727a7d"))
 	_cable_material = _make_material(Color("#777f83"))
 	_island_outline_material = _make_material(Color("#a59f8d"), true)
+	_portal_material = _make_material(Color("#20282d"), true)
 
 
 func _make_material(color: Color, unshaded: bool = false) -> StandardMaterial3D:
@@ -452,6 +496,55 @@ func _build_malmo_approach_cells() -> void:
 		})
 
 
+func _build_peberholm_approach_cells() -> void:
+	var config_variant: Variant = _layout.get("peberholm_visible_approach", {})
+	if not config_variant is Dictionary or config_variant.is_empty():
+		return
+	_peberholm_approach_config = config_variant
+	_peberholm_approach_length_m = maxf(float(_peberholm_approach_config.get("length_m", 0.0)), 0.0)
+	_peberholm_approach_ramp_length_m = clampf(
+		float(_peberholm_approach_config.get("ramp_length_m", _peberholm_approach_length_m)),
+		0.0,
+		_peberholm_approach_length_m
+	)
+	if _peberholm_approach_length_m <= 0.0 or _peberholm_approach_ramp_length_m <= 0.0:
+		push_warning("OresundBridge: Peberholm visual approach has invalid length data; skipping it.")
+		_peberholm_approach_config.clear()
+		_peberholm_approach_length_m = 0.0
+		_peberholm_approach_ramp_length_m = 0.0
+		return
+	var road_surface_height := float(_peberholm_approach_config.get("target_road_surface_above_water_m", 3.1))
+	_peberholm_approach_target_underside_y = _sea_level_y + road_surface_height - ROAD_DECK_TOP_OFFSET_M
+	var assumptions: Dictionary = _layout.get("graybox_assumptions", {})
+	var clearance := float(_layout.get("official_facts", {}).get("navigation_clearance_m", 57.0))
+	var approach_start_underside := float(assumptions.get("approach_start_underside_above_water_m", 10.0))
+	_peberholm_approach_start_slope = -(clearance - approach_start_underside) / maxf(_high_bridge_start_m(), 1.0)
+	var cell_count := ceili(_peberholm_approach_length_m / SPATIAL_CELL_LENGTH_M)
+	for index in range(cell_count):
+		var distance_start := float(index) * SPATIAL_CELL_LENGTH_M
+		var distance_end := minf(distance_start + SPATIAL_CELL_LENGTH_M, _peberholm_approach_length_m)
+		var cell_node := Node3D.new()
+		cell_node.name = "PeberholmVisibleApproachCell_%02d" % index
+		_segments_root.add_child(cell_node)
+		_peberholm_approach_cells.append({
+			"node": cell_node,
+			"start_m": distance_start,
+			"end_m": distance_end,
+			"lod": LOD_HIDDEN,
+			"runtime_root": null,
+		})
+	_apply_peberholm_flora_clearance()
+
+
+func _apply_peberholm_flora_clearance() -> void:
+	var flora := get_node_or_null("../OresundRegion/PeberholmLowVegetation")
+	if flora == null or not flora.has_method("remove_corridor_instances"):
+		return
+	var start := _peberholm_approach_position(0.0)
+	var finish := _peberholm_approach_position(_peberholm_approach_length_m)
+	_peberholm_flora_removed_count = int(flora.call("remove_corridor_instances", start, finish, 18.0))
+
+
 func _build_peberholm_outline() -> void:
 	var island: Dictionary = _layout.get("peberholm", {})
 	var coordinates: Variant = island.get("outline_lat_lon", [])
@@ -490,6 +583,9 @@ func _build_debug_markers() -> void:
 	if not _centerline.is_empty():
 		_add_debug_marker("PeberholmEndpoint", _centerline[0] + Vector3.UP * 2.0, "Peberholm 端", debug_material, 1.5)
 		_add_debug_marker("SwedenEndpoint", _centerline[-1] + Vector3.UP * 2.0, "Lernacken 端", debug_material, 1.5)
+		if _peberholm_approach_length_m > 0.0:
+			var portal_distance := maxf(_peberholm_approach_length_m - float(_peberholm_approach_config.get("portal_distance_from_end_m", 40.0)), 0.0)
+			_add_debug_marker("PeberholmGroundEntry", _peberholm_approach_position(portal_distance) + Vector3.UP * 2.0, "Peberholm 地面入口", debug_material, 1.5)
 	_debug_root.visible = _debug_enabled
 
 
@@ -558,6 +654,12 @@ func _update_lods() -> void:
 		var lod := _lod_for_distance(distance)
 		if lod != int(cell.get("lod", LOD_HIDDEN)):
 			_set_malmo_approach_cell_lod(index, lod)
+	for index in range(_peberholm_approach_cells.size()):
+		var cell: Dictionary = _peberholm_approach_cells[index]
+		var distance := _distance_to_peberholm_approach_range(boat_position, float(cell["start_m"]), float(cell["end_m"]))
+		var lod := _lod_for_distance(distance)
+		if lod != int(cell.get("lod", LOD_HIDDEN)):
+			_set_peberholm_approach_cell_lod(index, lod)
 	var high_distance := _distance_to_station_range(boat_position, _high_bridge_start_m(), _high_bridge_end_m())
 	var high_lod := _lod_for_distance(high_distance)
 	if high_lod != _high_span_lod:
@@ -578,6 +680,22 @@ func _set_malmo_approach_cell_lod(index: int, lod: int) -> void:
 		cell["runtime_root"] = root
 		_build_malmo_approach_cell_visual(root, float(cell["start_m"]), float(cell["end_m"]), lod)
 	_malmo_approach_cells[index] = cell
+
+
+func _set_peberholm_approach_cell_lod(index: int, lod: int) -> void:
+	var cell: Dictionary = _peberholm_approach_cells[index]
+	var previous: Variant = cell.get("runtime_root")
+	if previous is Node and is_instance_valid(previous):
+		previous.queue_free()
+	cell["runtime_root"] = null
+	cell["lod"] = lod
+	if lod != LOD_HIDDEN:
+		var root := Node3D.new()
+		root.name = "LOD_%s" % _lod_name(lod)
+		(cell["node"] as Node3D).add_child(root)
+		cell["runtime_root"] = root
+		_build_peberholm_approach_cell_visual(root, float(cell["start_m"]), float(cell["end_m"]), lod)
+	_peberholm_approach_cells[index] = cell
 
 
 func _lod_for_distance(distance: float) -> int:
@@ -665,6 +783,141 @@ func _build_malmo_approach_cell_visual(root: Node3D, distance_start: float, dist
 	var ramp_end := _malmo_approach_ramp_length_m
 	if ramp_end >= distance_start and ramp_end <= distance_end:
 		_add_malmo_approach_land_abutment(root, ramp_end)
+
+
+func _build_peberholm_approach_cell_visual(root: Node3D, distance_start: float, distance_end: float, lod: int) -> void:
+	var spacing := 42.0 if lod == LOD_NEAR else (105.0 if lod == LOD_MID else 260.0)
+	var distance := distance_start
+	while distance < distance_end - 0.01:
+		var next_distance := minf(distance + spacing, distance_end)
+		var start := _peberholm_approach_position(distance)
+		var finish := _peberholm_approach_position(next_distance)
+		var underside_start := _peberholm_approach_underside_height(distance)
+		var underside_end := _peberholm_approach_underside_height(next_distance)
+		var lower_start := Vector3(start.x, underside_start + LOWER_DECK_THICKNESS_M * 0.5, start.z)
+		var lower_end := Vector3(finish.x, underside_end + LOWER_DECK_THICKNESS_M * 0.5, finish.z)
+		var upper_start := Vector3(start.x, underside_start + 8.0, start.z)
+		var upper_end := Vector3(finish.x, underside_end + 8.0, finish.z)
+		var lower_material := _rail_material if lod == LOD_FAR else _near_material
+		_add_box_segment(root, lower_start, lower_end, LOWER_DECK_WIDTH_M, LOWER_DECK_THICKNESS_M, lower_material, "PeberholmApproachLowerDeck", lod == LOD_NEAR)
+		_add_box_segment(root, upper_start, upper_end, 24.0, 2.4, _road_material, "PeberholmApproachRoadDeck", lod == LOD_NEAR)
+		if lod == LOD_NEAR and minf(underside_start + ROAD_DECK_TOP_OFFSET_M, underside_end + ROAD_DECK_TOP_OFFSET_M) > 5.0:
+			var tangent := _horizontal_direction(start, finish)
+			var right := Vector3.UP.cross(tangent).normalized()
+			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _foundation_material, "PeberholmApproachRoadGuard", false)
+			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _foundation_material, "PeberholmApproachRoadGuard", false)
+		distance = next_distance
+	_build_peberholm_approach_interlayer_supports(root, distance_start, distance_end, lod)
+	_build_peberholm_approach_piers(root, distance_start, distance_end, lod)
+	var portal_distance := maxf(_peberholm_approach_length_m - float(_peberholm_approach_config.get("portal_distance_from_end_m", 40.0)), 0.0)
+	if portal_distance >= distance_start - 0.01 and portal_distance < distance_end + 0.01:
+		_add_peberholm_ground_entry_portal(root, portal_distance)
+
+
+func _build_peberholm_approach_interlayer_supports(parent: Node3D, distance_start: float, distance_end: float, lod: int) -> void:
+	var support_spacing := 126.0 if lod == LOD_NEAR else (252.0 if lod == LOD_MID else SPATIAL_CELL_LENGTH_M)
+	var beam_spacing := 105.0 if lod == LOD_NEAR else (210.0 if lod == LOD_MID else SPATIAL_CELL_LENGTH_M)
+	var side_offset := LOWER_DECK_WIDTH_M * 0.5 - 0.7
+	var beam_distance := distance_start
+	while beam_distance < distance_end - 0.01:
+		var next_beam_distance := minf(beam_distance + beam_spacing, distance_end)
+		var start := _peberholm_approach_position(beam_distance)
+		var finish := _peberholm_approach_position(next_beam_distance)
+		var right := Vector3.UP.cross(_peberholm_approach_tangent()).normalized()
+		for side_sign in [-1.0, 1.0]:
+			var side := float(side_sign) * side_offset
+			var lower_start := Vector3(start.x, _peberholm_approach_underside_height(beam_distance) + LOWER_DECK_THICKNESS_M, start.z) + right * side
+			var lower_end := Vector3(finish.x, _peberholm_approach_underside_height(next_beam_distance) + LOWER_DECK_THICKNESS_M, finish.z) + right * side
+			var upper_start := Vector3(start.x, _peberholm_approach_underside_height(beam_distance) + ROAD_DECK_SOFFIT_OFFSET_M, start.z) + right * side
+			var upper_end := Vector3(finish.x, _peberholm_approach_underside_height(next_beam_distance) + ROAD_DECK_SOFFIT_OFFSET_M, finish.z) + right * side
+			_add_box_segment(parent, lower_start, lower_end, 0.45, 0.45, _foundation_material, "PeberholmApproachLowerBeam", false)
+			_add_box_segment(parent, upper_start, upper_end, 0.45, 0.45, _foundation_material, "PeberholmApproachRoadBeam", false)
+		beam_distance = next_beam_distance
+	var support_distance := ceilf(distance_start / support_spacing) * support_spacing
+	while support_distance < distance_end - 0.01:
+		var position := _peberholm_approach_position(support_distance)
+		var lower_top := _peberholm_approach_underside_height(support_distance) + LOWER_DECK_THICKNESS_M
+		var road_bottom := _peberholm_approach_underside_height(support_distance) + ROAD_DECK_SOFFIT_OFFSET_M
+		var post_height := road_bottom - lower_top
+		if post_height > 0.1:
+			var yaw := float(_peberholm_approach_tangent().signed_angle_to(Vector3.FORWARD, Vector3.UP))
+			for side_sign in [-1.0, 1.0]:
+				var post_position := Vector3(position.x, (lower_top + road_bottom) * 0.5, position.z) + Vector3.UP.cross(_peberholm_approach_tangent()).normalized() * float(side_sign) * side_offset
+				_add_oriented_box(parent, "PeberholmApproachInterlayerSupport", post_position, Vector3(0.45, post_height, 0.45), yaw, _foundation_material, false)
+		support_distance += support_spacing
+
+
+func _build_peberholm_approach_piers(parent: Node3D, distance_start: float, distance_end: float, lod: int) -> void:
+	if lod == LOD_FAR:
+		return
+	var supports_variant: Variant = _peberholm_approach_config.get("supports", [])
+	if not supports_variant is Array:
+		return
+	for support_variant in supports_variant:
+		if not support_variant is Dictionary:
+			continue
+		var support: Dictionary = support_variant
+		var station := float(support.get("station_m", -1.0))
+		if station < distance_start - 0.01 or station >= distance_end - 0.01:
+			continue
+		_add_peberholm_approach_pier(parent, station, float(support.get("ground_height_above_water_m", 0.0)), lod == LOD_NEAR)
+
+
+func _add_peberholm_approach_pier(parent: Node3D, distance: float, ground_height_above_water: float, with_collision: bool) -> void:
+	var deck_bottom := _peberholm_approach_underside_height(distance)
+	var ground_y := _sea_level_y + ground_height_above_water
+	var height := deck_bottom - ground_y
+	if height < 0.2:
+		return
+	var center := _peberholm_approach_position(distance)
+	var yaw := float(_peberholm_approach_tangent().signed_angle_to(Vector3.FORWARD, Vector3.UP))
+	var support_suffix := "%04dm" % roundi(distance)
+	var pier_size := Vector3(11.0, height, 8.0)
+	_add_oriented_box(parent, "PeberholmApproachShorePier_%s" % support_suffix, Vector3(center.x, (deck_bottom + ground_y) * 0.5, center.z), pier_size, yaw, _concrete_material, false)
+	_add_oriented_box(parent, "PeberholmApproachShorePierFooting_%s" % support_suffix, Vector3(center.x, ground_y - 1.5, center.z), Vector3(18.0, 3.0, 15.0), yaw, _foundation_material, false)
+	if with_collision:
+		var body := StaticBody3D.new()
+		body.name = "PeberholmApproachShorePier_%s_Collision" % support_suffix
+		body.position = Vector3(center.x, (deck_bottom + ground_y) * 0.5, center.z)
+		body.rotation.y = yaw
+		parent.add_child(body)
+		var collider := CollisionShape3D.new()
+		var shape := BoxShape3D.new()
+		shape.size = pier_size
+		collider.shape = shape
+		body.add_child(collider)
+
+
+func _add_peberholm_ground_entry_portal(parent: Node3D, portal_distance: float) -> void:
+	var center := _peberholm_approach_position(portal_distance)
+	var tangent := _peberholm_approach_tangent()
+	var yaw := float(tangent.signed_angle_to(Vector3.FORWARD, Vector3.UP))
+	var road_top := _peberholm_approach_target_underside_y + ROAD_DECK_TOP_OFFSET_M
+	var opening_height := 5.7
+	var opening_center_y := road_top + opening_height * 0.5
+	var side_offset := 13.8
+	for side_sign in [-1.0, 1.0]:
+		_add_oriented_box(parent, "PeberholmGroundEntryPortalJamb", Vector3(center.x, opening_center_y, center.z) + Vector3.UP.cross(tangent).normalized() * float(side_sign) * side_offset, Vector3(2.8, opening_height, 3.2), yaw, _concrete_material, false)
+	_add_oriented_box(parent, "PeberholmGroundEntryPortalHeader", Vector3(center.x, road_top + opening_height + 1.1, center.z), Vector3(30.4, 2.2, 3.2), yaw, _concrete_material, false)
+	var dark_center := _peberholm_approach_position(portal_distance + 2.0)
+	_add_oriented_box(parent, "PeberholmGroundEntryPortalMouth", Vector3(dark_center.x, opening_center_y, dark_center.z), Vector3(24.0, opening_height, 0.25), yaw, _portal_material, false)
+	var wing_start_distance := maxf(portal_distance - float(_peberholm_approach_config.get("retaining_wall_length_m", 180.0)), 0.0)
+	var wing_start := _peberholm_approach_position(wing_start_distance)
+	var wing_end := _peberholm_approach_position(portal_distance)
+	var right := Vector3.UP.cross(tangent).normalized()
+	var wall_center_y := _sea_level_y + float(_peberholm_approach_config.get("terminal_ground_height_above_water_m", 3.0)) + 1.5
+	for side_sign in [-1.0, 1.0]:
+		var wing_offset := right * float(side_sign) * 16.5
+		_add_box_segment(
+			parent,
+			Vector3(wing_start.x, wall_center_y, wing_start.z) + wing_offset,
+			Vector3(wing_end.x, wall_center_y, wing_end.z) + wing_offset,
+			1.6,
+			3.0,
+			_foundation_material,
+			"PeberholmGroundEntryRetainingWing",
+			false
+		)
 
 
 func _build_malmo_approach_interlayer_supports(parent: Node3D, distance_start: float, distance_end: float, lod: int) -> void:
@@ -1021,6 +1274,15 @@ func _malmo_approach_position(distance: float) -> Vector3:
 	return endpoint + _malmo_approach_tangent() * clampf(distance, 0.0, _malmo_approach_length_m)
 
 
+func _peberholm_approach_tangent() -> Vector3:
+	return -_tangent_at_station(0.0)
+
+
+func _peberholm_approach_position(distance: float) -> Vector3:
+	var endpoint := _position_at_station(0.0)
+	return endpoint + _peberholm_approach_tangent() * clampf(distance, 0.0, _peberholm_approach_length_m)
+
+
 func _tangent_at_station(station: float) -> Vector3:
 	if _centerline.size() < 2:
 		return Vector3.FORWARD
@@ -1080,6 +1342,16 @@ func _distance_to_malmo_approach_range(position: Vector3, distance_start: float,
 	return _horizontal_distance(position, start.lerp(finish, blend))
 
 
+func _distance_to_peberholm_approach_range(position: Vector3, distance_start: float, distance_end: float) -> float:
+	var start := _peberholm_approach_position(distance_start)
+	var finish := _peberholm_approach_position(distance_end)
+	var segment := Vector2(finish.x - start.x, finish.z - start.z)
+	var offset := Vector2(position.x - start.x, position.z - start.z)
+	var length_squared := segment.length_squared()
+	var blend := clampf(offset.dot(segment) / length_squared, 0.0, 1.0) if length_squared > 0.001 else 0.0
+	return _horizontal_distance(position, start.lerp(finish, blend))
+
+
 func _underside_height_at_station(station: float) -> float:
 	var assumptions: Dictionary = _layout.get("graybox_assumptions", {})
 	var low_at_west := float(assumptions.get("approach_start_underside_above_water_m", 10.0))
@@ -1100,6 +1372,19 @@ func _malmo_approach_underside_height(distance: float) -> float:
 	var t := clampf(distance / maxf(_malmo_approach_ramp_length_m, 0.001), 0.0, 1.0)
 	var end_height := _malmo_approach_target_underside_y
 	var start_tangent_scaled := _malmo_approach_start_slope * _malmo_approach_ramp_length_m
+	var start_basis := 2.0 * t * t * t - 3.0 * t * t + 1.0
+	var start_tangent_basis := t * t * t - 2.0 * t * t + t
+	var end_basis := -2.0 * t * t * t + 3.0 * t * t
+	return start_basis * start_height + start_tangent_basis * start_tangent_scaled + end_basis * end_height
+
+
+func _peberholm_approach_underside_height(distance: float) -> float:
+	var start_height := _underside_height_at_station(0.0)
+	if distance >= _peberholm_approach_ramp_length_m:
+		return _peberholm_approach_target_underside_y
+	var t := clampf(distance / maxf(_peberholm_approach_ramp_length_m, 0.001), 0.0, 1.0)
+	var end_height := _peberholm_approach_target_underside_y
+	var start_tangent_scaled := _peberholm_approach_start_slope * _peberholm_approach_ramp_length_m
 	var start_basis := 2.0 * t * t * t - 3.0 * t * t + 1.0
 	var start_tangent_basis := t * t * t - 2.0 * t * t + t
 	var end_basis := -2.0 * t * t * t + 3.0 * t * t
@@ -1263,6 +1548,7 @@ func _update_debug_panel() -> void:
 		+ "长度 %.0f m · 桥墩 %d · 桥塔 %d · 主航道净空 %.1f m\n" % [_total_length_m, _pier_runtime.size(), _pylon_runtime.size(), float(gate["clearance_m"])]
 		+ "主塔组间距 %.1f m · 自由跨内桥墩 %d · 本船高度 %.1f m · 名义余量 %.1f m\n" % [float(gate["pylon_group_separation_m"]), int(gate["osm_pier_count_inside_free_span"]), float(gate["vessel_height_m"]), float(gate["nominal_vertical_clearance_margin_m"])]
 		+ "端点延伸估算 %.1f m / 端 · 最近测试定位：%s\n" % [_endpoint_extension_m, _last_teleport_name]
+		+ "Peberholm 引桥 %.0f m · 坡道 %.0f m · 支墩 %d · 植被让道 %d 株\n" % [_peberholm_approach_length_m, _peberholm_approach_ramp_length_m, int((_peberholm_approach_config.get("supports", []) as Array).size()) if _peberholm_approach_config.get("supports", []) is Array else 0, _peberholm_flora_removed_count]
 		+ "F5 显示/隐藏桥梁诊断标记 · Shift+F5 循环定位 (主桥跨中 → Malmö 端 → Peberholm 端)\n"
 		+ "© OpenStreetMap contributors · ODbL-1.0 · 垂直基准采用游戏静水面解释"
 	)

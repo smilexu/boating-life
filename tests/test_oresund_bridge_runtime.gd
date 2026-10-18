@@ -49,6 +49,59 @@ func _run() -> void:
 	var shore_pier_box := shore_pier.mesh as BoxMesh if shore_pier != null else null
 	var shore_pier_ground_y := shore_pier.position.y - shore_pier_box.size.y * 0.5 if shore_pier_box != null else INF
 	_check(absf(shore_pier_ground_y - 5.8166) < 0.02, "shore pier base matches the sampled rendered terrain height")
+	_check(absf(float(snapshot.get("peberholm_approach_length_m", 0.0)) - 1840.0) < 0.1, "Peberholm approach extends 1,840 m into the artificial island")
+	_check(absf(float(snapshot.get("peberholm_approach_ramp_length_m", 0.0)) - 1350.0) < 0.1, "Peberholm descent eases over 1,350 m before the grade-level entry")
+	_check(int(snapshot.get("peberholm_approach_cell_count", 0)) == 4, "Peberholm approach streams in four spatial LOD cells")
+	_check(int(snapshot.get("peberholm_approach_support_count", 0)) == 3, "three terrain-seated piers support the first, progressively lower approach section")
+	_check(int(snapshot.get("peberholm_flora_removed_count", 0)) > 0, "the road footprint is cleared of low vegetation")
+	var peberholm_start_underside := float(bridge.call("_underside_height_at_station", 0.0))
+	var peberholm_approach_start := float(bridge.call("_peberholm_approach_underside_height", 0.0))
+	var peberholm_approach_end := float(bridge.call("_peberholm_approach_underside_height", 1350.0))
+	var peberholm_terminal := float(bridge.call("_peberholm_approach_underside_height", 1840.0))
+	_check(absf(peberholm_approach_start - peberholm_start_underside) < 0.001, "Peberholm approach begins flush with the existing bridge section")
+	_check(absf(peberholm_approach_end + 9.2 - 3.1) < 0.01, "Peberholm road reaches the rendered island grade at the end of the descent")
+	_check(absf(peberholm_terminal - peberholm_approach_end) < 0.001, "the terminal apron stays level through the ground-entry portal")
+	var max_peberholm_slope := 0.0
+	var previous_underside := peberholm_approach_start
+	for ramp_distance in range(25, 1351, 25):
+		var current_underside := float(bridge.call("_peberholm_approach_underside_height", float(ramp_distance)))
+		max_peberholm_slope = maxf(max_peberholm_slope, absf(current_underside - previous_underside) / 25.0)
+		previous_underside = current_underside
+	_check(max_peberholm_slope < 0.02, "the Peberholm vertical curve stays under a 2 percent grade")
+	var peberholm_portal_distance := float(snapshot.get("peberholm_approach_length_m", 0.0)) - 40.0
+	var peberholm_portal_position: Vector3 = bridge.call("_peberholm_approach_position", peberholm_portal_distance)
+	var sampled_entry_ground := _sample_rendered_terrain_height(world.get_node("OresundRegion/TerrainChunks"), peberholm_portal_position)
+	_check(absf(sampled_entry_ground - 2.995) < 0.03, "portal apron is placed on the barycentrically sampled rendered terrain")
+	_check(absf(float(snapshot.get("peberholm_approach_target_underside_y", -100.0)) + 6.1) < 0.01, "the target road level is configured at +3.1 m above the game sea plane")
+	boat.global_position = bridge.call("_peberholm_approach_position", 200.0)
+	bridge.call("_update_lods")
+	await process_frame
+	snapshot = bridge.call("get_debug_snapshot")
+	_check(int(snapshot.get("peberholm_approach_near_cells", 0)) > 0, "near LOD activates on the Peberholm approach")
+	var peberholm_approach_cell := bridge.get_node_or_null("BridgeSegments/PeberholmVisibleApproachCell_00/LOD_近")
+	_check(peberholm_approach_cell != null and peberholm_approach_cell.find_child("PeberholmApproachLowerDeck", true, false) != null and peberholm_approach_cell.find_child("PeberholmApproachRoadDeck", true, false) != null, "Peberholm approach continues the existing two-level greybox section")
+	var peberholm_piers: Array[Node] = []
+	if peberholm_approach_cell != null:
+		for candidate in peberholm_approach_cell.find_children("*", "MeshInstance3D", true, false):
+			if str(candidate.name).begins_with("PeberholmApproachShorePier_") and not str(candidate.name).contains("Footing"):
+				peberholm_piers.append(candidate)
+	var pier_ground_heights := PackedFloat32Array()
+	for pier_variant in peberholm_piers:
+		var pier := pier_variant as MeshInstance3D
+		var pier_box := pier.mesh as BoxMesh if pier != null else null
+		if pier_box != null:
+			pier_ground_heights.append(pier.position.y - pier_box.size.y * 0.5)
+	pier_ground_heights.sort()
+	_check(pier_ground_heights.size() == 3 and absf(pier_ground_heights[0] - 1.982) < 0.02 and absf(pier_ground_heights[1] - 2.787) < 0.02 and absf(pier_ground_heights[2] - 2.844) < 0.02, "all three Peberholm pier feet match their sampled shoreline and island elevations")
+	boat.global_position = bridge.call("_peberholm_approach_position", 1750.0)
+	bridge.call("_update_lods")
+	await process_frame
+	var entry_cell := bridge.get_node_or_null("BridgeSegments/PeberholmVisibleApproachCell_03/LOD_近")
+	_check(entry_cell != null and entry_cell.find_child("PeberholmGroundEntryPortalHeader", true, false) != null and entry_cell.find_child("PeberholmGroundEntryPortalMouth", true, false) != null, "the approach reaches a framed, dark ground-entry portal")
+	var entry_wing := entry_cell.find_child("PeberholmGroundEntryRetainingWing", true, false) as MeshInstance3D if entry_cell != null else null
+	var entry_wing_box := entry_wing.mesh as BoxMesh if entry_wing != null else null
+	var retaining_wall_base_y := entry_wing.position.y - entry_wing_box.size.y * 0.5 if entry_wing_box != null else INF
+	_check(entry_wing_box != null and entry_wing_box.size.z >= 179.0 and absf(retaining_wall_base_y - 2.995) < 0.02, "the final 180 m entry trench walls start at rendered island grade")
 	var start_lat := float(snapshot.get("start_latitude_deg", 0.0))
 	var start_lon := float(snapshot.get("start_longitude_deg", 0.0))
 	var end_lat := float(snapshot.get("end_latitude_deg", 0.0))
@@ -168,12 +221,14 @@ func _test_coast_transition(world: Node, malmo_end_latitude: float, malmo_end_lo
 	var arrays: Array = mesh_instance.mesh.surface_get_arrays(0)
 	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
 	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
-	var indices: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+	var index_variant: Variant = arrays[Mesh.ARRAY_INDEX]
+	var indices: PackedInt32Array = index_variant if index_variant is PackedInt32Array else PackedInt32Array()
 	var triangles_non_degenerate := true
-	for triangle_start in range(0, indices.size(), 3):
-		var first_index := indices[triangle_start]
-		var second_index := indices[triangle_start + 1]
-		var third_index := indices[triangle_start + 2]
+	var triangle_index_count := vertices.size() if indices.is_empty() else indices.size()
+	for triangle_start in range(0, triangle_index_count, 3):
+		var first_index := triangle_start if indices.is_empty() else indices[triangle_start]
+		var second_index := triangle_start + 1 if indices.is_empty() else indices[triangle_start + 1]
+		var third_index := triangle_start + 2 if indices.is_empty() else indices[triangle_start + 2]
 		var first := vertices[first_index]
 		var second := vertices[second_index]
 		var third := vertices[third_index]
@@ -236,6 +291,39 @@ func _test_bridge_teleport_cycle(bridge: Node, boat: Node3D, depth_provider: Nod
 		var actual_forward := -boat.global_transform.basis.z
 		actual_forward.y = 0.0
 		_check(actual_forward.normalized().dot(expected_forward) > 0.99, "teleport %d faces the nearby bridge structure" % (index + 1))
+
+
+func _sample_rendered_terrain_height(terrain_root: Node, point: Vector3) -> float:
+	var best_height := -INF
+	for child in terrain_root.get_children():
+		var instance := child as MeshInstance3D
+		if instance == null or instance.mesh == null:
+			continue
+		for surface in range(instance.mesh.get_surface_count()):
+			var arrays := instance.mesh.surface_get_arrays(surface)
+			var vertices := arrays[Mesh.ARRAY_VERTEX] as PackedVector3Array
+			var index_variant: Variant = arrays[Mesh.ARRAY_INDEX]
+			var triangle_index_count := vertices.size() if not index_variant is PackedInt32Array else (index_variant as PackedInt32Array).size()
+			for index in range(0, triangle_index_count, 3):
+				var a_index := index if not index_variant is PackedInt32Array else int((index_variant as PackedInt32Array)[index])
+				var b_index := index + 1 if not index_variant is PackedInt32Array else int((index_variant as PackedInt32Array)[index + 1])
+				var c_index := index + 2 if not index_variant is PackedInt32Array else int((index_variant as PackedInt32Array)[index + 2])
+				var a := instance.to_global(vertices[a_index])
+				var b := instance.to_global(vertices[b_index])
+				var c := instance.to_global(vertices[c_index])
+				var weights := _barycentric_xz(Vector2(point.x, point.z), Vector2(a.x, a.z), Vector2(b.x, b.z), Vector2(c.x, c.z))
+				if weights.x >= -0.00001 and weights.y >= -0.00001 and weights.z >= -0.00001:
+					best_height = maxf(best_height, a.y * weights.x + b.y * weights.y + c.y * weights.z)
+	return best_height
+
+
+func _barycentric_xz(point: Vector2, a: Vector2, b: Vector2, c: Vector2) -> Vector3:
+	var denominator := (b.y - c.y) * (a.x - c.x) + (c.x - b.x) * (a.y - c.y)
+	if absf(denominator) < 0.000001:
+		return Vector3(-1.0, -1.0, -1.0)
+	var weight_a := ((b.y - c.y) * (point.x - c.x) + (c.x - b.x) * (point.y - c.y)) / denominator
+	var weight_b := ((c.y - a.y) * (point.x - c.x) + (a.x - c.x) * (point.y - c.y)) / denominator
+	return Vector3(weight_a, weight_b, 1.0 - weight_a - weight_b)
 
 
 func _nearest_terrain_vertex(terrain_root: Node, position: Vector3) -> Dictionary:

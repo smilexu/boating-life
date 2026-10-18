@@ -5,13 +5,18 @@ extends Node3D
 
 @export_node_path("Node3D") var target_path := NodePath("../MotionRoot")
 @export_range(4.0, 18.0, 0.5) var follow_distance := 14.0
+@export_range(16.0, 60.0, 1.0) var god_view_distance := 60.0
 @export_range(1.0, 8.0, 0.1) var follow_smoothing := 5.5
 @export_range(0.05, 1.0, 0.01) var mouse_sensitivity := 0.28
 @export_range(0.0, 2.0, 0.1) var look_height := 0.9
+@export_range(25.0, 55.0, 1.0) var god_view_elevation_degrees := 42.0
 
 var orbit_yaw := 0.0
 var orbit_elevation := deg_to_rad(16.0)
 var _mouse_look_active := false
+var _god_view_enabled := false
+var _saved_orbit_yaw := 0.0
+var _saved_orbit_elevation := 0.0
 var _smoothed_focus := Vector3.ZERO
 
 @onready var _target: Node3D = get_node_or_null(target_path) as Node3D
@@ -41,16 +46,21 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
+	if event.is_action_pressed("god_view_toggle") and not event.is_echo():
+		toggle_god_view()
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		_mouse_look_active = event.pressed
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED if _mouse_look_active else Input.MOUSE_MODE_VISIBLE)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and _mouse_look_active:
 		orbit_yaw += event.relative.x * mouse_sensitivity * 0.01
+		var minimum_elevation := deg_to_rad(20.0) if _god_view_enabled else deg_to_rad(8.0)
+		var maximum_elevation := deg_to_rad(78.0) if _god_view_enabled else deg_to_rad(55.0)
 		orbit_elevation = clampf(
 			orbit_elevation - event.relative.y * mouse_sensitivity * 0.01,
-			deg_to_rad(8.0),
-			deg_to_rad(55.0)
+			minimum_elevation,
+			maximum_elevation
 		)
 		get_viewport().set_input_as_handled()
 
@@ -65,6 +75,22 @@ func release_mouse_look() -> void:
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
+func toggle_god_view() -> bool:
+	_god_view_enabled = not _god_view_enabled
+	if _god_view_enabled:
+		_saved_orbit_yaw = orbit_yaw
+		_saved_orbit_elevation = orbit_elevation
+		orbit_elevation = deg_to_rad(god_view_elevation_degrees)
+	else:
+		orbit_yaw = _saved_orbit_yaw
+		orbit_elevation = _saved_orbit_elevation
+	return _god_view_enabled
+
+
+func is_god_view_enabled() -> bool:
+	return _god_view_enabled
+
+
 func _get_focus_position() -> Vector3:
 	var target_transform := _target.global_transform
 	return target_transform.origin + Vector3.UP * look_height
@@ -73,11 +99,12 @@ func _get_focus_position() -> Vector3:
 func _get_desired_position() -> Vector3:
 	var target_transform := _target.global_transform
 	var heading := target_transform.basis.get_euler().y + orbit_yaw
-	var planar_distance := follow_distance * cos(orbit_elevation)
+	var camera_distance := god_view_distance if _god_view_enabled else follow_distance
+	var planar_distance := camera_distance * cos(orbit_elevation)
 	var offset := Vector3(
 		sin(heading) * planar_distance,
-		sin(orbit_elevation) * follow_distance,
+		sin(orbit_elevation) * camera_distance,
 		cos(heading) * planar_distance
 	)
-	return target_transform.origin + Vector3.UP * look_height + offset
+	return _get_focus_position() + offset
 

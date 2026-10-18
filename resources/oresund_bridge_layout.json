@@ -53,6 +53,32 @@
       }
     ]
   },
+  "peberholm_visible_approach": {
+    "length_m": 1840.0,
+    "ramp_length_m": 1350.0,
+    "target_road_surface_above_water_m": 3.1,
+    "portal_distance_from_end_m": 40.0,
+    "terminal_ground_height_above_water_m": 2.995,
+    "retaining_wall_length_m": 180.0,
+    "terrain_basis": "Barycentric samples of the current rendered Peberholm terrain mesh along the reverse tangent from the existing bridge endpoint. Ground is approximately +2.0 m at the shore, +2.8 to +3.0 m through the island, and +3.0 m at the terminal apron. The road surface is held at +3.1 m to meet the generated terrain without z-fighting; these are game-world visual elevations, not surveyed levels.",
+    "supports": [
+      {
+        "support_id": "peberholm_entry_pier_0",
+        "station_m": 0.0,
+        "ground_height_above_water_m": 1.982
+      },
+      {
+        "support_id": "peberholm_entry_pier_1",
+        "station_m": 200.0,
+        "ground_height_above_water_m": 2.844
+      },
+      {
+        "support_id": "peberholm_entry_pier_2",
+        "station_m": 400.0,
+        "ground_height_above_water_m": 2.787
+      }
+    ]
+  },
   "pylon_groups": [
     {
       "group_id": "main_pylon_west",

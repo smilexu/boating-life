@@ -35,6 +35,9 @@ WGS84_F = 1.0 / 298.257223563
 WGS84_E2 = WGS84_F * (2.0 - WGS84_F)
 VERTEX_DTYPE = np.dtype("<f4")
 PROFILE_BOUNDARY_TOLERANCE_M = 0.05
+# Peberholm's terrain focus still uses CULL_FRONT in the current runtime split.
+# Keep its existing winding until that material workaround is migrated too.
+LEGACY_CULL_FRONT_PROFILE_IDS = frozenset({"peberholm"})
 
 
 def geodetic_to_enu(latitude_deg: float, longitude_deg: float, altitude_m: float = 0.0) -> tuple[float, float, float]:
@@ -318,6 +321,9 @@ def load_gameplay_elevation_profiles(land: object) -> tuple[list[dict[str, objec
             "profile_id": profile_id,
             "polygon": polygon,
             "coverage_polygon": polygon.buffer(PROFILE_BOUNDARY_TOLERANCE_M),
+            # Runtime Peberholm splitting selects the OSM outline plus a 75 m
+            # edge margin and keeps that top on its legacy CULL_FRONT material.
+            "winding_preserve_polygon": selector.buffer(75.0),
             "shoreline_height_m": shoreline_height,
             "plateau_height_m": plateau_height,
             "plateau_distance_from_shore_m": transition_distance,
@@ -412,6 +418,7 @@ def build_chunk(
     coastal_floor_m: float,
     gameplay_elevation_profiles: list[dict[str, object]],
     output_path: Path,
+    preserve_profile_winding_ids: set[str] | None = None,
 ) -> dict[str, object] | None:
     cells_per_axis = round(chunk_size_m / cell_size_m)
     coordinates = np.arange(cells_per_axis, dtype=np.float64) * cell_size_m
@@ -429,6 +436,19 @@ def build_chunk(
     vertices_east_north: list[tuple[float, float]] = []
     indices: list[int] = []
     vertex_lookup: dict[tuple[int, int], int] = {}
+    preserve_profile_winding_ids = preserve_profile_winding_ids or set()
+    preserve_winding_polygons = [
+        profile["winding_preserve_polygon"]
+        for profile in gameplay_elevation_profiles
+        if str(profile["profile_id"]) in preserve_profile_winding_ids
+    ]
+
+    def should_preserve_winding(points_east_north: list[tuple[float, float]]) -> bool:
+        if not preserve_winding_polygons:
+            return False
+        center_east = sum(point[0] for point in points_east_north) / 3.0
+        center_north = sum(point[1] for point in points_east_north) / 3.0
+        return any(bool(shapely.contains_xy(polygon, center_east, center_north)) for polygon in preserve_winding_polygons)
 
     def vertex_index(east: float, north: float) -> int:
         key = (round(east * 1000.0), round(north * 1000.0))
@@ -446,7 +466,14 @@ def build_chunk(
         p10 = vertex_index(east + cell_size_m, north)
         p01 = vertex_index(east, north + cell_size_m)
         p11 = vertex_index(east + cell_size_m, north + cell_size_m)
-        indices.extend((p00, p10, p11, p00, p11, p01))
+        for triangle in ((p00, p10, p11), (p00, p11, p01)):
+            triangle_points = [vertices_east_north[index] for index in triangle]
+            if should_preserve_winding(triangle_points):
+                indices.extend(triangle)
+            else:
+                # Godot's front-face test for X=east, Z=-north expects
+                # clockwise triangles when viewed from above.
+                indices.extend((triangle[0], triangle[2], triangle[1]))
 
     for cell_index in edge_cells:
         cell = cells[cell_index]
@@ -468,9 +495,13 @@ def build_chunk(
                 )
                 if abs(signed_area) < 1e-6:
                     continue
-                # East/north triangle order is CCW for an upward normal after
-                # mapping north to Godot -Z.
-                ordered = quantized if signed_area > 0.0 else (quantized[0], quantized[2], quantized[1])
+                positive_area_order = quantized if signed_area > 0.0 else (quantized[0], quantized[2], quantized[1])
+                if should_preserve_winding(positive_area_order):
+                    ordered = positive_area_order
+                else:
+                    # Match Godot's front-face winding for X=east, Z=-north:
+                    # negative signed area in EN is the visible side from above.
+                    ordered = (positive_area_order[0], positive_area_order[2], positive_area_order[1])
                 indices.extend(vertex_index(float(point[0]), float(point[1])) for point in ordered)
 
     if not indices:
@@ -535,6 +566,10 @@ def main() -> int:
     parser.add_argument("--shore-target-m", type=float, default=1.0, help="Target median elevation 60 m inland after alignment (default: 1 m)")
     parser.add_argument("--coastal-floor-m", type=float, default=0.5, help="Clamp low land vertices above the sea plane (default: 0.5 m)")
     parser.add_argument("--vertical-offset-m", type=float, help="Use this fixed offset instead of shoreline auto-alignment")
+    parser.add_argument(
+        "--chunk",
+        help="Rebuild only one existing chunk (e.g. e+0_n-20); leave the shared manifest untouched",
+    )
     args = parser.parse_args()
 
     try:
@@ -543,6 +578,28 @@ def main() -> int:
         cells_per_axis = round(args.chunk_size_m / args.cell_size_m)
         if not math.isclose(cells_per_axis * args.cell_size_m, args.chunk_size_m, abs_tol=1e-6):
             raise RuntimeError("chunk-size-m must be an integer multiple of cell-size-m for seamless chunk edges")
+        selected_chunk_basename: str | None = None
+        if args.chunk:
+            selected_chunk_basename = Path(args.chunk).name
+            if selected_chunk_basename.endswith(".bin"):
+                selected_chunk_basename = selected_chunk_basename[:-4]
+            if not selected_chunk_basename.startswith("chunk_"):
+                selected_chunk_basename = f"chunk_{selected_chunk_basename}"
+            selected_chunk_basename += ".bin"
+            if not OUTPUT_MANIFEST.is_file():
+                raise RuntimeError("--chunk requires an existing terrain manifest")
+            existing_manifest = json.loads(OUTPUT_MANIFEST.read_text(encoding="utf-8"))
+            chunk_entries = existing_manifest.get("chunks", [])
+            if not any(Path(str(entry.get("file", ""))).name == selected_chunk_basename for entry in chunk_entries):
+                raise RuntimeError(f"Requested chunk is not listed in the existing manifest: {selected_chunk_basename}")
+            if not (OUTPUT_ROOT / "chunks" / selected_chunk_basename).is_file():
+                raise RuntimeError(f"Requested chunk file is missing: {selected_chunk_basename}")
+            if int(existing_manifest.get("tile_zoom", -1)) != args.zoom:
+                raise RuntimeError("--chunk zoom must match the existing terrain manifest")
+            if not math.isclose(float(existing_manifest.get("terrain_grid_spacing_m", -1.0)), args.cell_size_m, abs_tol=1e-6):
+                raise RuntimeError("--chunk cell size must match the existing terrain manifest")
+            if not math.isclose(float(existing_manifest.get("terrain_chunk_size_m", -1.0)), args.chunk_size_m, abs_tol=1e-6):
+                raise RuntimeError("--chunk size must match the existing terrain manifest")
         bounds = read_bounds()
         region_data = json.loads(REGION_PATH.read_text(encoding="utf-8"))
         print(f"Loading Task 7 land mesh: {REGION_PATH.relative_to(PROJECT_ROOT)}")
@@ -577,6 +634,13 @@ def main() -> int:
                 "sample_count": 0,
                 "applied_uniform_offset_m": vertical_offset_m,
             }
+        if selected_chunk_basename is not None:
+            expected_offset = float(existing_manifest.get("vertical_alignment", {}).get("applied_uniform_offset_m", math.nan))
+            expected_floor = float(existing_manifest.get("vertical_alignment", {}).get("coastal_floor_m", math.nan))
+            if not math.isclose(vertical_offset_m, expected_offset, abs_tol=1e-5):
+                raise RuntimeError("--chunk computed vertical offset differs from the existing manifest; refusing to alter elevations")
+            if not math.isclose(args.coastal_floor_m, expected_floor, abs_tol=1e-6):
+                raise RuntimeError("--chunk coastal floor must match the existing terrain manifest")
         print(f"Vertical alignment: offset {vertical_offset_m:+.2f} m; {offset_report}")
 
         region_min_east, region_min_north, region_max_east, region_max_north = region_data["bounds_east_north_m"]
@@ -592,6 +656,8 @@ def main() -> int:
                 chunk_east = start_east + east_index * args.chunk_size_m
                 chunk_north = start_north + north_index * args.chunk_size_m
                 file_name = f"chunk_e{round(chunk_east / 1000):+d}_n{round(chunk_north / 1000):+d}.bin"
+                if selected_chunk_basename is not None and file_name != selected_chunk_basename:
+                    continue
                 output_path = OUTPUT_ROOT / "chunks" / file_name
                 result = build_chunk(
                     land,
@@ -605,6 +671,7 @@ def main() -> int:
                     args.coastal_floor_m,
                     gameplay_elevation_profiles,
                     output_path,
+                    LEGACY_CULL_FRONT_PROFILE_IDS,
                 )
                 if result is not None:
                     chunks.append(result)
@@ -612,6 +679,17 @@ def main() -> int:
 
         if not chunks:
             raise RuntimeError("No terrain chunks were generated")
+        if selected_chunk_basename is not None:
+            built_chunk = chunks[0]
+            print(
+                "Selective rebuild complete: %s (%s vertices, %s triangles). Existing manifest and all other chunk files were left untouched."
+                % (
+                    built_chunk["file"],
+                    f"{built_chunk['vertex_count']:,}",
+                    f"{built_chunk['triangle_count']:,}",
+                )
+            )
+            return 0
         all_heights = [chunk["height_min_m"] for chunk in chunks] + [chunk["height_max_m"] for chunk in chunks]
         landmark_samples: dict[str, dict[str, object]] = {}
         for name, latitude, longitude in (

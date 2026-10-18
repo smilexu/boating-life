@@ -295,7 +295,7 @@ func _update_status() -> void:
 	var mode_text := "自动巡航" if _controller.is_autopilot else "手动驾驶"
 	if _controller.is_motion_paused:
 		mode_text += " · 已暂停"
-	_status_label.text = "航速  %.1f m/s  ·  %.1f kn\n模式  %s\nW 前进  ·  S 减速/倒车  ·  A/D 转向  ·  Space 暂停  ·  T 自动巡航\n右键拖动观察  ·  1/2/3 天气  ·  M 地图调试  ·  F3 视觉调试  ·  F10 水面诊断" % [
+	_status_label.text = "航速  %.1f m/s  ·  %.1f kn\n模式  %s\nW 前进  ·  S 减速/倒车  ·  A/D 转向  ·  Space 暂停  ·  T 自动巡航\n右键拖动观察 / 调整高视角角度  ·  O 高视角切换  ·  1/2/3 天气  ·  M 地图调试  ·  F3 视觉调试  ·  F10 水面诊断" % [
 		_controller.speed_mps,
 		knots,
 		mode_text
@@ -363,7 +363,10 @@ func _update_fps_display() -> void:
 func _build_debug_panel() -> void:
 	_debug_panel = PanelContainer.new()
 	_debug_panel.name = "DebugPanel"
-	_debug_panel.position = Vector2(24.0, 196.0)
+	_debug_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_debug_panel.offset_left = -414.0
+	_debug_panel.offset_top = 196.0
+	_debug_panel.offset_right = -24.0
 	_debug_panel.custom_minimum_size = Vector2(390.0, 0.0)
 	_debug_panel.visible = false
 	var panel_style := StyleBoxFlat.new()
@@ -1177,11 +1180,15 @@ func _update_hud_layout() -> void:
 	if _depth_label != null:
 		_depth_label.custom_minimum_size.x = panel_width - 32.0
 	if _debug_panel != null:
-		_debug_panel.custom_minimum_size.x = minf(390.0, maxf(280.0, viewport_width - 48.0))
-		var available_height := maxf(280.0, viewport_size.y - _debug_panel.position.y - 16.0)
+		var debug_width := minf(390.0, maxf(280.0, viewport_width - 48.0))
+		_debug_panel.custom_minimum_size.x = debug_width
+		_debug_panel.offset_left = -debug_width - 24.0
+		_debug_panel.offset_right = -24.0
+		var available_height := maxf(280.0, viewport_size.y - _debug_panel.offset_top - 16.0)
 		var content_height := _debug_layout.get_combined_minimum_size().y
 		var panel_height := minf(content_height + 24.0, available_height)
 		_debug_panel.custom_minimum_size.y = panel_height
+		_debug_panel.offset_bottom = _debug_panel.offset_top + panel_height
 		_debug_scroll.custom_minimum_size.y = maxf(220.0, panel_height - 24.0)
 
 

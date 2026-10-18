@@ -51,6 +51,70 @@ func get_diagnostics() -> Dictionary:
 	return _counts.duplicate(true)
 
 
+func remove_corridor_instances(start_world: Vector3, end_world: Vector3, half_width_m: float) -> int:
+	var start := Vector2(start_world.x, start_world.z)
+	var end := Vector2(end_world.x, end_world.z)
+	var removed_by_species := {"grass": 0, "wildflowers": 0, "shrubs": 0}
+	for child in get_children():
+		var instance := child as MultiMeshInstance3D
+		if instance == null or instance.multimesh == null:
+			continue
+		var source := instance.multimesh
+		var keep_transforms: Array[Transform3D] = []
+		var keep_tints: Array[Color] = []
+		for index in range(source.instance_count):
+			var transform := source.get_instance_transform(index)
+			var world_position := instance.global_transform * transform.origin
+			if _distance_to_segment(Vector2(world_position.x, world_position.z), start, end) <= half_width_m:
+				var species := _species_from_batch_name(instance.name)
+				removed_by_species[species] = int(removed_by_species[species]) + 1
+				continue
+			keep_transforms.append(transform)
+			if source.use_custom_data:
+				keep_tints.append(source.get_instance_custom_data(index))
+		if keep_transforms.size() == source.instance_count:
+			continue
+		if keep_transforms.is_empty():
+			instance.visible = false
+			continue
+		var compacted := MultiMesh.new()
+		compacted.transform_format = MultiMesh.TRANSFORM_3D
+		compacted.use_custom_data = source.use_custom_data
+		compacted.mesh = source.mesh
+		compacted.instance_count = keep_transforms.size()
+		for index in range(keep_transforms.size()):
+			compacted.set_instance_transform(index, keep_transforms[index])
+			if compacted.use_custom_data:
+				compacted.set_instance_custom_data(index, keep_tints[index])
+		instance.multimesh = compacted
+	for species in removed_by_species:
+		_counts[species] = maxi(int(_counts[species]) - int(removed_by_species[species]), 0)
+	var removed_total := int(removed_by_species["grass"]) + int(removed_by_species["wildflowers"]) + int(removed_by_species["shrubs"])
+	if removed_total > 0:
+		print("[PeberholmFlora] cleared %d instances from bridge entry corridor: grass=%d wildflowers=%d shrubs=%d" % [
+			removed_total,
+			int(removed_by_species["grass"]),
+			int(removed_by_species["wildflowers"]),
+			int(removed_by_species["shrubs"]),
+		])
+	return removed_total
+
+
+func _species_from_batch_name(batch_name: String) -> String:
+	if batch_name.contains("Wildflowers"):
+		return "wildflowers"
+	if batch_name.contains("Shrubs"):
+		return "shrubs"
+	return "grass"
+
+
+func _distance_to_segment(point: Vector2, start: Vector2, finish: Vector2) -> float:
+	var segment := finish - start
+	var length_squared := segment.length_squared()
+	var blend := clampf((point - start).dot(segment) / length_squared, 0.0, 1.0) if length_squared > 0.0001 else 0.0
+	return point.distance_to(start + segment * blend)
+
+
 func _collect_surface_triangles(top_instances: Array[MeshInstance3D], region_root: Node3D) -> void:
 	for instance in top_instances:
 		if not is_instance_valid(instance) or instance.mesh == null:
