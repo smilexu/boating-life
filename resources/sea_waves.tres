@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="SeaWaveSettings" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="SeaWaveSettings" format=3 uid="uid://ceu2yh4h4es17"]
 
-[ext_resource type="Script" path="res://scripts/sea_wave_settings.gd" id="1_settings"]
-[ext_resource type="Script" path="res://addons/boujie_water_shader/types/gerstner_wave.gd" id="2_wave"]
+[ext_resource type="Script" uid="uid://30jv6icxeo37" path="res://scripts/sea_wave_settings.gd" id="1_settings"]
+[ext_resource type="Script" uid="uid://dl8sbf5o2iwj2" path="res://addons/boujie_water_shader/types/gerstner_wave.gd" id="2_wave"]
 
 [sub_resource type="Resource" id="Swell_Long"]
 script = ExtResource("2_wave")
@@ -10,7 +10,6 @@ amplitude = 2.2
 direction_degrees = 20.0
 frequency = 0.012
 speed = 0.72
-phase_degrees = 0.0
 
 [sub_resource type="Resource" id="Swell_Cross"]
 script = ExtResource("2_wave")
@@ -24,7 +23,6 @@ phase_degrees = 76.0
 [sub_resource type="Resource" id="Chop_A"]
 script = ExtResource("2_wave")
 steepness = 0.21
-amplitude = 1.0
 direction_degrees = 156.0
 frequency = 0.041
 speed = 1.08

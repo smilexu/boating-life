@@ -1,13 +1,12 @@
-[gd_resource type="Resource" script_class="ShallowReefAssetLibrary" load_steps=11 format=3]
+[gd_resource type="Resource" script_class="ShallowReefAssetLibrary" format=3 uid="uid://bjxnhin6dah3o"]
 
-[ext_resource type="Script" path="res://scripts/shallow_reef_asset_library.gd" id="1_library"]
-[ext_resource type="Script" path="res://scripts/shallow_reef_asset_definition.gd" id="2_definition"]
+[ext_resource type="Script" uid="uid://t80ajuvyrfj4" path="res://scripts/shallow_reef_asset_library.gd" id="1_library"]
+[ext_resource type="Script" uid="uid://c7hxrhp10gwaf" path="res://scripts/shallow_reef_asset_definition.gd" id="2_definition"]
 
 [sub_resource type="Resource" id="small_round"]
 script = ExtResource("2_definition")
 asset_id = &"rock_small_round"
 glb_path = "res://assets/rocks/rock_small_round.glb"
-role = 0
 selection_weight = 3.0
 target_height_min_m = 0.34
 target_height_max_m = 0.62
@@ -18,19 +17,17 @@ maximum_placement_slope = 0.11
 script = ExtResource("2_definition")
 asset_id = &"rock_medium_round"
 glb_path = "res://assets/rocks/rock_medium_round.glb"
-role = 0
 selection_weight = 3.2
-target_height_min_m = 0.70
+target_height_min_m = 0.7
 target_height_max_m = 1.15
 burial_fraction = 0.25
-maximum_placement_slope = 0.10
+maximum_placement_slope = 0.1
 allow_far_lod = true
 
 [sub_resource type="Resource" id="flat"]
 script = ExtResource("2_definition")
 asset_id = &"rock_flat"
 glb_path = "res://assets/rocks/rock_flat.glb"
-role = 0
 selection_weight = 1.8
 target_height_min_m = 0.22
 target_height_max_m = 0.42
@@ -41,10 +38,9 @@ maximum_placement_slope = 0.075
 script = ExtResource("2_definition")
 asset_id = &"rock_irregular"
 glb_path = "res://assets/rocks/rock_irregular.glb"
-role = 0
 selection_weight = 2.6
 target_height_min_m = 0.65
-target_height_max_m = 1.10
+target_height_max_m = 1.1
 burial_fraction = 0.27
 maximum_placement_slope = 0.12
 
@@ -54,7 +50,7 @@ asset_id = &"reef_two_rocks"
 glb_path = "res://assets/rocks/reef_two_rocks.glb"
 role = 1
 selection_weight = 3.0
-target_height_min_m = 1.20
+target_height_min_m = 1.2
 target_height_max_m = 1.75
 burial_fraction = 0.28
 maximum_placement_slope = 0.055
@@ -66,9 +62,9 @@ asset_id = &"reef_three_rocks"
 glb_path = "res://assets/rocks/reef_three_rocks.glb"
 role = 1
 selection_weight = 3.4
-target_height_min_m = 1.20
+target_height_min_m = 1.2
 target_height_max_m = 1.75
-burial_fraction = 0.30
+burial_fraction = 0.3
 maximum_placement_slope = 0.05
 allow_far_lod = true
 
@@ -98,4 +94,4 @@ allow_far_lod = true
 
 [resource]
 script = ExtResource("1_library")
-definitions = Array[Resource]([SubResource("small_round"), SubResource("medium_round"), SubResource("flat"), SubResource("irregular"), SubResource("two_rocks"), SubResource("three_rocks"), SubResource("low_bedrock"), SubResource("layered_slabs")])
+definitions = Array[ExtResource("2_definition")]([SubResource("small_round"), SubResource("medium_round"), SubResource("flat"), SubResource("irregular"), SubResource("two_rocks"), SubResource("three_rocks"), SubResource("low_bedrock"), SubResource("layered_slabs")])

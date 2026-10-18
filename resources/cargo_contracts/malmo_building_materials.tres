@@ -1,14 +1,13 @@
-[gd_resource type="Resource" script_class="CargoContractDefinition" load_steps=5 format=3]
+[gd_resource type="Resource" script_class="CargoContractDefinition" format=3 uid="uid://dluqg6m423x8p"]
 
-[ext_resource type="Script" path="res://scripts/cargo_contract_definition.gd" id="1_contract"]
-[ext_resource type="Script" path="res://scripts/cargo_item_definition.gd" id="2_item"]
+[ext_resource type="Script" uid="uid://c32vam0jwnjex" path="res://scripts/cargo_contract_definition.gd" id="1_contract"]
+[ext_resource type="Script" uid="uid://b3eeio32fcc75" path="res://scripts/cargo_item_definition.gd" id="2_item"]
 
 [sub_resource type="Resource" id="CargoItemDefinition_building_materials"]
 script = ExtResource("2_item")
 cargo_id = &"building_materials_crate_01"
 display_name = "建筑材料"
 weight_kg = 225.0
-space_units = 1
 visual_asset_id = &"standard_container"
 
 [sub_resource type="Resource" id="CargoItemDefinition_building_materials_02"]
@@ -16,7 +15,6 @@ script = ExtResource("2_item")
 cargo_id = &"building_materials_crate_02"
 display_name = "建筑材料"
 weight_kg = 225.0
-space_units = 1
 visual_asset_id = &"standard_container"
 
 [resource]

@@ -1,77 +1,76 @@
-[gd_scene load_steps=11 format=3]
+[gd_scene format=3 uid="uid://ci27qf2ne77u4"]
 
-[ext_resource type="Script" path="res://scripts/boat_controller.gd" id="1_controller"]
-[ext_resource type="Script" path="res://scripts/boat_follow_camera.gd" id="2_follow_camera"]
-[ext_resource type="Script" path="res://scripts/boat_hud.gd" id="3_hud"]
-[ext_resource type="PackedScene" path="res://assets/boats/first_boat_optimized.glb" id="4_first_boat"]
-[ext_resource type="Script" path="res://scripts/boat_buoyancy.gd" id="5_buoyancy"]
+[ext_resource type="Script" uid="uid://cg2hukghay3us" path="res://scripts/boat_controller.gd" id="1_controller"]
+[ext_resource type="Script" uid="uid://bex2jb3h7jqub" path="res://scripts/boat_follow_camera.gd" id="2_follow_camera"]
+[ext_resource type="Script" uid="uid://cwqihl2y017em" path="res://scripts/boat_hud.gd" id="3_hud"]
+[ext_resource type="PackedScene" uid="uid://ctefxee7nd6tl" path="res://assets/boats/first_boat_optimized.glb" id="4_first_boat"]
+[ext_resource type="Script" uid="uid://f6yubhuftniq" path="res://scripts/boat_buoyancy.gd" id="5_buoyancy"]
 [ext_resource type="PackedScene" path="res://scenes/WakeSystem.tscn" id="6_wake_system"]
 [ext_resource type="Resource" path="res://resources/vessels/starter_cargo_boat_draft.tres" id="7_draft_profile"]
-[ext_resource type="Script" path="res://scripts/cargo_loadout_controller.gd" id="8_cargo_loadout"]
+[ext_resource type="Script" uid="uid://dv68k2n40sq6e" path="res://scripts/cargo_loadout_controller.gd" id="8_cargo_loadout"]
 [ext_resource type="PackedScene" path="res://scenes/StandardCargoContainer.tscn" id="9_container_scene"]
 [ext_resource type="Resource" path="res://resources/cargo/test_standard_container.tres" id="10_test_cargo"]
+[ext_resource type="PackedScene" path="res://scenes/BoatExhaustSmokeSystem.tscn" id="11_exhaust_smoke"]
+[ext_resource type="Script" uid="uid://d1ip4einbvys1" path="res://scripts/exhaust_socket_editor_gizmo.gd" id="12_exhaust_socket_gizmo"]
 
-[node name="Boat" type="Node3D"]
+[node name="Boat" type="Node3D" unique_id=1227113286]
 
-[node name="MotionRoot" type="Node3D" parent="."]
+[node name="MotionRoot" type="Node3D" parent="." unique_id=1098559663]
 script = ExtResource("1_controller")
 draft_profile = ExtResource("7_draft_profile")
 
-[node name="VisualRoot" type="Node3D" parent="MotionRoot"]
+[node name="VisualRoot" type="Node3D" parent="MotionRoot" unique_id=86996725]
 script = ExtResource("5_buoyancy")
 fore_sample_distance = 2.7
 aft_sample_distance = 2.7
 half_beam = 1.1
 
-[node name="BoatModelFrame" type="Node3D" parent="MotionRoot/VisualRoot"]
-position = Vector3(0, -0.32, -0.293)
-rotation = Vector3(0, 1.5707963, 0)
-scale = Vector3(6.647381, 6.647381, 6.647381)
+[node name="BoatModelFrame" type="Node3D" parent="MotionRoot/VisualRoot" unique_id=1725611823]
+transform = Transform3D(5.018633e-07, 0, 6.647381, 0, 6.647381, 0, -6.647381, 0, 5.018633e-07, 0, -0.32, -0.293)
 
-[node name="FirstBoatModel" parent="MotionRoot/VisualRoot/BoatModelFrame" instance=ExtResource("4_first_boat")]
+[node name="FirstBoatModel" parent="MotionRoot/VisualRoot/BoatModelFrame" unique_id=1801643137 instance=ExtResource("4_first_boat")]
 
-[node name="CargoSlots" type="Node3D" parent="MotionRoot/VisualRoot"]
-position = Vector3(0, 0.4, 0)
+[node name="ExhaustSocket" type="Marker3D" parent="MotionRoot/VisualRoot/BoatModelFrame" unique_id=14803609]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.022462882, 0.44236928, -0.091189146)
+script = ExtResource("12_exhaust_socket_gizmo")
 
-[node name="CargoSlot_01" type="Marker3D" parent="MotionRoot/VisualRoot/CargoSlots"]
-position = Vector3(0, 0.22, 1.04)
+[node name="CargoSlots" type="Node3D" parent="MotionRoot/VisualRoot" unique_id=1088684205]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
 
-[node name="CargoSlot_02" type="Marker3D" parent="MotionRoot/VisualRoot/CargoSlots"]
-position = Vector3(0, 0.22, 2.23)
+[node name="CargoSlot_01" type="Marker3D" parent="MotionRoot/VisualRoot/CargoSlots" unique_id=779347719]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 1.04)
 
-[node name="CargoLoadout" type="Node" parent="MotionRoot"]
+[node name="CargoSlot_02" type="Marker3D" parent="MotionRoot/VisualRoot/CargoSlots" unique_id=466531071]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.22, 2.23)
+
+[node name="WakeSystem" parent="MotionRoot/VisualRoot" unique_id=1920040571 instance=ExtResource("6_wake_system")]
+
+[node name="ExhaustSmokeSystem" parent="MotionRoot/VisualRoot" unique_id=798328845 instance=ExtResource("11_exhaust_smoke")]
+
+[node name="BoatSkyFill" type="OmniLight3D" parent="MotionRoot/VisualRoot" unique_id=2081999809]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.2, 1)
+light_color = Color(0.76, 0.86, 1, 1)
+light_energy = 0.5
+light_specular = 0.12
+light_cull_mask = 2
+omni_range = 8.0
+omni_attenuation = 0.9
+
+[node name="CargoLoadout" type="Node" parent="MotionRoot" unique_id=2052034825]
 script = ExtResource("8_cargo_loadout")
 slot_paths = Array[NodePath]([NodePath("../VisualRoot/CargoSlots/CargoSlot_01"), NodePath("../VisualRoot/CargoSlots/CargoSlot_02")])
 container_scene = ExtResource("9_container_scene")
 test_cargo_item = ExtResource("10_test_cargo")
 
-[node name="WakeSystem" parent="MotionRoot/VisualRoot" instance=ExtResource("6_wake_system")]
-
-[editable path="MotionRoot/VisualRoot/BoatModelFrame/FirstBoatModel"]
-
-[node name="BoatSkyFill" type="OmniLight3D" parent="MotionRoot/VisualRoot"]
-position = Vector3(0, 2.2, 1.0)
-light_color = Color(0.76, 0.86, 1, 1)
-light_energy = 0.5
-light_specular = 0.12
-light_cull_mask = 2
-shadow_enabled = false
-omni_range = 8.0
-omni_attenuation = 0.9
-
-[node name="FollowCameraRig" type="Node3D" parent="."]
+[node name="FollowCameraRig" type="Node3D" parent="." unique_id=2028145011]
 script = ExtResource("2_follow_camera")
-target_path = NodePath("../MotionRoot")
 
-[node name="Camera3D" type="Camera3D" parent="FollowCameraRig"]
+[node name="Camera3D" type="Camera3D" parent="FollowCameraRig" unique_id=1528037546]
+current = true
 fov = 58.0
 far = 80000.0
-current = true
 
-[node name="BoatHUD" type="CanvasLayer" parent="."]
+[node name="BoatHUD" type="CanvasLayer" parent="." unique_id=962327329]
 script = ExtResource("3_hud")
-controller_path = NodePath("../MotionRoot")
-weather_controller_path = NodePath("../../WeatherController")
-wave_sampler_path = NodePath("../../WaveSampler")
-navigation_depth_monitor_path = NodePath("../../NavigationDepthMonitor")
 
+[editable path="MotionRoot/VisualRoot/BoatModelFrame/FirstBoatModel"]

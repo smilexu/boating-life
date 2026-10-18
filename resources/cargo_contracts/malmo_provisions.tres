@@ -1,14 +1,13 @@
-[gd_resource type="Resource" script_class="CargoContractDefinition" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="CargoContractDefinition" format=3 uid="uid://da7hvsknprnft"]
 
-[ext_resource type="Script" path="res://scripts/cargo_contract_definition.gd" id="1_contract"]
-[ext_resource type="Script" path="res://scripts/cargo_item_definition.gd" id="2_item"]
+[ext_resource type="Script" uid="uid://c32vam0jwnjex" path="res://scripts/cargo_contract_definition.gd" id="1_contract"]
+[ext_resource type="Script" uid="uid://b3eeio32fcc75" path="res://scripts/cargo_item_definition.gd" id="2_item"]
 
 [sub_resource type="Resource" id="CargoItemDefinition_provisions"]
 script = ExtResource("2_item")
 cargo_id = &"provisions_crate"
 display_name = "食品补给"
 weight_kg = 120.0
-space_units = 1
 visual_asset_id = &"standard_container"
 
 [resource]

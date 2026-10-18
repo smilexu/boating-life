@@ -1,7 +1,7 @@
-[gd_resource type="Resource" script_class="RouteDefinition" load_steps=3 format=3]
+[gd_resource type="Resource" script_class="RouteDefinition" format=3 uid="uid://t55to18whwhv"]
 
-[ext_resource type="Script" path="res://scripts/route_definition.gd" id="1_route"]
-[ext_resource type="Script" path="res://scripts/route_waypoint.gd" id="2_waypoint"]
+[ext_resource type="Script" uid="uid://dice3fg3mjgr7" path="res://scripts/route_definition.gd" id="1_route"]
+[ext_resource type="Script" uid="uid://dffupbxqsts1c" path="res://scripts/route_waypoint.gd" id="2_waypoint"]
 
 [sub_resource type="Resource" id="Waypoint_OresundNorth"]
 script = ExtResource("2_waypoint")
