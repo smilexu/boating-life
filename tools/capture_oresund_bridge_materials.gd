@@ -3,11 +3,14 @@ extends SceneTree
 ## Run: godot --path . --script res://tools/capture_oresund_bridge_materials.gd
 
 const MAIN_SCENE: PackedScene = preload("res://scenes/main.tscn")
-const OUTPUT_DIR := "res://.godot/bridge_material_review"
+const OUTPUT_DIR := "res://.godot/bridge_night_review"
 const CAPTURE_SIZE := Vector2i(1440, 900)
 
 var _metrics: Array[Dictionary] = []
 var _conditions: Array[Dictionary] = []
+var _night_lighting_snapshot: Dictionary = {}
+var _day_draw_call_count := 0
+var _day_primitive_count := 0
 
 
 func _initialize() -> void:
@@ -81,6 +84,8 @@ func _capture() -> void:
 		water.set_shader_parameter("freeze_time", true)
 	weather.call("set_weather_by_index", 0)
 	await _wait_frames(120)
+	_day_draw_call_count = int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
+	_day_primitive_count = int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 	await _save_capture("01_clear_noon_bridge_tower", output_path)
 	_record_condition("clear noon", main, weather)
 
@@ -117,6 +122,60 @@ func _capture() -> void:
 	await _save_capture("05_near_deck_pbr_detail", output_path)
 	_record_condition("clear noon near deck detail", main, weather)
 
+	motion.global_position = pylon_position + right * 300.0
+	bridge.call("_update_lods")
+	_set_camera(
+		camera,
+		pylon_position + right * 360.0 + tangent * 100.0 + Vector3.UP * 8.0,
+		pylon_position + Vector3.UP * 58.0
+	)
+	if time_manager != null:
+		time_manager.call("set_day_cycle_time", 0, 30)
+	weather.call("set_weather_by_index", 0)
+	await _wait_frames(180)
+	await _save_capture("06_clear_night_pylon_and_deck", output_path)
+	_record_condition("clear night near main pylon", main, weather)
+	var visible_pylon_outlines := 0
+	for outline in bridge.find_children("*", "MeshInstance3D", true, false):
+		if outline.name == "PylonNightOutline" and outline.visible:
+			visible_pylon_outlines += 1
+	_night_lighting_snapshot = {
+		"night_factor": float(bridge.get("_night_factor")),
+		"deck_emission_energy": float((bridge.get("_deck_light_material") as StandardMaterial3D).emission_energy_multiplier),
+		"beacon_emission_energy": float((bridge.get("_pylon_beacon_material") as StandardMaterial3D).emission_energy_multiplier),
+		"active_spot_lights": bridge.find_children("*", "SpotLight3D", true, false).size(),
+		"active_omni_lights": bridge.find_children("*", "OmniLight3D", true, false).size(),
+		"tower_accent_light_colors": _get_tower_accent_light_counts(bridge),
+		"tower_accent_assignments": _get_tower_accent_assignments(bridge),
+		"visible_pylon_outlines": visible_pylon_outlines,
+		"draw_calls": int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME)),
+		"rendered_primitives": int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME)),
+		"matching_day_draw_calls": _day_draw_call_count,
+		"matching_day_rendered_primitives": _day_primitive_count,
+	}
+
+	motion.global_position = pylon_position + right * 5200.0
+	bridge.call("_update_lods")
+	_set_camera(
+		camera,
+		pylon_position + right * 1300.0 + tangent * 250.0 + Vector3.UP * 24.0,
+		pylon_position + Vector3.UP * 65.0
+	)
+	await _wait_frames(150)
+	await _save_capture("07_clear_night_midrange", output_path)
+	_record_condition("clear night midrange LOD", main, weather)
+
+	motion.global_position = pylon_position + right * 18000.0
+	bridge.call("_update_lods")
+	_set_camera(
+		camera,
+		pylon_position + right * 6200.0 + tangent * 480.0 + Vector3.UP * 800.0,
+		pylon_position + tangent * 240.0 + Vector3.UP * 100.0
+	)
+	await _wait_frames(150)
+	await _save_capture("08_clear_night_far_view", output_path)
+	_record_condition("clear night far bridge view", main, weather)
+
 	# Compare the world-noise shader against simple PBR materials on the same
 	# already-built bridge instances; this isolates material shader cost.
 	motion.global_position = pylon_position + right * 300.0
@@ -141,6 +200,7 @@ func _capture() -> void:
 		"viewport_px": [root.get_viewport().size.x, root.get_viewport().size.y],
 		"pylon_station_m": station,
 		"bridge_node_count": bridge.get_child_count(),
+		"night_lighting": _night_lighting_snapshot,
 		"conditions": _conditions,
 		"benchmark_note": "Alternates procedural vertex-noise PBR and flat StandardMaterial3D on the same bridge nodes and camera. Draw calls/primitives are the stable indicators; frame-rate samples vary with the rest of the rendering scene and are diagnostic only, not a whole-game before/after benchmark.",
 		"benchmarks": _metrics,
@@ -150,6 +210,9 @@ func _capture() -> void:
 			output_path.path_join("03_golden_hour_bridge_tower.png"),
 			output_path.path_join("04_clear_noon_distant_view.png"),
 			output_path.path_join("05_near_deck_pbr_detail.png"),
+			output_path.path_join("06_clear_night_pylon_and_deck.png"),
+			output_path.path_join("07_clear_night_midrange.png"),
+			output_path.path_join("08_clear_night_far_view.png"),
 		],
 	}
 	var report_file := FileAccess.open(output_path.path_join("report.json"), FileAccess.WRITE)
@@ -171,6 +234,31 @@ func _set_camera(camera: Camera3D, position: Vector3, target: Vector3) -> void:
 	camera.global_position = position
 	camera.look_at(target, Vector3.UP)
 	camera.make_current()
+
+
+func _get_tower_accent_light_counts(bridge: Node) -> Dictionary:
+	var counts := {"blue": 0, "red": 0}
+	for light in bridge.find_children("*", "SpotLight3D", true, false):
+		var accent := str((light as SpotLight3D).get_meta("night_accent", ""))
+		if counts.has(accent):
+			counts[accent] = int(counts[accent]) + 1
+	for light in bridge.find_children("*", "OmniLight3D", true, false):
+		var accent := str((light as OmniLight3D).get_meta("night_accent", ""))
+		if counts.has(accent):
+			counts[accent] = int(counts[accent]) + 1
+	return counts
+
+
+func _get_tower_accent_assignments(bridge: Node) -> Array[Dictionary]:
+	var assignments: Array[Dictionary] = []
+	var pylons: Array = bridge.get("_pylon_runtime")
+	for pylon in pylons:
+		var record: Dictionary = pylon.get("record", {})
+		assignments.append({
+			"way_id": int(record.get("way_id", -1)),
+			"accent": str(bridge.call("_pylon_accent_key", pylon)),
+		})
+	return assignments
 
 
 func _create_flat_pbr_controls(bridge: Node) -> Array[Dictionary]:

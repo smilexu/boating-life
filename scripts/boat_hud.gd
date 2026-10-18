@@ -363,10 +363,14 @@ func _update_fps_display() -> void:
 func _build_debug_panel() -> void:
 	_debug_panel = PanelContainer.new()
 	_debug_panel.name = "DebugPanel"
-	_debug_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	_debug_panel.anchor_left = 1.0
+	_debug_panel.anchor_right = 1.0
+	_debug_panel.anchor_top = 0.0
+	_debug_panel.anchor_bottom = 1.0
 	_debug_panel.offset_left = -414.0
 	_debug_panel.offset_top = 196.0
 	_debug_panel.offset_right = -24.0
+	_debug_panel.offset_bottom = -16.0
 	_debug_panel.custom_minimum_size = Vector2(390.0, 0.0)
 	_debug_panel.visible = false
 	var panel_style := StyleBoxFlat.new()
@@ -380,9 +384,12 @@ func _build_debug_panel() -> void:
 
 	_debug_scroll = ScrollContainer.new()
 	_debug_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_debug_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	_debug_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
+	_debug_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_debug_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_debug_panel.add_child(_debug_scroll)
 	_debug_layout = VBoxContainer.new()
+	_debug_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_debug_layout.add_theme_constant_override("separation", 7)
 	_debug_scroll.add_child(_debug_layout)
 	var layout := _debug_layout
@@ -1001,6 +1008,8 @@ func _add_slider_row(parent: VBoxContainer, row_title: String, low: float, high:
 func _make_debug_label() -> Label:
 	var label := Label.new()
 	label.add_theme_color_override("font_color", Color(0.86, 0.92, 0.92))
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	return label
 
 
@@ -1184,12 +1193,10 @@ func _update_hud_layout() -> void:
 		_debug_panel.custom_minimum_size.x = debug_width
 		_debug_panel.offset_left = -debug_width - 24.0
 		_debug_panel.offset_right = -24.0
-		var available_height := maxf(280.0, viewport_size.y - _debug_panel.offset_top - 16.0)
-		var content_height := _debug_layout.get_combined_minimum_size().y
-		var panel_height := minf(content_height + 24.0, available_height)
-		_debug_panel.custom_minimum_size.y = panel_height
-		_debug_panel.offset_bottom = _debug_panel.offset_top + panel_height
-		_debug_scroll.custom_minimum_size.y = maxf(220.0, panel_height - 24.0)
+		_debug_panel.offset_top = minf(196.0, maxf(80.0, viewport_size.y * 0.2))
+		_debug_panel.offset_bottom = -16.0
+		_debug_panel.custom_minimum_size.y = 0.0
+		_debug_scroll.custom_minimum_size.y = 0.0
 
 
 func _refresh_weather_controls() -> void:

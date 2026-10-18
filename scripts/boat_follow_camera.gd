@@ -7,7 +7,7 @@ extends Node3D
 @export_range(4.0, 18.0, 0.5) var follow_distance := 14.0
 @export_range(16.0, 60.0, 1.0) var god_view_distance := 60.0
 @export_range(1.0, 8.0, 0.1) var follow_smoothing := 5.5
-@export_range(0.05, 1.0, 0.01) var mouse_sensitivity := 0.28
+@export_range(0.05, 1.5, 0.01) var mouse_sensitivity := 0.4
 @export_range(0.0, 2.0, 0.1) var look_height := 0.9
 @export_range(25.0, 55.0, 1.0) var god_view_elevation_degrees := 42.0
 
@@ -55,8 +55,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and _mouse_look_active:
 		orbit_yaw += event.relative.x * mouse_sensitivity * 0.01
-		var minimum_elevation := deg_to_rad(20.0) if _god_view_enabled else deg_to_rad(8.0)
-		var maximum_elevation := deg_to_rad(78.0) if _god_view_enabled else deg_to_rad(55.0)
+		var minimum_elevation := deg_to_rad(12.0) if _god_view_enabled else deg_to_rad(5.0)
+		var maximum_elevation := deg_to_rad(84.0) if _god_view_enabled else deg_to_rad(70.0)
 		orbit_elevation = clampf(
 			orbit_elevation - event.relative.y * mouse_sensitivity * 0.01,
 			minimum_elevation,

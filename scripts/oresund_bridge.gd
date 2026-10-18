@@ -49,6 +49,7 @@ const LOD_HIDDEN := -1
 var _boat: Node3D
 var _wave_sampler: Node
 var _navigation_depth_provider: Node
+var _day_night_controller: Node
 var _layout: Dictionary = {}
 var _pier_records: Array[Dictionary] = []
 var _pylon_records: Array[Dictionary] = []
@@ -79,14 +80,23 @@ var _far_material: ShaderMaterial
 var _road_material: ShaderMaterial
 var _guardrail_material: ShaderMaterial
 var _concrete_material: ShaderMaterial
+var _pylon_materials: Dictionary = {}
 var _cable_material: ShaderMaterial
 var _island_outline_material: StandardMaterial3D
 var _portal_material: StandardMaterial3D
+var _deck_light_material: StandardMaterial3D
+var _pylon_beacon_material: StandardMaterial3D
+var _pylon_outline_materials: Dictionary = {}
+var _pylon_crossbeam_materials: Dictionary = {}
+var _night_emissive_nodes: Array[GeometryInstance3D] = []
+var _night_lights: Array[Light3D] = []
 var _high_span_root: Node3D
 var _high_span_lod := LOD_HIDDEN
 var _debug_panel: PanelContainer
 var _debug_label: Label
 var _lod_elapsed := 0.0
+var _night_lighting_elapsed := 0.0
+var _night_factor := 0.0
 var _debug_enabled := false
 var _teleport_index := -1
 var _last_teleport_name := "未使用"
@@ -99,6 +109,8 @@ func _ready() -> void:
 	_boat = get_node_or_null(player_boat_path) as Node3D
 	_wave_sampler = get_node_or_null(wave_sampler_path)
 	_navigation_depth_provider = get_node_or_null(navigation_depth_provider_path)
+	_day_night_controller = get_node_or_null("../DayNightVisualController")
+	process_priority = 110
 	_update_sea_reference()
 	_make_materials()
 	if not _load_layout():
@@ -111,10 +123,15 @@ func _ready() -> void:
 	_build_peberholm_outline()
 	_build_debug_markers()
 	_build_debug_panel()
+	_update_night_lighting(true)
 	_update_lods()
 
 
 func _process(delta: float) -> void:
+	_night_lighting_elapsed += delta
+	if _night_lighting_elapsed >= 0.25:
+		_night_lighting_elapsed = fmod(_night_lighting_elapsed, 0.25)
+		_update_night_lighting()
 	_lod_elapsed += delta
 	if _lod_elapsed >= lod_update_interval_seconds:
 		_lod_elapsed = fmod(_lod_elapsed, lod_update_interval_seconds)
@@ -167,6 +184,8 @@ func reproject_for_georeference_change() -> void:
 	_peberholm_flora_removed_count = 0
 	_pier_runtime.clear()
 	_pylon_runtime.clear()
+	_night_emissive_nodes.clear()
+	_night_lights.clear()
 	_high_span_root = null
 	_high_span_lod = LOD_HIDDEN
 	_build_centerline()
@@ -326,14 +345,80 @@ func _update_sea_reference() -> void:
 
 
 func _make_materials() -> void:
-	_near_material = _make_surface_material(Color("#333C44"), 0.22, 0.68, 0.035, 0.10)
-	_far_material = _make_surface_material(Color("#424A50"), 0.12, 0.78, 0.025, 0.08)
-	_road_material = _make_surface_material(Color("#505259"), 0.0, 0.94, 0.07, 0.15)
+	_near_material = _make_surface_material(Color("#2E363C"), 0.22, 0.68, 0.035, 0.10)
+	_far_material = _make_surface_material(Color("#394147"), 0.12, 0.78, 0.025, 0.08)
+	_road_material = _make_surface_material(Color("#484A50"), 0.0, 0.94, 0.07, 0.15)
 	_concrete_material = _make_surface_material(Color("#A6A49C"), 0.0, 0.91, 0.075, 0.055)
 	_guardrail_material = _make_surface_material(Color("#A9B1B6"), 0.48, 0.58, 0.025, 0.3)
-	_cable_material = _make_surface_material(Color("#41474E"), 0.14, 0.75, 0.02, 0.1)
+	_cable_material = _make_surface_material(Color("#383E44"), 0.14, 0.75, 0.02, 0.1)
+	_pylon_materials.clear()
 	_island_outline_material = _make_material(Color("#a59f8d"), true)
 	_portal_material = _make_material(Color("#20282d"), true)
+	_deck_light_material = StandardMaterial3D.new()
+	_deck_light_material.albedo_color = Color("#32343A")
+	_deck_light_material.roughness = 0.74
+	_deck_light_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_deck_light_material.emission_enabled = true
+	_deck_light_material.emission = Color("#F6EAD6")
+	_deck_light_material.emission_energy_multiplier = 0.0
+	_pylon_beacon_material = StandardMaterial3D.new()
+	_pylon_beacon_material.albedo_color = Color("#6A2922")
+	_pylon_beacon_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_pylon_beacon_material.emission_enabled = true
+	_pylon_beacon_material.emission = Color("#E64C3C")
+	_pylon_beacon_material.emission_energy_multiplier = 0.0
+	_pylon_outline_materials.clear()
+	_pylon_crossbeam_materials.clear()
+	for accent_key in ["blue", "red"]:
+		var accent_color := _pylon_accent_color(str(accent_key))
+		var pylon_material := _make_surface_material(Color("#A6A49C"), 0.0, 0.91, 0.075, 0.055)
+		pylon_material.set_shader_parameter("night_emission_color", accent_color)
+		pylon_material.set_shader_parameter("night_emission_strength", 0.0)
+		_pylon_materials[accent_key] = pylon_material
+		var outline_material := StandardMaterial3D.new()
+		outline_material.albedo_color = Color("#151A20")
+		outline_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		outline_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+		outline_material.emission_enabled = true
+		outline_material.emission = accent_color
+		outline_material.emission_energy_multiplier = 0.0
+		_pylon_outline_materials[accent_key] = outline_material
+		var crossbeam_material := _make_surface_material(Color("#A6A49C"), 0.0, 0.91, 0.075, 0.055)
+		crossbeam_material.set_shader_parameter("night_emission_color", accent_color)
+		crossbeam_material.set_shader_parameter("night_emission_strength", 0.0)
+		_pylon_crossbeam_materials[accent_key] = crossbeam_material
+
+
+func _update_night_lighting(force: bool = false) -> void:
+	var daylight := 1.0
+	if is_instance_valid(_day_night_controller) and _day_night_controller.has_method("get_daylight_strength"):
+		daylight = clampf(float(_day_night_controller.call("get_daylight_strength")), 0.0, 1.0)
+	var next_night_factor := 1.0 - smoothstep(0.08, 0.82, daylight)
+	if not force and absf(next_night_factor - _night_factor) < 0.015:
+		return
+	_night_factor = next_night_factor
+	if is_instance_valid(_deck_light_material):
+		_deck_light_material.emission_energy_multiplier = 2.0 * _night_factor
+	if is_instance_valid(_pylon_beacon_material):
+		_pylon_beacon_material.emission_energy_multiplier = 1.8 * _night_factor
+	for outline_material_value in _pylon_outline_materials.values():
+		var outline_material := outline_material_value as StandardMaterial3D
+		if is_instance_valid(outline_material):
+			outline_material.emission_energy_multiplier = 1.0 * _night_factor
+	for crossbeam_material_value in _pylon_crossbeam_materials.values():
+		var crossbeam_material := crossbeam_material_value as ShaderMaterial
+		if is_instance_valid(crossbeam_material):
+			crossbeam_material.set_shader_parameter("night_emission_strength", 0.34 * _night_factor)
+	for pylon_material_value in _pylon_materials.values():
+		var pylon_material := pylon_material_value as ShaderMaterial
+		if is_instance_valid(pylon_material):
+			pylon_material.set_shader_parameter("night_emission_strength", 0.28 * _night_factor)
+	for visual in _night_emissive_nodes:
+		if is_instance_valid(visual):
+			visual.visible = _night_factor > 0.04
+	for light in _night_lights:
+		if is_instance_valid(light):
+			light.light_energy = float(light.get_meta("night_base_energy", 0.0)) * _night_factor
 
 
 func _make_surface_material(color: Color, metallic: float, roughness: float, variation: float, noise_scale: float = 0.08) -> ShaderMaterial:
@@ -354,6 +439,27 @@ func _make_material(color: Color, unshaded: bool = false) -> StandardMaterial3D:
 	if unshaded:
 		material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	return material
+
+
+func _pylon_accent_color(accent_key: String) -> Color:
+	return Color("#518FC8") if accent_key == "blue" else Color("#C96D70")
+
+
+func _pylon_accent_key(pylon: Dictionary) -> String:
+	var record: Dictionary = pylon.get("record", {})
+	var way_id := int(record.get("way_id", -1))
+	for group in _pylon_groups:
+		var support_ids: Variant = group.get("support_way_ids", [])
+		if not support_ids is Array:
+			continue
+		for support_id in support_ids:
+			if int(support_id) == way_id:
+				return "blue" if str(group.get("group_id", "")).ends_with("west") else "red"
+	return "blue"
+
+
+func _pylon_group_accent_key(group: Dictionary) -> String:
+	return "blue" if str(group.get("group_id", "")).ends_with("west") else "red"
 
 
 func _build_centerline() -> void:
@@ -764,6 +870,15 @@ func _build_cell_visual(root: Node3D, station_start: float, station_end: float, 
 					_add_pier(root, pier, lod == LOD_NEAR)
 					support_index += 1
 		station = next_station
+	_add_deck_light_strips(
+		root,
+		station_start,
+		station_end,
+		spacing,
+		Callable(self, "_position_at_station"),
+		Callable(self, "_underside_height_at_station"),
+		"BridgeDeckLightStrips"
+	)
 	_build_interlayer_supports(root, station_start, station_end, lod)
 
 
@@ -789,6 +904,15 @@ func _build_malmo_approach_cell_visual(root: Node3D, distance_start: float, dist
 			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "MalmoApproachRoadGuard", false)
 			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "MalmoApproachRoadGuard", false)
 		distance = next_distance
+	_add_deck_light_strips(
+		root,
+		distance_start,
+		distance_end,
+		spacing,
+		Callable(self, "_malmo_approach_position"),
+		Callable(self, "_malmo_approach_underside_height"),
+		"MalmoApproachDeckLightStrips"
+	)
 	_build_malmo_approach_interlayer_supports(root, distance_start, distance_end, lod)
 	_build_malmo_approach_piers(root, distance_start, distance_end, lod)
 	var ramp_end := _malmo_approach_ramp_length_m
@@ -818,6 +942,15 @@ func _build_peberholm_approach_cell_visual(root: Node3D, distance_start: float, 
 			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "PeberholmApproachRoadGuard", false)
 			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "PeberholmApproachRoadGuard", false)
 		distance = next_distance
+	_add_deck_light_strips(
+		root,
+		distance_start,
+		distance_end,
+		spacing,
+		Callable(self, "_peberholm_approach_position"),
+		Callable(self, "_peberholm_approach_underside_height"),
+		"PeberholmApproachDeckLightStrips"
+	)
 	_build_peberholm_approach_interlayer_supports(root, distance_start, distance_end, lod)
 	_build_peberholm_approach_piers(root, distance_start, distance_end, lod)
 	var portal_distance := maxf(_peberholm_approach_length_m - float(_peberholm_approach_config.get("portal_distance_from_end_m", 40.0)), 0.0)
@@ -1121,6 +1254,66 @@ func _add_pier(parent: Node3D, pier: Dictionary, with_collision: bool) -> void:
 		body.add_child(collider)
 
 
+func _add_deck_light_strips(
+	parent: Node3D,
+	distance_start: float,
+	distance_end: float,
+	spacing: float,
+	position_at_distance: Callable,
+	underside_at_distance: Callable,
+	node_name: String
+) -> void:
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var indices := PackedInt32Array()
+	var distance := distance_start
+	while distance < distance_end - 0.01:
+		var next_distance := minf(distance + spacing, distance_end)
+		var start: Vector3 = position_at_distance.call(distance)
+		var finish: Vector3 = position_at_distance.call(next_distance)
+		var tangent := _horizontal_direction(start, finish)
+		if tangent.length_squared() > 0.5:
+			var right := Vector3.UP.cross(tangent).normalized()
+			var overlap := 0.25
+			var start_y := float(underside_at_distance.call(distance)) + 8.0
+			var end_y := float(underside_at_distance.call(next_distance)) + 8.0
+			var start_center := Vector3(start.x, start_y, start.z) - tangent * overlap
+			var end_center := Vector3(finish.x, end_y, finish.z) + tangent * overlap
+			for side_sign in [-1.0, 1.0]:
+				var outward := right * float(side_sign)
+				var strip_center_start := start_center + outward * 12.15
+				var strip_center_end := end_center + outward * 12.15
+				var base_index := vertices.size()
+				var half_height := 0.18
+				vertices.append(strip_center_start - Vector3.UP * half_height)
+				vertices.append(strip_center_start + Vector3.UP * half_height)
+				vertices.append(strip_center_end - Vector3.UP * half_height)
+				vertices.append(strip_center_end + Vector3.UP * half_height)
+				for _vertex_index in range(4):
+					normals.append(outward)
+				indices.append(base_index)
+				indices.append(base_index + 2)
+				indices.append(base_index + 1)
+				indices.append(base_index + 1)
+				indices.append(base_index + 2)
+				indices.append(base_index + 3)
+		distance = next_distance
+	if vertices.is_empty():
+		return
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var instance := MeshInstance3D.new()
+	instance.name = node_name
+	instance.mesh = mesh
+	instance.material_override = _deck_light_material
+	parent.add_child(instance)
+
+
 func _add_oriented_box(parent: Node3D, node_name: String, position: Vector3, size: Vector3, yaw: float, material: Material, with_collision: bool) -> void:
 	var box := BoxMesh.new()
 	box.size = size
@@ -1147,6 +1340,8 @@ func _add_oriented_box(parent: Node3D, node_name: String, position: Vector3, siz
 
 func _set_high_span_lod(lod: int) -> void:
 	_clear_children(_high_span_root)
+	_night_emissive_nodes.clear()
+	_night_lights.clear()
 	_high_span_lod = lod
 	if lod == LOD_HIDDEN:
 		return
@@ -1186,11 +1381,13 @@ func _add_pylon(parent: Node3D, pylon: Dictionary, with_collision: bool) -> void
 		var greybox := MeshInstance3D.new()
 		greybox.name = "Pylon_%s" % str(record.get("way_id", "OSM"))
 		greybox.mesh = pylon_mesh
-		greybox.material_override = _concrete_material
+		greybox.material_override = _pylon_materials.get(_pylon_accent_key(pylon))
 		greybox.position = Vector3(position.x, _sea_level_y + pylon_height * 0.5, position.z)
 		greybox.rotation.y = deg_to_rad(45.0)
 		parent.add_child(greybox)
 		tower = greybox
+		_add_pylon_outline_mesh(parent, pylon, pylon_height)
+	_add_pylon_night_lighting(parent, pylon, pylon_height)
 	if with_collision:
 		var body := StaticBody3D.new()
 		body.name = "Pylon_%s_Collision" % str(record.get("way_id", "OSM"))
@@ -1205,6 +1402,93 @@ func _add_pylon(parent: Node3D, pylon: Dictionary, with_collision: bool) -> void
 		body.add_child(collider)
 
 
+func _add_pylon_night_lighting(parent: Node3D, pylon: Dictionary, pylon_height: float) -> void:
+	var position: Vector3 = pylon["position"]
+	var tangent: Vector3 = pylon["tangent"]
+	var right := Vector3.UP.cross(tangent).normalized()
+	var accent_key := _pylon_accent_key(pylon)
+	var accent_color := _pylon_accent_color(accent_key)
+	var beacon_mesh := SphereMesh.new()
+	beacon_mesh.radius = 0.70
+	beacon_mesh.height = 1.40
+	beacon_mesh.radial_segments = 8
+	beacon_mesh.rings = 4
+	var beacon := MeshInstance3D.new()
+	beacon.name = "PylonAviationBeacon"
+	beacon.mesh = beacon_mesh
+	beacon.material_override = _pylon_beacon_material
+	beacon.position = Vector3(position.x, _sea_level_y + pylon_height + 2.0, position.z)
+	parent.add_child(beacon)
+	var beacon_fill := OmniLight3D.new()
+	beacon_fill.name = "PylonBeaconLight"
+	beacon_fill.light_color = Color("#E64C3C")
+	beacon_fill.light_energy = 0.0
+	beacon_fill.omni_range = 28.0
+	beacon_fill.shadow_enabled = false
+	beacon_fill.position = beacon.position
+	beacon_fill.set_meta("night_base_energy", 0.16)
+	parent.add_child(beacon_fill)
+	_night_lights.append(beacon_fill)
+
+	var tower_fill := SpotLight3D.new()
+	tower_fill.name = "PylonSoftNightFill"
+	tower_fill.light_color = accent_color
+	tower_fill.light_energy = 0.0
+	tower_fill.spot_range = pylon_height + 35.0
+	tower_fill.spot_angle = 30.0
+	tower_fill.spot_angle_attenuation = 0.8
+	tower_fill.light_specular = 0.12
+	tower_fill.shadow_enabled = false
+	tower_fill.position = Vector3(position.x, _sea_level_y + 8.0, position.z) + right * 10.0
+	tower_fill.set_meta("night_accent", accent_key)
+	parent.add_child(tower_fill)
+	tower_fill.look_at(Vector3(position.x, _sea_level_y + pylon_height * 0.72, position.z), Vector3.FORWARD)
+	tower_fill.set_meta("night_base_energy", 9.0)
+	_night_lights.append(tower_fill)
+	_update_night_lighting(true)
+
+
+func _add_pylon_outline_mesh(parent: Node3D, pylon: Dictionary, pylon_height: float) -> void:
+	var position: Vector3 = pylon["position"]
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var indices := PackedInt32Array()
+	for corner_index in range(4):
+		var angle := deg_to_rad(45.0 + 90.0 * float(corner_index))
+		var radial := Vector3(cos(angle), 0.0, sin(angle))
+		var side := Vector3(-sin(angle), 0.0, cos(angle))
+		var bottom_center := Vector3(position.x, _sea_level_y + 5.0, position.z) + radial * 6.25
+		var top_center := Vector3(position.x, _sea_level_y + pylon_height - 5.0, position.z) + radial * 3.05
+		var base_index := vertices.size()
+		var half_width := 0.42
+		vertices.append(bottom_center - side * half_width)
+		vertices.append(bottom_center + side * half_width)
+		vertices.append(top_center - side * half_width)
+		vertices.append(top_center + side * half_width)
+		for _vertex_index in range(4):
+			normals.append(radial)
+		indices.append(base_index)
+		indices.append(base_index + 2)
+		indices.append(base_index + 1)
+		indices.append(base_index + 1)
+		indices.append(base_index + 2)
+		indices.append(base_index + 3)
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var outline := MeshInstance3D.new()
+	outline.name = "PylonNightOutline"
+	outline.mesh = mesh
+	outline.material_override = _pylon_outline_materials.get(_pylon_accent_key(pylon))
+	outline.visible = _night_factor > 0.04
+	parent.add_child(outline)
+	_night_emissive_nodes.append(outline)
+
+
 func _add_pylon_crossbeams(parent: Node3D, group: Dictionary) -> void:
 	var ids: Variant = group.get("support_way_ids", [])
 	if not ids is Array or ids.size() != 2:
@@ -1213,8 +1497,27 @@ func _add_pylon_crossbeams(parent: Node3D, group: Dictionary) -> void:
 	var second := _pylon_position_by_id(int(ids[1]))
 	if first == Vector3.INF or second == Vector3.INF:
 		return
+	var accent_key := _pylon_group_accent_key(group)
+	var accent_material: Material = _pylon_crossbeam_materials.get(accent_key, _concrete_material)
 	for beam_height in [68.0, 155.0]:
-		_add_box_segment(parent, first + Vector3.UP * beam_height, second + Vector3.UP * beam_height, 5.0, 4.0, _concrete_material, "PylonCrossbeam", false)
+		_add_box_segment(parent, first + Vector3.UP * beam_height, second + Vector3.UP * beam_height, 5.0, 4.0, accent_material, "PylonCrossbeam", false)
+	_add_tower_water_reflection_light(parent, first, second, _pylon_group_accent_key(group))
+
+
+func _add_tower_water_reflection_light(parent: Node3D, first: Vector3, second: Vector3, accent_key: String) -> void:
+	var light := OmniLight3D.new()
+	light.name = "PylonWaterReflectionFill"
+	light.light_color = _pylon_accent_color(accent_key)
+	light.light_energy = 0.0
+	light.light_specular = 0.78
+	light.omni_range = 180.0
+	light.shadow_enabled = false
+	light.position = Vector3((first.x + second.x) * 0.5, _sea_level_y + 2.5, (first.z + second.z) * 0.5)
+	light.set_meta("night_base_energy", 2.8)
+	light.set_meta("night_accent", accent_key)
+	parent.add_child(light)
+	_night_lights.append(light)
+	_update_night_lighting(true)
 
 
 func _add_stay_cables(parent: Node3D) -> void:

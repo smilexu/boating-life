@@ -6,6 +6,8 @@ uniform float metallic : hint_range(0.0, 1.0) = 0.0;
 uniform float base_roughness : hint_range(0.0, 1.0) = 0.85;
 uniform float variation_amount : hint_range(0.0, 0.2) = 0.05;
 uniform float noise_scale : hint_range(0.001, 8.0) = 0.08;
+uniform vec4 night_emission_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
+uniform float night_emission_strength : hint_range(0.0, 0.5) = 0.0;
 
 varying float surface_noise;
 
@@ -24,4 +26,5 @@ void fragment() {
 	METALLIC = metallic;
 	ROUGHNESS = clamp(base_roughness + (surface_noise - 0.5) * 0.08, 0.0, 1.0);
 	SPECULAR = 0.38;
+	EMISSION = night_emission_color.rgb * night_emission_strength;
 }
