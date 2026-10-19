@@ -21,6 +21,7 @@ const STAY_CABLE_DESIGN_ANGLE_DEGREES := 29.0
 const STAY_CABLE_MIDSPAN_CLEARANCE_M := 4.0
 const STAY_CABLE_TOWER_TOP_CLEARANCE_M := 4.0
 const STAY_CABLE_NIGHT_EMISSION_STRENGTH := 0.42
+const NIGHT_LIGHTING_BOOST := 1.5
 const LOD_NEAR := 0
 const LOD_MID := 1
 const LOD_FAR := 2
@@ -408,32 +409,32 @@ func _update_night_lighting(force: bool = false) -> void:
 		return
 	_night_factor = next_night_factor
 	if is_instance_valid(_deck_light_material):
-		_deck_light_material.emission_energy_multiplier = 2.0 * _night_factor
+		_deck_light_material.emission_energy_multiplier = 2.0 * NIGHT_LIGHTING_BOOST * _night_factor
 	if is_instance_valid(_cable_material):
-		_cable_material.set_shader_parameter("night_emission_strength", STAY_CABLE_NIGHT_EMISSION_STRENGTH * _night_factor)
+		_cable_material.set_shader_parameter("night_emission_strength", STAY_CABLE_NIGHT_EMISSION_STRENGTH * NIGHT_LIGHTING_BOOST * _night_factor)
 	if is_instance_valid(_pylon_beacon_material):
-		_pylon_beacon_material.emission_energy_multiplier = 1.8 * _night_factor
+		_pylon_beacon_material.emission_energy_multiplier = 1.8 * NIGHT_LIGHTING_BOOST * _night_factor
 	for outline_material_value in _pylon_outline_materials.values():
 		var outline_material := outline_material_value as StandardMaterial3D
 		if is_instance_valid(outline_material):
-			outline_material.emission_energy_multiplier = 1.0 * _night_factor
+			outline_material.emission_energy_multiplier = 1.0 * NIGHT_LIGHTING_BOOST * _night_factor
 	for crossbeam_material_value in _pylon_crossbeam_materials.values():
 		var crossbeam_material := crossbeam_material_value as ShaderMaterial
 		if is_instance_valid(crossbeam_material):
-			crossbeam_material.set_shader_parameter("night_emission_strength", 0.38 * _night_factor)
+			crossbeam_material.set_shader_parameter("night_emission_strength", 0.38 * NIGHT_LIGHTING_BOOST * _night_factor)
 	for pylon_material_value in _pylon_materials.values():
 		var pylon_material := pylon_material_value as ShaderMaterial
 		if is_instance_valid(pylon_material):
-			pylon_material.set_shader_parameter("night_emission_strength", 0.30 * _night_factor)
+			pylon_material.set_shader_parameter("night_emission_strength", 0.30 * NIGHT_LIGHTING_BOOST * _night_factor)
 	for visual in _night_emissive_nodes:
 		if is_instance_valid(visual):
 			visual.visible = _night_factor > 0.04
 	for light in _night_lights:
 		if is_instance_valid(light):
-			light.light_energy = float(light.get_meta("night_base_energy", 0.0)) * _night_factor
+			light.light_energy = float(light.get_meta("night_base_energy", 0.0)) * NIGHT_LIGHTING_BOOST * _night_factor
 	for light in _pier_night_lights:
 		if is_instance_valid(light):
-			light.light_energy = float(light.get_meta("night_base_energy", 0.0)) * _night_factor
+			light.light_energy = float(light.get_meta("night_base_energy", 0.0)) * NIGHT_LIGHTING_BOOST * _night_factor
 
 
 func _make_surface_material(color: Color, metallic: float, roughness: float, variation: float, noise_scale: float = 0.08) -> ShaderMaterial:
@@ -1297,7 +1298,7 @@ func _add_pier_night_fill(parent: Node3D, pier: Dictionary) -> void:
 	parent.add_child(light)
 	light.look_at(Vector3(center.x, _sea_level_y + 24.0, center.z), Vector3.FORWARD)
 	light.set_meta("night_base_energy", 4.0)
-	light.light_energy = 4.0 * _night_factor
+	light.light_energy = 4.0 * NIGHT_LIGHTING_BOOST * _night_factor
 	_pier_night_lights.append(light)
 
 
