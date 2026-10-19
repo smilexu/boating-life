@@ -214,7 +214,7 @@ func _process(delta: float) -> void:
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is not InputEventKey or not event.pressed or event.echo:
 		return
-	if event.physical_keycode == KEY_F6:
+	if event.physical_keycode == KEY_F6 and event.ctrl_pressed and not event.shift_pressed and not event.alt_pressed:
 		_toggle_water_transparency()
 	elif event.physical_keycode == KEY_F7 and not event.shift_pressed and not event.ctrl_pressed:
 		system_enabled = not system_enabled
@@ -2046,7 +2046,7 @@ func _update_statistics_text() -> void:
 	_stats_label.text += "Grass %s · sway %s · %s · tile CPU %.0f ms avg\n" % ["ON" if stats["seagrass_enabled"] else "OFF", "ON" if stats["seagrass_sway_enabled"] else "OFF", _seagrass_density_name(int(stats["seagrass_density_preset"])), stats["seagrass_average_build_ms"]]
 	_stats_label.text += "Grass slice %.1f/%.1f ms · finish max %.1f · budget %.1f\n" % [stats["seagrass_last_slice_ms"], stats["seagrass_maximum_slice_ms"], stats["seagrass_maximum_finish_ms"], stats["seagrass_generation_budget_ms"]]
 	_stats_label.text += "Build %.2f ms last · %.2f ms avg\n" % [stats["last_chunk_build_ms"], stats["average_chunk_build_ms"]]
-	_stats_label.text += "F6 water · F7 seabed · F8 stats · Shift+F8 bounds\nCtrl+F8 reefs · Alt+F8 LOD · F9 reef groups\nCtrl+F9 fill stones · Alt+F9 cluster guides\nF11 grass · Shift+F11 sway · Ctrl+F11 density · Alt+F11 guides"
+	_stats_label.text += "F6 wind farms · Ctrl+F6 water · F7 seabed · F8 stats · Shift+F8 bounds\nCtrl+F8 reefs · Alt+F8 LOD · F9 reef groups\nCtrl+F9 fill stones · Alt+F9 cluster guides\nF11 grass · Shift+F11 sway · Ctrl+F11 density · Alt+F11 guides"
 
 
 func _seagrass_density_name(preset: int) -> String:

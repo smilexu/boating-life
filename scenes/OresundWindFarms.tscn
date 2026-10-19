@@ -1,0 +1,30 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/oresund_wind_farms.gd" id="1_wind_farms"]
+[ext_resource type="Resource" path="res://resources/oresund_georeference.tres" id="2_georeference"]
+
+[node name="OresundWindFarms" type="Node3D"]
+script = ExtResource("1_wind_farms")
+georeference = ExtResource("2_georeference")
+layout_data_path = "res://resources/oresund_wind_farms.json"
+player_boat_path = NodePath("../PlayerBoat/MotionRoot")
+day_night_controller_path = NodePath("../DayNightVisualController")
+developer_tools_enabled = true
+debug_observation_offset_m = 500.0
+hub_height_m = 65.0
+rotor_radius_m = 46.5
+foundation_depth_m = 12.0
+rotor_speed_radians_per_second = 0.14
+near_lod_radius_m = 4000.0
+far_visible_radius_m = 60000.0
+visibility_update_interval_seconds = 0.6
+rotor_update_interval_seconds = 0.06
+red_night_beacons_enabled = true
+beacon_emission_energy = 1.1
+beacon_fill_light_energy = 1.2
+beacon_fill_light_range_m = 80.0
+platform_night_lights_enabled = true
+platform_light_emission_energy = 0.6
+platform_fill_light_energy = 0.7
+platform_fill_light_range_m = 45.0
+default_rotor_bearing_degrees = 225.0

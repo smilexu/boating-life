@@ -1,4 +1,4 @@
-[gd_scene load_steps=40 format=3]
+[gd_scene load_steps=41 format=3]
 
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
@@ -35,6 +35,7 @@
 [ext_resource type="Resource" path="res://resources/routes/copenhagen_to_malmo.tres" id="33_copenhagen_malmo_route"]
 [ext_resource type="Script" path="res://scripts/autopilot_controller.gd" id="34_autopilot"]
 [ext_resource type="PackedScene" path="res://scenes/OresundBridge.tscn" id="35_oresund_bridge"]
+[ext_resource type="PackedScene" path="res://scenes/OresundWindFarms.tscn" id="36_oresund_wind_farms"]
 
 [sub_resource type="Compositor" id="Compositor_volumetric_clouds"]
 compositor_effects = Array[CompositorEffect]([ExtResource("11_cloud_effect")])
@@ -137,6 +138,8 @@ game_surface_above_lat_m = 0.0
 [node name="OresundRegion" parent="." instance=ExtResource("13_oresund_region")]
 
 [node name="OresundBridge" parent="." instance=ExtResource("35_oresund_bridge")]
+
+[node name="OresundWindFarms" parent="." instance=ExtResource("36_oresund_wind_farms")]
 
 ; Start roughly 329 m offshore from Malmö's coast (WGS84 55.60587 N, 12.96300 E), facing east toward land.
 [node name="PlayerBoat" parent="." instance=ExtResource("6_boat")]

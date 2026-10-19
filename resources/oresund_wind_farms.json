@@ -1,0 +1,401 @@
+{
+  "schema_version": 1,
+  "coordinate_reference": "WGS84 latitude/longitude; east/north are converted at runtime through resources/oresund_georeference.tres; model bases are seated on game sea level Y=0.",
+  "snapshot_date": "2026-10-19",
+  "license_notice": "© OpenStreetMap contributors. Turbine point data is derived from OSM relations and is available under ODbL-1.0.",
+  "sources": [
+    {
+      "name": "OpenStreetMap Lillgrund relation 5136710",
+      "url": "https://www.openstreetmap.org/relation/5136710",
+      "api_url": "https://api.openstreetmap.org/api/0.6/relation/5136710/full.json",
+      "purpose": "48 individual turbine node positions",
+      "license": "ODbL-1.0"
+    },
+    {
+      "name": "OpenStreetMap Middelgrunden relation 1130880",
+      "url": "https://www.openstreetmap.org/relation/1130880",
+      "api_url": "https://api.openstreetmap.org/api/0.6/relation/1130880/full.json",
+      "purpose": "20 individual turbine node positions; source coordinates preserve the curved line",
+      "license": "ODbL-1.0"
+    },
+    {
+      "name": "Vattenfall Lillgrund",
+      "url": "https://powerplants.vattenfall.com/lillgrund/",
+      "purpose": "Official count, capacity, offshore status and approximate site context"
+    },
+    {
+      "name": "Middelgrundens Vindmøllelaug",
+      "url": "https://www.middelgrunden.dk/vindmoelleparken/",
+      "purpose": "Official confirmation of 20 turbines and ownership/layout context"
+    },
+    {
+      "name": "Danish Energy Agency offshore wind farms",
+      "url": "https://ens.dk/energikilder/etablerede-havvindmoelleparker",
+      "purpose": "40 MW / 20 turbine official project facts"
+    }
+  ],
+  "farms": [
+    {
+      "id": "lillgrund",
+      "name": "Lillgrund",
+      "country": "Sweden",
+      "turbine_count": 48,
+      "capacity_mw": 110,
+      "layout_type": "observed_regular_staggered_array",
+      "rotor_bearing_degrees": 225,
+      "turbine_positions_wgs84": [
+        {
+          "node_id": 3516243158,
+          "latitude_deg": 55.4992523,
+          "longitude_deg": 12.7731138
+        },
+        {
+          "node_id": 3516243159,
+          "latitude_deg": 55.5005539,
+          "longitude_deg": 12.7688332
+        },
+        {
+          "node_id": 3516243160,
+          "latitude_deg": 55.5007326,
+          "longitude_deg": 12.7814949
+        },
+        {
+          "node_id": 3516243161,
+          "latitude_deg": 55.5018683,
+          "longitude_deg": 12.7645525
+        },
+        {
+          "node_id": 3516243162,
+          "latitude_deg": 55.5020342,
+          "longitude_deg": 12.7771692
+        },
+        {
+          "node_id": 3516243163,
+          "latitude_deg": 55.5032974,
+          "longitude_deg": 12.7729111
+        },
+        {
+          "node_id": 3516243164,
+          "latitude_deg": 55.5035016,
+          "longitude_deg": 12.7855502
+        },
+        {
+          "node_id": 3516243165,
+          "latitude_deg": 55.5045861,
+          "longitude_deg": 12.7686304
+        },
+        {
+          "node_id": 3516243166,
+          "latitude_deg": 55.5047648,
+          "longitude_deg": 12.781247
+        },
+        {
+          "node_id": 3516243167,
+          "latitude_deg": 55.5058876,
+          "longitude_deg": 12.7643272
+        },
+        {
+          "node_id": 3516243168,
+          "latitude_deg": 55.5060407,
+          "longitude_deg": 12.7769439
+        },
+        {
+          "node_id": 3516243169,
+          "latitude_deg": 55.5062321,
+          "longitude_deg": 12.7896732
+        },
+        {
+          "node_id": 3516243170,
+          "latitude_deg": 55.5073549,
+          "longitude_deg": 12.7726632
+        },
+        {
+          "node_id": 3516243171,
+          "latitude_deg": 55.5075207,
+          "longitude_deg": 12.7853475
+        },
+        {
+          "node_id": 3516243172,
+          "latitude_deg": 55.5086562,
+          "longitude_deg": 12.7683601
+        },
+        {
+          "node_id": 3516243173,
+          "latitude_deg": 55.5088348,
+          "longitude_deg": 12.7809992
+        },
+        {
+          "node_id": 3516243174,
+          "latitude_deg": 55.5089879,
+          "longitude_deg": 12.7936609
+        },
+        {
+          "node_id": 2322731673,
+          "latitude_deg": 55.5099213,
+          "longitude_deg": 12.7641675
+        },
+        {
+          "node_id": 3516243175,
+          "latitude_deg": 55.5102509,
+          "longitude_deg": 12.7894028
+        },
+        {
+          "node_id": 3516243176,
+          "latitude_deg": 55.5115777,
+          "longitude_deg": 12.7851222
+        },
+        {
+          "node_id": 3516243177,
+          "latitude_deg": 55.511776,
+          "longitude_deg": 12.797742
+        },
+        {
+          "node_id": 2322731667,
+          "latitude_deg": 55.5126893,
+          "longitude_deg": 12.7681977
+        },
+        {
+          "node_id": 2322731674,
+          "latitude_deg": 55.5128561,
+          "longitude_deg": 12.7808438
+        },
+        {
+          "node_id": 3516243178,
+          "latitude_deg": 55.513032,
+          "longitude_deg": 12.7934581
+        },
+        {
+          "node_id": 2322731672,
+          "latitude_deg": 55.5139608,
+          "longitude_deg": 12.7638612
+        },
+        {
+          "node_id": 2322731668,
+          "latitude_deg": 55.5141464,
+          "longitude_deg": 12.7765181
+        },
+        {
+          "node_id": 3516243179,
+          "latitude_deg": 55.5143459,
+          "longitude_deg": 12.7891775
+        },
+        {
+          "node_id": 3516243180,
+          "latitude_deg": 55.5145118,
+          "longitude_deg": 12.8017941
+        },
+        {
+          "node_id": 2322731671,
+          "latitude_deg": 55.5154357,
+          "longitude_deg": 12.7722702
+        },
+        {
+          "node_id": 3516243181,
+          "latitude_deg": 55.5156215,
+          "longitude_deg": 12.7848518
+        },
+        {
+          "node_id": 3516243182,
+          "latitude_deg": 55.5158001,
+          "longitude_deg": 12.797491
+        },
+        {
+          "node_id": 2322731670,
+          "latitude_deg": 55.5167495,
+          "longitude_deg": 12.7679295
+        },
+        {
+          "node_id": 3516243183,
+          "latitude_deg": 55.5169099,
+          "longitude_deg": 12.7805712
+        },
+        {
+          "node_id": 3516243184,
+          "latitude_deg": 55.5170884,
+          "longitude_deg": 12.7932103
+        },
+        {
+          "node_id": 3516243185,
+          "latitude_deg": 55.5172798,
+          "longitude_deg": 12.805872
+        },
+        {
+          "node_id": 2322731675,
+          "latitude_deg": 55.5180244,
+          "longitude_deg": 12.763636
+        },
+        {
+          "node_id": 3516243186,
+          "latitude_deg": 55.5182109,
+          "longitude_deg": 12.7762455
+        },
+        {
+          "node_id": 3516243187,
+          "latitude_deg": 55.5183767,
+          "longitude_deg": 12.7889071
+        },
+        {
+          "node_id": 3516243188,
+          "latitude_deg": 55.5185808,
+          "longitude_deg": 12.8015463
+        },
+        {
+          "node_id": 3516243189,
+          "latitude_deg": 55.5194991,
+          "longitude_deg": 12.7719648
+        },
+        {
+          "node_id": 3516243190,
+          "latitude_deg": 55.5196522,
+          "longitude_deg": 12.7846265
+        },
+        {
+          "node_id": 3516243191,
+          "latitude_deg": 55.5198563,
+          "longitude_deg": 12.7972657
+        },
+        {
+          "node_id": 2322731669,
+          "latitude_deg": 55.5207916,
+          "longitude_deg": 12.767761
+        },
+        {
+          "node_id": 3516243192,
+          "latitude_deg": 55.5209787,
+          "longitude_deg": 12.7803008
+        },
+        {
+          "node_id": 3516252093,
+          "latitude_deg": 55.52117,
+          "longitude_deg": 12.792985
+        },
+        {
+          "node_id": 3516252094,
+          "latitude_deg": 55.5222541,
+          "longitude_deg": 12.7760427
+        },
+        {
+          "node_id": 3516252095,
+          "latitude_deg": 55.5223178,
+          "longitude_deg": 12.7884791
+        },
+        {
+          "node_id": 3516252096,
+          "latitude_deg": 55.5235549,
+          "longitude_deg": 12.7717395
+        }
+      ]
+    },
+    {
+      "id": "middelgrunden",
+      "name": "Middelgrunden",
+      "country": "Denmark",
+      "turbine_count": 20,
+      "capacity_mw": 40,
+      "layout_type": "observed_curved_single_line",
+      "rotor_bearing_degrees": 225,
+      "turbine_positions_wgs84": [
+        {
+          "node_id": 25365257,
+          "latitude_deg": 55.675894,
+          "longitude_deg": 12.6683603
+        },
+        {
+          "node_id": 25365256,
+          "latitude_deg": 55.6775172,
+          "longitude_deg": 12.6688462
+        },
+        {
+          "node_id": 25365255,
+          "latitude_deg": 55.6791487,
+          "longitude_deg": 12.6692672
+        },
+        {
+          "node_id": 548139984,
+          "latitude_deg": 55.6807715,
+          "longitude_deg": 12.6696296
+        },
+        {
+          "node_id": 25365253,
+          "latitude_deg": 55.6824029,
+          "longitude_deg": 12.6699622
+        },
+        {
+          "node_id": 25365252,
+          "latitude_deg": 55.6840415,
+          "longitude_deg": 12.6702327
+        },
+        {
+          "node_id": 25365251,
+          "latitude_deg": 55.6856867,
+          "longitude_deg": 12.6704406
+        },
+        {
+          "node_id": 25365250,
+          "latitude_deg": 55.6873209,
+          "longitude_deg": 12.670596
+        },
+        {
+          "node_id": 25365249,
+          "latitude_deg": 55.6889612,
+          "longitude_deg": 12.6706965
+        },
+        {
+          "node_id": 25365248,
+          "latitude_deg": 55.6906131,
+          "longitude_deg": 12.6707493
+        },
+        {
+          "node_id": 25365247,
+          "latitude_deg": 55.6922533,
+          "longitude_deg": 12.670758
+        },
+        {
+          "node_id": 25365246,
+          "latitude_deg": 55.6938958,
+          "longitude_deg": 12.6707087
+        },
+        {
+          "node_id": 25365245,
+          "latitude_deg": 55.6955363,
+          "longitude_deg": 12.6705914
+        },
+        {
+          "node_id": 25365244,
+          "latitude_deg": 55.6971744,
+          "longitude_deg": 12.6704306
+        },
+        {
+          "node_id": 25365243,
+          "latitude_deg": 55.6988155,
+          "longitude_deg": 12.6702183
+        },
+        {
+          "node_id": 25365242,
+          "latitude_deg": 55.7004493,
+          "longitude_deg": 12.6699663
+        },
+        {
+          "node_id": 25365241,
+          "latitude_deg": 55.7020786,
+          "longitude_deg": 12.6696457
+        },
+        {
+          "node_id": 25365240,
+          "latitude_deg": 55.7037063,
+          "longitude_deg": 12.6692729
+        },
+        {
+          "node_id": 25365239,
+          "latitude_deg": 55.7053351,
+          "longitude_deg": 12.6688283
+        },
+        {
+          "node_id": 25365238,
+          "latitude_deg": 55.706953,
+          "longitude_deg": 12.6683513
+        }
+      ]
+    }
+  ]
+}
