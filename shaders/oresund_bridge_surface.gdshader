@@ -8,8 +8,10 @@ uniform float variation_amount : hint_range(0.0, 0.2) = 0.05;
 uniform float noise_scale : hint_range(0.001, 8.0) = 0.08;
 uniform vec4 night_emission_color : source_color = vec4(0.0, 0.0, 0.0, 1.0);
 uniform float night_emission_strength : hint_range(0.0, 0.5) = 0.0;
+uniform bool use_instance_emission_scale = false;
 
 varying float surface_noise;
+varying float instance_emission_scale;
 
 
 void vertex() {
@@ -17,6 +19,10 @@ void vertex() {
 	float broad = sin(dot(world_position, vec3(0.173, 0.217, 0.139)));
 	float detail = sin(dot(world_position, vec3(0.071, 0.113, 0.193)) + broad * 1.9);
 	surface_noise = clamp(0.5 + (broad * 0.62 + detail * 0.38) * 0.5, 0.0, 1.0);
+	instance_emission_scale = 1.0;
+	if (use_instance_emission_scale) {
+		instance_emission_scale = INSTANCE_CUSTOM.r;
+	}
 }
 
 
@@ -26,5 +32,5 @@ void fragment() {
 	METALLIC = metallic;
 	ROUGHNESS = clamp(base_roughness + (surface_noise - 0.5) * 0.08, 0.0, 1.0);
 	SPECULAR = 0.38;
-	EMISSION = night_emission_color.rgb * night_emission_strength;
+	EMISSION = night_emission_color.rgb * night_emission_strength * instance_emission_scale;
 }

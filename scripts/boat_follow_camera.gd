@@ -55,8 +55,8 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and _mouse_look_active:
 		orbit_yaw += event.relative.x * mouse_sensitivity * 0.01
-		var minimum_elevation := deg_to_rad(12.0) if _god_view_enabled else deg_to_rad(5.0)
-		var maximum_elevation := deg_to_rad(84.0) if _god_view_enabled else deg_to_rad(70.0)
+		var minimum_elevation := deg_to_rad(2.0)
+		var maximum_elevation := deg_to_rad(88.0) if _god_view_enabled else deg_to_rad(84.0)
 		orbit_elevation = clampf(
 			orbit_elevation - event.relative.y * mouse_sensitivity * 0.01,
 			minimum_elevation,

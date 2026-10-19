@@ -16,6 +16,11 @@ const LOWER_DECK_THICKNESS_M := 1.2
 const ROAD_DECK_SOFFIT_OFFSET_M := 6.8
 const ROAD_DECK_TOP_OFFSET_M := 9.2
 const MAIN_PIER_LIGHT_PYLON_RADIUS_M := 470.0
+const STAY_CABLE_DECK_SPACING_M := 20.0
+const STAY_CABLE_DESIGN_ANGLE_DEGREES := 29.0
+const STAY_CABLE_MIDSPAN_CLEARANCE_M := 4.0
+const STAY_CABLE_TOWER_TOP_CLEARANCE_M := 4.0
+const STAY_CABLE_NIGHT_EMISSION_STRENGTH := 0.42
 const LOD_NEAR := 0
 const LOD_MID := 1
 const LOD_FAR := 2
@@ -354,6 +359,8 @@ func _make_materials() -> void:
 	_concrete_material = _make_surface_material(Color("#A6A49C"), 0.0, 0.91, 0.075, 0.055)
 	_guardrail_material = _make_surface_material(Color("#A9B1B6"), 0.48, 0.58, 0.025, 0.3)
 	_cable_material = _make_surface_material(Color("#383E44"), 0.14, 0.75, 0.02, 0.1)
+	_cable_material.set_shader_parameter("night_emission_color", Color("#E8EFF2"))
+	_cable_material.set_shader_parameter("use_instance_emission_scale", true)
 	_pylon_materials.clear()
 	_island_outline_material = _make_material(Color("#a59f8d"), true)
 	_portal_material = _make_material(Color("#20282d"), true)
@@ -402,6 +409,8 @@ func _update_night_lighting(force: bool = false) -> void:
 	_night_factor = next_night_factor
 	if is_instance_valid(_deck_light_material):
 		_deck_light_material.emission_energy_multiplier = 2.0 * _night_factor
+	if is_instance_valid(_cable_material):
+		_cable_material.set_shader_parameter("night_emission_strength", STAY_CABLE_NIGHT_EMISSION_STRENGTH * _night_factor)
 	if is_instance_valid(_pylon_beacon_material):
 		_pylon_beacon_material.emission_energy_multiplier = 1.8 * _night_factor
 	for outline_material_value in _pylon_outline_materials.values():
@@ -1572,41 +1581,105 @@ func _add_stay_cables(parent: Node3D) -> void:
 	cylinder.height = 1.0
 	cylinder.radial_segments = 4
 	var transforms: Array[Transform3D] = []
+	var night_visibility_scales := PackedFloat32Array()
 	var high_start := _high_bridge_start_m()
 	var high_end := _high_bridge_end_m()
+	var cable_angle_radians := deg_to_rad(STAY_CABLE_DESIGN_ANGLE_DEGREES)
+	var cable_angle_tangent := tan(cable_angle_radians)
+	var pylon_height := float(_layout.get("official_facts", {}).get("pylon_height_m", 203.5))
+	var highest_tower_anchor_y := _sea_level_y + pylon_height - STAY_CABLE_TOWER_TOP_CLEARANCE_M
 	for pylon in _pylon_runtime:
 		var station := float(pylon["station_m"])
-		for side in [-1.0, 1.0]:
-			var available := (high_end - station) if side > 0.0 else (station - high_start)
-			var max_distance := clampf(available - 8.0, 30.0, 490.0)
-			for index in range(20):
-				var fraction := float(index + 1) / 20.0
-				var target_station := clampf(station + side * lerpf(32.0, max_distance, fraction), high_start + 5.0, high_end - 5.0)
+		var pylon_position: Vector3 = pylon["position"]
+		var pylon_centerline_position := _position_at_station(station)
+		var pylon_right := Vector3.UP.cross(_tangent_at_station(station)).normalized()
+		var pylon_lateral_offset := (pylon_position - pylon_centerline_position).dot(pylon_right)
+		if absf(pylon_lateral_offset) < 1.0:
+			continue
+		var other_group_station := _other_pylon_group_station(pylon)
+		for longitudinal_direction in [-1.0, 1.0]:
+			var toward_other_pylon_group: bool = not is_nan(other_group_station) and (other_group_station - station) * longitudinal_direction > 0.0
+			var span_boundary_station := (station + other_group_station) * 0.5 if toward_other_pylon_group else (high_end if longitudinal_direction > 0.0 else high_start)
+			var available_distance := absf(span_boundary_station - station) - STAY_CABLE_MIDSPAN_CLEARANCE_M
+			if available_distance < STAY_CABLE_DECK_SPACING_M:
+				continue
+			var cable_distance := STAY_CABLE_DECK_SPACING_M
+			while cable_distance <= available_distance + 0.001:
+				var target_station: float = station + longitudinal_direction * cable_distance
+				if target_station <= high_start or target_station >= high_end:
+					break
 				var deck_position := _position_at_station(target_station)
-				var pylon_position: Vector3 = pylon["position"]
-				var start_height := lerpf(104.0, 197.0, fraction)
-				var start := Vector3(pylon_position.x, _sea_level_y + start_height, pylon_position.z)
-				var finish := Vector3(deck_position.x, _underside_height_at_station(target_station) + 9.2, deck_position.z)
+				var deck_right := Vector3.UP.cross(_tangent_at_station(target_station)).normalized()
+				var finish := deck_position + deck_right * pylon_lateral_offset
+				finish.y = _underside_height_at_station(target_station) + ROAD_DECK_TOP_OFFSET_M
+				var horizontal_distance := Vector2(finish.x - pylon_position.x, finish.z - pylon_position.z).length()
+				var start_y := finish.y + horizontal_distance * cable_angle_tangent
+				if start_y > highest_tower_anchor_y:
+					break
+				var start := Vector3(pylon_position.x, start_y, pylon_position.z)
 				var delta := finish - start
 				var length := delta.length()
-				if length <= 1.0:
-					continue
-				var rotation := Quaternion(Vector3.UP, delta / length)
-				var basis := Basis(rotation).scaled(Vector3(1.0, length, 1.0))
-				transforms.append(Transform3D(basis, (start + finish) * 0.5))
+				if length > 1.0:
+					transforms.append(_stay_cable_transform(start, finish))
+					var outward_blend := clampf(
+						(cable_distance - STAY_CABLE_DECK_SPACING_M)
+						/ maxf(available_distance - STAY_CABLE_DECK_SPACING_M, 1.0),
+						0.0,
+						1.0
+					)
+					night_visibility_scales.append(lerpf(1.0, 0.70, outward_blend))
+				cable_distance += STAY_CABLE_DECK_SPACING_M
 	if transforms.is_empty():
 		return
 	var multi_mesh := MultiMesh.new()
 	multi_mesh.transform_format = MultiMesh.TRANSFORM_3D
+	multi_mesh.use_custom_data = true
 	multi_mesh.mesh = cylinder
 	multi_mesh.instance_count = transforms.size()
 	for index in range(transforms.size()):
 		multi_mesh.set_instance_transform(index, transforms[index])
+		multi_mesh.set_instance_custom_data(index, Color(night_visibility_scales[index], 0.0, 0.0, 1.0))
 	var cables := MultiMeshInstance3D.new()
-	cables.name = "StayCables_80Pairs_Graybox"
+	cables.name = "StayCables_%d_Graybox" % transforms.size()
 	cables.multimesh = multi_mesh
 	cables.material_override = _cable_material
 	parent.add_child(cables)
+
+
+func _stay_cable_transform(tower_anchor: Vector3, deck_anchor: Vector3) -> Transform3D:
+	var delta := deck_anchor - tower_anchor
+	var length := delta.length()
+	var direction := delta / maxf(length, 0.001)
+	var rotation := Quaternion(Vector3.UP, direction)
+	var basis := Basis(rotation).scaled_local(Vector3(1.0, length, 1.0))
+	var cable_transform := Transform3D(basis, (tower_anchor + deck_anchor) * 0.5)
+	if OS.is_debug_build():
+		var cylinder_bottom := cable_transform * Vector3(0.0, -0.5, 0.0)
+		var cylinder_top := cable_transform * Vector3(0.0, 0.5, 0.0)
+		assert(cylinder_bottom.distance_to(tower_anchor) < 0.02, "Stay cable mesh bottom is not at its tower anchor.")
+		assert(cylinder_top.distance_to(deck_anchor) < 0.02, "Stay cable mesh top is not at its deck anchor.")
+	return cable_transform
+
+
+func _other_pylon_group_station(pylon: Dictionary) -> float:
+	var record: Dictionary = pylon.get("record", {})
+	var way_id := int(record.get("way_id", -1))
+	var own_group_id := ""
+	for group in _pylon_groups:
+		var support_ids: Variant = group.get("support_way_ids", [])
+		if support_ids is Array and support_ids.has(way_id):
+			own_group_id = str(group.get("group_id", ""))
+			break
+	if own_group_id.is_empty():
+		return NAN
+	for group in _pylon_groups:
+		if str(group.get("group_id", "")) == own_group_id:
+			continue
+		var group_position := _group_world_position(str(group.get("group_id", "")))
+		if group_position == Vector3.INF:
+			continue
+		return float(_project_to_centerline(group_position).get("station_m", NAN))
+	return NAN
 
 
 func _position_at_station(station: float) -> Vector3:
