@@ -173,6 +173,15 @@ vec3 N_DEG(float x, float z, float t, float Steepness, float Amplitude, float Di
 	return result;
 }
 
+float water_fade_out(float fade_min, float fade_max, float value) {
+	float fade_start = min(fade_min, fade_max);
+	float fade_end = max(fade_min, fade_max);
+	if (fade_start >= fade_end) {
+		return value < fade_start ? 1.0 : 0.0;
+	}
+	return 1.0 - smoothstep(fade_start, fade_end, value);
+}
+
 // Rotate a vector from vec3(0,1,0) to the normal, rotation about the z and y axes.
 vec3 rotate_to_normal(vec3 point, vec3 normal)
 {
@@ -255,7 +264,7 @@ void vertex() {
 	
 	float vertex_fade_alpha = 1.0;
 #ifdef VERTEX_WAVE_FADE
-	vertex_fade_alpha = smoothstep(vertex_wave_fade_max, vertex_wave_fade_min, distance_from_camera);
+	vertex_fade_alpha = water_fade_out(vertex_wave_fade_min, vertex_wave_fade_max, distance_from_camera);
 #endif
 	
 	// Calculate offset for every wave, take average
@@ -356,14 +365,14 @@ void fragment() {
 	float foam_fade_alpha = 1.0;
 	float shore_fade_alpha = 1.0;
 #ifdef DISTANCE_FADE
-	ALPHA *= smoothstep(distance_fade_max, distance_fade_min, distance_from_camera);
+	ALPHA *= water_fade_out(distance_fade_min, distance_fade_max, distance_from_camera);
 	ALPHA *= smoothstep(near_fade_min, near_fade_max, distance_from_camera);
 #endif
 #ifdef FOAM_FADE
-	foam_fade_alpha = smoothstep(foam_fade_max, foam_fade_min, distance_from_camera);
+	foam_fade_alpha = water_fade_out(foam_fade_min, foam_fade_max, distance_from_camera);
 #endif
 #ifdef SHORE_FADE
-	shore_fade_alpha = smoothstep(shore_fade_max, shore_fade_min, distance_from_camera);
+	shore_fade_alpha = water_fade_out(shore_fade_min, shore_fade_max, distance_from_camera);
 #endif
 	
 	if (ALPHA <= 0.0) {
