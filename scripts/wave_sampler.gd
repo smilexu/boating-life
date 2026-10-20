@@ -13,6 +13,8 @@ const EXTREME_TRANSITION_SECONDS := 2.5
 const EXTREME_SHAPE_TRANSITION_SECONDS := EXTREME_TRANSITION_SECONDS
 
 @export_node_path("Node3D") var ocean_path := NodePath("../Ocean")
+## World-space point whose wave phase stays continuous while test wavelengths change.
+@export_node_path("Node3D") var phase_anchor_path := NodePath("../PlayerBoat/MotionRoot")
 
 @export var wave_settings: SeaWaveSettings:
 	set(value):
@@ -31,6 +33,7 @@ const EXTREME_SHAPE_TRANSITION_SECONDS := EXTREME_TRANSITION_SECONDS
 
 var wave_time_seconds := 0.0
 var _ocean: Node3D
+var _phase_anchor: Node3D
 var _extreme_test_active := false
 var _extreme_test_restoring := false
 var _extreme_test_target_height_m := 0.0
@@ -43,6 +46,10 @@ var _transition_output_settings: SeaWaveSettings
 var _transition_from_strength := 1.0
 var _transition_output_strength := 1.0
 var _transition_duration_seconds := EXTREME_TRANSITION_SECONDS
+var _transition_phase_anchor_world := Vector2.ZERO
+var _transition_anchor_phase_radians: Array[float] = []
+var _transition_phase_correction_radians: Array[float] = []
+var _transition_phase_correction_start_progress := 0.0
 var _wave_parameter_revision := 0
 
 
@@ -52,6 +59,7 @@ func _enter_tree() -> void:
 
 func _ready() -> void:
 	_ocean = get_node_or_null(ocean_path) as Node3D
+	_phase_anchor = get_node_or_null(phase_anchor_path) as Node3D
 	_apply_wave_parameters()
 
 
@@ -59,11 +67,12 @@ func _process(delta: float) -> void:
 	if Engine.is_editor_hint():
 		return
 
+	if water_material != null:
+		wave_time_seconds = fposmod(wave_time_seconds + delta, TIME_WRAP_SECONDS)
 	if _transition_active:
 		_advance_extreme_transition(delta)
 	if water_material == null:
 		return
-	wave_time_seconds = fposmod(wave_time_seconds + delta, TIME_WRAP_SECONDS)
 	water_material.set_shader_parameter("WaveTime", wave_time_seconds)
 
 
@@ -90,6 +99,7 @@ func set_extreme_sea_test(settings: SeaWaveSettings, target_height_m: float) -> 
 	if same_test_target and _transition_active:
 		# During a transition, keep the current interpolation clock and replace
 		# only its endpoint so continuous slider drags do not restart the blend.
+		_reanchor_transition_phase_continuity(false)
 		return true
 	var duration := EXTREME_SHAPE_TRANSITION_SECONDS if same_test_target else EXTREME_TRANSITION_SECONDS
 	_begin_extreme_transition(from_settings, from_strength, duration)
@@ -312,6 +322,7 @@ func _begin_extreme_transition(
 	_transition_elapsed = 0.0
 	_transition_duration_seconds = maxf(duration_seconds, 0.01)
 	_transition_active = true
+	_reanchor_transition_phase_continuity(true)
 	_apply_wave_parameters()
 
 
@@ -331,18 +342,25 @@ func _advance_extreme_transition(delta: float) -> void:
 		_extreme_test_restoring = false
 		_apply_wave_parameters()
 		return
+	var phase_correction_weight := _get_transition_phase_correction_weight(linear_weight)
 	for index in range(_transition_output_settings.waves.size()):
 		var from_wave: GerstnerWave = _transition_from_settings.waves[index]
 		var target_wave: GerstnerWave = target_settings.waves[index]
 		var output_wave: GerstnerWave = _transition_output_settings.waves[index]
+		var previous_omega := output_wave.speed
 		output_wave.steepness = lerpf(from_wave.steepness, target_wave.steepness, weight)
 		output_wave.amplitude = lerpf(from_wave.amplitude, target_wave.amplitude, weight)
 		output_wave.direction_degrees = _lerp_degrees(from_wave.direction_degrees, target_wave.direction_degrees, weight)
 		output_wave.frequency = lerpf(from_wave.frequency, target_wave.frequency, weight)
 		output_wave.speed = lerpf(from_wave.speed, target_wave.speed, weight)
-		output_wave.phase_degrees = _lerp_degrees(from_wave.phase_degrees, target_wave.phase_degrees, weight)
+		var phase_time_delta := delta if _is_wave_time_advancing() else 0.0
+		_transition_anchor_phase_radians[index] += (previous_omega + output_wave.speed) * 0.5 * phase_time_delta
+		var desired_anchor_phase := (
+			_transition_anchor_phase_radians[index]
+			+ _transition_phase_correction_radians[index] * phase_correction_weight
+		)
+		output_wave.phase_degrees = _solve_phase_degrees_at_anchor(output_wave, desired_anchor_phase)
 	_transition_output_strength = lerpf(_transition_from_strength, target_strength, weight)
-	_apply_wave_parameters()
 	if linear_weight >= 1.0:
 		_transition_active = false
 		if _extreme_test_restoring:
@@ -350,7 +368,108 @@ func _advance_extreme_transition(delta: float) -> void:
 			_extreme_test_restoring = false
 			_extreme_test_target_height_m = 0.0
 			_extreme_test_settings = null
-			_apply_wave_parameters()
+	_apply_wave_parameters()
+
+
+func _reanchor_transition_phase_continuity(reset_anchor: bool) -> void:
+	# Interpolating frequency/direction changes k·x by many cycles at large
+	# world coordinates. Integrate the local angular phase and solve the shader
+	# phase offset so that this coordinate does not inherit that spatial drift.
+	if _transition_output_settings == null or _transition_from_settings == null:
+		return
+	var target_settings := wave_settings if _extreme_test_restoring else _extreme_test_settings
+	if target_settings == null or target_settings.waves.size() != _transition_output_settings.waves.size():
+		return
+	if reset_anchor or _transition_anchor_phase_radians.size() != _transition_output_settings.waves.size():
+		_transition_phase_anchor_world = _get_phase_anchor_world_xz()
+	_transition_anchor_phase_radians.clear()
+	_transition_phase_correction_radians.clear()
+	var start_progress := clampf(_transition_elapsed / _transition_duration_seconds, 0.0, 1.0)
+	_transition_phase_correction_start_progress = start_progress
+	var remaining_duration := _transition_duration_seconds * (1.0 - start_progress)
+	var effective_phase_time := _get_effective_wave_phase_time()
+	var phase_time_remaining := remaining_duration if _is_wave_time_advancing() else 0.0
+	var target_phase_time := (
+		fposmod(wave_time_seconds + remaining_duration, TIME_WRAP_SECONDS)
+		if _is_wave_time_advancing()
+		else effective_phase_time
+	)
+	for index in range(_transition_output_settings.waves.size()):
+		var current_wave: GerstnerWave = _transition_output_settings.waves[index]
+		var from_wave: GerstnerWave = _transition_from_settings.waves[index]
+		var target_wave: GerstnerWave = target_settings.waves[index]
+		var current_phase := _wave_phase_at_anchor(current_wave, _transition_phase_anchor_world, effective_phase_time)
+		_transition_anchor_phase_radians.append(current_phase)
+		var average_weight := _average_transition_weight(start_progress)
+		var predicted_end_phase := current_phase + phase_time_remaining * lerpf(
+			from_wave.speed,
+			target_wave.speed,
+			average_weight
+		)
+		var target_end_phase := _wave_phase_at_anchor(
+			target_wave,
+			_transition_phase_anchor_world,
+			target_phase_time
+		)
+		_transition_phase_correction_radians.append(_wrap_signed_radians(target_end_phase - predicted_end_phase))
+
+
+func _get_transition_phase_correction_weight(progress: float) -> float:
+	var remaining_progress := 1.0 - _transition_phase_correction_start_progress
+	if remaining_progress <= 0.000001:
+		return 1.0
+	var local_progress := clampf((progress - _transition_phase_correction_start_progress) / remaining_progress, 0.0, 1.0)
+	return local_progress * local_progress * (3.0 - 2.0 * local_progress)
+
+
+func _average_transition_weight(start_progress: float) -> float:
+	if start_progress >= 0.999999:
+		return 1.0
+	var integral_at_start := start_progress * start_progress * start_progress - 0.5 * pow(start_progress, 4.0)
+	return clampf((0.5 - integral_at_start) / (1.0 - start_progress), 0.0, 1.0)
+
+
+func _get_phase_anchor_world_xz() -> Vector2:
+	if is_instance_valid(_phase_anchor):
+		return Vector2(_phase_anchor.global_position.x, _phase_anchor.global_position.z)
+	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
+	if camera != null:
+		return Vector2(camera.global_position.x, camera.global_position.z)
+	return Vector2.ZERO
+
+
+func _wave_phase_at_anchor(wave: GerstnerWave, anchor_xz: Vector2, sample_time_seconds: float) -> float:
+	var direction_radians := deg_to_rad(wave.direction_degrees)
+	var direction := Vector2(sin(direction_radians), cos(direction_radians))
+	return (
+		TAU * wave.frequency * direction.dot(anchor_xz)
+		+ wave.speed * (sample_time_seconds + deg_to_rad(wave.phase_degrees))
+	)
+
+
+func _solve_phase_degrees_at_anchor(wave: GerstnerWave, desired_phase_radians: float) -> float:
+	if absf(wave.speed) <= 0.000001:
+		return wave.phase_degrees
+	var direction_radians := deg_to_rad(wave.direction_degrees)
+	var direction := Vector2(sin(direction_radians), cos(direction_radians))
+	var spatial_phase := TAU * wave.frequency * direction.dot(_transition_phase_anchor_world)
+	# P_DEG encodes phase as omega * (time + phase_radians), so solve its
+	# time-offset value rather than changing height or horizontal steepness.
+	var phase_time_seconds := (desired_phase_radians - spatial_phase) / wave.speed - _get_effective_wave_phase_time()
+	phase_time_seconds = fposmod(phase_time_seconds, TAU / absf(wave.speed))
+	return rad_to_deg(phase_time_seconds)
+
+
+func _is_wave_time_advancing() -> bool:
+	return water_material != null and not bool(water_material.get_shader_parameter("freeze_time"))
+
+
+func _get_effective_wave_phase_time() -> float:
+	return 0.0 if water_material != null and bool(water_material.get_shader_parameter("freeze_time")) else wave_time_seconds
+
+
+func _wrap_signed_radians(value: float) -> float:
+	return fposmod(value + PI, TAU) - PI
 
 
 func _copy_wave_settings(source: SeaWaveSettings) -> SeaWaveSettings:
