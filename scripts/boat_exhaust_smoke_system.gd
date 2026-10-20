@@ -96,7 +96,9 @@ func _create_particles() -> void:
 
 	var smoke_material := StandardMaterial3D.new()
 	smoke_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	smoke_material.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	# Exhaust should remain neutral gray-white at night instead of turning into
+	# a black plume when the scene has little ambient or direct light.
+	smoke_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	smoke_material.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED
 	smoke_material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	smoke_material.roughness = 1.0
@@ -172,10 +174,10 @@ func _make_scale_curve() -> CurveTexture:
 
 func _make_color_ramp() -> GradientTexture1D:
 	var gradient := Gradient.new()
-	gradient.set_color(0, Color(0.66, 0.68, 0.70, 0.04))
-	gradient.add_point(0.05, Color(0.66, 0.68, 0.70, 0.12))
-	gradient.add_point(0.56, Color(0.71, 0.73, 0.75, 0.10))
-	gradient.set_color(gradient.get_point_count() - 1, Color(0.75, 0.77, 0.79, 0.0))
+	gradient.set_color(0, Color(0.52, 0.54, 0.56, 0.05))
+	gradient.add_point(0.05, Color(0.52, 0.54, 0.56, 0.18))
+	gradient.add_point(0.56, Color(0.57, 0.59, 0.61, 0.16))
+	gradient.set_color(gradient.get_point_count() - 1, Color(0.62, 0.64, 0.66, 0.0))
 	var texture := GradientTexture1D.new()
 	texture.gradient = gradient
 	return texture
