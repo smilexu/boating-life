@@ -7,6 +7,7 @@ const COMPASS_HUD_SCRIPT := preload("res://scripts/compass_hud.gd")
 const LocalTimeControlScript := preload("res://scripts/local_world_time_control.gd")
 const MoonPositionScript := preload("res://scripts/moon_position.gd")
 const SolarPositionScript := preload("res://scripts/solar_position.gd")
+const ExtremeSeaStatePresetsScript := preload("res://scripts/extreme_sea_state_presets.gd")
 const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 
 @export_node_path("Node3D") var controller_path := NodePath("../MotionRoot")
@@ -61,6 +62,11 @@ var _sun_elevation_slider: HSlider
 var _sun_azimuth_slider: HSlider
 var _cloud_slider: HSlider
 var _wave_slider: HSlider
+var _extreme_sea_option: OptionButton
+var _extreme_sea_status: Label
+var _wave_compactness_slider: HSlider
+var _wave_sharpness_slider: HSlider
+var _extreme_wave_defaults_button: Button
 var _quality_option: OptionButton
 var _frame_limit_option: OptionButton
 var _window_mode_button: Button
@@ -425,6 +431,24 @@ func _build_debug_panel() -> void:
 	_wave_slider = _add_slider_row(layout, "波浪强度", 0.0, 2.0, 0.05)
 	_wave_slider.value = 1.05
 	_wave_slider.value_changed.connect(_on_wave_changed)
+	if OS.is_debug_build():
+		_extreme_sea_option = _add_option_row(layout, "极端海况测试", ["正常天气", "5 m", "10 m", "20 m", "30 m"])
+		_extreme_sea_option.item_selected.connect(_on_extreme_sea_selected)
+		_wave_compactness_slider = _add_slider_row(layout, "波浪紧凑度", 0.5, 2.5, 0.05)
+		_wave_compactness_slider.value = 1.0
+		_wave_compactness_slider.editable = false
+		_wave_compactness_slider.value_changed.connect(_on_extreme_wave_shape_changed)
+		_wave_sharpness_slider = _add_slider_row(layout, "波峰陡度", 0.0, 1.0, 0.01)
+		_wave_sharpness_slider.value = 0.0
+		_wave_sharpness_slider.editable = false
+		_wave_sharpness_slider.value_changed.connect(_on_extreme_wave_shape_changed)
+		_extreme_wave_defaults_button = Button.new()
+		_extreme_wave_defaults_button.text = "恢复默认波形"
+		_extreme_wave_defaults_button.disabled = true
+		_extreme_wave_defaults_button.pressed.connect(_on_extreme_wave_defaults_pressed)
+		layout.add_child(_extreme_wave_defaults_button)
+		_extreme_sea_status = _make_debug_label()
+		layout.add_child(_extreme_sea_status)
 
 	var settings_title := Label.new()
 	settings_title.text = "性能与显示"
@@ -1206,6 +1230,7 @@ func _refresh_weather_controls() -> void:
 	_refresh_solar_controls()
 	_cloud_slider.set_value_no_signal(float(_weather_controller.call("get_cloud_coverage")))
 	_wave_slider.set_value_no_signal(float(_wave_sampler.get("wave_strength")) if _wave_sampler != null else 1.0)
+	_update_extreme_sea_status()
 	_weather_label.text = "当前天气：%s   ·   按 1 / 2 / 3 切换" % _weather_controller.get("current_weather_name")
 
 
@@ -1234,9 +1259,15 @@ func _update_debug_status() -> void:
 		if not _cloud_slider.has_focus():
 			_cloud_slider.set_value_no_signal(float(_weather_controller.call("get_cloud_coverage")))
 	if _wave_sampler != null:
-		_wave_label.text = "波浪强度：%.2f" % float(_wave_sampler.get("wave_strength"))
+		var extreme_active := bool(_wave_sampler.call("is_extreme_sea_test_active")) if _wave_sampler.has_method("is_extreme_sea_test_active") else false
+		if extreme_active:
+			_wave_label.text = "极端海况：目标 %.0f m · Shader / WaveSampler 同步" % float(_wave_sampler.call("get_extreme_sea_test_target_height"))
+		else:
+			_wave_label.text = "波浪强度：%.2f" % float(_wave_sampler.get("wave_strength"))
 		if not _wave_slider.has_focus():
 			_wave_slider.set_value_no_signal(float(_wave_sampler.get("wave_strength")))
+		_wave_slider.editable = not extreme_active
+		_update_extreme_sea_status()
 	var fps := Engine.get_frames_per_second()
 	var draw_calls := int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	var visible_objects := int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
@@ -1570,6 +1601,107 @@ func _on_wave_changed(value: float) -> void:
 		_weather_controller.call("set_wave_strength", value)
 	elif _wave_sampler != null:
 		_wave_sampler.set("wave_strength", value)
+
+
+func _on_extreme_sea_selected(index: int) -> void:
+	if _wave_sampler == null or not _wave_sampler.has_method("clear_extreme_sea_test"):
+		return
+	if index == 0:
+		_wave_sampler.call("clear_extreme_sea_test")
+		_update_extreme_sea_status()
+		return
+	if not _apply_selected_extreme_sea_shape():
+		_extreme_sea_option.select(0)
+		_update_extreme_sea_status()
+		return
+	_wave_slider.editable = false
+	_update_extreme_sea_status()
+
+
+func _on_extreme_wave_shape_changed(_value: float) -> void:
+	if _extreme_sea_option == null or _extreme_sea_option.selected == 0:
+		return
+	_apply_selected_extreme_sea_shape()
+	_update_extreme_sea_status()
+
+
+func _on_extreme_wave_defaults_pressed() -> void:
+	if _wave_compactness_slider == null or _wave_sharpness_slider == null:
+		return
+	_wave_compactness_slider.set_value_no_signal(1.0)
+	_wave_sharpness_slider.set_value_no_signal(0.0)
+	if _extreme_sea_option != null and _extreme_sea_option.selected > 0:
+		_apply_selected_extreme_sea_shape()
+	_update_extreme_sea_status()
+
+
+func _apply_selected_extreme_sea_shape() -> bool:
+	if _wave_sampler == null or _extreme_sea_option == null or _extreme_sea_option.selected == 0:
+		return false
+	if not _wave_sampler.has_method("set_extreme_sea_test"):
+		return false
+	var targets := [5.0, 10.0, 20.0, 30.0]
+	var target_height_m: float = targets[_extreme_sea_option.selected - 1]
+	var base_settings := _wave_sampler.get("wave_settings") as SeaWaveSettings
+	var compactness := float(_wave_compactness_slider.value) if _wave_compactness_slider != null else 1.0
+	var sharpness := float(_wave_sharpness_slider.value) if _wave_sharpness_slider != null else 0.0
+	var test_settings: SeaWaveSettings = ExtremeSeaStatePresetsScript.build_settings(
+		base_settings,
+		target_height_m,
+		compactness,
+		sharpness
+	)
+	if test_settings == null:
+		return false
+	return bool(_wave_sampler.call("set_extreme_sea_test", test_settings, target_height_m))
+
+
+func _update_extreme_sea_status() -> void:
+	if _extreme_sea_status == null or _extreme_sea_option == null:
+		return
+	if _wave_sampler == null:
+		_extreme_sea_status.text = "WaveSampler 未连接"
+		return
+	var selected := _extreme_sea_option.selected
+	var test_active := bool(_wave_sampler.call("is_extreme_sea_test_active")) if _wave_sampler.has_method("is_extreme_sea_test_active") else false
+	_wave_slider.editable = not test_active
+	var transitioning := bool(_wave_sampler.call("is_extreme_sea_test_transitioning")) if _wave_sampler.has_method("is_extreme_sea_test_transitioning") else false
+	var restoring := bool(_wave_sampler.call("is_extreme_sea_test_restoring")) if _wave_sampler.has_method("is_extreme_sea_test_restoring") else false
+	var shape_controls_active := selected > 0 and test_active and not restoring
+	if _wave_compactness_slider != null:
+		_wave_compactness_slider.editable = shape_controls_active
+	if _wave_sharpness_slider != null:
+		_wave_sharpness_slider.editable = shape_controls_active
+	if _extreme_wave_defaults_button != null:
+		_extreme_wave_defaults_button.disabled = not shape_controls_active
+	if selected == 0:
+		_extreme_sea_status.text = "正常天气波浪" + (" · 正在平滑恢复" if transitioning else " · 天气系统接管")
+		return
+	var targets := [5.0, 10.0, 20.0, 30.0]
+	var target_height_m: float = targets[selected - 1]
+	var compactness := float(_wave_compactness_slider.value) if _wave_compactness_slider != null else 1.0
+	var sharpness := float(_wave_sharpness_slider.value) if _wave_sharpness_slider != null else 0.0
+	var profile: Dictionary = ExtremeSeaStatePresetsScript.profile_for_height(target_height_m, compactness)
+	var state_text := "参数平滑过渡中" if transitioning else "测试参数已应用"
+	if restoring:
+		state_text = "正在恢复当前天气波浪"
+	_extreme_sea_status.text = "目标波高 %.0f m（波峰到波谷构造包络，不等同显著波高）\n紧凑度 %.2f · 波峰陡度 %.2f\n主涌浪 λ %.1f m / %.1f s；次涌浪 λ %.1f m / %.1f s；中尺度 λ %.1f m / %.1f s\n%s" % [
+		target_height_m,
+		compactness,
+		sharpness,
+		float(profile["main_wavelength_m"]),
+		float(profile["main_period_s"]),
+		float(profile["cross_wavelength_m"]),
+		float(profile["cross_period_s"]),
+		float(profile["medium_wavelength_m"]),
+		float(profile["medium_period_s"]),
+		state_text,
+	]
+
+
+func _exit_tree() -> void:
+	if is_instance_valid(_wave_sampler) and _wave_sampler.has_method("clear_extreme_sea_test"):
+		_wave_sampler.call("clear_extreme_sea_test")
 
 
 func _on_quality_selected(index: int) -> void:

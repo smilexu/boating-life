@@ -36,7 +36,7 @@ var _density_target := 1.0
 var _density_change_time := 0.0
 var _seconds_since_emission := 0.0
 var _particle_system_live := false
-var _source_wave_strength := -1.0
+var _source_wave_parameter_revision := -1
 
 
 func _ready() -> void:
@@ -331,8 +331,13 @@ func _sync_wave_parameters(force: bool) -> void:
 	var wave_settings := _wave_sampler.get("wave_settings") as SeaWaveSettings
 	var source_material := _wave_sampler.get("water_material") as ShaderMaterial
 	var strength := float(_wave_sampler.get("wave_strength"))
+	var parameter_revision := -1
+	if _wave_sampler.has_method("get_effective_wave_settings"):
+		wave_settings = _wave_sampler.call("get_effective_wave_settings") as SeaWaveSettings
+		strength = float(_wave_sampler.call("get_effective_wave_strength"))
+		parameter_revision = int(_wave_sampler.call("get_wave_parameter_revision"))
 	var count := 0 if wave_settings == null else mini(wave_settings.waves.size(), MAX_WAVES)
-	if force or absf(strength - _source_wave_strength) > 0.001:
+	if force or parameter_revision != _source_wave_parameter_revision:
 		var steepnesses := PackedFloat32Array()
 		var amplitudes := PackedFloat32Array()
 		var directions := PackedFloat32Array()
@@ -355,7 +360,7 @@ func _sync_wave_parameters(force: bool) -> void:
 		_draw_material.set_shader_parameter("wave_frequency", frequencies)
 		_draw_material.set_shader_parameter("wave_speed", speeds)
 		_draw_material.set_shader_parameter("wave_phase_degrees", phases)
-		_source_wave_strength = strength
+		_source_wave_parameter_revision = parameter_revision
 	if source_material != null:
 		var frozen := bool(source_material.get_shader_parameter("freeze_time"))
 		_draw_material.set_shader_parameter("wave_time", 0.0 if frozen else wave_time)
