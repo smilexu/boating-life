@@ -2,6 +2,8 @@ class_name OresundBridge
 extends Node3D
 
 const BRIDGE_SURFACE_SHADER: Shader = preload("res://shaders/oresund_bridge_surface.gdshader")
+const BRIDGE_FAR_LIGHT_PROXY_SHADER: Shader = preload("res://shaders/bridge_far_light_proxy.gdshader")
+const BRIDGE_FAR_LIGHT_STRIP_SHADER: Shader = preload("res://shaders/bridge_far_light_strip.gdshader")
 
 ## GPS-anchored, streamed greybox of the Øresund Bridge.
 ## All horizontal placement comes from the bundled OSM support/coastline data.
@@ -11,6 +13,7 @@ const BRIDGE_SURFACE_SHADER: Shader = preload("res://shaders/oresund_bridge_surf
 const HIGH_BRIDGE_START_M := 3014.0
 const HIGH_BRIDGE_END_M := 4106.0
 const SPATIAL_CELL_LENGTH_M := 500.0
+const DECK_VISUAL_SAMPLE_SPACING_M := 35.0
 const LOWER_DECK_WIDTH_M := 20.0
 const LOWER_DECK_THICKNESS_M := 1.2
 const ROAD_DECK_SOFFIT_OFFSET_M := 6.8
@@ -38,6 +41,33 @@ const LOD_HIDDEN := -1
 @export_range(0.1, 2.0, 0.1) var lod_update_interval_seconds := 0.5
 @export var developer_tools_enabled := true
 
+@export_category("Far night-light LOD")
+@export_range(100.0, 2500.0, 50.0) var far_light_fade_in_start_m := 500.0
+@export_range(500.0, 4000.0, 100.0) var far_light_fade_in_end_m := 2000.0
+@export_range(3000.0, 12000.0, 250.0) var far_light_fade_out_start_m := 9000.0
+@export_range(5000.0, 20000.0, 500.0) var far_light_max_distance_m := 12000.0
+@export_range(50.0, 250.0, 10.0) var far_deck_light_spacing_m := 120.0
+@export_range(1, 8, 1) var far_stay_proxy_every_nth_cable := 4
+@export_range(0.0, 8.0, 0.1) var far_deck_light_emission := 1.5
+@export_range(0.0, 5.0, 0.1) var far_tower_light_emission := 2.0
+@export_range(0.0, 3.0, 0.1) var far_stay_light_emission := 1.0
+@export_range(0.0, 5.0, 0.1) var far_main_span_color_emission := 2.7
+@export_range(0.5, 3.0, 0.1) var far_deck_point_screen_size_px := 1.1
+@export_range(1.0, 4.0, 0.1) var far_tower_point_screen_size_px := 2.6
+@export_range(0.5, 2.5, 0.1) var far_stay_point_screen_size_px := 1.2
+@export_range(2.0, 6.0, 0.1) var far_main_span_color_screen_size_px := 4.0
+@export_range(8.0, 36.0, 0.5) var far_point_max_world_size_m := 28.0
+@export_range(12.0, 48.0, 0.5) var far_color_max_world_size_m := 42.0
+@export_range(15.0, 35.0, 1.0) var far_deck_strip_segment_length_m := 25.0
+@export_range(0.0, 12.0, 1.0) var far_deck_strip_gap_m := 5.0
+@export_range(0.5, 3.0, 0.1) var far_deck_strip_screen_width_px := 1.4
+@export_range(0.0, 8.0, 0.1) var far_deck_strip_emission := 5.2
+@export_range(8.0, 32.0, 0.5) var far_deck_strip_max_world_width_m := 28.0
+@export_range(12.1, 18.0, 0.1) var far_deck_strip_lateral_offset_m := 13.0
+@export_range(12.0, 18.0, 0.1) var far_deck_light_lateral_offset_m := 13.2
+@export_range(0.0, 0.25, 0.005) var far_light_fog_attenuation_strength := 0.18
+@export var far_light_extra_weather_attenuation_enabled := true
+
 @export_category("Optional GLB replacement sockets")
 ## A replacement scene is anchored to the OSM pylon footprint; the GPS layout
 ## and collision location stay independent of the model asset.
@@ -57,6 +87,7 @@ var _boat: Node3D
 var _wave_sampler: Node
 var _navigation_depth_provider: Node
 var _day_night_controller: Node
+var _world_environment: WorldEnvironment
 var _layout: Dictionary = {}
 var _pier_records: Array[Dictionary] = []
 var _pylon_records: Array[Dictionary] = []
@@ -83,7 +114,6 @@ var _peberholm_flora_removed_count := 0
 var _sea_level_y := 0.0
 var _endpoint_extension_m := 0.0
 var _near_material: ShaderMaterial
-var _far_material: ShaderMaterial
 var _road_material: ShaderMaterial
 var _guardrail_material: ShaderMaterial
 var _concrete_material: ShaderMaterial
@@ -98,13 +128,31 @@ var _pylon_crossbeam_materials: Dictionary = {}
 var _night_emissive_nodes: Array[GeometryInstance3D] = []
 var _night_lights: Array[Light3D] = []
 var _pier_night_lights: Array[Light3D] = []
+var _far_light_proxy_batches: Array[Dictionary] = []
+var _far_deck_proxy_positions: Array[Vector3] = []
+var _far_tower_proxy_positions: Array[Vector3] = []
+var _far_stay_proxy_positions: Array[Vector3] = []
+var _far_red_proxy_positions: Array[Vector3] = []
+var _far_blue_proxy_positions: Array[Vector3] = []
+var _far_deck_strip_segments: Array[Dictionary] = []
+var _far_proxy_root: Node3D
+var _far_proxy_quad_mesh: QuadMesh
+var _far_strip_quad_mesh: QuadMesh
+var _far_strip_instance: MultiMeshInstance3D
+var _far_strip_material: ShaderMaterial
+var _far_proxy_in_range_counts := PackedInt32Array([0, 0, 0, 0, 0])
+var _far_proxy_nearest_distance_m := INF
+var _far_strip_in_range_count := 0
 var _high_span_root: Node3D
 var _high_span_lod := LOD_HIDDEN
 var _debug_panel: PanelContainer
 var _debug_label: Label
+var _far_light_controls: VBoxContainer
+var _far_light_slider_value_labels: Dictionary = {}
 var _lod_elapsed := 0.0
 var _night_lighting_elapsed := 0.0
 var _night_factor := 0.0
+var _near_stay_lighting_factor := 1.0
 var _debug_enabled := false
 var _teleport_index := -1
 var _last_teleport_name := "未使用"
@@ -118,6 +166,7 @@ func _ready() -> void:
 	_wave_sampler = get_node_or_null(wave_sampler_path)
 	_navigation_depth_provider = get_node_or_null(navigation_depth_provider_path)
 	_day_night_controller = get_node_or_null("../DayNightVisualController")
+	_world_environment = get_node_or_null("../WorldEnvironment") as WorldEnvironment
 	process_priority = 110
 	_update_sea_reference()
 	_make_materials()
@@ -128,11 +177,13 @@ func _ready() -> void:
 	_build_spatial_cells()
 	_build_malmo_approach_cells()
 	_build_peberholm_approach_cells()
+	_build_far_light_proxies()
 	_build_peberholm_outline()
 	_build_debug_markers()
 	_build_debug_panel()
 	_update_night_lighting(true)
 	_update_lods()
+	_update_far_light_proxies()
 
 
 func _process(delta: float) -> void:
@@ -146,6 +197,7 @@ func _process(delta: float) -> void:
 		if not is_instance_valid(_boat):
 			_boat = get_node_or_null(player_boat_path) as Node3D
 		_update_lods()
+		_update_far_light_proxies()
 	if _debug_enabled:
 		_update_debug_panel()
 
@@ -195,6 +247,20 @@ func reproject_for_georeference_change() -> void:
 	_night_emissive_nodes.clear()
 	_night_lights.clear()
 	_pier_night_lights.clear()
+	_far_light_proxy_batches.clear()
+	_far_deck_proxy_positions.clear()
+	_far_tower_proxy_positions.clear()
+	_far_stay_proxy_positions.clear()
+	_far_red_proxy_positions.clear()
+	_far_blue_proxy_positions.clear()
+	_far_deck_strip_segments.clear()
+	_far_proxy_root = null
+	_far_strip_instance = null
+	_far_strip_material = null
+	_far_proxy_in_range_counts = PackedInt32Array([0, 0, 0, 0, 0])
+	_far_proxy_nearest_distance_m = INF
+	_far_strip_in_range_count = 0
+	_near_stay_lighting_factor = 1.0
 	_high_span_root = null
 	_high_span_lod = LOD_HIDDEN
 	_build_centerline()
@@ -202,6 +268,7 @@ func reproject_for_georeference_change() -> void:
 	_build_spatial_cells()
 	_build_malmo_approach_cells()
 	_build_peberholm_approach_cells()
+	_build_far_light_proxies()
 	_build_peberholm_outline()
 	_build_debug_markers()
 	_update_lods()
@@ -286,6 +353,21 @@ func get_debug_snapshot() -> Dictionary:
 		"peberholm_flora_removed_count": _peberholm_flora_removed_count,
 		"peberholm_entry_portal_world": _peberholm_approach_position(maxf(_peberholm_approach_length_m - float(_peberholm_approach_config.get("portal_distance_from_end_m", 40.0)), 0.0)) if _peberholm_approach_length_m > 0.0 else Vector3.ZERO,
 		"high_span_lod": _lod_name(_high_span_lod),
+		"far_deck_proxy_count": _far_deck_proxy_positions.size(),
+		"far_tower_proxy_count": _far_tower_proxy_positions.size(),
+		"far_stay_proxy_count": _far_stay_proxy_positions.size(),
+		"far_red_proxy_count": _far_red_proxy_positions.size(),
+		"far_blue_proxy_count": _far_blue_proxy_positions.size(),
+		"far_deck_strip_count": _far_deck_strip_segments.size(),
+		"far_deck_strip_in_range": _far_strip_in_range_count,
+		"far_proxy_deck_in_range": int(_far_proxy_in_range_counts[0]) if _far_proxy_in_range_counts.size() > 0 else 0,
+		"far_proxy_tower_in_range": int(_far_proxy_in_range_counts[1]) if _far_proxy_in_range_counts.size() > 1 else 0,
+		"far_proxy_stay_in_range": int(_far_proxy_in_range_counts[2]) if _far_proxy_in_range_counts.size() > 2 else 0,
+		"far_proxy_red_in_range": int(_far_proxy_in_range_counts[3]) if _far_proxy_in_range_counts.size() > 3 else 0,
+		"far_proxy_blue_in_range": int(_far_proxy_in_range_counts[4]) if _far_proxy_in_range_counts.size() > 4 else 0,
+		"far_proxy_nearest_distance_m": _far_proxy_nearest_distance_m,
+		"far_strip_visible": is_instance_valid(_far_strip_instance) and _far_strip_instance.visible,
+		"night_factor": _night_factor,
 		"sea_level_y": _sea_level_y,
 		"endpoint_extension_m": _endpoint_extension_m,
 		"start_latitude_deg": start_geo.x,
@@ -355,7 +437,6 @@ func _update_sea_reference() -> void:
 
 func _make_materials() -> void:
 	_near_material = _make_surface_material(Color("#2E363C"), 0.22, 0.68, 0.035, 0.10)
-	_far_material = _make_surface_material(Color("#394147"), 0.12, 0.78, 0.025, 0.08)
 	_road_material = _make_surface_material(Color("#484A50"), 0.0, 0.94, 0.07, 0.15)
 	_concrete_material = _make_surface_material(Color("#A6A49C"), 0.0, 0.91, 0.075, 0.055)
 	_guardrail_material = _make_surface_material(Color("#A9B1B6"), 0.48, 0.58, 0.025, 0.3)
@@ -411,7 +492,7 @@ func _update_night_lighting(force: bool = false) -> void:
 	if is_instance_valid(_deck_light_material):
 		_deck_light_material.emission_energy_multiplier = 2.0 * NIGHT_LIGHTING_BOOST * _night_factor
 	if is_instance_valid(_cable_material):
-		_cable_material.set_shader_parameter("night_emission_strength", STAY_CABLE_NIGHT_EMISSION_STRENGTH * NIGHT_LIGHTING_BOOST * _night_factor)
+		_apply_stay_night_emission()
 	if is_instance_valid(_pylon_beacon_material):
 		_pylon_beacon_material.emission_energy_multiplier = 1.8 * NIGHT_LIGHTING_BOOST * _night_factor
 	for outline_material_value in _pylon_outline_materials.values():
@@ -435,6 +516,415 @@ func _update_night_lighting(force: bool = false) -> void:
 	for light in _pier_night_lights:
 		if is_instance_valid(light):
 			light.light_energy = float(light.get_meta("night_base_energy", 0.0)) * NIGHT_LIGHTING_BOOST * _night_factor
+	for batch in _far_light_proxy_batches:
+		var proxy_material := batch.get("material") as ShaderMaterial
+		if is_instance_valid(proxy_material):
+			proxy_material.set_shader_parameter("night_strength", _night_factor)
+		var proxy_instance := batch.get("instance") as MultiMeshInstance3D
+		if is_instance_valid(proxy_instance):
+			proxy_instance.visible = _night_factor > 0.015
+	if is_instance_valid(_far_strip_material):
+		_far_strip_material.set_shader_parameter("night_strength", _night_factor)
+	if is_instance_valid(_far_strip_instance):
+		_far_strip_instance.visible = _night_factor > 0.015
+
+
+func _build_far_light_proxies() -> void:
+	_far_light_proxy_batches.clear()
+	_far_deck_proxy_positions.clear()
+	_far_tower_proxy_positions.clear()
+	_far_stay_proxy_positions.clear()
+	_far_red_proxy_positions.clear()
+	_far_blue_proxy_positions.clear()
+	_far_deck_strip_segments.clear()
+	_far_proxy_in_range_counts = PackedInt32Array([0, 0, 0, 0, 0])
+	_far_proxy_nearest_distance_m = INF
+	_far_strip_in_range_count = 0
+	if _far_proxy_root != null and is_instance_valid(_far_proxy_root):
+		_far_proxy_root.queue_free()
+	_far_proxy_root = Node3D.new()
+	_far_proxy_root.name = "FarNightLightProxies"
+	_segments_root.add_child(_far_proxy_root)
+	_far_proxy_quad_mesh = QuadMesh.new()
+	_far_proxy_quad_mesh.size = Vector2(2.0, 2.0)
+	_far_strip_quad_mesh = QuadMesh.new()
+	_far_strip_quad_mesh.size = Vector2.ONE
+
+	_collect_far_deck_proxy_positions()
+	_collect_far_tower_proxy_positions()
+	_collect_far_stay_proxy_positions()
+	_collect_far_main_span_color_proxy_positions()
+	_add_far_light_proxy_batch("DeckLightPoints", _far_deck_proxy_positions, Color("#FFF1DC"), far_deck_light_emission, 0, far_deck_point_screen_size_px, far_point_max_world_size_m)
+	_add_far_light_proxy_batch("TowerLightPoints", _far_tower_proxy_positions, Color("#E7EEF3"), far_tower_light_emission, 1, far_tower_point_screen_size_px, far_point_max_world_size_m)
+	_add_far_light_proxy_batch("StayLightPoints", _far_stay_proxy_positions, Color("#D8E3E9"), far_stay_light_emission, 2, far_stay_point_screen_size_px, far_point_max_world_size_m)
+	_add_far_light_proxy_batch("MainSpanRedPoints", _far_red_proxy_positions, _pylon_accent_color("red"), far_main_span_color_emission, 3, far_main_span_color_screen_size_px, far_color_max_world_size_m)
+	_add_far_light_proxy_batch("MainSpanBluePoints", _far_blue_proxy_positions, _pylon_accent_color("blue"), far_main_span_color_emission, 4, far_main_span_color_screen_size_px, far_color_max_world_size_m)
+	_far_strip_material = ShaderMaterial.new()
+	_far_strip_material.shader = BRIDGE_FAR_LIGHT_STRIP_SHADER
+	_far_strip_material.set_shader_parameter("proxy_color", Vector3(1.0, 0.945, 0.86))
+	_far_strip_material.set_shader_parameter("emission_strength", far_deck_strip_emission)
+	_far_strip_material.set_shader_parameter("night_strength", _night_factor)
+	_rebuild_far_deck_strip_proxy()
+	_update_night_lighting(true)
+
+
+func _apply_stay_night_emission() -> void:
+	if is_instance_valid(_cable_material):
+		_cable_material.set_shader_parameter(
+			"night_emission_strength",
+			STAY_CABLE_NIGHT_EMISSION_STRENGTH * NIGHT_LIGHTING_BOOST * _night_factor * _near_stay_lighting_factor
+		)
+
+
+func _collect_far_deck_proxy_positions() -> void:
+	var spacing := maxf(far_deck_light_spacing_m, 25.0)
+	var station := spacing * 0.5
+	while station < _total_length_m:
+		_append_far_deck_pair(_position_at_station(station), _tangent_at_station(station), _underside_height_at_station(station))
+		station += spacing
+	var approach_distance := spacing * 0.5
+	while approach_distance < _malmo_approach_length_m:
+		_append_far_deck_pair(_malmo_approach_position(approach_distance), _malmo_approach_tangent(), _malmo_approach_underside_height(approach_distance))
+		approach_distance += spacing
+	approach_distance = spacing * 0.5
+	while approach_distance < _peberholm_approach_length_m:
+		_append_far_deck_pair(_peberholm_approach_position(approach_distance), _peberholm_approach_tangent(), _peberholm_approach_underside_height(approach_distance))
+		approach_distance += spacing
+
+
+func _append_far_deck_pair(position: Vector3, tangent: Vector3, underside_y: float) -> void:
+	var right := Vector3.UP.cross(tangent).normalized()
+	# Far lights sit just outside the road-deck side face. A proxy placed on
+	# the road surface is occluded from the low sea-level viewpoints used by
+	# players, even when it is a little above the deck top.
+	var deck_y := underside_y + ROAD_DECK_SOFFIT_OFFSET_M + 1.2
+	var deck_center := Vector3(position.x, deck_y, position.z)
+	_far_deck_proxy_positions.append(deck_center + right * far_deck_light_lateral_offset_m)
+	_far_deck_proxy_positions.append(deck_center - right * far_deck_light_lateral_offset_m)
+
+
+func _collect_far_tower_proxy_positions() -> void:
+	var pylon_height := float(_layout.get("official_facts", {}).get("pylon_height_m", 203.5))
+	var pylon_levels := [54.0, 96.0, 138.0, 178.0, pylon_height - 8.0]
+	for pylon in _pylon_runtime:
+		var position: Vector3 = pylon["position"]
+		var right := Vector3.UP.cross(_tangent_at_station(float(pylon["station_m"]))).normalized()
+		for level in pylon_levels:
+			var center := Vector3(position.x, _sea_level_y + minf(float(level), pylon_height - 8.0), position.z)
+			_far_tower_proxy_positions.append(center + right * 4.4)
+			_far_tower_proxy_positions.append(center - right * 4.4)
+
+
+func _collect_far_stay_proxy_positions() -> void:
+	var high_start := _high_bridge_start_m()
+	var high_end := _high_bridge_end_m()
+	var cable_angle_tangent := tan(deg_to_rad(STAY_CABLE_DESIGN_ANGLE_DEGREES))
+	var pylon_height := float(_layout.get("official_facts", {}).get("pylon_height_m", 203.5))
+	var highest_tower_anchor_y := _sea_level_y + pylon_height - STAY_CABLE_TOWER_TOP_CLEARANCE_M
+	var every_nth := maxi(far_stay_proxy_every_nth_cable, 1)
+	for pylon in _pylon_runtime:
+		var station := float(pylon["station_m"])
+		var pylon_position: Vector3 = pylon["position"]
+		var pylon_centerline_position := _position_at_station(station)
+		var pylon_right := Vector3.UP.cross(_tangent_at_station(station)).normalized()
+		var pylon_lateral_offset := (pylon_position - pylon_centerline_position).dot(pylon_right)
+		if absf(pylon_lateral_offset) < 1.0:
+			continue
+		var other_group_station := _other_pylon_group_station(pylon)
+		for longitudinal_direction in [-1.0, 1.0]:
+			var toward_other_pylon_group: bool = not is_nan(other_group_station) and (other_group_station - station) * longitudinal_direction > 0.0
+			var span_boundary_station := (station + other_group_station) * 0.5 if toward_other_pylon_group else (high_end if longitudinal_direction > 0.0 else high_start)
+			var available_distance := absf(span_boundary_station - station) - STAY_CABLE_MIDSPAN_CLEARANCE_M
+			if available_distance < STAY_CABLE_DECK_SPACING_M:
+				continue
+			var cable_distance := STAY_CABLE_DECK_SPACING_M
+			var cable_index := 0
+			while cable_distance <= available_distance + 0.001:
+				var target_station: float = station + float(longitudinal_direction) * cable_distance
+				if target_station <= high_start or target_station >= high_end:
+					break
+				var deck_position := _position_at_station(target_station)
+				var deck_right := Vector3.UP.cross(_tangent_at_station(target_station)).normalized()
+				var finish := deck_position + deck_right * pylon_lateral_offset
+				finish.y = _underside_height_at_station(target_station) + ROAD_DECK_TOP_OFFSET_M
+				var horizontal_distance := Vector2(finish.x - pylon_position.x, finish.z - pylon_position.z).length()
+				var start_y := finish.y + horizontal_distance * cable_angle_tangent
+				if start_y > highest_tower_anchor_y:
+					break
+				var start := Vector3(pylon_position.x, start_y, pylon_position.z)
+				if cable_index % every_nth == 0:
+					_far_stay_proxy_positions.append(start.lerp(finish, 0.38))
+					_far_stay_proxy_positions.append(start.lerp(finish, 0.72))
+				cable_index += 1
+				cable_distance += STAY_CABLE_DECK_SPACING_M
+
+
+func _collect_far_main_span_color_proxy_positions() -> void:
+	for group in _pylon_groups:
+		var group_id := str(group.get("group_id", ""))
+		if not group_id.begins_with("main_pylon_"):
+			continue
+		var support_ids: Variant = group.get("support_way_ids", [])
+		if not support_ids is Array or support_ids.size() != 2:
+			continue
+		var first := _pylon_position_by_id(int(support_ids[0]))
+		var second := _pylon_position_by_id(int(support_ids[1]))
+		if first == Vector3.INF or second == Vector3.INF:
+			continue
+		var accent_key := _pylon_group_accent_key(group)
+		var target_positions: Array[Vector3] = _far_blue_proxy_positions if accent_key == "blue" else _far_red_proxy_positions
+		for beam_height in [68.0, 155.0]:
+			for span_fraction in [0.18, 0.5, 0.82]:
+				target_positions.append(first.lerp(second, float(span_fraction)) + Vector3.UP * float(beam_height))
+
+
+func _add_far_light_proxy_batch(
+	batch_name: String,
+	positions: Array[Vector3],
+	color: Color,
+	emission_strength: float,
+	count_index: int,
+	target_screen_size_px: float,
+	maximum_world_size_m: float
+) -> void:
+	if positions.is_empty():
+		return
+	var multi_mesh := MultiMesh.new()
+	multi_mesh.transform_format = MultiMesh.TRANSFORM_3D
+	multi_mesh.use_custom_data = true
+	multi_mesh.mesh = _far_proxy_quad_mesh
+	multi_mesh.instance_count = positions.size()
+	for index in range(positions.size()):
+		multi_mesh.set_instance_transform(index, Transform3D(Basis.IDENTITY, to_local(positions[index])))
+		multi_mesh.set_instance_custom_data(index, Color(1.0, 0.0, 0.0, 1.0))
+	var minimum := Vector3(INF, INF, INF)
+	var maximum := Vector3(-INF, -INF, -INF)
+	for position in positions:
+		var local_position := to_local(position)
+		minimum = minimum.min(local_position)
+		maximum = maximum.max(local_position)
+	var margin := maximum_world_size_m * 0.5 + 1.0
+	multi_mesh.custom_aabb = AABB(minimum - Vector3.ONE * margin, maximum - minimum + Vector3.ONE * (margin * 2.0))
+	var material := ShaderMaterial.new()
+	material.shader = BRIDGE_FAR_LIGHT_PROXY_SHADER
+	material.set_shader_parameter("proxy_color", Vector3(color.r, color.g, color.b))
+	material.set_shader_parameter("emission_strength", emission_strength)
+	material.set_shader_parameter("night_strength", _night_factor)
+	var instance := MultiMeshInstance3D.new()
+	instance.name = batch_name
+	instance.multimesh = multi_mesh
+	instance.material_override = material
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.visible = false
+	_far_proxy_root.add_child(instance)
+	_far_light_proxy_batches.append({
+		"name": batch_name,
+		"instance": instance,
+		"material": material,
+		"positions": positions,
+		"emission_strength": emission_strength,
+		"count_index": count_index,
+		"target_screen_size_px": target_screen_size_px,
+		"maximum_world_size_m": maximum_world_size_m,
+	})
+
+
+func _rebuild_far_deck_strip_proxy() -> void:
+	_far_deck_strip_segments.clear()
+	_append_far_deck_strip_segments(
+		0.0,
+		_total_length_m,
+		Callable(self, "_position_at_station"),
+		Callable(self, "_tangent_at_station"),
+		Callable(self, "_underside_height_at_station")
+	)
+	_append_far_deck_strip_segments(
+		0.0,
+		_malmo_approach_length_m,
+		Callable(self, "_malmo_approach_position"),
+		Callable(self, "_malmo_approach_tangent_at_distance"),
+		Callable(self, "_malmo_approach_underside_height")
+	)
+	_append_far_deck_strip_segments(
+		0.0,
+		_peberholm_approach_length_m,
+		Callable(self, "_peberholm_approach_position"),
+		Callable(self, "_peberholm_approach_tangent_at_distance"),
+		Callable(self, "_peberholm_approach_underside_height")
+	)
+	if _far_deck_strip_segments.is_empty() or not is_instance_valid(_far_proxy_root) or not is_instance_valid(_far_strip_material):
+		return
+	var multi_mesh := MultiMesh.new()
+	multi_mesh.transform_format = MultiMesh.TRANSFORM_3D
+	multi_mesh.use_custom_data = true
+	multi_mesh.mesh = _far_strip_quad_mesh
+	multi_mesh.instance_count = _far_deck_strip_segments.size()
+	var minimum := Vector3(INF, INF, INF)
+	var maximum := Vector3(-INF, -INF, -INF)
+	for index in range(_far_deck_strip_segments.size()):
+		var segment: Dictionary = _far_deck_strip_segments[index]
+		var start: Vector3 = segment["start"]
+		var finish: Vector3 = segment["finish"]
+		multi_mesh.set_instance_transform(index, Transform3D(Basis.IDENTITY, to_local((start + finish) * 0.5)))
+		multi_mesh.set_instance_custom_data(index, Color(1.0, 0.0, 0.0, 1.0))
+		minimum = minimum.min(to_local(start)).min(to_local(finish))
+		maximum = maximum.max(to_local(start)).max(to_local(finish))
+	var margin := far_deck_strip_max_world_width_m * 0.5 + 2.0
+	multi_mesh.custom_aabb = AABB(minimum - Vector3.ONE * margin, maximum - minimum + Vector3.ONE * (margin * 2.0))
+	if not is_instance_valid(_far_strip_instance):
+		_far_strip_instance = MultiMeshInstance3D.new()
+		_far_strip_instance.name = "BridgeDeckFarLightStrip"
+		_far_strip_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		_far_strip_instance.material_override = _far_strip_material
+		_far_strip_instance.visible = false
+		_far_proxy_root.add_child(_far_strip_instance)
+	_far_strip_instance.multimesh = multi_mesh
+
+
+func _append_far_deck_strip_segments(
+	distance_start: float,
+	distance_end: float,
+	position_at_distance: Callable,
+	tangent_at_distance: Callable,
+	underside_at_distance: Callable
+) -> void:
+	if distance_end <= distance_start:
+		return
+	var segment_length := maxf(far_deck_strip_segment_length_m, 1.0)
+	var interval := segment_length + maxf(far_deck_strip_gap_m, 0.0)
+	var distance := distance_start
+	while distance < distance_end - 0.01:
+		var next_distance := minf(distance + segment_length, distance_end)
+		var start_center: Vector3 = position_at_distance.call(distance)
+		var finish_center: Vector3 = position_at_distance.call(next_distance)
+		var tangent: Vector3 = tangent_at_distance.call((distance + next_distance) * 0.5)
+		var right := Vector3.UP.cross(tangent).normalized()
+		var start_y := float(underside_at_distance.call(distance)) + ROAD_DECK_TOP_OFFSET_M + 0.25
+		var finish_y := float(underside_at_distance.call(next_distance)) + ROAD_DECK_TOP_OFFSET_M + 0.25
+		for side_sign in [-1.0, 1.0]:
+			# Keep the remote strip outside the 24 m opaque road deck. If it sits
+			# above the road surface but within the deck footprint, low sea-level
+			# viewpoints see the deck silhouette over the emissive proxy.
+			var offset := right * far_deck_strip_lateral_offset_m * float(side_sign)
+			var start := Vector3(start_center.x, start_y, start_center.z) + offset
+			var finish := Vector3(finish_center.x, finish_y, finish_center.z) + offset
+			_far_deck_strip_segments.append({"start": start, "finish": finish})
+		distance += interval
+
+
+func _malmo_approach_tangent_at_distance(_distance: float) -> Vector3:
+	return _malmo_approach_tangent()
+
+
+func _peberholm_approach_tangent_at_distance(_distance: float) -> Vector3:
+	return _peberholm_approach_tangent()
+
+
+func _far_proxy_distance_fade(distance: float) -> float:
+	var fade_in_start := maxf(far_light_fade_in_start_m, 0.0)
+	var fade_in_end := maxf(far_light_fade_in_end_m, fade_in_start + 0.1)
+	var fade_out_start := maxf(far_light_fade_out_start_m, fade_in_end)
+	var max_distance := maxf(far_light_max_distance_m, fade_out_start + 0.1)
+	var fade_in := smoothstep(fade_in_start, fade_in_end, distance)
+	var fade_out := 1.0 - smoothstep(fade_out_start, max_distance, distance)
+	var weather_fade := 1.0
+	if far_light_extra_weather_attenuation_enabled:
+		weather_fade = exp(-_far_proxy_excess_fog_density() * distance * far_light_fog_attenuation_strength)
+	return fade_in * fade_out * weather_fade
+
+
+func _proxy_radius_for_screen_size(camera: Camera3D, distance: float, target_pixels: float, max_world_size_m: float, viewport_height: float) -> float:
+	var half_fov_tangent := tan(deg_to_rad(camera.fov) * 0.5)
+	var desired_radius := target_pixels * half_fov_tangent * distance / maxf(viewport_height, 1.0)
+	return clampf(desired_radius, 0.1, max_world_size_m * 0.5)
+
+
+func _update_far_light_proxies() -> void:
+	if _far_light_proxy_batches.is_empty() and not is_instance_valid(_far_strip_instance):
+		return
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return
+	var camera_position := camera.global_position
+	var camera_basis_local := global_transform.basis.inverse() * camera.global_basis.orthonormalized()
+	var viewport_height := get_viewport().get_visible_rect().size.y
+	var fade_in_start := maxf(far_light_fade_in_start_m, 0.0)
+	var fade_in_end := maxf(far_light_fade_in_end_m, fade_in_start + 0.1)
+	var fade_out_start := maxf(far_light_fade_out_start_m, fade_in_end)
+	var max_distance := maxf(far_light_max_distance_m, fade_out_start + 0.1)
+	var high_span_distance := _distance_to_station_range(camera_position, _high_bridge_start_m(), _high_bridge_end_m())
+	_near_stay_lighting_factor = 1.0 - smoothstep(fade_in_start, fade_in_end, high_span_distance)
+	_apply_stay_night_emission()
+	_far_proxy_in_range_counts = PackedInt32Array([0, 0, 0, 0, 0])
+	_far_proxy_nearest_distance_m = INF
+	_far_strip_in_range_count = 0
+	for batch_index in range(_far_light_proxy_batches.size()):
+		var batch: Dictionary = _far_light_proxy_batches[batch_index]
+		var positions: Array[Vector3] = batch["positions"]
+		var multi_mesh: MultiMesh = (batch["instance"] as MultiMeshInstance3D).multimesh
+		var minimum_distance := INF
+		var in_range_count := 0
+		for instance_index in range(positions.size()):
+			var position := positions[instance_index]
+			var distance := camera_position.distance_to(position)
+			minimum_distance = minf(minimum_distance, distance)
+			_far_proxy_nearest_distance_m = minf(_far_proxy_nearest_distance_m, distance)
+			if distance < max_distance:
+				in_range_count += 1
+			var radius := _proxy_radius_for_screen_size(
+				camera,
+				distance,
+				float(batch["target_screen_size_px"]),
+				float(batch["maximum_world_size_m"]),
+				viewport_height
+			)
+			var local_basis := camera_basis_local.scaled(Vector3(radius, radius, 1.0))
+			multi_mesh.set_instance_transform(instance_index, Transform3D(local_basis, to_local(position)))
+			multi_mesh.set_instance_custom_data(instance_index, Color(_far_proxy_distance_fade(distance), 0.0, 0.0, 1.0))
+		var count_index := int(batch.get("count_index", batch_index))
+		if count_index >= 0 and count_index < _far_proxy_in_range_counts.size():
+			_far_proxy_in_range_counts[count_index] = in_range_count
+		var proxy_instance := batch["instance"] as MultiMeshInstance3D
+		proxy_instance.visible = _night_factor > 0.015 and minimum_distance < max_distance
+		var proxy_material := batch["material"] as ShaderMaterial
+		proxy_material.set_shader_parameter("night_strength", _night_factor)
+		proxy_material.set_shader_parameter("emission_strength", float(batch["emission_strength"]))
+	if is_instance_valid(_far_strip_instance) and _far_strip_instance.multimesh != null:
+		var minimum_strip_distance := INF
+		for index in range(_far_deck_strip_segments.size()):
+			var segment: Dictionary = _far_deck_strip_segments[index]
+			var start: Vector3 = segment["start"]
+			var finish: Vector3 = segment["finish"]
+			var midpoint := (start + finish) * 0.5
+			var distance := camera_position.distance_to(midpoint)
+			_far_strip_instance.multimesh.set_instance_custom_data(index, Color(_far_proxy_distance_fade(distance), 0.0, 0.0, 1.0))
+			if distance < minimum_strip_distance:
+				minimum_strip_distance = distance
+			_far_proxy_nearest_distance_m = minf(_far_proxy_nearest_distance_m, distance)
+			if distance < max_distance:
+				_far_strip_in_range_count += 1
+			var local_direction := global_transform.basis.inverse() * (finish - start).normalized()
+			var camera_direction := camera_basis_local.inverse() * local_direction
+			var projected_direction := Vector2(camera_direction.x, camera_direction.y)
+			var projected_length := (finish - start).length() * projected_direction.length()
+			var angle := atan2(projected_direction.y, projected_direction.x)
+			var in_plane_rotation := Basis(Vector3(0.0, 0.0, 1.0), angle)
+			var strip_width := _proxy_radius_for_screen_size(camera, distance, far_deck_strip_screen_width_px, far_deck_strip_max_world_width_m, viewport_height) * 2.0
+			var strip_basis := camera_basis_local * in_plane_rotation.scaled(Vector3(maxf(projected_length, 0.05), strip_width, 1.0))
+			_far_strip_instance.multimesh.set_instance_transform(index, Transform3D(strip_basis, to_local(midpoint)))
+		_far_strip_instance.visible = _night_factor > 0.015 and minimum_strip_distance < max_distance
+		if is_instance_valid(_far_strip_material):
+			_far_strip_material.set_shader_parameter("night_strength", _night_factor)
+			_far_strip_material.set_shader_parameter("emission_strength", far_deck_strip_emission)
+
+
+func _far_proxy_excess_fog_density() -> float:
+	if not far_light_extra_weather_attenuation_enabled or not is_instance_valid(_world_environment):
+		return 0.0
+	var environment := _world_environment.environment
+	if environment == null or not environment.fog_enabled:
+		return 0.0
+	return maxf(environment.fog_density - 0.0007, 0.0)
 
 
 func _make_surface_material(color: Color, metallic: float, roughness: float, variation: float, noise_scale: float = 0.08) -> ShaderMaterial:
@@ -748,16 +1238,171 @@ func _build_debug_panel() -> void:
 	_debug_panel.name = "BridgeDebugPanel"
 	_debug_panel.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	_debug_panel.position = Vector2(18.0, 90.0)
-	_debug_panel.custom_minimum_size = Vector2(470.0, 0.0)
-	_debug_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_debug_panel.custom_minimum_size = Vector2(510.0, 0.0)
+	_debug_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 	_debug_panel.add_theme_stylebox_override("panel", _make_debug_style())
 	_debug_layer.add_child(_debug_panel)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 5)
+	_debug_panel.add_child(content)
 	_debug_label = Label.new()
 	_debug_label.add_theme_color_override("font_color", Color("#e4efed"))
 	_debug_label.add_theme_font_size_override("font_size", 15)
 	_debug_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_debug_panel.add_child(_debug_label)
+	content.add_child(_debug_label)
+	var divider := HSeparator.new()
+	content.add_child(divider)
+	var tuning_title := Label.new()
+	tuning_title.text = "远景灯光实时调节"
+	tuning_title.add_theme_color_override("font_color", Color("#b9d5d8"))
+	tuning_title.add_theme_font_size_override("font_size", 14)
+	content.add_child(tuning_title)
+	_far_light_controls = VBoxContainer.new()
+	_far_light_controls.add_theme_constant_override("separation", 2)
+	content.add_child(_far_light_controls)
+	_add_far_light_debug_slider("白色灯带亮度", "strip_emission", 0.0, 8.0, 0.1, far_deck_strip_emission, "")
+	_add_far_light_debug_slider("白色灯带宽度", "strip_width", 0.5, 2.5, 0.1, far_deck_strip_screen_width_px, " px")
+	_add_far_light_debug_slider("灯带重复间距", "strip_interval", far_deck_strip_segment_length_m + 1.0, 50.0, 1.0, far_deck_strip_segment_length_m + far_deck_strip_gap_m, " m")
+	_add_far_light_debug_slider("LOD 渐显完成距离", "fade_in_end", 1000.0, 4000.0, 100.0, far_light_fade_in_end_m, " m")
+	_add_far_light_debug_slider("LOD 最远距离", "max_distance", 8000.0, 16000.0, 500.0, far_light_max_distance_m, " m")
+	var observation_row := HBoxContainer.new()
+	observation_row.add_theme_constant_override("separation", 5)
+	_far_light_controls.add_child(observation_row)
+	var observation_title := Label.new()
+	observation_title.text = "测试观察距离"
+	observation_title.custom_minimum_size = Vector2(145.0, 0.0)
+	observation_title.add_theme_font_size_override("font_size", 13)
+	observation_row.add_child(observation_title)
+	for distance_m in [500.0, 2000.0, 5000.0, 8000.0]:
+		var button := Button.new()
+		button.text = "%.0f m" % distance_m if distance_m < 1000.0 else "%.0f km" % (distance_m / 1000.0)
+		button.custom_minimum_size = Vector2(62.0, 24.0)
+		button.focus_mode = Control.FOCUS_NONE
+		button.pressed.connect(_teleport_to_far_light_test_distance.bind(float(distance_m)))
+		observation_row.add_child(button)
+	var fog_test := CheckButton.new()
+	fog_test.text = "天气雾衰减（关闭仅用于诊断对照）"
+	fog_test.button_pressed = far_light_extra_weather_attenuation_enabled
+	fog_test.add_theme_font_size_override("font_size", 13)
+	fog_test.toggled.connect(_on_far_light_debug_fog_toggled)
+	_far_light_controls.add_child(fog_test)
 	_debug_panel.visible = false
+
+
+func _add_far_light_debug_slider(
+	caption: String,
+	setting_id: String,
+	minimum: float,
+	maximum: float,
+	step: float,
+	initial: float,
+	unit: String
+) -> void:
+	if _far_light_controls == null:
+		return
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	_far_light_controls.add_child(row)
+	var title := Label.new()
+	title.text = caption
+	title.custom_minimum_size = Vector2(145.0, 0.0)
+	title.add_theme_font_size_override("font_size", 13)
+	row.add_child(title)
+	var slider := HSlider.new()
+	slider.min_value = minimum
+	slider.max_value = maximum
+	slider.step = step
+	slider.value = clampf(initial, minimum, maximum)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.custom_minimum_size = Vector2(190.0, 18.0)
+	slider.focus_mode = Control.FOCUS_NONE
+	row.add_child(slider)
+	var value_label := Label.new()
+	value_label.text = _format_far_light_debug_value(slider.value, unit)
+	value_label.custom_minimum_size = Vector2(62.0, 0.0)
+	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	value_label.add_theme_font_size_override("font_size", 13)
+	row.add_child(value_label)
+	_far_light_slider_value_labels[setting_id] = value_label
+	slider.value_changed.connect(_on_far_light_debug_slider_changed.bind(setting_id, unit, value_label))
+
+
+func _format_far_light_debug_value(value: float, unit: String) -> String:
+	if unit == " m":
+		return "%.0f%s" % [value, unit]
+	if unit == " px":
+		return "%.1f%s" % [value, unit]
+	return "%.1f" % value
+
+
+func _on_far_light_debug_slider_changed(value: float, setting_id: String, unit: String, value_label: Label) -> void:
+	value_label.text = _format_far_light_debug_value(value, unit)
+	match setting_id:
+		"strip_emission":
+			far_deck_strip_emission = value
+		"strip_width":
+			far_deck_strip_screen_width_px = value
+		"strip_interval":
+			far_deck_strip_gap_m = maxf(value - far_deck_strip_segment_length_m, 0.0)
+			_rebuild_far_deck_strip_proxy()
+		"fade_in_end":
+			far_light_fade_in_end_m = value
+			far_light_fade_out_start_m = maxf(far_light_fade_out_start_m, value + 500.0)
+		"max_distance":
+			far_light_max_distance_m = value
+			far_light_fade_out_start_m = maxf(far_light_fade_in_end_m, value - 3000.0)
+	_update_far_light_proxies()
+
+
+func _on_far_light_debug_fog_toggled(enabled: bool) -> void:
+	far_light_extra_weather_attenuation_enabled = enabled
+	_update_far_light_proxies()
+
+
+func _teleport_to_far_light_test_distance(distance_m: float) -> void:
+	if _boat == null or _navigation_depth_provider == null or not _navigation_depth_provider.has_method("query_world_position"):
+		return
+	var reference_station := (_high_bridge_start_m() + _high_bridge_end_m()) * 0.5
+	var reference := _position_at_station(reference_station)
+	var tangent := _tangent_at_station(reference_station)
+	var across := Vector3.UP.cross(tangent).normalized()
+	var chosen_position := Vector3.ZERO
+	var best_depth := -INF
+	var found_water := false
+	for direction_index in range(16):
+		var angle := TAU * float(direction_index) / 16.0
+		var direction := across * cos(angle) + tangent * sin(angle)
+		var candidate := reference + direction * distance_m
+		candidate.y = _sea_level_y
+		var sample: Dictionary = _navigation_depth_provider.call("query_world_position", candidate)
+		if not bool(sample.get("valid", false)) or str(sample.get("data_state", "")) != "water":
+			continue
+		var candidate_depth := float(sample.get("depth_m", 0.0))
+		if not found_water or candidate_depth > best_depth:
+			chosen_position = candidate
+			best_depth = candidate_depth
+			found_water = true
+	if not found_water:
+		push_warning("OresundBridge: no water observation position found at %.0f m from the main span." % distance_m)
+		return
+	if _boat.has_method("disengage_autopilot"):
+		_boat.call("disengage_autopilot")
+	if _boat.has_method("set_port_docked"):
+		_boat.call("set_port_docked", false)
+	_boat.global_position = chosen_position
+	var forward := _horizontal_direction(chosen_position, reference)
+	_boat.global_rotation.y = atan2(-forward.x, -forward.z)
+	if _boat.get("speed_mps") != null:
+		_boat.set("speed_mps", 0.0)
+	if _boat.get("is_motion_paused") != null:
+		_boat.set("is_motion_paused", false)
+	_debug_enabled = true
+	_debug_root.visible = false
+	_debug_panel.visible = true
+	_last_teleport_name = "远景灯光测试 %.0f m" % distance_m
+	_update_lods()
+	_update_far_light_proxies()
+	_update_debug_panel()
 
 
 func _make_debug_style() -> StyleBoxFlat:
@@ -866,27 +1511,40 @@ func _build_cell_visual(root: Node3D, station_start: float, station_end: float, 
 		var next_station := minf(station + spacing, station_end)
 		var start := _position_at_station(station)
 		var finish := _position_at_station(next_station)
-		var underside_start := _underside_height_at_station(station)
-		var underside_end := _underside_height_at_station(next_station)
-		var lower_start := Vector3(start.x, underside_start + LOWER_DECK_THICKNESS_M * 0.5, start.z)
-		var lower_end := Vector3(finish.x, underside_end + LOWER_DECK_THICKNESS_M * 0.5, finish.z)
-		var upper_start := Vector3(start.x, underside_start + 8.0, start.z)
-		var upper_end := Vector3(finish.x, underside_end + 8.0, finish.z)
-		var lower_material := _far_material if lod == LOD_FAR else _near_material
-		_add_box_segment(root, lower_start, lower_end, LOWER_DECK_WIDTH_M, LOWER_DECK_THICKNESS_M, lower_material, "LowerDeck", lod == LOD_NEAR)
-		_add_box_segment(root, upper_start, upper_end, 24.0, 2.4, _road_material, "RoadDeck", lod == LOD_NEAR)
 		if lod == LOD_NEAR:
+			var underside_start := _underside_height_at_station(station)
+			var underside_end := _underside_height_at_station(next_station)
+			var lower_start := Vector3(start.x, underside_start + LOWER_DECK_THICKNESS_M * 0.5, start.z)
+			var lower_end := Vector3(finish.x, underside_end + LOWER_DECK_THICKNESS_M * 0.5, finish.z)
+			var upper_start := Vector3(start.x, underside_start + 8.0, start.z)
+			var upper_end := Vector3(finish.x, underside_end + 8.0, finish.z)
+			_add_box_segment(root, lower_start, lower_end, LOWER_DECK_WIDTH_M, LOWER_DECK_THICKNESS_M, _near_material, "LowerDeck", true, false)
+			_add_box_segment(root, upper_start, upper_end, 24.0, 2.4, _road_material, "RoadDeck", true, false)
 			var tangent := _horizontal_direction(start, finish)
 			var right := Vector3.UP.cross(tangent).normalized()
 			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "RoadGuard", false)
 			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "RoadGuard", false)
-		if lod != LOD_FAR:
-			for pier in _pier_runtime:
-				var pier_station := float(pier["station_m"])
-				if pier_station >= station and pier_station < next_station and (lod == LOD_NEAR or support_index % 2 == 0):
-					_add_pier(root, pier, lod == LOD_NEAR)
-					support_index += 1
+		for pier in _pier_runtime:
+			var pier_station := float(pier["station_m"])
+			if pier_station >= station and pier_station < next_station and (lod == LOD_NEAR or (lod == LOD_MID and support_index % 2 == 0)):
+				_add_pier(root, pier, lod == LOD_NEAR)
+				support_index += 1
 		station = next_station
+	# Keep the deck silhouette identical at every bridge distance LOD. The
+	# former near/mid/far box lengths created visible breaks when adjacent cells
+	# switched LOD independently.
+	_add_continuous_deck_prism(
+		root, "RoadDeck_Continuous", station_start, station_end,
+		24.0, ROAD_DECK_SOFFIT_OFFSET_M, 2.4, _road_material,
+		Callable(self, "_position_at_station"), Callable(self, "_tangent_at_station"),
+		Callable(self, "_underside_height_at_station"), DECK_VISUAL_SAMPLE_SPACING_M, _centerline_stations
+	)
+	_add_continuous_deck_prism(
+		root, "LowerDeck_Continuous", station_start, station_end,
+		LOWER_DECK_WIDTH_M, 0.0, LOWER_DECK_THICKNESS_M, _near_material,
+		Callable(self, "_position_at_station"), Callable(self, "_tangent_at_station"),
+		Callable(self, "_underside_height_at_station"), DECK_VISUAL_SAMPLE_SPACING_M, _centerline_stations
+	)
 	_add_deck_light_strips(
 		root,
 		station_start,
@@ -906,21 +1564,33 @@ func _build_malmo_approach_cell_visual(root: Node3D, distance_start: float, dist
 		var next_distance := minf(distance + spacing, distance_end)
 		var start := _malmo_approach_position(distance)
 		var finish := _malmo_approach_position(next_distance)
-		var underside_start := _malmo_approach_underside_height(distance)
-		var underside_end := _malmo_approach_underside_height(next_distance)
-		var lower_start := Vector3(start.x, underside_start + LOWER_DECK_THICKNESS_M * 0.5, start.z)
-		var lower_end := Vector3(finish.x, underside_end + LOWER_DECK_THICKNESS_M * 0.5, finish.z)
-		var upper_start := Vector3(start.x, underside_start + 8.0, start.z)
-		var upper_end := Vector3(finish.x, underside_end + 8.0, finish.z)
-		var lower_material := _far_material if lod == LOD_FAR else _near_material
-		_add_box_segment(root, lower_start, lower_end, LOWER_DECK_WIDTH_M, LOWER_DECK_THICKNESS_M, lower_material, "MalmoApproachLowerDeck", lod == LOD_NEAR)
-		_add_box_segment(root, upper_start, upper_end, 24.0, 2.4, _road_material, "MalmoApproachRoadDeck", lod == LOD_NEAR)
 		if lod == LOD_NEAR:
+			var underside_start := _malmo_approach_underside_height(distance)
+			var underside_end := _malmo_approach_underside_height(next_distance)
+			var lower_start := Vector3(start.x, underside_start + LOWER_DECK_THICKNESS_M * 0.5, start.z)
+			var lower_end := Vector3(finish.x, underside_end + LOWER_DECK_THICKNESS_M * 0.5, finish.z)
+			var upper_start := Vector3(start.x, underside_start + 8.0, start.z)
+			var upper_end := Vector3(finish.x, underside_end + 8.0, finish.z)
+			_add_box_segment(root, lower_start, lower_end, LOWER_DECK_WIDTH_M, LOWER_DECK_THICKNESS_M, _near_material, "MalmoApproachLowerDeck", true, false)
+			_add_box_segment(root, upper_start, upper_end, 24.0, 2.4, _road_material, "MalmoApproachRoadDeck", true, false)
 			var tangent := _horizontal_direction(start, finish)
 			var right := Vector3.UP.cross(tangent).normalized()
 			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "MalmoApproachRoadGuard", false)
 			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "MalmoApproachRoadGuard", false)
 		distance = next_distance
+	var no_extra_stations := PackedFloat32Array()
+	_add_continuous_deck_prism(
+		root, "MalmoApproachRoadDeck_Continuous", distance_start, distance_end,
+		24.0, ROAD_DECK_SOFFIT_OFFSET_M, 2.4, _road_material,
+		Callable(self, "_malmo_approach_position"), Callable(self, "_malmo_approach_tangent_at_distance"),
+		Callable(self, "_malmo_approach_underside_height"), DECK_VISUAL_SAMPLE_SPACING_M, no_extra_stations
+	)
+	_add_continuous_deck_prism(
+		root, "MalmoApproachLowerDeck_Continuous", distance_start, distance_end,
+		LOWER_DECK_WIDTH_M, 0.0, LOWER_DECK_THICKNESS_M, _near_material,
+		Callable(self, "_malmo_approach_position"), Callable(self, "_malmo_approach_tangent_at_distance"),
+		Callable(self, "_malmo_approach_underside_height"), DECK_VISUAL_SAMPLE_SPACING_M, no_extra_stations
+	)
 	_add_deck_light_strips(
 		root,
 		distance_start,
@@ -944,21 +1614,34 @@ func _build_peberholm_approach_cell_visual(root: Node3D, distance_start: float, 
 		var next_distance := minf(distance + spacing, distance_end)
 		var start := _peberholm_approach_position(distance)
 		var finish := _peberholm_approach_position(next_distance)
-		var underside_start := _peberholm_approach_underside_height(distance)
-		var underside_end := _peberholm_approach_underside_height(next_distance)
-		var lower_start := Vector3(start.x, underside_start + LOWER_DECK_THICKNESS_M * 0.5, start.z)
-		var lower_end := Vector3(finish.x, underside_end + LOWER_DECK_THICKNESS_M * 0.5, finish.z)
-		var upper_start := Vector3(start.x, underside_start + 8.0, start.z)
-		var upper_end := Vector3(finish.x, underside_end + 8.0, finish.z)
-		var lower_material := _far_material if lod == LOD_FAR else _near_material
-		_add_box_segment(root, lower_start, lower_end, LOWER_DECK_WIDTH_M, LOWER_DECK_THICKNESS_M, lower_material, "PeberholmApproachLowerDeck", lod == LOD_NEAR)
-		_add_box_segment(root, upper_start, upper_end, 24.0, 2.4, _road_material, "PeberholmApproachRoadDeck", lod == LOD_NEAR)
-		if lod == LOD_NEAR and minf(underside_start + ROAD_DECK_TOP_OFFSET_M, underside_end + ROAD_DECK_TOP_OFFSET_M) > 5.0:
-			var tangent := _horizontal_direction(start, finish)
-			var right := Vector3.UP.cross(tangent).normalized()
-			_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "PeberholmApproachRoadGuard", false)
-			_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "PeberholmApproachRoadGuard", false)
+		if lod == LOD_NEAR:
+			var underside_start := _peberholm_approach_underside_height(distance)
+			var underside_end := _peberholm_approach_underside_height(next_distance)
+			var lower_start := Vector3(start.x, underside_start + LOWER_DECK_THICKNESS_M * 0.5, start.z)
+			var lower_end := Vector3(finish.x, underside_end + LOWER_DECK_THICKNESS_M * 0.5, finish.z)
+			var upper_start := Vector3(start.x, underside_start + 8.0, start.z)
+			var upper_end := Vector3(finish.x, underside_end + 8.0, finish.z)
+			_add_box_segment(root, lower_start, lower_end, LOWER_DECK_WIDTH_M, LOWER_DECK_THICKNESS_M, _near_material, "PeberholmApproachLowerDeck", true, false)
+			_add_box_segment(root, upper_start, upper_end, 24.0, 2.4, _road_material, "PeberholmApproachRoadDeck", true, false)
+			if minf(underside_start + ROAD_DECK_TOP_OFFSET_M, underside_end + ROAD_DECK_TOP_OFFSET_M) > 5.0:
+				var tangent := _horizontal_direction(start, finish)
+				var right := Vector3.UP.cross(tangent).normalized()
+				_add_box_segment(root, upper_start + right * 11.4 + Vector3.UP * 1.4, upper_end + right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "PeberholmApproachRoadGuard", false)
+				_add_box_segment(root, upper_start - right * 11.4 + Vector3.UP * 1.4, upper_end - right * 11.4 + Vector3.UP * 1.4, 0.35, 1.2, _guardrail_material, "PeberholmApproachRoadGuard", false)
 		distance = next_distance
+	var no_extra_stations := PackedFloat32Array()
+	_add_continuous_deck_prism(
+		root, "PeberholmApproachRoadDeck_Continuous", distance_start, distance_end,
+		24.0, ROAD_DECK_SOFFIT_OFFSET_M, 2.4, _road_material,
+		Callable(self, "_peberholm_approach_position"), Callable(self, "_peberholm_approach_tangent_at_distance"),
+		Callable(self, "_peberholm_approach_underside_height"), DECK_VISUAL_SAMPLE_SPACING_M, no_extra_stations
+	)
+	_add_continuous_deck_prism(
+		root, "PeberholmApproachLowerDeck_Continuous", distance_start, distance_end,
+		LOWER_DECK_WIDTH_M, 0.0, LOWER_DECK_THICKNESS_M, _near_material,
+		Callable(self, "_peberholm_approach_position"), Callable(self, "_peberholm_approach_tangent_at_distance"),
+		Callable(self, "_peberholm_approach_underside_height"), DECK_VISUAL_SAMPLE_SPACING_M, no_extra_stations
+	)
 	_add_deck_light_strips(
 		root,
 		distance_start,
@@ -1208,20 +1891,21 @@ func _build_interlayer_supports(parent: Node3D, station_start: float, station_en
 		support_station += support_spacing
 
 
-func _add_box_segment(parent: Node3D, start: Vector3, finish: Vector3, width: float, height: float, material: Material, node_name: String, with_collision: bool) -> void:
+func _add_box_segment(parent: Node3D, start: Vector3, finish: Vector3, width: float, height: float, material: Material, node_name: String, with_collision: bool, render_mesh: bool = true) -> void:
 	var direction := finish - start
 	var segment_length := maxf(direction.length(), 0.1)
 	var midpoint := (start + finish) * 0.5
 	var size := Vector3(maxf(width, 0.1), maxf(height, 0.1), segment_length + 0.6)
-	var box := BoxMesh.new()
-	box.size = size
-	var instance := MeshInstance3D.new()
-	instance.name = node_name
-	instance.mesh = box
-	instance.material_override = material
-	instance.position = midpoint
-	parent.add_child(instance)
-	instance.look_at(midpoint + direction.normalized(), Vector3.UP)
+	if render_mesh:
+		var box := BoxMesh.new()
+		box.size = size
+		var instance := MeshInstance3D.new()
+		instance.name = node_name
+		instance.mesh = box
+		instance.material_override = material
+		instance.position = midpoint
+		parent.add_child(instance)
+		instance.look_at(midpoint + direction.normalized(), Vector3.UP)
 	if with_collision:
 		var body := StaticBody3D.new()
 		body.name = "%s_Collision" % node_name
@@ -1367,6 +2051,117 @@ func _add_deck_light_strips(
 	instance.mesh = mesh
 	instance.material_override = _deck_light_material
 	parent.add_child(instance)
+
+
+func _add_continuous_deck_prism(
+	parent: Node3D,
+	node_name: String,
+	distance_start: float,
+	distance_end: float,
+	width: float,
+	bottom_offset: float,
+	thickness: float,
+	material: Material,
+	position_at_distance: Callable,
+	tangent_at_distance: Callable,
+	underside_at_distance: Callable,
+	sample_spacing_m: float,
+	extra_stations: PackedFloat32Array
+) -> void:
+	if distance_end - distance_start < 0.1:
+		return
+	var sample_distances := PackedFloat64Array([distance_start])
+	var spacing := maxf(sample_spacing_m, 5.0)
+	var distance := distance_start + spacing
+	while distance < distance_end - 0.01:
+		sample_distances.append(distance)
+		distance += spacing
+	for extra_distance in extra_stations:
+		if extra_distance > distance_start + 0.01 and extra_distance < distance_end - 0.01:
+			sample_distances.append(extra_distance)
+	sample_distances.append(distance_end)
+	sample_distances.sort()
+	var unique_distances := PackedFloat64Array()
+	for sample_distance in sample_distances:
+		if unique_distances.is_empty() or sample_distance - unique_distances[-1] > 0.01:
+			unique_distances.append(sample_distance)
+	if unique_distances.size() < 2:
+		return
+
+	var left_bottom := PackedVector3Array()
+	var left_top := PackedVector3Array()
+	var right_bottom := PackedVector3Array()
+	var right_top := PackedVector3Array()
+	var right_vectors := PackedVector3Array()
+	var tangent_epsilon := minf(2.0, maxf((distance_end - distance_start) * 0.01, 0.25))
+	for sample_distance in unique_distances:
+		var center: Vector3 = position_at_distance.call(sample_distance)
+		# Let each path's tangent function clamp against the full path, not this
+		# 500 m cell; adjacent cells must derive the same shared edge frame.
+		var before: Vector3 = tangent_at_distance.call(sample_distance - tangent_epsilon)
+		var after: Vector3 = tangent_at_distance.call(sample_distance + tangent_epsilon)
+		before.y = 0.0
+		after.y = 0.0
+		var tangent := before + after
+		if tangent.length_squared() < 0.001:
+			tangent = after if after.length_squared() >= 0.001 else Vector3.FORWARD
+		tangent = tangent.normalized()
+		var right := Vector3.UP.cross(tangent).normalized()
+		if right.length_squared() < 0.001:
+			right = Vector3.RIGHT
+		var underside_y := float(underside_at_distance.call(sample_distance)) + bottom_offset
+		var half_width := width * 0.5
+		left_bottom.append(parent.to_local(Vector3(center.x, underside_y, center.z) - right * half_width))
+		left_top.append(parent.to_local(Vector3(center.x, underside_y + thickness, center.z) - right * half_width))
+		right_bottom.append(parent.to_local(Vector3(center.x, underside_y, center.z) + right * half_width))
+		right_top.append(parent.to_local(Vector3(center.x, underside_y + thickness, center.z) + right * half_width))
+		right_vectors.append(right)
+
+	var vertices := PackedVector3Array()
+	var normals := PackedVector3Array()
+	var indices := PackedInt32Array()
+	for index in range(unique_distances.size() - 1):
+		var side_normal := (right_vectors[index] + right_vectors[index + 1]).normalized()
+		if side_normal.length_squared() < 0.001:
+			side_normal = right_vectors[index]
+		_append_deck_prism_quad(vertices, normals, indices, left_top[index], left_top[index + 1], right_top[index], right_top[index + 1], Vector3.UP)
+		_append_deck_prism_quad(vertices, normals, indices, left_bottom[index], left_bottom[index + 1], right_bottom[index], right_bottom[index + 1], Vector3.DOWN)
+		_append_deck_prism_quad(vertices, normals, indices, left_top[index], left_top[index + 1], left_bottom[index], left_bottom[index + 1], -side_normal)
+		_append_deck_prism_quad(vertices, normals, indices, right_top[index], right_top[index + 1], right_bottom[index], right_bottom[index + 1], side_normal)
+	var arrays: Array = []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = vertices
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var instance := MeshInstance3D.new()
+	instance.name = node_name
+	instance.mesh = mesh
+	instance.material_override = material
+	parent.add_child(instance)
+
+
+func _append_deck_prism_quad(
+	vertices: PackedVector3Array,
+	normals: PackedVector3Array,
+	indices: PackedInt32Array,
+	p0: Vector3,
+	p1: Vector3,
+	p2: Vector3,
+	p3: Vector3,
+	target_normal: Vector3
+) -> void:
+	var base_index := vertices.size()
+	vertices.append_array(PackedVector3Array([p0, p1, p2, p3]))
+	var normal := target_normal.normalized()
+	for _vertex_index in range(4):
+		normals.append(normal)
+	var face_normal := (p1 - p0).cross(p2 - p0)
+	if face_normal.dot(normal) >= 0.0:
+		indices.append_array(PackedInt32Array([base_index, base_index + 1, base_index + 2, base_index + 1, base_index + 3, base_index + 2]))
+	else:
+		indices.append_array(PackedInt32Array([base_index, base_index + 2, base_index + 1, base_index + 1, base_index + 2, base_index + 3]))
 
 
 func _add_oriented_box(parent: Node3D, node_name: String, position: Vector3, size: Vector3, yaw: float, material: Material, with_collision: bool) -> void:
@@ -1978,6 +2773,8 @@ func _update_debug_panel() -> void:
 		"Øresund Bridge · GPS 灰盒 V1\n"
 		+ "船位 %.5f°N, %.5f°E · 海平面 Y %.2f m\n" % [boat_geo.x, boat_geo.y, _sea_level_y]
 		+ "距离段 LOD：近 %d · 中 %d · 远 %d · 未加载 %d · 主桥塔 %s\n" % [int(snapshot["near_cells"]), int(snapshot["mid_cells"]), int(snapshot["far_cells"]), int(snapshot["hidden_cells"]), str(snapshot["high_span_lod"])]
+		+ "夜景代理距最近点 %.0f m · 白带 %d/%d · 红 %d/%d 蓝 %d/%d · 塔 %d/%d 拉索 %d/%d\n" % [float(snapshot["far_proxy_nearest_distance_m"]), int(snapshot["far_deck_strip_in_range"]), int(snapshot["far_deck_strip_count"]), int(snapshot["far_proxy_red_in_range"]), int(snapshot["far_red_proxy_count"]), int(snapshot["far_proxy_blue_in_range"]), int(snapshot["far_blue_proxy_count"]), int(snapshot["far_proxy_tower_in_range"]), int(snapshot["far_tower_proxy_count"]), int(snapshot["far_proxy_stay_in_range"]), int(snapshot["far_stay_proxy_count"])]
+		+ "远景夜间系数 %.2f · 天气雾密度 %.4f · 最近点衰减 %.2f\n" % [_night_factor, _world_environment.environment.fog_density if is_instance_valid(_world_environment) and _world_environment.environment != null else 0.0, _far_proxy_distance_fade(float(snapshot["far_proxy_nearest_distance_m"]))]
 		+ "长度 %.0f m · 桥墩 %d · 桥塔 %d · 主航道净空 %.1f m\n" % [_total_length_m, _pier_runtime.size(), _pylon_runtime.size(), float(gate["clearance_m"])]
 		+ "主塔组间距 %.1f m · 自由跨内桥墩 %d · 本船高度 %.1f m · 名义余量 %.1f m\n" % [float(gate["pylon_group_separation_m"]), int(gate["osm_pier_count_inside_free_span"]), float(gate["vessel_height_m"]), float(gate["nominal_vertical_clearance_margin_m"])]
 		+ "端点延伸估算 %.1f m / 端 · 最近测试定位：%s\n" % [_endpoint_extension_m, _last_teleport_name]
