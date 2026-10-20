@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=7 format=3]
 
 [ext_resource type="Script" path="res://scripts/malmo_harbor_greybox.gd" id="1_harbor_script"]
 [ext_resource type="Resource" path="res://resources/oresund_georeference.tres" id="2_georeference"]
 [ext_resource type="Script" path="res://scripts/port_service_controller.gd" id="3_service_controller"]
 [ext_resource type="Resource" path="res://resources/ports/malmo_port_services.tres" id="4_service_config"]
 [ext_resource type="Resource" path="res://resources/ports/malmo_port_definition.tres" id="5_port_definition"]
+[ext_resource type="PackedScene" path="res://scenes/MalmoCityDistrict.tscn" id="6_city_district"]
 
 [node name="MalmoHarbor" type="Node3D"]
 script = ExtResource("1_harbor_script")
@@ -14,6 +15,12 @@ port_definition = ExtResource("5_port_definition")
 port_id = "malmo_greybox_v1"
 port_latitude_deg = 55.619
 port_longitude_deg = 12.977
+build_greybox_visuals = false
+use_city_entry = true
+city_district_path = NodePath("CityDistrict")
+city_prompt_radius_m = 500.0
+city_entry_radius_m = 200.0
+city_entry_speed_threshold_mps = 0.8
 test_offset_east_north_m = Vector2(0, 0)
 entrance_offset_east_north_m = Vector2(-95, 0)
 approach_offset_east_north_m = Vector2(-260, 0)
@@ -49,3 +56,6 @@ harbor_path = NodePath("..")
 boat_path = NodePath("../../PlayerBoat/MotionRoot")
 camera_rig_path = NodePath("../../PlayerBoat/FollowCameraRig")
 economy_manager_path = NodePath("../../CargoEconomyManager")
+
+[node name="CityDistrict" parent="." instance=ExtResource("6_city_district")]
+position = Vector3(100, 0, 0)

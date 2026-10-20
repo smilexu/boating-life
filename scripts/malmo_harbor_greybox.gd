@@ -1,10 +1,12 @@
 extends Node3D
 
-## Phase 1 Malmö harbour greybox. All layout offsets are in east/north metres
-## relative to a documented WGS84 test anchor; no boat or ocean physics are added.
+## Port gameplay and interaction. City entry uses configurable distance/speed
+## thresholds; legacy docking and depth checks remain available for other ports.
 
 signal port_docked(port_id: String)
 signal port_undocked(port_id: String)
+signal port_entered(port_id: String)
+signal port_exited(port_id: String)
 signal port_services_requested(port_id: String)
 
 @export_category("References")
@@ -25,6 +27,12 @@ signal port_services_requested(port_id: String)
 @export_range(-180.0, 180.0, 1.0) var layout_rotation_degrees := 0.0
 @export var debug_teleport_action := "port_debug_teleport"
 @export var depth_override_id_prefix := "malmo"
+@export var build_greybox_visuals := true
+@export var use_city_entry := false
+@export_node_path("Node3D") var city_district_path := NodePath("CityDistrict")
+@export_range(1.0, 5000.0, 1.0) var city_prompt_radius_m := 500.0
+@export_range(1.0, 1000.0, 1.0) var city_entry_radius_m := 200.0
+@export_range(0.0, 3.0, 0.1) var city_entry_speed_threshold_mps := 0.8
 
 @export_category("Port coordinates · east/north metres from anchor")
 @export var entrance_offset_east_north_m := Vector2(-95.0, 0.0)
@@ -82,6 +90,7 @@ var _depth_provider: NavigationDepthProvider
 var _service_controller: PortServiceController
 var _economy_manager: CargoEconomyManager
 var _route_manager: PortRouteManager
+var _city_district: Node3D
 var _display_name := "Port"
 var _world_anchor := Vector3.ZERO
 var _entrance_position := Vector3.ZERO
@@ -98,7 +107,9 @@ var _debug_label: Label
 var _dev_delivery_button: Button
 var _debug_enabled := false
 var _docked := false
+var _port_entered := false
 var _paused_before_docking := false
+var _paused_before_port_entry := false
 var _external_interaction_active := false
 var _ui_elapsed := 0.0
 var _materials: Dictionary = {}
@@ -113,6 +124,9 @@ func _ready() -> void:
 	_bathymetry = get_node_or_null(bathymetry_path) as BathymetryManager
 	_depth_provider = get_node_or_null(navigation_depth_provider_path) as NavigationDepthProvider
 	_service_controller = get_node_or_null(service_controller_path) as PortServiceController
+	_city_district = get_node_or_null(city_district_path) as Node3D
+	if use_city_entry and _city_district == null:
+		push_warning("City entry is enabled, but the configured city district node was not found.")
 	_economy_manager = get_node_or_null(economy_manager_path) as CargoEconomyManager
 	_route_manager = get_node_or_null("../PortRouteManager") as PortRouteManager
 	if georeference == null:
@@ -135,7 +149,8 @@ func _ready() -> void:
 	_service_position = _world_anchor + _offset_to_world(service_offset_east_north_m)
 	_register_gameplay_depth_areas()
 	_build_materials()
-	_build_harbour()
+	if build_greybox_visuals:
+		_build_harbour()
 	_build_debug_markers()
 	_build_ui()
 	refresh_berth_depth_cache()
@@ -143,6 +158,8 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	if _port_entered and _boat != null:
+		_boat.is_motion_paused = _paused_before_port_entry
 	_unregister_gameplay_depth_areas()
 
 
@@ -155,7 +172,7 @@ func _process(delta: float) -> void:
 	if _ui_elapsed < 0.08:
 		return
 	_ui_elapsed = fmod(_ui_elapsed, 0.08)
-	var status := get_docking_diagnostics()
+	var status := get_port_interaction_diagnostics()
 	_update_prompt(status)
 	if _debug_enabled:
 		_update_debug_label(status)
@@ -173,6 +190,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _service_controller != null and _service_controller.is_menu_open():
 				get_viewport().set_input_as_handled()
 			elif request_undock():
+				get_viewport().set_input_as_handled()
+		elif _port_entered:
+			get_viewport().set_input_as_handled()
+		elif use_city_entry:
+			if request_enter_port():
 				get_viewport().set_input_as_handled()
 		else:
 			if request_dock():
@@ -192,6 +214,10 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func is_docked() -> bool:
 	return _docked
+
+
+func is_port_entered() -> bool:
+	return _port_entered
 
 
 func get_service_config() -> PortServiceConfig:
@@ -261,6 +287,47 @@ func get_docking_diagnostics() -> Dictionary:
 	}
 
 
+func get_port_interaction_diagnostics() -> Dictionary:
+	return get_city_entry_diagnostics() if use_city_entry else get_docking_diagnostics()
+
+
+func get_city_entry_diagnostics() -> Dictionary:
+	if _boat == null:
+		return {"can_enter": false, "near_city": false, "docked": _docked, "port_entered": _port_entered}
+	var distance := INF
+	if _city_district != null:
+		if _city_district.has_method("get_distance_to_city_cluster"):
+			distance = float(_city_district.call("get_distance_to_city_cluster", _boat.global_position))
+		elif _city_district.has_method("get_distance_to_building_cluster"):
+			distance = float(_city_district.call("get_distance_to_building_cluster", _boat.global_position))
+	var near_city := distance <= city_prompt_radius_m
+	var inside_entry_radius := distance <= city_entry_radius_m
+	var speed_ok := absf(_boat.speed_mps) <= city_entry_speed_threshold_mps
+	var draft := -1.0
+	var current_depth: Dictionary = {"valid": false, "status": NavigationDepthProvider.STATUS_UNKNOWN, "reason": "船只吃水或水深数据不可用"}
+	if _debug_enabled:
+		draft = _boat.get_current_draft_m()
+		if _depth_provider != null and draft >= 0.0:
+			current_depth = _depth_provider.evaluate_world_position(_boat.global_position, draft)
+	var interaction_available := not _external_interaction_active and not _docked and not _port_entered
+	var can_enter := inside_entry_radius and speed_ok and interaction_available
+	return {
+		"port_id": port_id,
+		"distance_m": distance,
+		"near_city": near_city,
+		"inside_entry_radius": inside_entry_radius,
+		"speed_mps": _boat.speed_mps,
+		"speed_ok": speed_ok,
+		"depth_status": str(current_depth.get("status", NavigationDepthProvider.STATUS_UNKNOWN)),
+		"current_depth": current_depth,
+		"draft_m": draft,
+		"interaction_available": interaction_available,
+		"can_enter": can_enter,
+		"docked": _docked,
+		"port_entered": _port_entered,
+	}
+
+
 func set_external_interaction_active(active: bool) -> void:
 	_external_interaction_active = active
 
@@ -294,7 +361,35 @@ func request_dock() -> bool:
 	return true
 
 
+func request_enter_port() -> bool:
+	if not use_city_entry or _port_entered:
+		return false
+	var status := get_city_entry_diagnostics()
+	if not bool(status.get("can_enter", false)):
+		return false
+	_paused_before_port_entry = _boat.is_motion_paused
+	_boat.disengage_autopilot()
+	_boat.speed_mps = 0.0
+	_boat.is_motion_paused = true
+	_port_entered = true
+	port_entered.emit(port_id)
+	return true
+
+
+func request_leave_port() -> bool:
+	if not _port_entered:
+		return false
+	_port_entered = false
+	if _boat != null:
+		_boat.speed_mps = 0.0
+		_boat.is_motion_paused = _paused_before_port_entry
+	port_exited.emit(port_id)
+	return true
+
+
 func request_undock() -> bool:
+	if _port_entered:
+		return request_leave_port()
 	if not _docked:
 		return false
 	_undock()
@@ -315,6 +410,8 @@ func teleport_to_approach() -> void:
 		return
 	if _docked:
 		_undock()
+	if _port_entered:
+		request_leave_port()
 	_boat.is_autopilot = false
 	_boat.speed_mps = 0.0
 	_boat.is_motion_paused = false
@@ -531,6 +628,8 @@ func _make_unshaded_material(color: Color) -> StandardMaterial3D:
 
 
 func _build_harbour() -> void:
+	if not build_greybox_visuals:
+		return
 	var quay_center := Vector3(QUAY_CENTER_EAST_M, 0.0, 0.0)
 	_add_box("MainQuayWall", quay_center + Vector3(0.0, (quay_top_y_m - 4.2) * 0.5, 0.0), Vector3(main_quay_width_m, quay_top_y_m + 4.2, main_quay_length_m), _materials["concrete"])
 	_add_box("MainQuayDeck", quay_center + Vector3(0.0, quay_top_y_m - 0.04, 0.0), Vector3(main_quay_width_m + 0.4, 0.12, main_quay_length_m + 0.4), _materials["concrete_top"])
@@ -756,6 +855,29 @@ func _make_panel_style(color: Color) -> StyleBoxFlat:
 
 
 func _update_prompt(status: Dictionary) -> void:
+	if use_city_entry and not _port_entered and not _docked:
+		if not bool(status.get("near_city", false)):
+			_prompt_panel.visible = false
+			return
+		_prompt_panel.visible = true
+		var distance := float(status.get("distance_m", INF))
+		var distance_text := "距 %s 城市区 %.0f 米" % [_display_name, distance]
+		if not bool(status.get("inside_entry_radius", false)):
+			_prompt_label.text = "%s\n进入 %.0f 米内且航速 ≤ %.1f m/s 时，按 E 进港" % [
+				distance_text, city_entry_radius_m, city_entry_speed_threshold_mps,
+			]
+			return
+		if not bool(status.get("speed_ok", false)):
+			_prompt_label.text = "%s · 请减速至 %.1f m/s 以下" % [distance_text, city_entry_speed_threshold_mps]
+			return
+		if not bool(status.get("interaction_available", false)):
+			_prompt_label.text = "%s · 完成当前交互后可进港" % distance_text
+			return
+		_prompt_label.text = "%s · 按 E 进港" % distance_text
+		return
+	if _port_entered:
+		_prompt_panel.visible = false
+		return
 	if _docked:
 		var menu_open := _service_controller != null and _service_controller.is_menu_open()
 		_prompt_panel.visible = not menu_open
@@ -786,8 +908,9 @@ func _update_debug_label(status: Dictionary) -> void:
 	var gps := Vector3.ZERO
 	if _boat != null and georeference != null:
 		gps = georeference.world_to_geodetic(_boat.global_position)
-	var can_dock := "满足" if bool(status.get("can_dock", false)) else "不满足"
-	var dock_state := "已靠泊" if _docked else "未靠泊"
+	var interaction_ready := bool(status.get("can_enter", false)) if use_city_entry else bool(status.get("can_dock", false))
+	var interaction_result := "满足" if interaction_ready else "不满足"
+	var dock_state := "已进港" if _port_entered else "已靠泊" if _docked else "未进港/未靠泊"
 	var current_depth: Dictionary = status.get("current_depth", {})
 	var current_depth_text := "未知"
 	if bool(current_depth.get("valid", false)):
@@ -842,18 +965,21 @@ func _update_debug_label(status: Dictionary) -> void:
 	var route_summary := ""
 	if _route_manager != null and _boat != null and _boat.draft_profile != null:
 		route_summary = "\n预设航线 (G 显示)：\n%s\n" % _route_manager.get_debug_summary(_boat.draft_profile.cruise_speed_mps)
+	var interaction_details := "城市最近距离 %.1f m · 提示 %.0f m / 进港 %.0f m · 低速 ≤ %.1f m/s · 进港条件 %s\n" % [float(status.get("distance_m", INF)), city_prompt_radius_m, city_entry_radius_m, city_entry_speed_threshold_mps, interaction_result] if use_city_entry else (
+		"泊位距离 %.1f m · 方向偏差 %.1f° / %.1f° · 靠泊条件 %s\n" % [float(status.get("distance_m", 0.0)), float(status.get("heading_error_degrees", 0.0)), docking_heading_tolerance_degrees, interaction_result]
+	)
+	var depth_status_label := "水深状态（仅参考，不限制进港）" if use_city_entry else "水深状态"
+	var current_depth_label := "当前位置水深（仅诊断）" if use_city_entry else "当前位置水深"
 	_debug_label.text = (
-		"%s Greybox · %s\n" % [_display_name, port_id]
+		"%s 港口 · %s\n" % [_display_name, port_id]
 		+ "船位 %.5f°N, %.5f°E · ENU (%.1f, %.1f) m\n" % [gps.x, gps.y, _boat.global_position.x, _boat.global_position.z]
-		+ "入口 ENU (%.1f, %.1f) · 泊位中心 ENU (%.1f, %.1f)\n" % [_entrance_position.x, _entrance_position.z, _berth_position.x, _berth_position.z]
-		+ "船速 %.2f m/s · 泊位距离 %.1f m\n" % [float(status.get("speed_mps", 0.0)), float(status.get("distance_m", 0.0))]
-		+ "方向偏差 %.1f° (容差 %.1f°) · 靠泊条件 %s\n" % [float(status.get("heading_error_degrees", 0.0)), docking_heading_tolerance_degrees, can_dock]
-		+ "当前位置水深：%s · 吃水 %.2f m · 安全余量 %.2f m\n" % [current_depth_text, float(status.get("draft_m", -1.0)), _depth_provider.safety_margin_m if _depth_provider != null else 0.0]
+		+ interaction_details
+		+ "船速 %.2f m/s · %s %s\n" % [float(status.get("speed_mps", 0.0)), depth_status_label, str(status.get("depth_status", NavigationDepthProvider.STATUS_UNKNOWN))]
+		+ "%s：%s · 吃水 %.2f m · 安全余量 %.2f m\n" % [current_depth_label, current_depth_text, float(status.get("draft_m", -1.0)), _depth_provider.safety_margin_m if _depth_provider != null else 0.0]
 		+ cargo_debug_text
 		+ route_summary
-		+ "泊位水深 %s · %s\n%s\n" % [str(status.get("depth_status", NavigationDepthProvider.STATUS_UNKNOWN)), str(status.get("depth_reason", "Unknown")), berth_water]
-		+ "状态 %s · 入口宽 %.0f m · 泊位 %.0f × %.1f m\n" % [dock_state, entrance_width_m, berth_length_m, berth_width_m]
-		+ "E 靠泊/离泊 · %s 测试定位 · V 港口标记 · G 航线标记 · F12 货柜测试\n" % ("P" if debug_teleport_action == ACTION_DEBUG_TELEPORT else "K")
+		+ ("泊位水深 %s · %s\n%s\n" % [str(status.get("depth_status", NavigationDepthProvider.STATUS_UNKNOWN)), str(status.get("depth_reason", "Unknown")), berth_water] if not use_city_entry else "")
+		+ "状态 %s · E %s · %s 测试定位 · V 港口标记 · G 航线标记 · F12 货柜测试\n" % [dock_state, "进港/离港" if use_city_entry else "靠泊/离泊", "P" if debug_teleport_action == ACTION_DEBUG_TELEPORT else "K"]
 	)
 	if _dev_delivery_button != null:
 		_dev_delivery_button.visible = _debug_enabled and developer_tools_enabled and (OS.has_feature("editor") or OS.has_feature("debug")) and _economy_manager != null and not _economy_manager.get_active_contracts().is_empty()

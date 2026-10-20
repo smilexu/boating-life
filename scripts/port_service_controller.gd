@@ -54,6 +54,10 @@ func _ready() -> void:
 		_harbor.connect("port_docked", _on_port_docked)
 	if _harbor.has_signal("port_undocked"):
 		_harbor.connect("port_undocked", _on_port_undocked)
+	if _harbor.has_signal("port_entered"):
+		_harbor.connect("port_entered", _on_port_entered)
+	if _harbor.has_signal("port_exited"):
+		_harbor.connect("port_exited", _on_port_exited)
 	if _harbor.has_signal("port_services_requested"):
 		_harbor.connect("port_services_requested", _on_port_services_requested)
 	if _economy_manager != null and _economy_manager.has_signal("state_changed"):
@@ -67,7 +71,7 @@ func is_menu_open() -> bool:
 
 
 func is_docked() -> bool:
-	return _state != PortState.SAILING
+	return _harbor != null and _harbor.has_method("is_docked") and bool(_harbor.call("is_docked"))
 
 
 func get_state_name() -> String:
@@ -90,7 +94,7 @@ func get_menu_visible() -> bool:
 
 
 func open_main_menu() -> bool:
-	if _harbor == null or not bool(_harbor.call("is_docked")):
+	if _harbor == null or not _harbor_is_at_port():
 		return false
 	_current_service_id = ""
 	_populate_main_page()
@@ -108,7 +112,11 @@ func close_menu() -> void:
 		return
 	_current_service_id = ""
 	_overlay.visible = false
-	_set_state(PortState.DOCKED)
+	if _harbor != null and _harbor.has_method("is_port_entered") and bool(_harbor.call("is_port_entered")):
+		_harbor.call("request_leave_port")
+		_set_state(PortState.SAILING)
+	else:
+		_set_state(PortState.DOCKED)
 	_set_ui_input_active(false)
 
 
@@ -152,8 +160,28 @@ func _on_port_undocked(_port_id: String) -> void:
 	_set_state(PortState.SAILING)
 
 
+func _on_port_entered(_port_id: String) -> void:
+	open_main_menu()
+
+
+func _on_port_exited(_port_id: String) -> void:
+	_current_service_id = ""
+	if _overlay != null:
+		_overlay.visible = false
+	_set_ui_input_active(false)
+	_set_state(PortState.SAILING)
+
+
 func _on_port_services_requested(_port_id: String) -> void:
 	open_main_menu()
+
+
+func _harbor_is_at_port() -> bool:
+	if _harbor == null:
+		return false
+	if _harbor.has_method("is_docked") and bool(_harbor.call("is_docked")):
+		return true
+	return _harbor.has_method("is_port_entered") and bool(_harbor.call("is_port_entered"))
 
 
 func _set_state(next_state: int) -> void:
@@ -231,7 +259,8 @@ func _populate_main_page() -> void:
 	if _port_title == null or _body == null:
 		return
 	_port_title.text = _config.display_name
-	_status_label.text = "已靠泊  ·  %s" % _get_vessel_display_name()
+	var arrival_state := "已进入港口" if _harbor != null and _harbor.has_method("is_port_entered") and bool(_harbor.call("is_port_entered")) else "已靠泊"
+	_status_label.text = "%s  ·  %s" % [arrival_state, _get_vessel_display_name()]
 	_clear_children(_body)
 	var intro := Label.new()
 	intro.text = "选择一项港口服务。港口与海面仍在当前世界中持续运行。"
@@ -445,7 +474,9 @@ func _build_footer(main_page: bool) -> void:
 
 
 func _on_leave_port_pressed() -> void:
-	if _harbor != null and _harbor.has_method("request_undock"):
+	if _harbor != null and _harbor.has_method("is_port_entered") and bool(_harbor.call("is_port_entered")) and _harbor.has_method("request_leave_port"):
+		_harbor.call("request_leave_port")
+	elif _harbor != null and _harbor.has_method("request_undock"):
 		_harbor.call("request_undock")
 
 

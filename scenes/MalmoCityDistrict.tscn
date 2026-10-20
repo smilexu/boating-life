@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/malmo_city_district.gd" id="1_city_district"]
+
+[node name="MalmoCityDistrict" type="Node3D"]
+script = ExtResource("1_city_district")

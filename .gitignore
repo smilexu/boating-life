@@ -1,6 +1,7 @@
 # Godot generated files
 .godot/
 .import/
+.DS_Store
 
 # Exported builds
 build/
