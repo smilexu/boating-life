@@ -1,6 +1,16 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://scripts/malmo_city_district.gd" id="1_city_district"]
+[ext_resource type="Script" path="res://scripts/city_lighting_controller.gd" id="2_city_lighting"]
+[ext_resource type="Resource" path="res://resources/cities/malmo/turning_torso_lighting.tres" id="3_turning_torso_lighting"]
+[ext_resource type="Resource" path="res://resources/cities/malmo/blue_office_lighting.tres" id="4_blue_office_lighting"]
+[ext_resource type="Resource" path="res://resources/cities/malmo/white_residential_lighting_a.tres" id="5_white_residential_a"]
+[ext_resource type="Resource" path="res://resources/cities/malmo/white_residential_lighting_b.tres" id="6_white_residential_b"]
+[ext_resource type="Resource" path="res://resources/cities/malmo/brick_residential_lighting.tres" id="7_brick_residential"]
 
 [node name="MalmoCityDistrict" type="Node3D"]
 script = ExtResource("1_city_district")
+
+[node name="CityLightingController" type="Node3D" parent="."]
+script = ExtResource("2_city_lighting")
+window_profiles = [ExtResource("3_turning_torso_lighting"), ExtResource("4_blue_office_lighting"), ExtResource("5_white_residential_a"), ExtResource("6_white_residential_b"), ExtResource("7_brick_residential")]

@@ -22,6 +22,9 @@ func _ready() -> void:
 	_build_district_ground()
 	_build_buildings()
 	_build_trees()
+	var lighting_controller := get_node_or_null("CityLightingController")
+	if lighting_controller != null:
+		lighting_controller.call("configure", self, get_node_or_null("../../DayNightVisualController"))
 
 
 func _build_materials() -> void:
@@ -266,6 +269,10 @@ func _ensure_counter_clockwise(outline: PackedVector2Array) -> PackedVector2Arra
 
 func _position_en(position_east_north: Vector2, height: float) -> Vector3:
 	return Vector3(position_east_north.x + DISTRICT_EAST_SHIFT_M, height, -position_east_north.y)
+
+
+func get_local_position_en(position_east_north: Vector2, height: float) -> Vector3:
+	return _position_en(position_east_north, height)
 
 
 func get_distance_to_city_cluster(world_position: Vector3) -> float:

@@ -83,6 +83,20 @@ var _autopilot_panel: PanelContainer
 var _autopilot_label: Label
 var _peberholm_debug_button: Button
 var _peberholm_debug_feedback: Label
+var _city_lighting_toggle: CheckButton
+var _city_window_strength_slider: HSlider
+var _city_density_mode_option: OptionButton
+var _city_window_density_slider: HSlider
+var _city_mask_debug_toggle: CheckButton
+var _city_turning_torso_slider: HSlider
+var _city_contour_slider: HSlider
+var _city_residential_slider: HSlider
+var _city_office_slider: HSlider
+var _city_street_slider: HSlider
+var _city_lighting_mode_option: OptionButton
+var _city_lighting_status: Label
+var _city_lighting_save_button: Button
+var _city_lighting_reset_button: Button
 
 
 func _ready() -> void:
@@ -414,6 +428,7 @@ func _build_debug_panel() -> void:
 	layout.add_child(preset_row)
 	_add_fish_observation_controls(layout)
 	_add_dolphin_controls(layout)
+	_add_city_lighting_controls(layout)
 
 	_sun_elevation_slider = _add_slider_row(layout, "太阳高度（时间驱动）", -90.0, 90.0, 0.1)
 	_sun_elevation_slider.editable = false
@@ -458,6 +473,213 @@ func _build_debug_panel() -> void:
 	add_child(_debug_panel)
 	_refresh_weather_controls()
 	_refresh_settings_controls()
+	_refresh_city_lighting_controls()
+
+
+func _add_city_lighting_controls(parent: VBoxContainer) -> void:
+	var section_title := Label.new()
+	section_title.text = "Malmö 城市夜间灯光"
+	section_title.add_theme_font_size_override("font_size", 16)
+	section_title.add_theme_color_override("font_color", Color(0.94, 0.96, 0.94))
+	parent.add_child(section_title)
+	_city_lighting_toggle = CheckButton.new()
+	_city_lighting_toggle.text = "启用城市夜间灯光"
+	_city_lighting_toggle.toggled.connect(_on_city_lighting_toggled)
+	parent.add_child(_city_lighting_toggle)
+	var mode_note := _make_debug_label()
+	mode_note.text = "强制模式仅测试城市灯光，不改变世界时间、天气或太阳。"
+	parent.add_child(mode_note)
+	_city_lighting_mode_option = _add_option_row(parent, "灯光模式", ["自动昼夜", "强制白天", "强制黄昏", "强制夜晚"])
+	_city_lighting_mode_option.item_selected.connect(_on_city_lighting_mode_selected)
+	_city_window_strength_slider = _add_slider_row(parent, "窗光总强度 · 0–3 倍", 0.0, 3.0, 0.05)
+	_city_window_strength_slider.value = 1.0
+	_city_window_strength_slider.value_changed.connect(_on_city_window_strength_changed)
+	_city_density_mode_option = _add_option_row(parent, "亮灯密度", ["按建筑配置（自动）", "自定义比例"])
+	_city_density_mode_option.item_selected.connect(_on_city_density_mode_selected)
+	_city_window_density_slider = _add_slider_row(parent, "自定义亮灯比例 · 0–80%", 0.0, 0.8, 0.01)
+	_city_window_density_slider.value = 0.3
+	_city_window_density_slider.value_changed.connect(_on_city_window_density_changed)
+	_city_mask_debug_toggle = CheckButton.new()
+	_city_mask_debug_toggle.text = "诊断：亮紫色显示窗户遮罩"
+	_city_mask_debug_toggle.toggled.connect(_on_city_mask_debug_toggled)
+	parent.add_child(_city_mask_debug_toggle)
+	_city_turning_torso_slider = _add_slider_row(parent, "Turning Torso 窗光", 0.0, 3.0, 0.05)
+	_city_turning_torso_slider.value = 1.0
+	_city_turning_torso_slider.value_changed.connect(_on_city_turning_torso_changed)
+	_city_contour_slider = _add_slider_row(parent, "Turning Torso 弱轮廓补光", 0.0, 2.0, 0.05)
+	_city_contour_slider.value = 0.2
+	_city_contour_slider.value_changed.connect(_on_city_contour_changed)
+	_city_residential_slider = _add_slider_row(parent, "住宅窗光", 0.0, 3.0, 0.05)
+	_city_residential_slider.value = 1.0
+	_city_residential_slider.value_changed.connect(_on_city_residential_changed)
+	_city_office_slider = _add_slider_row(parent, "办公楼窗光", 0.0, 3.0, 0.05)
+	_city_office_slider.value = 1.0
+	_city_office_slider.value_changed.connect(_on_city_office_changed)
+	_city_street_slider = _add_slider_row(parent, "道路与广场照明", 0.0, 3.0, 0.05)
+	_city_street_slider.value = 1.0
+	_city_street_slider.value_changed.connect(_on_city_street_changed)
+	_city_lighting_status = _make_debug_label()
+	parent.add_child(_city_lighting_status)
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 6)
+	_city_lighting_save_button = Button.new()
+	_city_lighting_save_button.text = "保存灯光参数"
+	_city_lighting_save_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_city_lighting_save_button.pressed.connect(_on_city_lighting_save_pressed)
+	buttons.add_child(_city_lighting_save_button)
+	_city_lighting_reset_button = Button.new()
+	_city_lighting_reset_button.text = "恢复城市默认值"
+	_city_lighting_reset_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_city_lighting_reset_button.pressed.connect(_on_city_lighting_reset_pressed)
+	buttons.add_child(_city_lighting_reset_button)
+	parent.add_child(buttons)
+
+
+func _get_city_lighting_controller() -> Node:
+	var controllers := get_tree().get_nodes_in_group("city_lighting_controller")
+	return controllers[0] if not controllers.is_empty() else null
+
+
+func _refresh_city_lighting_controls() -> void:
+	if _city_lighting_status == null:
+		return
+	var city_lighting := _get_city_lighting_controller()
+	var controls: Array[Control] = [
+		_city_lighting_toggle, _city_window_strength_slider, _city_density_mode_option,
+		_city_window_density_slider, _city_turning_torso_slider, _city_contour_slider,
+		_city_residential_slider, _city_office_slider, _city_street_slider,
+		_city_mask_debug_toggle, _city_lighting_mode_option, _city_lighting_save_button, _city_lighting_reset_button,
+	]
+	if city_lighting == null:
+		_set_city_lighting_controls_enabled(controls, false)
+		_city_lighting_status.text = "城市灯光控制器尚未加载。"
+		return
+	_set_city_lighting_controls_enabled(controls, true)
+	var state: Dictionary = city_lighting.call("get_debug_state")
+	_city_lighting_toggle.set_pressed_no_signal(bool(state.get("enabled", true)))
+	if not _city_window_strength_slider.has_focus():
+		_city_window_strength_slider.set_value_no_signal(float(state.get("master_window_intensity", 1.0)))
+	var density_override := float(state.get("density_override", -1.0))
+	_city_density_mode_option.select(1 if density_override >= 0.0 else 0)
+	_city_window_density_slider.editable = density_override >= 0.0
+	_city_mask_debug_toggle.set_pressed_no_signal(bool(state.get("debug_mask_view", false)))
+	if not _city_window_density_slider.has_focus() and density_override >= 0.0:
+		_city_window_density_slider.set_value_no_signal(density_override)
+	if not _city_turning_torso_slider.has_focus():
+		_city_turning_torso_slider.set_value_no_signal(float(state.get("turning_torso_intensity", 1.0)))
+	if not _city_contour_slider.has_focus():
+		_city_contour_slider.set_value_no_signal(float(state.get("contour_intensity", 0.2)))
+	if not _city_residential_slider.has_focus():
+		_city_residential_slider.set_value_no_signal(float(state.get("residential_intensity", 1.0)))
+	if not _city_office_slider.has_focus():
+		_city_office_slider.set_value_no_signal(float(state.get("office_intensity", 1.0)))
+	if not _city_street_slider.has_focus():
+		_city_street_slider.set_value_no_signal(float(state.get("street_intensity", 1.0)))
+	_city_lighting_mode_option.select(int(state.get("forced_mode", 0)))
+	_city_lighting_status.text = "状态 %s · %s · 游戏时间 %s · 距城 %.0f m · 近窗 %.0f%% / 远景代理 %.0f%% · 亮灯 %s · 窗光材质组 %d · %s" % [
+		"开" if bool(state.get("enabled", true)) else "关",
+		str(state.get("mode_name", "自动昼夜")),
+		str(state.get("local_time", "--:--")),
+		float(state.get("camera_distance_m", 0.0)),
+		float(state.get("near_window_factor", 0.0)) * 100.0,
+		float(state.get("far_proxy_factor", 0.0)) * 100.0,
+		str(state.get("density_text", "自动")),
+		int(state.get("overlay_surfaces", 0)),
+		"在可见距离内" if bool(state.get("visible", true)) else "超出灯光距离",
+	]
+
+
+func _set_city_lighting_controls_enabled(controls: Array[Control], enabled: bool) -> void:
+	for control in controls:
+		if control is BaseButton:
+			(control as BaseButton).disabled = not enabled
+		elif control is Range:
+			(control as Range).editable = enabled
+
+
+func _on_city_lighting_toggled(enabled: bool) -> void:
+	var controller := _get_city_lighting_controller()
+	if controller != null:
+		controller.call("set_lighting_enabled", enabled)
+		_refresh_city_lighting_controls()
+
+
+func _on_city_lighting_mode_selected(index: int) -> void:
+	var controller := _get_city_lighting_controller()
+	if controller != null:
+		controller.call("set_forced_mode", index)
+		_refresh_city_lighting_controls()
+
+
+func _on_city_window_strength_changed(value: float) -> void:
+	var controller := _get_city_lighting_controller()
+	if controller != null:
+		controller.call("set_master_window_intensity", value)
+		_refresh_city_lighting_controls()
+
+
+func _on_city_density_mode_selected(index: int) -> void:
+	var controller := _get_city_lighting_controller()
+	if controller != null:
+		controller.call("set_density_override", index == 1, _city_window_density_slider.value)
+		_refresh_city_lighting_controls()
+
+
+func _on_city_window_density_changed(value: float) -> void:
+	var controller := _get_city_lighting_controller()
+	if controller != null:
+		controller.call("set_density_override", _city_density_mode_option.selected == 1, value)
+		_refresh_city_lighting_controls()
+
+
+func _on_city_mask_debug_toggled(enabled: bool) -> void:
+	var controller := _get_city_lighting_controller()
+	if controller != null:
+		controller.call("set_debug_mask_view", enabled)
+
+
+func _on_city_turning_torso_changed(value: float) -> void:
+	var controller := _get_city_lighting_controller()
+	if controller != null:
+		controller.call("set_category_intensity", "turning_torso", value)
+
+
+func _on_city_contour_changed(value: float) -> void:
+	var controller := _get_city_lighting_controller()
+	if controller != null:
+		controller.call("set_contour_intensity", value)
+
+
+func _on_city_residential_changed(value: float) -> void:
+	var controller := _get_city_lighting_controller()
+	if controller != null:
+		controller.call("set_category_intensity", "residential", value)
+
+
+func _on_city_office_changed(value: float) -> void:
+	var controller := _get_city_lighting_controller()
+	if controller != null:
+		controller.call("set_category_intensity", "office", value)
+
+
+func _on_city_street_changed(value: float) -> void:
+	var controller := _get_city_lighting_controller()
+	if controller != null:
+		controller.call("set_street_lighting_intensity", value)
+
+
+func _on_city_lighting_save_pressed() -> void:
+	var controller := _get_city_lighting_controller()
+	if controller != null:
+		var saved := bool(controller.call("save_debug_settings"))
+		_city_lighting_status.text = "城市灯光参数已保存到 user://malmo_city_lighting.cfg" if saved else "城市灯光参数保存失败。"
+
+
+func _on_city_lighting_reset_pressed() -> void:
+	var controller := _get_city_lighting_controller()
+	if controller != null:
+		controller.call("reset_debug_defaults")
+		_refresh_city_lighting_controls()
 
 
 func _add_peberholm_render_debug_control(parent: VBoxContainer) -> void:
@@ -1275,6 +1497,7 @@ func _update_debug_status() -> void:
 		str(render_metrics.get("adapter", "n/a")),
 	]
 	_refresh_settings_controls()
+	_refresh_city_lighting_controls()
 
 
 func _refresh_world_time_controls() -> void:

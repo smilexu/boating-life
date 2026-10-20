@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="CityWindowLightingProfile" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/city_window_lighting_profile.gd" id="1_profile"]
+[ext_resource type="Texture2D" path="res://assets/cities/malmo/window_lighting/blue_building_window_rank.png" id="2_mask"]
+[ext_resource type="Texture2D" path="res://assets/cities/malmo/window_lighting/blue_building_window_far_proxy.png" id="3_far_mask"]
+
+[resource]
+script = ExtResource("1_profile")
+building_node_name = "BlueGlassApartment"
+kind = 2
+window_rank_mask = ExtResource("2_mask")
+far_proxy_mask = ExtResource("3_far_mask")
+evening_lit_ratio = 0.4
+late_night_lit_ratio = 0.1
+warm_window_color = Color(0.86, 0.88, 0.82, 1)
+secondary_window_color = Color(0.77, 0.85, 0.91, 1)
+secondary_color_ratio = 0.1
+emission_strength = 1.15
+pattern_offset = 0.371
+far_proxy_emission_strength = 6.0
