@@ -130,8 +130,8 @@ func accept_contract(contract_id: String, harbor: Node = null) -> Dictionary:
 		return _result(false, "unknown_contract", "找不到这份合同")
 	var active_harbor := harbor if harbor != null else _harbor
 	var location := _get_harbor_context(active_harbor)
-	if not bool(location.get("docked", false)) or str(location.get("port_id", "")) != str(definition.origin_port_id):
-		return _result(false, "wrong_origin", "必须停泊在起运港 %s 才能接单" % _get_port_display_name(str(definition.origin_port_id)))
+	if not bool(location.get("at_port", false)) or str(location.get("port_id", "")) != str(definition.origin_port_id):
+		return _result(false, "wrong_origin", "必须进入或停泊在起运港 %s 才能接单" % _get_port_display_name(str(definition.origin_port_id)))
 	var state: Dictionary = _contract_states.get(contract_id, {})
 	if str(state.get("status", STATUS_AVAILABLE)) != STATUS_AVAILABLE:
 		return _result(false, "already_taken", "这份任务已被接受或完成")
@@ -170,12 +170,12 @@ func accept_contract(contract_id: String, harbor: Node = null) -> Dictionary:
 
 func deliver_contract(contract_id: String, harbor: Node = null) -> Dictionary:
 	var location := _get_harbor_context(harbor if harbor != null else _harbor)
-	return _complete_delivery(contract_id, str(location.get("port_id", "")), bool(location.get("docked", false)))
+	return _complete_delivery(contract_id, str(location.get("port_id", "")), bool(location.get("at_port", false)))
 
 
 func can_deliver_contract(contract_id: String, harbor: Node = null) -> Dictionary:
 	var location := _get_harbor_context(harbor if harbor != null else _harbor)
-	var validation := _validate_delivery(contract_id, str(location.get("port_id", "")), bool(location.get("docked", false)))
+	var validation := _validate_delivery(contract_id, str(location.get("port_id", "")), bool(location.get("at_port", false)))
 	return {"can_deliver": bool(validation.get("valid", false)), "reason": str(validation.get("reason", ""))}
 
 
@@ -372,8 +372,8 @@ func reset_runtime_state_for_testing() -> bool:
 	return true
 
 
-func _complete_delivery(contract_id: String, port_id: String, docked: bool, success_message_override: String = "") -> Dictionary:
-	var validation := _validate_delivery(contract_id, port_id, docked)
+func _complete_delivery(contract_id: String, port_id: String, at_port: bool, success_message_override: String = "") -> Dictionary:
+	var validation := _validate_delivery(contract_id, port_id, at_port)
 	if not bool(validation.get("valid", false)):
 		return _result(false, str(validation.get("code", "delivery_rejected")), str(validation.get("reason", "无法交货")))
 	var definition := get_contract_definition(contract_id)
@@ -405,12 +405,12 @@ func _complete_delivery(contract_id: String, port_id: String, docked: bool, succ
 	return _result(true, "completed", message)
 
 
-func _validate_delivery(contract_id: String, port_id: String, docked: bool) -> Dictionary:
+func _validate_delivery(contract_id: String, port_id: String, at_port: bool) -> Dictionary:
 	var definition := get_contract_definition(contract_id)
 	if definition == null:
 		return {"valid": false, "code": "unknown_contract", "reason": "找不到这份合同"}
-	if not docked:
-		return {"valid": false, "code": "not_docked", "reason": "必须停泊后才能交货"}
+	if not at_port:
+		return {"valid": false, "code": "not_at_port", "reason": "必须进入或停泊在港口后才能交货"}
 	if port_id != str(definition.destination_port_id):
 		return {"valid": false, "code": "wrong_destination", "reason": "当前港口不是合同目的港 %s" % _get_port_display_name(str(definition.destination_port_id))}
 	var state: Dictionary = _contract_states.get(contract_id, {})
@@ -520,10 +520,12 @@ func _get_active_count() -> int:
 
 func _get_harbor_context(harbor: Node) -> Dictionary:
 	if harbor == null:
-		return {"docked": false, "port_id": ""}
-	var docked := bool(harbor.call("is_docked")) if harbor.has_method("is_docked") else false
+		return {"at_port": false, "port_id": ""}
+	var at_port := bool(harbor.call("is_docked")) if harbor.has_method("is_docked") else false
+	if not at_port and harbor.has_method("is_port_entered"):
+		at_port = bool(harbor.call("is_port_entered"))
 	var port_value: Variant = harbor.get("port_id")
-	return {"docked": docked, "port_id": str(port_value) if port_value != null else ""}
+	return {"at_port": at_port, "port_id": str(port_value) if port_value != null else ""}
 
 
 func _get_port_display_name(port_id: String) -> String:
