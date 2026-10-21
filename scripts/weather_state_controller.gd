@@ -21,6 +21,7 @@ enum OperatingMode { AUTO, MANUAL }
 
 signal weather_state_changed(weather_id: StringName, wind_state: Dictionary)
 signal operating_mode_changed(mode_name: StringName)
+signal precipitation_visual_target_changed(state: Dictionary)
 
 const WEATHER_NAMES := [&"Clear", &"PartlyCloudy", &"Overcast"]
 const SAVE_SCHEMA_VERSION := 1
@@ -32,6 +33,9 @@ var climate_region_id := ""
 var climate_date: Dictionary = {}
 var climate_weather_type := ""
 var climate_data_quality := "unavailable"
+var formal_precipitation_intensity_mm_per_hour := 0.0
+var formal_precipitation_available := false
+var formal_precipitation_data_quality := "unavailable"
 
 var _weather_controller: Node
 var _wind_field: WindField
@@ -138,6 +142,7 @@ func set_manual_mode() -> void:
 		return
 	operating_mode = OperatingMode.MANUAL
 	_runtime_climate_tracking = false
+	_set_formal_precipitation(0.0, false, "manual")
 	operating_mode_changed.emit(&"MANUAL")
 
 
@@ -160,7 +165,9 @@ func apply_runtime_climate_sample(
 	wind_state: Dictionary,
 	region_id: String,
 	date: Dictionary,
-	data_quality: String
+	data_quality: String,
+	precipitation_intensity_mm_per_hour: float = 0.0,
+	precipitation_available: bool = false
 ) -> bool:
 	if operating_mode != OperatingMode.AUTO or visual_preset_index < 0 or visual_preset_index >= WEATHER_NAMES.size():
 		return false
@@ -168,6 +175,11 @@ func apply_runtime_climate_sample(
 	climate_date = date.duplicate(true)
 	climate_weather_type = weather_type
 	climate_data_quality = data_quality
+	_set_formal_precipitation(
+		precipitation_intensity_mm_per_hour,
+		precipitation_available,
+		data_quality
+	)
 	var visual_changed := visual_preset_index != _active_visual_preset_index
 	if visual_changed and _weather_controller != null:
 		_weather_controller.call("set_weather_by_index", visual_preset_index, false)
@@ -225,6 +237,33 @@ func get_wind_state() -> Dictionary:
 
 func get_operating_mode_name() -> StringName:
 	return &"AUTO" if operating_mode == OperatingMode.AUTO else &"MANUAL"
+
+
+func get_precipitation_visual_state() -> Dictionary:
+	return _precipitation_visual_state()
+
+
+func _set_formal_precipitation(rate_mm_per_hour: float, available: bool, quality: String) -> void:
+	var safe_rate := maxf(rate_mm_per_hour, 0.0) if is_finite(rate_mm_per_hour) and available else 0.0
+	var changed := (
+		absf(safe_rate - formal_precipitation_intensity_mm_per_hour) > 0.001
+		or available != formal_precipitation_available
+		or quality != formal_precipitation_data_quality
+	)
+	formal_precipitation_intensity_mm_per_hour = safe_rate
+	formal_precipitation_available = available
+	formal_precipitation_data_quality = quality
+	if changed:
+		precipitation_visual_target_changed.emit(_precipitation_visual_state())
+
+
+func _precipitation_visual_state() -> Dictionary:
+	return {
+		"intensity_mm_per_hour": formal_precipitation_intensity_mm_per_hour,
+		"available": formal_precipitation_available,
+		"data_quality": formal_precipitation_data_quality,
+		"operating_mode": String(get_operating_mode_name()),
+	}
 
 
 ## Describes future save fields only; no weather save/load is implemented in W2.1.

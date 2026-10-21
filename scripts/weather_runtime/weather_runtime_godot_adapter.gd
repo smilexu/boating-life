@@ -22,6 +22,18 @@ func apply_sample(sample: Dictionary, region_id: String) -> Dictionary:
 		return {"ok": false, "error": "visual_weather_unavailable", "visual_weather_id": visual_name}
 	var wind_state := _wind_state_from_sample(sample)
 	var date := _date_from_sample(sample)
+	var precipitation_available := sample.has("precipitation_intensity_mm_per_hour")
+	var precipitation_rate := 0.0
+	if precipitation_available:
+		var raw_rate: Variant = sample.get("precipitation_intensity_mm_per_hour")
+		if raw_rate is int or raw_rate is float:
+			var parsed_rate := float(raw_rate)
+			if is_finite(parsed_rate):
+				precipitation_rate = maxf(parsed_rate, 0.0)
+			else:
+				precipitation_available = false
+		else:
+			precipitation_available = false
 	var applied := bool(_weather_state_controller.call(
 		"apply_runtime_climate_sample",
 		str(sample.get("weather_type", visual_name)),
@@ -29,9 +41,17 @@ func apply_sample(sample: Dictionary, region_id: String) -> Dictionary:
 		wind_state,
 		region_id,
 		date,
-		sample.get("data_quality", "unavailable")
+		sample.get("data_quality", "unavailable"),
+		precipitation_rate,
+		precipitation_available
 	))
-	return {"ok": applied, "visual_weather_id": visual_name, "wind_available": not wind_state.is_empty()}
+	return {
+		"ok": applied,
+		"visual_weather_id": visual_name,
+		"wind_available": not wind_state.is_empty(),
+		"precipitation_available": precipitation_available,
+		"precipitation_intensity_mm_per_hour": precipitation_rate,
+	}
 
 
 func _visual_index(visual_name: String) -> int:

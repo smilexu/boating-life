@@ -17,6 +17,7 @@ const MoonPositionScript := preload("res://scripts/moon_position.gd")
 @export_node_path("SunshineCloudsDriverGD") var sunshine_clouds_driver_path := NodePath("../SunshineCloudsDriverGD")
 @export var georeference: GeoReference
 @export var visual_profile: DayNightVisualProfile
+@export_range(0.0, 1.0, 0.01) var rain_fog_density_multiplier := 0.60
 
 var _world_time_manager: Node
 var _weather_controller: WeatherController
@@ -251,7 +252,9 @@ func _apply_composed_visuals(weather: Dictionary) -> void:
 	fog_color = fog_color.lerp(visual_profile.blue_hour_fog_color, blue_hour * 0.45)
 	fog_color = fog_color.lerp(visual_profile.twilight_color, horizon_warmth * visual_profile.fog_twilight_mix)
 	_environment.fog_light_color = fog_color
-	_environment.fog_density = float(weather["fog_density"]) * lerpf(visual_profile.night_fog_density_multiplier, 1.0, sky_horizon_daylight)
+	var base_fog_density := float(weather["fog_density"]) * lerpf(visual_profile.night_fog_density_multiplier, 1.0, sky_horizon_daylight)
+	var rain_haze := clampf(float(weather.get("rain_haze_strength", 0.0)), 0.0, 1.0)
+	_environment.fog_density = base_fog_density * (1.0 + rain_haze * rain_fog_density_multiplier)
 	_environment.fog_aerial_perspective = lerpf(visual_profile.night_fog_aerial_perspective, float(weather.get("fog_aerial_perspective", 0.13)), sky_horizon_daylight)
 	_environment.fog_sun_scatter = lerpf(visual_profile.night_fog_sun_scatter, float(weather.get("fog_sun_scatter", 0.08)), sky_horizon_daylight)
 	_apply_cloud_lighting(weather, cloud_daylight, blue_hour, horizon_warmth, moon_light_strength)

@@ -123,6 +123,7 @@ var _target: Dictionary = {}
 var _transition_elapsed := 0.0
 var _transition_active := false
 var _last_applied_wave_strength := -1.0
+var _rain_haze_strength := 0.0
 
 
 func _ready() -> void:
@@ -219,7 +220,15 @@ func get_sun_azimuth() -> float:
 
 ## Returns a copy of the active weather values for visual composition.
 func get_day_night_visual_baseline() -> Dictionary:
-	return _current.duplicate(true)
+	var baseline := _current.duplicate(true)
+	baseline["rain_haze_strength"] = _rain_haze_strength
+	return baseline
+
+
+## Rain is an additive atmosphere input. DayNightVisualController remains the
+## sole writer of WorldEnvironment fog values.
+func set_rain_haze_strength(value: float) -> void:
+	_rain_haze_strength = clampf(value, 0.0, 1.0)
 
 
 func get_cloud_coverage() -> float:

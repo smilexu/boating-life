@@ -32,6 +32,14 @@ uniform float detail_wave_fade_start : hint_range(0.0, 5000.0) = 80.0;
 uniform float detail_wave_fade_end : hint_range(0.0, 5000.0) = 850.0;
 uniform float detail_normal_strength_near : hint_range(0.0, 5.0) = 0.8;
 uniform float detail_normal_strength_far : hint_range(0.0, 1.0) = 0.0;
+// Client-only rainfall detail. This perturbs the fragment normal/roughness
+// after the shared Gerstner displacement; it never changes vertex height.
+uniform float rain_impact_density : hint_range(0.0, 0.35) = 0.0;
+uniform float rain_impact_strength : hint_range(0.0, 2.0) = 0.0;
+uniform float rain_impact_cell_size : hint_range(0.6, 3.0) = 1.4;
+uniform float rain_micro_density : hint_range(0.0, 1.0) = 0.0;
+uniform float rain_micro_cell_size : hint_range(0.2, 0.8) = 0.42;
+uniform float rain_ring_size : hint_range(0.4, 1.5) = 1.0;
 uniform float sun_glitter_intensity : hint_range(0.0, 2.0) = 0.72;
 uniform float water_roughness_near : hint_range(0.0, 1.0) = 0.10;
 uniform float water_roughness_far : hint_range(0.0, 1.0) = 0.34;
@@ -495,6 +503,76 @@ vec3 water_detail_fbm(vec2 p) {
 	return vec3(value, gradient);
 }
 
+// Sparse, short-lived ripples are one layer of rain detail. Their random radius
+// stays below the previous large-cell radius; most rain is represented by the
+// finer micro-impact field below.
+vec2 rain_impact_normal_slope(vec2 world_xz, float time_seconds, float density, float cell_size, float ring_size) {
+	vec2 cell = floor(world_xz / cell_size);
+	float seed = water_hash(cell + vec2(47.17, 12.91));
+	if (seed >= density) {
+		return vec2(0.0);
+	}
+	float placement_seed = water_hash(cell + vec2(19.13, 71.11));
+	float phase = fract(seed * 83.71);
+	float cycle = fract(time_seconds * 0.62 + phase);
+	float jitter_x = (fract(placement_seed * 17.13) - 0.5) * 0.28;
+	float jitter_y = (fract(placement_seed * 53.29) - 0.5) * 0.28;
+	vec2 center = (cell + vec2(0.5 + jitter_x, 0.5 + jitter_y)) * cell_size;
+	vec2 offset = world_xz - center;
+	float distance_to_center = length(offset);
+	float radius_variation = mix(0.055, 0.12, fract(seed * 101.31));
+	float ring_radius = cycle * cell_size * radius_variation * ring_size;
+	float sigma = max(cell_size * 0.022, 0.014);
+	float signed_distance = distance_to_center - ring_radius;
+	float normalized_distance = signed_distance / sigma;
+	float ring = exp(-normalized_distance * normalized_distance) * pow(1.0 - cycle, 0.8);
+	float radial_derivative = -2.0 * normalized_distance * ring / sigma;
+	vec2 radial_direction = offset / max(distance_to_center, 0.025);
+	return radial_direction * radial_derivative * cell_size * 0.0015;
+}
+
+// A deterministic, fine world-space impact field creates many small surface
+// disturbances. It changes shading only and evaluates once per visible water
+// fragment; there are no per-drop nodes, collisions, or CPU wave queries.
+vec4 rain_micro_impact_detail(vec2 world_xz, float time_seconds, float density, float cell_size, float pixel_footprint) {
+	vec2 cell = floor(world_xz / cell_size);
+	float seed = water_hash(cell + vec2(27.19, 61.73));
+	if (seed >= density) {
+		return vec4(0.0);
+	}
+	float placement_seed = water_hash(cell + vec2(74.23, 18.47));
+	float phase_offset = fract(seed * 74.23);
+	float age = fract(time_seconds * 2.15 + phase_offset);
+	float lifetime = mix(0.18, 0.29, fract(seed * 13.71));
+	if (age >= lifetime) {
+		return vec4(0.0);
+	}
+	vec2 jitter = vec2(fract(placement_seed * 32.11), fract(placement_seed * 7.91)) - vec2(0.5);
+	vec2 center = (cell + vec2(0.5) + jitter * 0.52) * cell_size;
+	vec2 offset = world_xz - center;
+	float distance_to_center = length(offset);
+	float physical_sigma = max(cell_size * mix(0.14, 0.21, fract(seed * 94.7)), 0.028);
+	// Keep impacts visible at oblique camera angles. The previous squared area
+	// correction reduced sub-pixel events almost to zero on the sea surface.
+	float sigma = max(physical_sigma, min(pixel_footprint * 0.65, cell_size * 0.24));
+	float area_compensation = clamp(physical_sigma / sigma, 0.78, 1.0);
+	float pulse = exp(-age * 2.2) * (1.0 - smoothstep(lifetime * 0.78, lifetime, age));
+	float spot = exp(-dot(offset, offset) / (sigma * sigma)) * pulse * area_compensation;
+	float radial_derivative = -2.0 * distance_to_center * spot / (sigma * sigma);
+	vec2 radial_direction = offset / max(distance_to_center, 0.008);
+	vec2 slope = radial_direction * radial_derivative * cell_size * 0.0080;
+	float ring_radius = sigma * mix(0.92, 1.24, fract(seed * 31.7));
+	float ring_width = max(sigma * 0.32, pixel_footprint * 0.15);
+	float ring_distance = distance_to_center - ring_radius;
+	vec2 arc_axis = vec2(fract(placement_seed * 13.17), fract(placement_seed * 31.91)) - vec2(0.5);
+	arc_axis /= max(length(arc_axis), 0.001);
+	float arc_mask = smoothstep(-0.10, 0.38, dot(radial_direction, arc_axis));
+	float ripple_chance = step(0.56, fract(seed * 37.91));
+	float small_ripple = exp(-(ring_distance * ring_distance) / (ring_width * ring_width))
+		* pulse * area_compensation * arc_mask * ripple_chance;
+	return vec4(slope, spot, small_ripple);
+}
+
 vec2 rotate_water_vector(vec2 value, float angle) {
 	float c = cos(angle);
 	float s = sin(angle);
@@ -597,6 +675,12 @@ void fragment() {
 	NORMAL = normalize(mix(flat_water_normal_view, NORMAL, wave_normal_strength));
 	float detail_time = WaveTime * float(!freeze_time);
 	vec2 detail_position = world_coordinates.xz;
+	float rain_world_pixel_footprint = 0.0;
+	// Rain inputs are material-wide uniforms, so derivatives are evaluated in
+	// uniform control flow and skipped entirely while the surface is dry.
+	if ((rain_impact_density > 0.001 || rain_micro_density > 0.001) && rain_impact_strength > 0.001) {
+		rain_world_pixel_footprint = max(fwidth(world_coordinates.x), fwidth(world_coordinates.z));
+	}
 	float detail_distance_fade = smoothstep(detail_wave_fade_start, detail_wave_fade_end, distance_from_camera);
 	float detail_strength = mix(detail_normal_strength_near, detail_normal_strength_far, detail_distance_fade);
 	vec2 drift_direction = normalize(ripple_direction + vec2(0.0001, 0.0));
@@ -614,6 +698,36 @@ void fragment() {
 	vec2 micro_slope = gradient_a * 0.64 + gradient_b * 0.36;
 	vec3 micro_normal_offset_world = vec3(-micro_slope.x, 0.0, -micro_slope.y) * detail_strength * sun_glitter_intensity;
 	NORMAL = normalize(NORMAL + (VIEW_MATRIX * vec4(micro_normal_offset_world, 0.0)).xyz);
+	float rain_micro_activity = 0.0;
+	float rain_micro_core_activity = 0.0;
+	float rain_micro_rim_activity = 0.0;
+	if ((rain_impact_density > 0.001 || rain_micro_density > 0.001) && rain_impact_strength > 0.001 && distance_from_camera < 90.0) {
+		float ring_fade = 1.0 - smoothstep(28.0, 78.0, distance_from_camera);
+		float micro_fade = 1.0 - smoothstep(35.0, 75.0, distance_from_camera);
+		vec2 ring_slope = rain_impact_normal_slope(
+			world_coordinates.xz,
+			detail_time,
+			rain_impact_density,
+			max(rain_impact_cell_size, 0.6),
+			rain_ring_size
+		);
+		vec4 micro_detail = rain_micro_impact_detail(
+			world_coordinates.xz,
+			detail_time,
+			rain_micro_density,
+			max(rain_micro_cell_size, 0.2),
+			rain_world_pixel_footprint
+		);
+		rain_micro_core_activity = micro_detail.z * micro_fade;
+		rain_micro_rim_activity = micro_detail.w * micro_fade;
+		rain_micro_activity = max(rain_micro_core_activity, rain_micro_rim_activity * 0.55);
+		vec2 combined_rain_slope = ring_slope * ring_fade + micro_detail.xy * micro_fade;
+		vec3 rain_normal_offset_world = vec3(-combined_rain_slope.x, 0.0, -combined_rain_slope.y)
+			* rain_impact_strength;
+		NORMAL = normalize(NORMAL + (VIEW_MATRIX * vec4(rain_normal_offset_world, 0.0)).xyz);
+		ROUGHNESS = clamp(ROUGHNESS + rain_impact_strength * ring_fade * 0.035 + rain_micro_activity * rain_impact_strength * 0.09, 0.0, 1.0);
+		SPECULAR = clamp(SPECULAR + micro_detail.w * micro_fade * rain_impact_strength * 0.08, 0.0, 1.0);
+	}
 	
 	vec4 albedo_tex;
 #ifdef WORLD_TRIPLANAR
@@ -764,6 +878,13 @@ void fragment() {
 	ALBEDO = surface_color.rgb * albedo_detail;
 	ALPHA *= surface_color.a * albedo_tex.a;
 #endif
+	if (water_diagnostic_mode == 0 && rain_micro_activity > 0.001) {
+		// A muted blue-grey broken-scale response makes impacts readable on both
+		// daylight and dark water without introducing white emissive specks.
+		ALBEDO *= 1.0 - rain_micro_core_activity * rain_impact_strength * 0.08;
+		ALBEDO += vec3(0.018, 0.026, 0.030) * rain_micro_core_activity * rain_impact_strength;
+		ALBEDO += vec3(0.035, 0.048, 0.055) * rain_micro_rim_activity * rain_impact_strength;
+	}
 	if (shallow_transparency_enabled && water_diagnostic_mode == 0) {
 		ALPHA *= shallow_surface_alpha;
 	}

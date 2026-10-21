@@ -1,4 +1,4 @@
-[gd_scene load_steps=52 format=3]
+[gd_scene load_steps=54 format=3]
 
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
@@ -47,6 +47,8 @@
 [ext_resource type="Script" path="res://scripts/weather_runtime/weather_runtime_authority.gd" id="45_weather_runtime_authority"]
 [ext_resource type="Script" path="res://scripts/weather_runtime/weather_runtime_diagnostics.gd" id="46_weather_runtime_diagnostics"]
 [ext_resource type="Script" path="res://scripts/weather_runtime/weather_runtime_preview_panel.gd" id="47_weather_runtime_preview"]
+[ext_resource type="Script" path="res://scripts/rain_visual_controller.gd" id="48_rain_visual"]
+[ext_resource type="Script" path="res://scripts/rain_visual_debug_panel.gd" id="49_rain_visual_debug"]
 
 [sub_resource type="Compositor" id="Compositor_volumetric_clouds"]
 compositor_effects = Array[CompositorEffect]([ExtResource("11_cloud_effect")])
@@ -161,6 +163,19 @@ simulation_seed = 74291
 sample_interval_real_seconds = 2.0
 provider_check_interval_seconds = 60.0
 forecast_update_blend_cycles = 1.0
+
+[node name="RainVisualController" type="Node" parent="." node_paths=PackedStringArray("weather_state_controller_path", "wind_field_path", "weather_controller_path")]
+script = ExtResource("48_rain_visual")
+weather_state_controller_path = NodePath("../WeatherStateController")
+wind_field_path = NodePath("../WindField")
+weather_controller_path = NodePath("../WeatherController")
+water_material = ExtResource("5_water_material")
+quality_level = 1
+
+[node name="RainVisualDebugPanel" type="CanvasLayer" parent="." node_paths=PackedStringArray("rain_visual_controller_path")]
+script = ExtResource("49_rain_visual_debug")
+rain_visual_controller_path = NodePath("../RainVisualController")
+show_in_debug_builds = true
 
 [node name="WeatherRuntimeDiagnostics" type="CanvasLayer" parent="."]
 script = ExtResource("46_weather_runtime_diagnostics")
