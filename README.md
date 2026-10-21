@@ -85,6 +85,7 @@ godot --path .
 - 正式主场景左下角增加了北向上水深海图仪：显示当前海图水深、船只朝向、海岸线、等深线和比例尺。该数值是 LAT 基准的游戏海图估算值，不是安全导航数据。
 - 数据源固定为无需认证的 EMODnet Bathymetry DTM 2024。NetCDF 区域数据已下载并离线转换；游戏运行时不联网。安装和重建命令、来源许可、精度及实测采样见 [`docs/BATHYMETRY_DATA.md`](docs/BATHYMETRY_DATA.md)。
 - 启动位置实测海图水深约 2.2 m。主海面现按离线 EMODnet 水深栅格轻微调整基础色；海图与水面共用同一数据和 GeoReference。按 **B** 可临时开关着色对比；无效/越界区域保持原天气水色。
+- F3 极端海况区的开发专用浅水振幅约束、百分比安全余量、CPU/Shader 同步和数值验证见 [`docs/SHALLOW_WAVE_CONSTRAINT.md`](docs/SHALLOW_WAVE_CONSTRAINT.md)。
 
 ## 目录
 

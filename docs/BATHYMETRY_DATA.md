@@ -52,6 +52,8 @@ At runtime, `BathymetryManager` reads that raw file once, creates an `ImageTextu
 
 The shader samples the RG texture once per water fragment with linear filtering. It blends shallow, middle, blue, then current weather/Fresnel color at 2, 5, 10, and 20 m using `smoothstep`; default `depth_color_strength` is 0.80. This was increased after visual feedback found the initial 0.46 mix too subtle. The validity fade uses `valid_coverage_min=0.20` and `valid_coverage_max=0.80`, so partial nearshore data remains visible while zero-coverage locations stay unchanged. The blend changes only `surface_color.rgb`, leaving waves, normals, roughness, reflection, foam, transparency, and depth writing alone. Press **B** while playing to toggle the tint for visual/performance comparison; the current state and colors are editable on the shared sea material.
 
+The same depth texture also drives a debug-only shallow-water wave-amplitude constraint in the water vertex shader and `WaveSampler`. Its visual depth curve, percentage safety budget, F3 controls, CPU/GPU parameter flow, tests, and limitations are documented in [`SHALLOW_WAVE_CONSTRAINT.md`](SHALLOW_WAVE_CONSTRAINT.md).
+
 `validate_bathymetry.py` compares the GPU texture's filtered samples with BathymetryManager's CPU grid samples at the five check locations. The 0.74 m Malmö approach sample is retained as partial edge coverage and fades its tint according to the texture validity channel rather than becoming a false full-valid cell.
 
 | Check point | CPU depth | GPU texture depth | Valid coverage / tint weight | Result |
