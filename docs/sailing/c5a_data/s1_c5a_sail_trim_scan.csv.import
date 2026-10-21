@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://blkpujxei3c10"
+
+[deps]
+
+files=["res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.tack.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.wind.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.sail.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.sim.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.heading.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.heading.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.sog.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.longitudinal.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.lateral.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.forward.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.cross.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.yaw.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.max.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.sail.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.sail.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.sail.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.keel.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.rudder.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.luffing.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.apparent.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.heel.translation"]
+
+source_file="res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.csv"
+dest_files=["res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.tack.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.wind.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.sail.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.sim.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.heading.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.heading.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.sog.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.longitudinal.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.lateral.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.forward.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.cross.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.yaw.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.max.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.sail.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.sail.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.sail.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.keel.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.rudder.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.luffing.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.apparent.translation", "res://docs/sailing/c5a_data/s1_c5a_sail_trim_scan.heel.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

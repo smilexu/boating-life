@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cuhgxag83uown"
+
+[deps]
+
+files=["res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.sail.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.attack.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.luffing.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.sheet.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.cl.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.cd.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.dynamic.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.lift.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.lift.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.drag.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.drag.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.total.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.total.translation"]
+
+source_file="res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.csv"
+dest_files=["res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.sail.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.attack.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.luffing.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.sheet.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.cl.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.cd.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.dynamic.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.lift.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.lift.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.drag.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.drag.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.total.translation", "res://docs/sailing/c5b_data/s1_c5b_aero_side_matrix.total.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

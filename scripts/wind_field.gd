@@ -198,6 +198,12 @@ func get_debug_override_state() -> String:
 	return "formal"
 
 
+## Read-only guard for isolated developer tools. Test controls must not write a
+## WeatherStateController-owned field.
+func is_weather_controlled() -> bool:
+	return _weather_controlled
+
+
 func get_effective_wind_settings() -> Dictionary:
 	return _snapshot_parameters()
 

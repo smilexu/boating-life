@@ -152,7 +152,7 @@ func _test_rigidbody_float_and_recovery() -> void:
 	var tabs := debug_panel.find_child("SailboatDebugTabs", true, false) as TabContainer
 	_expect(tabs != null, "new sailboat debug controls are collected in one tab container")
 	if tabs != null:
-		_expect(tabs.get_tab_count() == 5, "tab container exposes status, attitude, impulse, buoyancy, and wave-coupling pages")
+		_expect(tabs.get_tab_count() == 6, "tab container exposes existing buoyancy and wave pages plus the new sail-aerodynamics page")
 	for _step in range(600):
 		await physics_frame
 	var neutral_y: float = boat.global_position.y

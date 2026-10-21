@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://c5mrftrjosft1"
+
+[deps]
+
+files=["res://docs/sailing/c5b_data/s1_c5b_rudder_small_angle_matrix.rudder.translation", "res://docs/sailing/c5b_data/s1_c5b_rudder_small_angle_matrix.local.translation", "res://docs/sailing/c5b_data/s1_c5b_rudder_small_angle_matrix.angle.translation", "res://docs/sailing/c5b_data/s1_c5b_rudder_small_angle_matrix.force.translation", "res://docs/sailing/c5b_data/s1_c5b_rudder_small_angle_matrix.force.translation", "res://docs/sailing/c5b_data/s1_c5b_rudder_small_angle_matrix.yaw.translation"]
+
+source_file="res://docs/sailing/c5b_data/s1_c5b_rudder_small_angle_matrix.csv"
+dest_files=["res://docs/sailing/c5b_data/s1_c5b_rudder_small_angle_matrix.rudder.translation", "res://docs/sailing/c5b_data/s1_c5b_rudder_small_angle_matrix.local.translation", "res://docs/sailing/c5b_data/s1_c5b_rudder_small_angle_matrix.angle.translation", "res://docs/sailing/c5b_data/s1_c5b_rudder_small_angle_matrix.force.translation", "res://docs/sailing/c5b_data/s1_c5b_rudder_small_angle_matrix.force.translation", "res://docs/sailing/c5b_data/s1_c5b_rudder_small_angle_matrix.yaw.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

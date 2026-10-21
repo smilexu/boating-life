@@ -1,0 +1,16 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://c17jmjc1nk5jk"
+
+[deps]
+
+source_file="res://docs/sailing/c4_data/s1_c4_force_matrix.csv"
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

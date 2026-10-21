@@ -3,6 +3,7 @@ extends CanvasLayer
 
 const REFRESH_INTERVAL_S := 0.15
 const EXTREME_WAVE_PRESETS := preload("res://scripts/extreme_sea_state_presets.gd")
+const NAVIGATION_INSTRUMENT_SCRIPT := preload("res://scripts/sailboat_navigation_instrument.gd")
 const FLOAT_POINT_NAMES := ["前左 FL", "前右 FR", "后左 RL", "后右 RR"]
 
 @export var boat_path: NodePath = ^"../SailboatBody"
@@ -28,6 +29,14 @@ var _strength_label: Label
 var _damping_label: Label
 var _strength_slider: HSlider
 var _damping_slider: HSlider
+var _sail_metrics_label: Label
+var _sail_target_slider: HSlider
+var _sail_target_value_label: Label
+var _rudder_target_slider: HSlider
+var _rudder_target_value_label: Label
+var _hydrodynamics_metrics_label: Label
+var _wind_test_status_label: Label
+var _wind_test_buttons: Array[Button] = []
 
 
 func _ready() -> void:
@@ -67,7 +76,7 @@ func _build_panel() -> void:
 	outer.add_theme_constant_override("separation", 10)
 	panel.add_child(outer)
 	var title := Label.new()
-	title.text = "S1-B2 · 帆船动态海浪实验室"
+	title.text = "S1-C1 · 帆船风帆实验室"
 	title.add_theme_font_size_override("font_size", 22)
 	outer.add_child(title)
 	var subtitle := Label.new()
@@ -188,10 +197,52 @@ func _build_panel() -> void:
 	_wave_performance_label.name = "WavePerformanceDiagnostics"
 	waves_page.add_child(_wave_performance_label)
 
+	var sail_page := _new_scroll_page(tabs, "风与主帆")
+	sail_page.add_child(_section_title("手动操帆 · 只改变目标帆角"))
+	_sail_target_value_label = _make_note("目标角 0° · 实际角 0°")
+	sail_page.add_child(_sail_target_value_label)
+	_sail_target_slider = _make_wave_slider(-80.0, 80.0, 1.0, 0.0)
+	_sail_target_slider.name = "SailTargetAngle"
+	_sail_target_slider.value_changed.connect(_on_sail_target_changed)
+	sail_page.add_child(_sail_target_slider)
+	sail_page.add_child(_make_note("正角：主帆向右舷放出；负角：向左舷放出。8 m/s 横风可先试 ±30°，随后按视风角继续调帆；这只是本测试船的调参起点。实际帆角按机械转速限值追随。"))
+	sail_page.add_child(_section_title("本地风向测试 · 不修改正式天气"))
+	_wind_test_status_label = _make_note("风场状态读取中。")
+	sail_page.add_child(_wind_test_status_label)
+	_add_wind_test_button(sail_page, "无风 0 m/s", 0.0, 0.0)
+	_add_wind_test_button(sail_page, "迎风 8 m/s（来向 0°）", 8.0, 0.0)
+	_add_wind_test_button(sail_page, "顺风 8 m/s（来向 180°）", 8.0, 180.0)
+	_add_wind_test_button(sail_page, "左舷横风 8 m/s（来向 270°）", 8.0, 270.0)
+	_add_wind_test_button(sail_page, "右舷横风 8 m/s（来向 90°）", 8.0, 90.0)
+	sail_page.add_child(_make_note("实验风按钮只写入 SailboatLab 自己的 WindField；若连接由 WeatherStateController 管理的风场，按钮会锁定。F12 临时覆盖仍按 WindField 现有规则生效。"))
+	sail_page.add_child(_section_title("手动掌舵 · A 左舵，D 右舵，松开回中"))
+	_rudder_target_value_label = _make_note("目标舵角 0° · 实际舵角 0°")
+	sail_page.add_child(_rudder_target_value_label)
+	_rudder_target_slider = _make_wave_slider(-35.0, 35.0, 1.0, 0.0)
+	_rudder_target_slider.name = "RudderTargetAngle"
+	_rudder_target_slider.value_changed.connect(_on_rudder_target_changed)
+	sail_page.add_child(_rudder_target_slider)
+	sail_page.add_child(_make_note("正舵角为右舷舵：向前航行时预期船首向右转。A/D 为按住输入，滑块可设定持续舵角。舵力依赖舵位置相对水速，静止时不产生主动转向。"))
+	sail_page.add_child(_make_button("回中舵", _center_rudder))
+	sail_page.add_child(_section_title("风场、视风与帆力"))
+	_sail_metrics_label = _make_note("等待帆船物理快照。")
+	_sail_metrics_label.name = "SailAerodynamicsDiagnostics"
+	sail_page.add_child(_sail_metrics_label)
+	sail_page.add_child(_section_title("龙骨、船舵与合力诊断"))
+	_hydrodynamics_metrics_label = _make_note("等待水动力快照。")
+	_hydrodynamics_metrics_label.name = "SailboatHydrodynamicsDiagnostics"
+	sail_page.add_child(_hydrodynamics_metrics_label)
+
 	var footer := Label.new()
-	footer.text = "独立场景 · 不接入动力船；使用现有 WaveSampler 与 F3 海况预设"
+	footer.text = "独立场景 · 不接入动力船或正式天气；主帆仅以真实力驱动刚体"
 	footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	outer.add_child(footer)
+
+	var navigation_instrument := Control.new()
+	navigation_instrument.name = "NavigationInstrument"
+	navigation_instrument.set_script(NAVIGATION_INSTRUMENT_SCRIPT)
+	root.add_child(navigation_instrument)
+	navigation_instrument.call("configure", _boat)
 	_refresh_metrics()
 
 
@@ -260,6 +311,8 @@ func _refresh_metrics() -> void:
 			]
 		_attitude_feedback_label.text = action_text
 	_refresh_wave_metrics(data)
+	_refresh_sail_metrics(data)
+	_refresh_hydrodynamics_metrics(data)
 	var velocity: Vector3 = data.get("linear_velocity_mps", Vector3.ZERO)
 	var angular_velocity: Vector3 = data.get("angular_velocity_rad_s", Vector3.ZERO)
 	_metrics_label.text = (
@@ -287,6 +340,122 @@ func _refresh_metrics() -> void:
 		float(data.get("physics_delta_s", 0.0)),
 		float(data.get("buoyancy_strength", 1.0)),
 		float(data.get("damping_ratio", 0.0)),
+	]
+
+
+func _refresh_sail_metrics(data: Dictionary) -> void:
+	if _sail_metrics_label == null:
+		return
+	var local_wind: Vector3 = data.get("true_wind_world_mps", Vector3.ZERO)
+	var apparent_local: Vector3 = data.get("apparent_wind_local_mps", Vector3.ZERO)
+	var lift_local: Vector3 = data.get("sail_lift_force_local_n", Vector3.ZERO)
+	var drag_local: Vector3 = data.get("sail_drag_force_local_n", Vector3.ZERO)
+	var net_world: Vector3 = data.get("sail_net_force_world_n", Vector3.ZERO)
+	var target_degrees := rad_to_deg(float(data.get("target_sail_angle_rad", 0.0)))
+	var actual_degrees := rad_to_deg(float(data.get("actual_sail_angle_rad", 0.0)))
+	var alpha_degrees := rad_to_deg(float(data.get("sail_angle_of_attack_rad", 0.0)))
+	if _sail_target_slider != null:
+		_sail_target_slider.set_value_no_signal(target_degrees)
+	if _sail_target_value_label != null:
+		_sail_target_value_label.text = "目标角 %+.0f° · 实际角 %+.1f° · 机械速度上限 %.1f°/s" % [
+			target_degrees,
+			actual_degrees,
+			rad_to_deg(float(data.get("sail_rotation_speed_rad_s", 0.0))),
+		]
+	if _wind_test_status_label != null:
+		var can_test_wind := bool(_boat.call("can_set_lab_test_wind")) if _boat.has_method("can_set_lab_test_wind") else false
+		for button in _wind_test_buttons:
+			button.disabled = not can_test_wind
+		_wind_test_status_label.text = (
+			"风场：%s · 权威天气所有权：%s · F12 覆盖：%s\n"
+			+ "本步查询 %d 次 · 采样 %d μs（均值/P95 %d/%d）"
+		) % [
+			"可调本地测试风" if bool(data.get("wind_field_available", false)) and can_test_wind else "正式风场只读" if bool(data.get("wind_field_available", false)) else "未连接",
+			"是" if bool(data.get("wind_field_weather_controlled", false)) else "否",
+			str(data.get("wind_debug_override_state", "formal")),
+			int(data.get("wind_query_count_per_tick", 0)),
+			int(data.get("wind_sample_usec", 0)),
+			int(data.get("wind_sample_average_usec", 0)),
+			int(data.get("wind_sample_p95_usec", 0)),
+		]
+	_sail_metrics_label.text = (
+		"真风：%.2f m/s · 气象来向 %.0f°\n"
+		+ "真风向量（世界，wind-to）：(%.2f, %.2f, %.2f) m/s\n"
+		+ "视风：%.2f m/s · 相对船首来向角 %+.1f° · %s\n"
+		+ "视风向量（船体局部）：(%.2f, %.2f, %.2f) m/s\n"
+		+ "帆面积：%.1f m² · 攻角：%+.1f° · CL %.3f · CD %.3f · 失风权重 %.2f · q %.1f Pa\n"
+		+ "升力：%.0f N · 阻力：%.0f N · 合力世界向量：(%.0f, %.0f, %.0f) N\n"
+		+ "船速：纵向 %.2f m/s · 横向 %.2f m/s · 横倾 %+.1f° · 偏航角速度 %+.3f rad/s\n"
+		+ "帆计算：当前 %d μs · 均值/P95 %d/%d μs · 完整物理：%d μs · 均值/P95 %d/%d μs"
+	) % [
+		float(data.get("true_wind_speed_mps", 0.0)),
+		float(data.get("true_wind_from_degrees", 0.0)),
+		local_wind.x, local_wind.y, local_wind.z,
+		float(data.get("apparent_wind_speed_mps", 0.0)),
+		float(data.get("apparent_wind_from_angle_degrees", 0.0)),
+		str(data.get("windward_side", "无有效视风")),
+		apparent_local.x, apparent_local.y, apparent_local.z,
+		float(data.get("sail_area_m2", 0.0)), alpha_degrees,
+		float(data.get("sail_cl", 0.0)), float(data.get("sail_cd", 0.0)),
+		float(data.get("sail_luffing_scale", 0.0)),
+		float(data.get("sail_dynamic_pressure_pa", 0.0)),
+		lift_local.length(), drag_local.length(),
+		net_world.x, net_world.y, net_world.z,
+		float(data.get("longitudinal_velocity_mps", 0.0)),
+		float(data.get("lateral_velocity_mps", 0.0)),
+		float(data.get("roll_degrees", 0.0)),
+		float(data.get("yaw_rate_rad_s", 0.0)),
+		int(data.get("aero_calculation_usec", 0)),
+		int(data.get("aero_calculation_average_usec", 0)),
+		int(data.get("aero_calculation_p95_usec", 0)),
+		int(data.get("force_calculation_usec", 0)),
+		int(data.get("total_physics_calculation_average_usec", 0)),
+		int(data.get("total_physics_calculation_p95_usec", 0)),
+	]
+
+
+func _refresh_hydrodynamics_metrics(data: Dictionary) -> void:
+	if _hydrodynamics_metrics_label == null:
+		return
+	var keel_force: Vector3 = data.get("keel_force_local_n", Vector3.ZERO)
+	var rudder_force: Vector3 = data.get("rudder_force_local_n", Vector3.ZERO)
+	var hull_drag: Vector3 = data.get("hull_drag_force_local_n", Vector3.ZERO)
+	var total_force: Vector3 = data.get("total_horizontal_force_local_n", Vector3.ZERO)
+	var rudder_target := rad_to_deg(float(data.get("target_rudder_angle_rad", 0.0)))
+	var rudder_actual := rad_to_deg(float(data.get("actual_rudder_angle_rad", 0.0)))
+	if _rudder_target_slider != null:
+		_rudder_target_slider.set_value_no_signal(rudder_target)
+	if _rudder_target_value_label != null:
+		_rudder_target_value_label.text = "目标舵角 %+.0f° · 实际舵角 %+.1f° · 转舵限速 %.0f°/s" % [
+			rudder_target,
+			rudder_actual,
+			rad_to_deg(float(data.get("rudder_rotation_speed_rad_s", 0.0))),
+		]
+	var longitudinal := float(data.get("longitudinal_velocity_mps", 0.0))
+	var lateral := float(data.get("lateral_velocity_mps", 0.0))
+	var sideslip_deg := rad_to_deg(atan2(lateral, maxf(absf(longitudinal), 0.15)))
+	_hydrodynamics_metrics_label.text = (
+		"船首航向 %.1f° · 纵向 %.2f m/s · 横向 %.2f m/s · 侧滑 %.1f°\n"
+		+ "龙骨水速 %.2f m/s · 侧滑 %.1f° · 力 (%.0f, %.0f, %.0f) N · 偏航矩 %+.0f N·m\n"
+		+ "船舵水速 %.2f m/s · 攻角 %.1f° · 力 (%.0f, %.0f, %.0f) N · 偏航矩 %+.0f N·m\n"
+		+ "舵角目标/实际 %+.0f° / %+.1f° · 机械限位 ±%.0f° · A 左 / D 右，松开回中\n"
+		+ "船体水阻 (%.0f, %.0f, %.0f) N · 水动力合力 (%.0f, %.0f, %.0f) N\n"
+		+ "帆/龙骨/舵偏航矩 %+.0f / %+.0f / %+.0f N·m · 外力矩合计 %+.0f N·m\n"
+		+ "计算 μs 当前 龙骨/舵/船体 %d/%d/%d · 均值/P95 龙骨 %d/%d、舵 %d/%d、全物理 %d/%d"
+	) % [
+		float(data.get("heading_degrees", 0.0)), longitudinal, lateral, sideslip_deg,
+		float(data.get("keel_water_speed_mps", 0.0)), rad_to_deg(float(data.get("keel_side_slip_angle_rad", 0.0))),
+		keel_force.x, keel_force.y, keel_force.z, float(data.get("keel_yaw_torque_nm", 0.0)),
+		float(data.get("rudder_water_speed_mps", 0.0)), rad_to_deg(float(data.get("rudder_angle_of_attack_rad", 0.0))),
+		rudder_force.x, rudder_force.y, rudder_force.z, float(data.get("rudder_yaw_torque_nm", 0.0)),
+		rudder_target, rudder_actual, rad_to_deg(float(data.get("max_rudder_angle_rad", 0.0))),
+		hull_drag.x, hull_drag.y, hull_drag.z, total_force.x, total_force.y, total_force.z,
+		float(data.get("sail_yaw_torque_nm", 0.0)), float(data.get("keel_yaw_torque_nm", 0.0)),
+		float(data.get("rudder_yaw_torque_nm", 0.0)), float(data.get("total_external_yaw_torque_nm", 0.0)),
+		int(data.get("keel_calculation_usec", 0)), int(data.get("rudder_calculation_usec", 0)), int(data.get("hull_drag_calculation_usec", 0)),
+		int(data.get("keel_calculation_average_usec", 0)), int(data.get("keel_calculation_p95_usec", 0)),
+		int(data.get("rudder_calculation_average_usec", 0)), int(data.get("rudder_calculation_p95_usec", 0)),
+		int(data.get("total_physics_calculation_average_usec", 0)), int(data.get("total_physics_calculation_p95_usec", 0)),
 	]
 
 
@@ -365,6 +534,33 @@ func _on_damping_changed(value: float) -> void:
 	if _boat != null:
 		_boat.call("set_runtime_damping_ratio", value)
 	_update_parameter_labels()
+
+
+func _on_sail_target_changed(value_degrees: float) -> void:
+	if _boat != null and _boat.has_method("set_target_sail_angle"):
+		_boat.call("set_target_sail_angle", deg_to_rad(value_degrees))
+
+
+func _on_rudder_target_changed(value_degrees: float) -> void:
+	if _boat != null and _boat.has_method("set_target_rudder_angle"):
+		_boat.call("set_target_rudder_angle", deg_to_rad(value_degrees))
+
+
+func _center_rudder() -> void:
+	if _boat != null and _boat.has_method("clear_rudder_input"):
+		_boat.call("clear_rudder_input")
+
+
+func _add_wind_test_button(parent: VBoxContainer, text: String, speed_mps: float, from_degrees: float) -> void:
+	var button := _make_button(text, _set_lab_test_wind.bind(speed_mps, from_degrees))
+	parent.add_child(button)
+	_wind_test_buttons.append(button)
+
+
+func _set_lab_test_wind(speed_mps: float, from_degrees: float) -> void:
+	if _boat != null and _boat.has_method("set_lab_test_wind"):
+		_boat.call("set_lab_test_wind", speed_mps, from_degrees)
+	_refresh_metrics()
 
 
 func _on_dynamic_wave_toggled(enabled: bool) -> void:

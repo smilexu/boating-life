@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "source": "resources/sailing/sailboat_lab_profile.tres before S1-C5b",
+  "visual_sail": {
+    "head_local_m": [0.0, 4.45, 0.04],
+    "tack_local_m": [0.0, 0.08, 0.0],
+    "clew_local_m": [0.0, 0.08, 4.65],
+    "projected_planform_area_m2": 10.16025,
+    "mast_base_y_m": 0.63,
+    "mast_head_y_m": 5.28,
+    "boom_length_m": 4.65
+  },
+  "physical_profile": {
+    "main_sail_area_m2": 26.0,
+    "main_sail_pivot_local_m": [0.0, 0.65, -0.75],
+    "main_sail_pressure_center_from_pivot_m": [0.0, 2.4, 1.55],
+    "center_of_mass_m": [0.0, -0.65, 0.0],
+    "keel_center_local_m": [0.0, -1.05, 0.15],
+    "rudder_center_local_m": [0.0, -0.88, 3.18],
+    "mass_kg": 3200.0
+  },
+  "notes": [
+    "The planform area is one-sided triangle area; double-sided rendering does not double aerodynamic area.",
+    "S1-C5a chordwise -0.75 m candidate corresponds to sail-pivot-frame Z=0.80 m.",
+    "All measurements are prototype/tuning values, not data for a named production vessel."
+  ]
+}

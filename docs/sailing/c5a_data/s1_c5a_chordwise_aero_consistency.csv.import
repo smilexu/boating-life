@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://csd2vc4b7bs8s"
+
+[deps]
+
+files=["res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.wind.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.sail.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.trim.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.apparent.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.angle.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.luffing.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.cl.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.cd.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.dynamic.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.lift.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.lift.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.drag.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.drag.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.total.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.total.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.pressure.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.pressure.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.pressure.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.yaw.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.roll.translation"]
+
+source_file="res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.csv"
+dest_files=["res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.wind.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.sail.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.trim.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.apparent.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.angle.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.luffing.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.cl.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.cd.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.dynamic.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.lift.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.lift.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.drag.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.drag.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.total.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.total.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.pressure.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.pressure.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.pressure.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.yaw.translation", "res://docs/sailing/c5a_data/s1_c5a_chordwise_aero_consistency.roll.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true
