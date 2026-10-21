@@ -175,6 +175,12 @@ func get_wave_parameter_revision() -> int:
 	return _wave_parameter_revision
 
 
+## Returns the phase time used by both the water shader and CPU sampling.
+## Physics callers should capture this once and reuse it for every point in a tick.
+func get_effective_wave_time_seconds() -> float:
+	return _get_effective_wave_phase_time()
+
+
 func set_shallow_wave_constraint_options(
 	enabled: bool,
 	full_depth_m: float,
@@ -299,7 +305,12 @@ func _get_depth_coverage_limits() -> Vector2:
 	)
 
 
-func _calculate_shallow_wave_state(source_xz: Vector2, surface_y: float, max_trough: float) -> Dictionary:
+func _calculate_shallow_wave_state(
+	source_xz: Vector2,
+	surface_y: float,
+	max_trough: float,
+	include_diagnostics: bool = true
+) -> Dictionary:
 	var limits := _get_depth_coverage_limits()
 	var depth_sample: Dictionary
 	if _bathymetry_manager != null and _bathymetry_manager.has_method("sample_shader_depth_at_world_position"):
@@ -323,6 +334,9 @@ func _calculate_shallow_wave_state(source_xz: Vector2, surface_y: float, max_tro
 		shallow_wave_min_amplitude_scale
 	)
 	var active := shallow_wave_constraint_enabled and OS.is_debug_build()
+	var final_amplitude_scale := float(scale_components["amplitude_scale"]) if active else 1.0
+	if not include_diagnostics:
+		return {"amplitude_scale": final_amplitude_scale}
 	return {
 		"depth_m": float(depth_sample.get("depth_m", 64.0)),
 		"effective_depth_m": effective_depth,
@@ -335,7 +349,7 @@ func _calculate_shallow_wave_state(source_xz: Vector2, surface_y: float, max_tro
 		"allowed_trough_m": float(scale_components["allowed_trough_m"]),
 		"safe_depth_ratio": clampf(shallow_wave_safe_depth_ratio, 0.10, 0.50),
 		"constrained_amplitude_scale": float(scale_components["amplitude_scale"]),
-		"amplitude_scale": float(scale_components["amplitude_scale"]) if active else 1.0,
+		"amplitude_scale": final_amplitude_scale,
 		"enabled": active,
 	}
 
@@ -357,10 +371,31 @@ func _apply_shallow_wave_parameters() -> void:
 ## The sampler inverts Gerstner horizontal displacement before returning height
 ## and the shader's approximate normal at that world-space location.
 func sample_surface(world_position: Vector3, sample_time_seconds: float) -> Dictionary:
+	return _sample_surface_internal(world_position, sample_time_seconds, true)
+
+
+## Camera-independent wave sample for physical simulation. It uses the same
+## effective wave settings, phase, inversion and shallow-water constraint as
+## `sample_surface()`, but deliberately omits the renderer's camera-distance fade.
+func sample_physics_surface(world_position: Vector3, sample_time_seconds: float) -> Dictionary:
+	return _sample_surface_internal(world_position, sample_time_seconds, false)
+
+
+func _sample_surface_internal(
+	world_position: Vector3,
+	sample_time_seconds: float,
+	apply_camera_fade: bool
+) -> Dictionary:
 	var water_y := _get_water_plane_y()
 	var active_settings := get_effective_wave_settings()
 	if active_settings == null or active_settings.waves.is_empty():
-		return {"height": water_y, "normal": Vector3.UP, "displacement": Vector3.ZERO}
+		return {
+			"height": water_y,
+			"normal": Vector3.UP,
+			"displacement": Vector3.ZERO,
+			"vertical_velocity_mps": 0.0,
+			"sample_time_seconds": 0.0 if water_material != null and bool(water_material.get_shader_parameter("freeze_time")) else sample_time_seconds,
+		}
 
 	var effective_time := sample_time_seconds
 	if water_material != null and bool(water_material.get_shader_parameter("freeze_time")):
@@ -369,9 +404,13 @@ func sample_surface(world_position: Vector3, sample_time_seconds: float) -> Dict
 	var target_xz := Vector2(world_position.x, world_position.z)
 	var source_xz := target_xz
 	var constraint_active := shallow_wave_constraint_enabled and OS.is_debug_build()
+	var max_trough := _theoretical_max_trough_excursion(active_settings, get_effective_wave_strength()) if constraint_active else 0.0
 	for _iteration in range(INVERSE_ITERATIONS):
-		var field := _calculate_wave_field(source_xz, effective_time)
-		var fade := _vertex_wave_fade(source_xz, water_y)
+		# Inversion only needs displacement and its horizontal Jacobian. Normal,
+		# vertical velocity, and detailed depth diagnostics are computed once at
+		# the converged point below.
+		var field := _calculate_wave_field(source_xz, effective_time, max_trough, false, false, false)
+		var fade := _vertex_wave_fade(source_xz, water_y) if apply_camera_fade else 1.0
 		var displacement: Vector3 = field["displacement"]
 		if fade >= 0.999 and not constraint_active:
 			var residual := source_xz + Vector2(displacement.x, displacement.z) - target_xz
@@ -390,21 +429,42 @@ func sample_surface(world_position: Vector3, sample_time_seconds: float) -> Dict
 			# inversion in the fade band, where that extra spatial gradient matters.
 			source_xz = target_xz - Vector2(displacement.x, displacement.z) * fade
 
-	var final_field := _calculate_wave_field(source_xz, effective_time)
-	var final_fade := _vertex_wave_fade(source_xz, water_y)
+	var final_field := _calculate_wave_field(
+		source_xz,
+		effective_time,
+		max_trough,
+		apply_camera_fade,
+		true,
+		true
+	)
+	var final_fade := _vertex_wave_fade(source_xz, water_y) if apply_camera_fade else 1.0
 	var final_displacement: Vector3 = final_field["displacement"] * final_fade
 	var wave_normal: Vector3 = final_field["normal"].normalized()
 	var final_normal := Vector3.UP.lerp(wave_normal, final_fade).normalized()
-	return {
+	var vertical_velocity := float(final_field.get("vertical_velocity_mps", 0.0))
+	if not _is_wave_time_advancing():
+		vertical_velocity = 0.0
+	var result := {
 		"height": water_y + final_displacement.y,
-		"normal": final_normal,
 		"displacement": final_displacement,
+		"vertical_velocity_mps": vertical_velocity,
+		"sample_time_seconds": effective_time,
 		"source_xz": source_xz,
 		"shallow_wave_state": final_field.get("shallow_wave_state", {}),
 	}
+	if apply_camera_fade:
+		result["normal"] = final_normal
+	return result
 
 
-func _calculate_wave_field(source_xz: Vector2, sample_time_seconds: float) -> Dictionary:
+func _calculate_wave_field(
+	source_xz: Vector2,
+	sample_time_seconds: float,
+	max_trough: float,
+	include_normal: bool,
+	include_vertical_velocity: bool,
+	include_shallow_diagnostics: bool
+) -> Dictionary:
 	var active_settings := get_effective_wave_settings()
 	if active_settings == null:
 		return {"displacement": Vector3.ZERO, "normal": Vector3.UP}
@@ -412,15 +472,20 @@ func _calculate_wave_field(source_xz: Vector2, sample_time_seconds: float) -> Di
 	var wave_count := mini(active_settings.waves.size(), MAX_SHADER_WAVES)
 	var displacement := Vector3.ZERO
 	var normal_sum := Vector3.ZERO
+	var vertical_velocity := 0.0
 	var horizontal_jacobian := Vector4(1.0, 0.0, 0.0, 1.0)
-	var max_trough := _theoretical_max_trough_excursion(active_settings, active_strength)
 	var shallow_state := {
 		"amplitude_scale": 1.0,
 		"depth_zone_and_safety_scale": 1.0,
 		"enabled": false,
 	}
 	if shallow_wave_constraint_enabled and OS.is_debug_build():
-		shallow_state = _calculate_shallow_wave_state(source_xz, _get_water_plane_y(), max_trough)
+		shallow_state = _calculate_shallow_wave_state(
+			source_xz,
+			_get_water_plane_y(),
+			max_trough,
+			include_shallow_diagnostics
+		)
 	if wave_count == 0:
 		return {
 			"displacement": displacement,
@@ -444,6 +509,8 @@ func _calculate_wave_field(source_xz: Vector2, sample_time_seconds: float) -> Di
 		var cosine := cos(theta)
 		var sine := sin(theta)
 		var wave_number := TAU * wave.frequency
+		if include_vertical_velocity:
+			vertical_velocity += steepness * wave.speed * cosine
 
 		# Matches P_DEG: steepness drives vertical height; amplitude scales
 		# horizontal particle displacement as well as the normal calculation.
@@ -456,15 +523,19 @@ func _calculate_wave_field(source_xz: Vector2, sample_time_seconds: float) -> Di
 		horizontal_jacobian.z += horizontal_derivative * direction.y * direction.x / float(wave_count)
 		horizontal_jacobian.w += horizontal_derivative * direction.y * direction.y / float(wave_count)
 
-		# Matches N_DEG from the water shader before its final normalization.
-		normal_sum.x += -direction.x * wave.frequency * amplitude * cosine
-		normal_sum.y += 1.0 - steepness * wave.frequency * amplitude * sine
-		normal_sum.z += -direction.y * wave.frequency * amplitude * cosine
+		if include_normal:
+			# Matches N_DEG from the water shader before its final normalization.
+			normal_sum.x += -direction.x * wave.frequency * amplitude * cosine
+			normal_sum.y += 1.0 - steepness * wave.frequency * amplitude * sine
+			normal_sum.z += -direction.y * wave.frequency * amplitude * cosine
 
 	var divisor := float(wave_count)
 	return {
 		"displacement": displacement / divisor,
-		"normal": normal_sum / divisor,
+		"normal": normal_sum / divisor if include_normal else Vector3.UP,
+		# Fixed-source vertical phase derivative; this is a low-cost approximation
+		# of surface motion, not full 3D Gerstner particle velocity.
+		"vertical_velocity_mps": vertical_velocity / divisor,
 		"horizontal_jacobian": horizontal_jacobian,
 		"shallow_wave_state": shallow_state,
 	}

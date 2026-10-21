@@ -1,0 +1,21 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/sailing/sailboat_lab_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+vessel_name = "8 m 单桅测试帆船（原型调参）"
+vessel_length_m = 8.0
+vessel_beam_m = 2.6
+draft_m = 0.9
+mass_kg = 3200.0
+center_of_mass_m = Vector3(0.0, -0.65, 0.0)
+rest_submergence_m = 0.45
+float_point_offsets_m = PackedVector3Array(-0.65, -0.5, -2.4, 0.65, -0.5, -2.4, -0.65, -0.5, 2.4, 0.65, -0.5, 2.4)
+buoyancy_damping_ratio = 0.55
+maximum_point_force_ratio = 1.8
+linear_damping = 0.12
+angular_damping = 0.08
+roll_damping_n_m_s_per_rad = 600.0
+pitch_damping_n_m_s_per_rad = 2000.0
+yaw_damping_n_m_s_per_rad = 1600.0
