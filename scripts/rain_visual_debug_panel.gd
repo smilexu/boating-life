@@ -2,9 +2,10 @@ extends CanvasLayer
 class_name RainVisualDebugPanel
 
 ## Local-only rain presentation tools. R toggles this panel.
-## Closing the panel always clears the rain override and resumes formal input.
+## Closing the panel always clears local rain/lightning overrides and resumes formal input.
 
 @export_node_path("Node") var rain_visual_controller_path := NodePath("../RainVisualController")
+@export_node_path("Node") var lightning_event_controller_path := NodePath("../LightningEventController")
 @export var show_in_debug_builds := true
 
 const RAIN_PRESETS := [
@@ -31,6 +32,24 @@ var _ring_size_slider: HSlider
 var _ring_probability_slider: HSlider
 var _impact_slider: HSlider
 var _haze_slider: HSlider
+var _lightning_controller: Node
+var _thunder_status_label: Label
+var _thunder_override_toggle: CheckButton
+var _thunder_intensity_slider: HSlider
+var _thunder_frequency_slider: HSlider
+var _thunder_flash_slider: HSlider
+var _thunder_cloud_flash_slider: HSlider
+var _thunder_environment_flash_slider: HSlider
+var _thunder_distance_slider: HSlider
+var _thunder_width_slider: HSlider
+var _thunder_curve_slider: HSlider
+var _thunder_primary_density_slider: HSlider
+var _thunder_secondary_density_slider: HSlider
+var _thunder_glow_slider: HSlider
+var _thunder_seed_spin: SpinBox
+var _thunder_quality_option: OptionButton
+var _reduce_flashes_toggle: CheckButton
+var _thunder_freeze_toggle: CheckButton
 var _refresh_elapsed := 0.0
 var _syncing_controls := false
 
@@ -38,6 +57,7 @@ var _syncing_controls := false
 func _ready() -> void:
 	layer = 70
 	_rain_controller = get_node_or_null(rain_visual_controller_path)
+	_lightning_controller = get_node_or_null(lightning_event_controller_path)
 	visible = false
 	if not show_in_debug_builds or not OS.is_debug_build() or OS.has_feature("dedicated_server") or DisplayServer.get_name().to_lower() == "headless":
 		set_process(false)
@@ -173,7 +193,100 @@ func _build_panel() -> void:
 	_haze_slider = _add_slider(body, "远景雨幕强度", 0.0, 1.0, 1.0, 0.02)
 	for slider in [_density_slider, _near_density_slider, _length_slider, _opacity_slider, _wind_slider, _micro_slider, _ring_size_slider, _ring_probability_slider, _impact_slider, _haze_slider]:
 		slider.value_changed.connect(_on_visual_control_changed)
+	_add_thunderstorm_debug_section(body)
 	_refresh_status()
+
+
+func _add_thunderstorm_debug_section(body: VBoxContainer) -> void:
+	var separator := HSeparator.new()
+	body.add_child(separator)
+	var title := Label.new()
+	title.text = "雷暴与闪电（本地视觉）"
+	title.add_theme_font_size_override("font_size", 15)
+	body.add_child(title)
+	var hint := Label.new()
+	hint.text = "普通雨不会触发闪电；测试覆盖不会改天气、风场或存档。设置种子后再触发可复现形状。冻结预览仅用于检查几何；关闭 R 面板会解除覆盖。"
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_font_size_override("font_size", 12)
+	hint.add_theme_color_override("font_color", Color(0.69, 0.83, 0.85))
+	body.add_child(hint)
+	_thunder_status_label = Label.new()
+	_thunder_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_thunder_status_label.add_theme_font_size_override("font_size", 12)
+	body.add_child(_thunder_status_label)
+	_thunder_override_toggle = CheckButton.new()
+	_thunder_override_toggle.text = "启用本地雷暴覆盖"
+	_thunder_override_toggle.toggled.connect(_on_thunder_override_toggled)
+	body.add_child(_thunder_override_toggle)
+	_thunder_intensity_slider = _add_slider(body, "雷暴视觉强度", 0.0, 1.0, 0.55, 0.01)
+	_thunder_intensity_slider.value_changed.connect(_on_thunder_intensity_changed)
+	_thunder_frequency_slider = _add_slider(body, "闪电频率倍率", 0.25, 3.0, 1.0, 0.05)
+	_thunder_frequency_slider.value_changed.connect(_on_thunder_frequency_changed)
+	_thunder_flash_slider = _add_slider(body, "闪光强度上限", 0.0, 1.0, 1.0, 0.02)
+	_thunder_flash_slider.value_changed.connect(_on_thunder_flash_changed)
+	_thunder_cloud_flash_slider = _add_slider(body, "云层局部闪光", 0.0, 1.5, 1.0, 0.02)
+	_thunder_cloud_flash_slider.value_changed.connect(_on_thunder_cloud_flash_changed)
+	_thunder_environment_flash_slider = _add_slider(body, "环境与海面照明", 0.0, 1.5, 1.0, 0.02)
+	_thunder_environment_flash_slider.value_changed.connect(_on_thunder_environment_flash_changed)
+	_thunder_distance_slider = _add_slider(body, "闪电距离范围", 0.5, 1.5, 1.0, 0.02)
+	_thunder_distance_slider.value_changed.connect(_on_thunder_distance_changed)
+	_thunder_width_slider = _add_slider(body, "主干宽度倍率", 0.5, 3.0, 1.65, 0.05)
+	_thunder_width_slider.value_changed.connect(_on_thunder_width_changed)
+	_thunder_curve_slider = _add_slider(body, "路径曲折程度", 0.4, 2.5, 1.35, 0.05)
+	_thunder_curve_slider.value_changed.connect(_on_thunder_curve_changed)
+	_thunder_primary_density_slider = _add_slider(body, "一级分叉密度", 0.35, 2.0, 1.0, 0.05)
+	_thunder_primary_density_slider.value_changed.connect(_on_thunder_primary_density_changed)
+	_thunder_secondary_density_slider = _add_slider(body, "二级分叉密度", 0.35, 2.0, 1.0, 0.05)
+	_thunder_secondary_density_slider.value_changed.connect(_on_thunder_secondary_density_changed)
+	_thunder_glow_slider = _add_slider(body, "闪电辉光强度", 0.4, 2.0, 1.2, 0.05)
+	_thunder_glow_slider.value_changed.connect(_on_thunder_glow_changed)
+	_thunder_seed_spin = SpinBox.new()
+	_thunder_seed_spin.min_value = 0
+	_thunder_seed_spin.max_value = 2147483647
+	_thunder_seed_spin.step = 1
+	_thunder_seed_spin.value = 629104
+	_thunder_seed_spin.value_changed.connect(_on_thunder_seed_changed)
+	_add_labeled_control(body, "闪电固定随机种子", _thunder_seed_spin)
+	_reduce_flashes_toggle = CheckButton.new()
+	_reduce_flashes_toggle.text = "减少闪光强度（视觉舒适）"
+	_reduce_flashes_toggle.toggled.connect(_on_reduce_flashes_toggled)
+	body.add_child(_reduce_flashes_toggle)
+	_thunder_freeze_toggle = CheckButton.new()
+	_thunder_freeze_toggle.text = "冻结近距离闪电几何预览"
+	_thunder_freeze_toggle.toggled.connect(_on_thunder_freeze_toggled)
+	body.add_child(_thunder_freeze_toggle)
+	_thunder_quality_option = OptionButton.new()
+	_thunder_quality_option.add_item("Low · 云内闪光与简化远雷", LightningEventController.Quality.LOW)
+	_thunder_quality_option.add_item("Medium · 远雷与少量近雷", LightningEventController.Quality.MEDIUM)
+	_thunder_quality_option.add_item("High · 更多分支与环境照明", LightningEventController.Quality.HIGH)
+	_thunder_quality_option.item_selected.connect(_on_thunder_quality_selected)
+	_add_labeled_control(body, "雷暴画质", _thunder_quality_option)
+	var event_grid := GridContainer.new()
+	event_grid.columns = 2
+	event_grid.add_theme_constant_override("h_separation", 6)
+	event_grid.add_theme_constant_override("v_separation", 6)
+	body.add_child(event_grid)
+	_add_event_button(event_grid, "云内闪光", "in_cloud")
+	_add_event_button(event_grid, "云间闪电", "cloud_to_cloud")
+	_add_event_button(event_grid, "远处云地闪电", "distant_cg")
+	_add_event_button(event_grid, "中距离云地闪电", "medium_cg")
+	_add_event_button(event_grid, "近处云地闪电", "near_cg")
+	var restore := Button.new()
+	restore.text = "恢复正式雷暴信号"
+	restore.pressed.connect(_clear_thunder_debug_override)
+	body.add_child(restore)
+
+
+func _add_event_button(parent: GridContainer, label: String, event_type: String) -> void:
+	var button := Button.new()
+	button.text = label
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.pressed.connect(func():
+		if _lightning_controller != null:
+			_lightning_controller.call("trigger_debug_event", event_type)
+		_refresh_thunder_status()
+	)
+	parent.add_child(button)
 
 
 func _add_slider(parent: VBoxContainer, title_text: String, minimum: float, maximum: float, initial: float, step: float) -> HSlider:
@@ -209,6 +322,7 @@ func _set_panel_open(open: bool) -> void:
 	visible = open
 	if not open:
 		_clear_debug_override()
+		_clear_thunder_debug_override()
 	else:
 		_refresh_status()
 
@@ -231,6 +345,124 @@ func _clear_debug_override() -> void:
 	if _rain_controller != null:
 		_rain_controller.call("clear_debug_override")
 	_refresh_status()
+
+
+func _on_thunder_override_toggled(enabled: bool) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_debug_override", enabled, _thunder_intensity_slider.value)
+	_refresh_thunder_status()
+
+
+func _on_thunder_intensity_changed(value: float) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	if _thunder_override_toggle.button_pressed:
+		_lightning_controller.call("set_debug_override", true, value)
+	_refresh_thunder_status()
+
+
+func _on_thunder_frequency_changed(value: float) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_frequency_multiplier", value)
+	_refresh_thunder_status()
+
+
+func _on_thunder_flash_changed(value: float) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_flash_sensitivity", value)
+
+
+func _on_thunder_cloud_flash_changed(value: float) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_cloud_flash_multiplier", value)
+
+
+func _on_thunder_environment_flash_changed(value: float) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_environment_flash_multiplier", value)
+
+
+func _on_thunder_distance_changed(value: float) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_distance_multiplier", value)
+	_refresh_thunder_status()
+
+
+func _on_thunder_width_changed(value: float) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_bolt_width_multiplier", value)
+	_refresh_thunder_status()
+
+
+func _on_thunder_curve_changed(value: float) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_bolt_curve_multiplier", value)
+	_refresh_thunder_status()
+
+
+func _on_thunder_primary_density_changed(value: float) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_primary_branch_density_multiplier", value)
+	_refresh_thunder_status()
+
+
+func _on_thunder_secondary_density_changed(value: float) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_secondary_branch_density_multiplier", value)
+	_refresh_thunder_status()
+
+
+func _on_thunder_glow_changed(value: float) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_glow_multiplier", value)
+	_refresh_thunder_status()
+
+
+func _on_thunder_seed_changed(value: float) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_debug_visual_seed", int(value))
+	_refresh_thunder_status()
+
+
+func _on_thunder_freeze_toggled(enabled: bool) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_preview_frozen", enabled)
+	_refresh_thunder_status()
+
+
+func _on_reduce_flashes_toggled(enabled: bool) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_reduce_flashes", enabled)
+
+
+func _on_thunder_quality_selected(index: int) -> void:
+	if _syncing_controls or _lightning_controller == null:
+		return
+	_lightning_controller.call("set_quality_level", _thunder_quality_option.get_item_id(index))
+
+
+func _clear_thunder_debug_override() -> void:
+	if _lightning_controller != null:
+		_lightning_controller.call("clear_debug_override")
+	if _thunder_override_toggle != null:
+		_syncing_controls = true
+		_thunder_override_toggle.button_pressed = false
+		_syncing_controls = false
+	_refresh_thunder_status()
 
 
 func _on_quality_selected(index: int) -> void:
@@ -290,6 +522,57 @@ func _refresh_status() -> void:
 		float(state.get("surface_ring_density", 0.0)),
 	]
 	_sync_controls_from_controller()
+	_refresh_thunder_status()
+
+
+func _refresh_thunder_status() -> void:
+	if _thunder_status_label == null:
+		return
+	if _lightning_controller == null:
+		_thunder_status_label.text = "LightningEventController 不可用。"
+		return
+	var state: Dictionary = _lightning_controller.call("get_diagnostic_state")
+	var source := "本地测试覆盖" if bool(state.get("debug_override_active", false)) else "正式天气"
+	var signal_text := "雷暴信号" if bool(state.get("formal_signal", false)) else "无正式雷暴信号"
+	var geometry: Dictionary = state.get("geometry", {})
+	var frozen_text := " · 冻结预览" if bool(state.get("preview_frozen", false)) else ""
+	_thunder_status_label.text = "%s · %s · %.2f · %s\n闪电：%s%s · 下一事件约 %.0f 秒 · 临时灯 %d\n最近几何：主干+%d 一级/%d 二级 · %d 顶点 · 主干核心半径 %.1f m" % [
+		source,
+		signal_text,
+		float(state.get("effective_intensity", 0.0)),
+		str(state.get("formal_data_quality", "unavailable")),
+		str(state.get("active_event_type", "none")),
+		frozen_text,
+		float(state.get("next_event_in_seconds", 0.0)),
+		int(state.get("temporary_light_count", 0)),
+		int(geometry.get("primary_branch_count", 0)),
+		int(geometry.get("secondary_branch_count", 0)),
+		int(geometry.get("vertex_count", 0)),
+		float(geometry.get("core_radius_m", 0.0)),
+	]
+	if _syncing_controls or _thunder_override_toggle == null:
+		return
+	_syncing_controls = true
+	_thunder_override_toggle.button_pressed = bool(state.get("debug_override_active", false))
+	_thunder_intensity_slider.value = float(state.get("debug_intensity", 0.55))
+	_thunder_frequency_slider.value = float(_lightning_controller.get("frequency_multiplier"))
+	_thunder_flash_slider.value = float(_lightning_controller.get("flash_sensitivity"))
+	_thunder_cloud_flash_slider.value = float(_lightning_controller.get("cloud_flash_multiplier"))
+	_thunder_environment_flash_slider.value = float(_lightning_controller.get("environment_flash_multiplier"))
+	_thunder_distance_slider.value = float(_lightning_controller.get("distance_multiplier"))
+	_thunder_width_slider.value = float(_lightning_controller.get("bolt_width_multiplier"))
+	_thunder_curve_slider.value = float(_lightning_controller.get("bolt_curve_multiplier"))
+	_thunder_primary_density_slider.value = float(_lightning_controller.get("primary_branch_density_multiplier"))
+	_thunder_secondary_density_slider.value = float(_lightning_controller.get("secondary_branch_density_multiplier"))
+	_thunder_glow_slider.value = float(_lightning_controller.get("glow_multiplier"))
+	_thunder_seed_spin.value = float(state.get("debug_visual_seed", 629104))
+	_reduce_flashes_toggle.button_pressed = bool(state.get("reduce_flashes", false))
+	_thunder_freeze_toggle.button_pressed = bool(state.get("preview_frozen", false))
+	for index in range(_thunder_quality_option.item_count):
+		if _thunder_quality_option.get_item_id(index) == int(_lightning_controller.get("quality_level")):
+			_thunder_quality_option.select(index)
+			break
+	_syncing_controls = false
 
 
 func _sync_controls_from_controller() -> void:

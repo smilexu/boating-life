@@ -23,6 +23,7 @@ func _run() -> void:
 	_test_direction_and_calm_wind()
 	_test_weather_category_hysteresis()
 	_test_clear_rain_and_strong_wind_constraints()
+	_test_explicit_thunder_symbol_signal()
 	_test_nonuniform_interval_weighting()
 	_test_missing_gust_stale_and_unavailable()
 	_test_cross_midnight_and_authority_sampling()
@@ -182,6 +183,26 @@ func _test_nonuniform_interval_weighting() -> void:
 		var mean := float(result["timeline"]["forecast_day_summaries"][0]["fields"]["wind_speed_mps"]["time_weighted_mean"])
 		_expect(absf(mean - (155.0 / 24.0)) < 0.01, "daily weather background uses elapsed-time trapezoidal weighting rather than sample count")
 		_expect(float(result["timeline"]["forecast_day_summaries"][0]["fields"]["wind_speed_mps"]["coverage_fraction"]) > 0.99, "nonuniform forecast interval coverage is measured in time")
+
+
+func _test_explicit_thunder_symbol_signal() -> void:
+	var thunder_document := _hourly_weather_document("rain", -1, false)
+	for sample in thunder_document["timeseries"]:
+		_set_weather_symbol_periods(sample, "lightrainandthunder_day")
+	var thunder_result := CORE.generate_timeline(_request(24, 7281, thunder_document, "2026-10-20T00:00:00Z", "2026-10-21T00:00:00Z"))
+	_expect(bool(thunder_result.get("ok", false)), "explicit MET thunder symbol generates a timeline")
+	if bool(thunder_result.get("ok", false)):
+		var sample: Dictionary = CORE.sample_weather(thunder_result["timeline"], {"elapsed_cycles": 8.5})["state"]
+		_expect(bool(sample.get("thunderstorm_forecast", false)), "the sampled keyframe preserves thunder as an explicit forecast marker")
+		_expect(str(sample.get("weather_type", "")) == "ThunderstormForecast", "explicit thunder symbol plus explicit precipitation keeps the thunder forecast classification")
+	var heavy_rain_document := _hourly_weather_document("rain", -1, false)
+	for sample in heavy_rain_document["timeseries"]:
+		_set_weather_symbol_periods(sample, "rain")
+	var heavy_rain_result := CORE.generate_timeline(_request(24, 7282, heavy_rain_document, "2026-10-20T00:00:00Z", "2026-10-21T00:00:00Z"))
+	_expect(bool(heavy_rain_result.get("ok", false)), "heavy-rain non-thunder fixture generates")
+	if bool(heavy_rain_result.get("ok", false)):
+		var heavy_sample: Dictionary = CORE.sample_weather(heavy_rain_result["timeline"], {"elapsed_cycles": 8.5})["state"]
+		_expect(not bool(heavy_sample.get("thunderstorm_forecast", false)), "rainfall amount without a thunder symbol does not activate the storm marker")
 
 
 func _test_missing_gust_stale_and_unavailable() -> void:

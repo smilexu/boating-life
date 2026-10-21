@@ -183,6 +183,28 @@ func _test_formal_weather_and_debug_isolation() -> void:
 	var no_amount: Dictionary = adapter.apply_sample({"visual_weather_id": "Overcast", "weather_type": "Overcast", "data_quality": "stale"}, "oresund")
 	_expect(not bool(no_amount["precipitation_available"]), "missing precipitation remains N/A instead of inferred from Overcast")
 	_expect(is_equal_approx(float(rain.formal_rate_mm_per_hour), 0.0), "missing precipitation produces no fabricated rain")
+	_expect(not bool(state.get_thunderstorm_visual_state().get("available", false)), "ordinary overcast sample does not enable thunderstorm visuals")
+	var thunder_sample: Dictionary = adapter.apply_sample({
+		"visual_weather_id": "Overcast",
+		"weather_type": "ThunderstormForecast",
+		"weather_symbol": "heavyrainandthunder_day",
+		"thunderstorm_forecast": true,
+		"data_quality": "fresh",
+	}, "oresund")
+	_expect(bool(thunder_sample.get("thunderstorm_forecast", false)), "runtime adapter preserves the explicit forecast thunder marker")
+	_expect(bool(state.get_thunderstorm_visual_state().get("available", false)), "explicit thunder forecast enables a separate formal visual signal")
+	_expect(float(state.get_thunderstorm_visual_state().get("intensity", 0.0)) < 0.5, "a binary forecast symbol maps to a conservative visual intensity")
+	state.set_manual_mode()
+	_expect(not bool(state.get_thunderstorm_visual_state().get("available", false)), "MANUAL mode clears the formal lightning visual signal")
+	state.set_auto_mode()
+	var ordinary_heavy_rain: Dictionary = adapter.apply_sample({
+		"visual_weather_id": "Overcast",
+		"weather_type": "Precipitation",
+		"precipitation_intensity_mm_per_hour": 22.0,
+		"data_quality": "fresh",
+	}, "oresund")
+	_expect(not bool(ordinary_heavy_rain.get("thunderstorm_forecast", false)), "heavy rain without a thunder marker remains non-thunderstorm")
+	_expect(not bool(state.get_thunderstorm_visual_state().get("available", false)), "high rain rate cannot keep lightning active after a normal forecast sample")
 	var invalid_amount: Dictionary = adapter.apply_sample({
 		"visual_weather_id": "Overcast",
 		"weather_type": "Precipitation",

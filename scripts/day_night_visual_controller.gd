@@ -39,6 +39,8 @@ var _solar_state: Dictionary = {}
 var _moon_state: Dictionary = {}
 var _last_calendar_key := ""
 var _last_cycle_seconds := -1.0
+var _lightning_cloud_flash_strength := 0.0
+var _lightning_environment_flash_strength := 0.0
 
 
 func _ready() -> void:
@@ -109,6 +111,19 @@ func get_twilight_warmth() -> float:
 	return float(_solar_state.get("twilight_warmth", 0.0))
 
 
+## Temporary additive contribution for lightning. All final environment and
+## cloud writes still happen through this compositor, so the base day/night
+## values are recalculated every frame and cannot accumulate.
+func set_lightning_flash_strength(value: float) -> void:
+	var safe_value := clampf(value, 0.0, 1.0) if is_finite(value) else 0.0
+	set_lightning_flash_contributions(safe_value, safe_value)
+
+
+func set_lightning_flash_contributions(cloud_value: float, environment_value: float) -> void:
+	_lightning_cloud_flash_strength = clampf(cloud_value, 0.0, 1.0) if is_finite(cloud_value) else 0.0
+	_lightning_environment_flash_strength = clampf(environment_value, 0.0, 1.0) if is_finite(environment_value) else 0.0
+
+
 func _update_visuals(force: bool) -> void:
 	var time_snapshot: Dictionary = _world_time_manager.call("get_authoritative_state")
 	var date: Dictionary = time_snapshot.get("calendar_date", {})
@@ -142,6 +157,8 @@ func _update_visuals(force: bool) -> void:
 func _apply_composed_visuals(weather: Dictionary) -> void:
 	if weather.is_empty():
 		return
+	var storm_intensity := clampf(float(weather.get("thunderstorm_intensity", 0.0)), 0.0, 1.0)
+	var lightning_flash := _lightning_environment_flash_strength
 	var elevation := float(_solar_state["elevation_degrees"])
 	var direction: Vector3 = _solar_state["direction"]
 	var direct_visibility := visual_profile.sample_response(visual_profile.direct_light_curve, elevation, 0.0)
@@ -219,10 +236,12 @@ func _apply_composed_visuals(weather: Dictionary) -> void:
 	sky_top = sky_top.lerp(visual_profile.blue_hour_sky_top_color, blue_hour * 0.28)
 	sky_top = sky_top.lerp(visual_profile.pre_dawn_sky_top_color, predawn_blend * 0.55)
 	sky_top = sky_top.lerp(visual_profile.twilight_color, horizon_warmth * visual_profile.zenith_twilight_mix)
+	sky_top = sky_top.lerp(Color(0.17, 0.22, 0.30), storm_intensity * 0.34)
 	var sky_horizon := visual_profile.night_sky_horizon_color.lerp(day_horizon, sky_horizon_daylight)
 	sky_horizon = sky_horizon.lerp(visual_profile.blue_hour_horizon_color, blue_hour * 0.58)
 	sky_horizon = sky_horizon.lerp(visual_profile.pre_dawn_horizon_color, predawn_blend * 0.48)
 	sky_horizon = sky_horizon.lerp(visual_profile.twilight_color, sunset_horizon_warmth)
+	sky_horizon = sky_horizon.lerp(Color(0.24, 0.29, 0.35), storm_intensity * 0.25)
 	var ground_haze := visual_profile.night_ground_haze_color.lerp(day_haze, sky_horizon_daylight)
 	ground_haze = ground_haze.lerp(visual_profile.blue_hour_ground_haze_color, blue_hour * 0.48)
 	ground_haze = ground_haze.lerp(visual_profile.pre_dawn_ground_haze_color, predawn_blend * 0.46)
@@ -240,8 +259,13 @@ func _apply_composed_visuals(weather: Dictionary) -> void:
 	ambient_color = ambient_color.lerp(visual_profile.blue_hour_ambient_color, blue_hour * 0.30)
 	ambient_color = ambient_color.lerp(visual_profile.twilight_color, horizon_warmth * 0.08)
 	ambient_color = ambient_color.lerp(visual_profile.moonlight_color, moon_light_strength * 0.65)
+	ambient_color = ambient_color.lerp(Color(0.34, 0.41, 0.50), storm_intensity * 0.23)
+	var lightning_ambient_response := pow(clampf(lightning_flash, 0.0, 1.0), 0.68)
+	ambient_color = ambient_color.lerp(Color(0.82, 0.89, 1.0), lightning_ambient_response * 0.76)
 	_environment.ambient_light_color = ambient_color
-	_environment.ambient_light_energy = lerpf(visual_profile.night_ambient_energy, float(weather["ambient_energy"]), ambient_daylight) + moon_light_strength * 0.18
+	var ambient_energy := lerpf(visual_profile.night_ambient_energy, float(weather["ambient_energy"]), ambient_daylight) + moon_light_strength * 0.18
+	ambient_energy *= lerpf(1.0, 0.84, storm_intensity)
+	_environment.ambient_light_energy = ambient_energy + lightning_ambient_response * 1.15
 	if _water_material != null:
 		_water_material.set_shader_parameter("night_visual_weight", nightness)
 		_water_material.set_shader_parameter("night_surface_lift", _color_to_vector3(visual_profile.night_water_emission_color))
@@ -275,6 +299,7 @@ func _apply_composed_visuals(weather: Dictionary) -> void:
 	_solar_state["twilight_warmth"] = horizon_warmth
 	_solar_state["sun_warmth"] = sun_warmth
 	_solar_state["cloud_daylight"] = cloud_daylight
+	_solar_state["lightning_flash_strength"] = lightning_flash
 	_solar_state["moonlight_strength"] = moon_light_strength
 	_moon_state["moonlight_strength"] = moon_light_strength
 	_moon_state["sky_visibility"] = moon_disk_visibility
@@ -295,6 +320,12 @@ func _apply_cloud_lighting(weather: Dictionary, cloud_daylight: float, blue_hour
 	var moon_cloud_mix := clampf(moon_light_strength / maxf(visual_profile.moon_light_max_energy, 0.001), 0.0, 1.0) * 0.28
 	cloud_color = cloud_color.lerp(visual_profile.moonlit_cloud_ambient_color, moon_cloud_mix)
 	cloud_tint = cloud_tint.lerp(visual_profile.moonlit_cloud_ambient_tint, moon_cloud_mix)
+	var storm_intensity := clampf(float(weather.get("thunderstorm_intensity", 0.0)), 0.0, 1.0)
+	cloud_color = cloud_color.lerp(Color(0.32, 0.39, 0.48), storm_intensity * 0.40)
+	cloud_tint = cloud_tint.lerp(Color(0.22, 0.29, 0.37), storm_intensity * 0.32)
+	var lightning_flash := pow(clampf(_lightning_cloud_flash_strength, 0.0, 1.0), 0.68)
+	cloud_color = cloud_color.lerp(Color(0.86, 0.92, 1.0), lightning_flash * 0.86)
+	cloud_tint = cloud_tint.lerp(Color(0.62, 0.73, 0.91), lightning_flash * 0.68)
 	_sunshine_clouds.cloud_ambient_color = cloud_color
 	_sunshine_clouds.cloud_ambient_tint = cloud_tint
 

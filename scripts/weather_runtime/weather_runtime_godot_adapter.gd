@@ -22,6 +22,10 @@ func apply_sample(sample: Dictionary, region_id: String) -> Dictionary:
 		return {"ok": false, "error": "visual_weather_unavailable", "visual_weather_id": visual_name}
 	var wind_state := _wind_state_from_sample(sample)
 	var date := _date_from_sample(sample)
+	# WeatherSimulationCore derives this only from a retained forecast symbol
+	# window. Rain rate and wind are deliberately not used as proxies for thunder.
+	var thunderstorm_forecast := bool(sample.get("thunderstorm_forecast", false))
+	var thunderstorm_symbol := str(sample.get("weather_symbol", "")) if thunderstorm_forecast else ""
 	var precipitation_available := sample.has("precipitation_intensity_mm_per_hour")
 	var precipitation_rate := 0.0
 	if precipitation_available:
@@ -43,7 +47,9 @@ func apply_sample(sample: Dictionary, region_id: String) -> Dictionary:
 		date,
 		sample.get("data_quality", "unavailable"),
 		precipitation_rate,
-		precipitation_available
+		precipitation_available,
+		thunderstorm_forecast,
+		thunderstorm_symbol
 	))
 	return {
 		"ok": applied,
@@ -51,6 +57,7 @@ func apply_sample(sample: Dictionary, region_id: String) -> Dictionary:
 		"wind_available": not wind_state.is_empty(),
 		"precipitation_available": precipitation_available,
 		"precipitation_intensity_mm_per_hour": precipitation_rate,
+		"thunderstorm_forecast": thunderstorm_forecast,
 	}
 
 

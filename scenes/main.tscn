@@ -1,4 +1,4 @@
-[gd_scene load_steps=54 format=3]
+[gd_scene load_steps=55 format=3]
 
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
@@ -49,6 +49,7 @@
 [ext_resource type="Script" path="res://scripts/weather_runtime/weather_runtime_preview_panel.gd" id="47_weather_runtime_preview"]
 [ext_resource type="Script" path="res://scripts/rain_visual_controller.gd" id="48_rain_visual"]
 [ext_resource type="Script" path="res://scripts/rain_visual_debug_panel.gd" id="49_rain_visual_debug"]
+[ext_resource type="Script" path="res://scripts/lightning_event_controller.gd" id="50_lightning_events"]
 
 [sub_resource type="Compositor" id="Compositor_volumetric_clouds"]
 compositor_effects = Array[CompositorEffect]([ExtResource("11_cloud_effect")])
@@ -172,9 +173,10 @@ weather_controller_path = NodePath("../WeatherController")
 water_material = ExtResource("5_water_material")
 quality_level = 1
 
-[node name="RainVisualDebugPanel" type="CanvasLayer" parent="." node_paths=PackedStringArray("rain_visual_controller_path")]
+[node name="RainVisualDebugPanel" type="CanvasLayer" parent="." node_paths=PackedStringArray("rain_visual_controller_path", "lightning_event_controller_path")]
 script = ExtResource("49_rain_visual_debug")
 rain_visual_controller_path = NodePath("../RainVisualController")
+lightning_event_controller_path = NodePath("../LightningEventController")
 show_in_debug_builds = true
 
 [node name="WeatherRuntimeDiagnostics" type="CanvasLayer" parent="."]
@@ -201,6 +203,15 @@ weather_state_controller_path = NodePath("../WeatherStateController")
 script = ExtResource("17_day_night")
 georeference = ExtResource("15_georeference")
 visual_profile = ExtResource("18_day_night_profile")
+
+[node name="LightningEventController" type="Node" parent="." node_paths=PackedStringArray("weather_state_controller_path", "weather_controller_path", "day_night_visual_controller_path", "sunshine_clouds_driver_path")]
+script = ExtResource("50_lightning_events")
+weather_state_controller_path = NodePath("../WeatherStateController")
+weather_controller_path = NodePath("../WeatherController")
+day_night_visual_controller_path = NodePath("../DayNightVisualController")
+sunshine_clouds_driver_path = NodePath("../SunshineCloudsDriverGD")
+quality_level = 1
+random_seed = 629104
 
 [node name="QualityManager" type="Node" parent="."]
 script = ExtResource("12_quality_manager")

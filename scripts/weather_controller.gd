@@ -124,6 +124,7 @@ var _transition_elapsed := 0.0
 var _transition_active := false
 var _last_applied_wave_strength := -1.0
 var _rain_haze_strength := 0.0
+var _thunderstorm_atmosphere_intensity := 0.0
 
 
 func _ready() -> void:
@@ -222,7 +223,14 @@ func get_sun_azimuth() -> float:
 func get_day_night_visual_baseline() -> Dictionary:
 	var baseline := _current.duplicate(true)
 	baseline["rain_haze_strength"] = _rain_haze_strength
+	baseline["thunderstorm_intensity"] = _thunderstorm_atmosphere_intensity
 	return baseline
+
+
+## Thunderstorm atmosphere is an additive visual input. The daylight composer
+## remains the only writer of WorldEnvironment and cloud ambient properties.
+func set_thunderstorm_atmosphere_intensity(value: float) -> void:
+	_thunderstorm_atmosphere_intensity = clampf(value, 0.0, 1.0) if is_finite(value) else 0.0
 
 
 ## Rain is an additive atmosphere input. DayNightVisualController remains the

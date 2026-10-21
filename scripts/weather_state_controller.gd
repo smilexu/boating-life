@@ -22,6 +22,7 @@ enum OperatingMode { AUTO, MANUAL }
 signal weather_state_changed(weather_id: StringName, wind_state: Dictionary)
 signal operating_mode_changed(mode_name: StringName)
 signal precipitation_visual_target_changed(state: Dictionary)
+signal thunderstorm_visual_target_changed(state: Dictionary)
 
 const WEATHER_NAMES := [&"Clear", &"PartlyCloudy", &"Overcast"]
 const SAVE_SCHEMA_VERSION := 1
@@ -36,6 +37,9 @@ var climate_data_quality := "unavailable"
 var formal_precipitation_intensity_mm_per_hour := 0.0
 var formal_precipitation_available := false
 var formal_precipitation_data_quality := "unavailable"
+var formal_thunderstorm_forecast := false
+var formal_thunderstorm_data_quality := "unavailable"
+var formal_thunderstorm_symbol := ""
 
 var _weather_controller: Node
 var _wind_field: WindField
@@ -143,6 +147,7 @@ func set_manual_mode() -> void:
 	operating_mode = OperatingMode.MANUAL
 	_runtime_climate_tracking = false
 	_set_formal_precipitation(0.0, false, "manual")
+	_set_formal_thunderstorm(false, "manual", "")
 	operating_mode_changed.emit(&"MANUAL")
 
 
@@ -152,6 +157,9 @@ func set_auto_mode() -> void:
 	operating_mode = OperatingMode.AUTO
 	_transition_active = false
 	_runtime_climate_tracking = false
+	# Wait for the next authoritative sample instead of reusing a possibly stale
+	# storm signal after leaving MANUAL mode.
+	_set_formal_thunderstorm(false, "awaiting_authoritative_sample", "")
 	operating_mode_changed.emit(&"AUTO")
 
 
@@ -167,7 +175,9 @@ func apply_runtime_climate_sample(
 	date: Dictionary,
 	data_quality: String,
 	precipitation_intensity_mm_per_hour: float = 0.0,
-	precipitation_available: bool = false
+	precipitation_available: bool = false,
+	thunderstorm_forecast: bool = false,
+	thunderstorm_symbol: String = ""
 ) -> bool:
 	if operating_mode != OperatingMode.AUTO or visual_preset_index < 0 or visual_preset_index >= WEATHER_NAMES.size():
 		return false
@@ -180,6 +190,7 @@ func apply_runtime_climate_sample(
 		precipitation_available,
 		data_quality
 	)
+	_set_formal_thunderstorm(thunderstorm_forecast, data_quality, thunderstorm_symbol)
 	var visual_changed := visual_preset_index != _active_visual_preset_index
 	if visual_changed and _weather_controller != null:
 		_weather_controller.call("set_weather_by_index", visual_preset_index, false)
@@ -208,6 +219,7 @@ func apply_climate_weather_target(
 		return false
 	climate_region_id = region_id
 	climate_date = date.duplicate(true)
+	_set_formal_thunderstorm(false, "climate_target_without_thunder_signal", "")
 	_set_weather_target(weather_id, visual_preset_index, wind_profile)
 	return true
 
@@ -243,6 +255,10 @@ func get_precipitation_visual_state() -> Dictionary:
 	return _precipitation_visual_state()
 
 
+func get_thunderstorm_visual_state() -> Dictionary:
+	return _thunderstorm_visual_state()
+
+
 func _set_formal_precipitation(rate_mm_per_hour: float, available: bool, quality: String) -> void:
 	var safe_rate := maxf(rate_mm_per_hour, 0.0) if is_finite(rate_mm_per_hour) and available else 0.0
 	var changed := (
@@ -262,6 +278,34 @@ func _precipitation_visual_state() -> Dictionary:
 		"intensity_mm_per_hour": formal_precipitation_intensity_mm_per_hour,
 		"available": formal_precipitation_available,
 		"data_quality": formal_precipitation_data_quality,
+		"operating_mode": String(get_operating_mode_name()),
+	}
+
+
+func _set_formal_thunderstorm(active: bool, quality: String, symbol: String) -> void:
+	var safe_active := active and operating_mode == OperatingMode.AUTO
+	var changed := (
+		safe_active != formal_thunderstorm_forecast
+		or quality != formal_thunderstorm_data_quality
+		or symbol != formal_thunderstorm_symbol
+	)
+	formal_thunderstorm_forecast = safe_active
+	formal_thunderstorm_data_quality = quality
+	formal_thunderstorm_symbol = symbol if safe_active else ""
+	if changed:
+		thunderstorm_visual_target_changed.emit(_thunderstorm_visual_state())
+
+
+func _thunderstorm_visual_state() -> Dictionary:
+	var active := formal_thunderstorm_forecast and operating_mode == OperatingMode.AUTO
+	return {
+		"available": active,
+		# MET provides a thunderstorm symbol signal, not a measured severity.
+		# This conservative visual default only controls local presentation.
+		"intensity": 0.32 if active else 0.0,
+		"data_quality": formal_thunderstorm_data_quality,
+		"weather_symbol": formal_thunderstorm_symbol if active else "",
+		"source": "formal_forecast" if active else "none",
 		"operating_mode": String(get_operating_mode_name()),
 	}
 
