@@ -1,4 +1,4 @@
-[gd_scene load_steps=55 format=3]
+[gd_scene load_steps=57 format=3]
 
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
@@ -50,6 +50,9 @@
 [ext_resource type="Script" path="res://scripts/rain_visual_controller.gd" id="48_rain_visual"]
 [ext_resource type="Script" path="res://scripts/rain_visual_debug_panel.gd" id="49_rain_visual_debug"]
 [ext_resource type="Script" path="res://scripts/lightning_event_controller.gd" id="50_lightning_events"]
+[ext_resource type="Script" path="res://scripts/game_menu.gd" id="51_game_menu"]
+[ext_resource type="Script" path="res://scripts/environment_audio_manager.gd" id="52_environment_audio"]
+[ext_resource type="Script" path="res://scripts/boat_audio_controller.gd" id="53_boat_audio"]
 
 [sub_resource type="Compositor" id="Compositor_volumetric_clouds"]
 compositor_effects = Array[CompositorEffect]([ExtResource("11_cloud_effect")])
@@ -140,7 +143,7 @@ random_seed = 74291
 script = ExtResource("39_weather_state")
 weather_controller_path = NodePath("../WeatherController")
 wind_field_path = NodePath("../WindField")
-world_time_manager_path = NodePath("/root/WorldTimeManager")
+world_time_manager_path = NodePath("../../WorldTimeManager")
 clear_wind_profile = ExtResource("40_clear_wind")
 partly_cloudy_wind_profile = ExtResource("41_partly_wind")
 overcast_wind_profile = ExtResource("42_overcast_wind")
@@ -156,7 +159,7 @@ weather_state_controller_path = NodePath("../WeatherStateController")
 [node name="WeatherRuntimeAuthority" type="Node" parent="."]
 script = ExtResource("45_weather_runtime_authority")
 weather_region = ExtResource("43_oresund_weather_region")
-world_time_manager_path = NodePath("/root/WorldTimeManager")
+world_time_manager_path = NodePath("../../WorldTimeManager")
 godot_adapter_path = NodePath("../WeatherRuntimeGodotAdapter")
 cycles_per_real_day = 24
 timeline_calendar_days = 7
@@ -173,16 +176,18 @@ weather_controller_path = NodePath("../WeatherController")
 water_material = ExtResource("5_water_material")
 quality_level = 1
 
-[node name="RainVisualDebugPanel" type="CanvasLayer" parent="." node_paths=PackedStringArray("rain_visual_controller_path", "lightning_event_controller_path")]
+[node name="RainVisualDebugPanel" type="CanvasLayer" parent="." node_paths=PackedStringArray("rain_visual_controller_path", "lightning_event_controller_path", "environment_audio_manager_path", "boat_audio_controller_path")]
 script = ExtResource("49_rain_visual_debug")
 rain_visual_controller_path = NodePath("../RainVisualController")
 lightning_event_controller_path = NodePath("../LightningEventController")
+environment_audio_manager_path = NodePath("../EnvironmentAudioManager")
+boat_audio_controller_path = NodePath("../BoatAudioController")
 show_in_debug_builds = true
 
 [node name="WeatherRuntimeDiagnostics" type="CanvasLayer" parent="."]
 script = ExtResource("46_weather_runtime_diagnostics")
 authority_path = NodePath("../WeatherRuntimeAuthority")
-world_time_manager_path = NodePath("/root/WorldTimeManager")
+world_time_manager_path = NodePath("../../WorldTimeManager")
 weather_state_controller_path = NodePath("../WeatherStateController")
 wind_field_path = NodePath("../WindField")
 wind_field_debug_panel_path = NodePath("../WindFieldDebugPanel")
@@ -212,6 +217,21 @@ day_night_visual_controller_path = NodePath("../DayNightVisualController")
 sunshine_clouds_driver_path = NodePath("../SunshineCloudsDriverGD")
 quality_level = 1
 random_seed = 629104
+
+[node name="EnvironmentAudioManager" type="Node" parent="." node_paths=PackedStringArray("boat_path", "listener_path", "wind_field_path", "weather_state_controller_path", "wave_sampler_path", "lightning_event_controller_path", "music_manager_path")]
+script = ExtResource("52_environment_audio")
+boat_path = NodePath("../PlayerBoat/MotionRoot")
+listener_path = NodePath("../PlayerBoat/FollowCameraRig/Camera3D")
+wind_field_path = NodePath("../WindField")
+weather_state_controller_path = NodePath("../WeatherStateController")
+wave_sampler_path = NodePath("../WaveSampler")
+lightning_event_controller_path = NodePath("../LightningEventController")
+music_manager_path = NodePath("../../MusicManager")
+
+[node name="BoatAudioController" type="Node" parent="." node_paths=PackedStringArray("boat_path", "buoyancy_path")]
+script = ExtResource("53_boat_audio")
+boat_path = NodePath("../PlayerBoat/MotionRoot")
+buoyancy_path = NodePath("../PlayerBoat/MotionRoot/VisualRoot")
 
 [node name="QualityManager" type="Node" parent="."]
 script = ExtResource("12_quality_manager")
@@ -304,3 +324,13 @@ script = ExtResource("22_fish_map")
 manager_path = NodePath("../FishResourceManager")
 bathymetry_path = NodePath("../BathymetryManager")
 boat_path = NodePath("../PlayerBoat/MotionRoot")
+
+[node name="GameMenu" type="CanvasLayer" parent="." node_paths=PackedStringArray("boat_controller_path", "camera_rig_path", "environment_audio_manager_path", "boat_audio_controller_path", "fish_map_path", "malmo_port_services_path", "copenhagen_port_services_path")]
+script = ExtResource("51_game_menu")
+boat_controller_path = NodePath("../PlayerBoat/MotionRoot")
+camera_rig_path = NodePath("../PlayerBoat/FollowCameraRig")
+environment_audio_manager_path = NodePath("../EnvironmentAudioManager")
+boat_audio_controller_path = NodePath("../BoatAudioController")
+fish_map_path = NodePath("../FishResourceMap")
+malmo_port_services_path = NodePath("../MalmoHarbor/PortServiceController")
+copenhagen_port_services_path = NodePath("../CopenhagenHarbor/PortServiceController")

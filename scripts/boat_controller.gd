@@ -12,6 +12,12 @@ signal manual_takeover_requested
 
 const DEFAULT_VESSEL_LENGTH_M := 5.263
 const DEFAULT_VESSEL_BEAM_M := 2.327
+const EngineAudioProfileScript = preload("res://scripts/engine_audio_profile.gd")
+
+enum PropulsionType {
+	NONE,
+	POWERBOAT,
+}
 
 @export_category("Movement")
 @export_range(1.0, 20.0, 0.5) var max_speed_mps := 12.0
@@ -26,10 +32,15 @@ const DEFAULT_VESSEL_BEAM_M := 2.327
 @export var draft_profile: VesselDraftProfile
 @export_range(0.0, 1000000.0, 1.0, "or_greater") var current_cargo_weight_kg := 0.0
 
+@export_category("Vessel audio")
+@export var propulsion_type: PropulsionType = PropulsionType.POWERBOAT
+@export var engine_audio_profile: EngineAudioProfileScript
+
 var speed_mps := 0.0
 var is_autopilot := false
 var is_motion_paused := false
 var is_port_docked := false
+var manual_input_enabled := true
 
 var _autopilot_steering_input := 0.0
 var _autopilot_target_speed_mps := 0.0
@@ -48,6 +59,35 @@ func get_reverse_max_speed_mps() -> float:
 
 func get_autopilot_speed_cap_mps() -> float:
 	return maxf(max_speed_mps, _autopilot_speed_cap_mps)
+
+
+## Read-only demand estimate for the local engine sound. This does not feed back
+## into throttle, propulsion, autopilot, or vessel motion.
+func get_engine_audio_state() -> Dictionary:
+	if not has_engine():
+		return {"running": false, "power": 0.0, "docked": is_port_docked}
+	var running := not is_port_docked and not is_motion_paused
+	if not running:
+		return {"running": false, "power": 0.0, "docked": is_port_docked}
+	var throttle_demand := 0.0
+	if is_autopilot:
+		throttle_demand = clampf(_autopilot_target_speed_mps / maxf(get_autopilot_speed_cap_mps(), 0.1), 0.0, 1.0)
+	elif manual_input_enabled:
+		throttle_demand = maxf(Input.get_action_strength("boat_accelerate"), Input.get_action_strength("boat_brake"))
+	return {
+		"running": true,
+		"power": clampf(0.15 + throttle_demand * 0.85, 0.0, 1.0),
+		"throttle_demand": throttle_demand,
+		"docked": is_port_docked,
+	}
+
+
+func has_engine() -> bool:
+	return propulsion_type == PropulsionType.POWERBOAT
+
+
+func get_engine_audio_profile() -> EngineAudioProfileScript:
+	return engine_audio_profile
 
 
 func set_autopilot_speed_cap_mps(speed_cap_mps: float) -> void:
@@ -107,10 +147,10 @@ func _process(delta: float) -> void:
 		is_motion_paused = true
 		return
 
-	if Input.is_action_just_pressed("boat_pause"):
+	if manual_input_enabled and Input.is_action_just_pressed("boat_pause"):
 		is_motion_paused = not is_motion_paused
 
-	if is_autopilot and _has_manual_drive_input():
+	if manual_input_enabled and is_autopilot and _has_manual_drive_input():
 		manual_takeover_requested.emit()
 		if is_autopilot:
 			disengage_autopilot()
@@ -120,7 +160,7 @@ func _process(delta: float) -> void:
 
 	if is_autopilot:
 		_update_autopilot_motion(delta)
-	else:
+	elif manual_input_enabled:
 		_update_manual_controls(delta)
 
 	var forward_direction := -global_transform.basis.z

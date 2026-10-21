@@ -9,7 +9,7 @@ enum OperatingMode { AUTO, MANUAL }
 
 @export_node_path("Node") var weather_controller_path := NodePath("../WeatherController")
 @export_node_path("Node") var wind_field_path := NodePath("../WindField")
-@export_node_path("Node") var world_time_manager_path := NodePath("/root/WorldTimeManager")
+@export_node_path("Node") var world_time_manager_path := NodePath("../../WorldTimeManager")
 @export var clear_wind_profile: WeatherWindProfile
 @export var partly_cloudy_wind_profile: WeatherWindProfile
 @export var overcast_wind_profile: WeatherWindProfile

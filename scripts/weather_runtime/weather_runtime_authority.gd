@@ -18,7 +18,7 @@ const PersistenceScript := preload("res://scripts/weather_runtime/weather_runtim
 const WorldTimeManagerScript := preload("res://scripts/world_time_manager.gd")
 
 @export var weather_region: WeatherRegion
-@export_node_path("Node") var world_time_manager_path := NodePath("/root/WorldTimeManager")
+@export_node_path("Node") var world_time_manager_path := NodePath("../../WorldTimeManager")
 @export_node_path("Node") var godot_adapter_path := NodePath("../WeatherRuntimeGodotAdapter")
 @export_range(12, 24, 12) var cycles_per_real_day := 24
 @export_range(1, 16, 1) var timeline_calendar_days := 7

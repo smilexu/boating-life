@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="EngineAudioProfile" load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/engine_audio_profile.gd" id="1_profile"]
+[ext_resource type="AudioStream" path="res://assets/sfx/processed/OM02_loop.ogg" id="2_engine"]
+
+[resource]
+script = ExtResource("1_profile")
+profile_id = &"powerboat_default"
+engine_stream = ExtResource("2_engine")
+playback_trim_db = 8.0
+idle_gain = 0.18
+throttle_gain = 0.62
+minimum_pitch_scale = 0.86
+maximum_pitch_scale = 1.13

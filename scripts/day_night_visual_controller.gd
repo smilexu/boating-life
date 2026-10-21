@@ -45,7 +45,7 @@ var _lightning_environment_flash_strength := 0.0
 
 func _ready() -> void:
 	process_priority = 100
-	_world_time_manager = get_node_or_null("/root/WorldTimeManager")
+	_world_time_manager = get_tree().root.get_node_or_null("WorldTimeManager")
 	_weather_controller = get_node_or_null(weather_controller_path) as WeatherController
 	if _weather_controller != null:
 		_water_material = _weather_controller.water_material

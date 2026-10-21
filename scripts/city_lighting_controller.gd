@@ -78,7 +78,7 @@ func configure(city_root: Node3D, day_night_controller: Node) -> void:
 		return
 	_city_root = city_root
 	_day_night_controller = day_night_controller
-	_world_time_manager = get_node_or_null("/root/WorldTimeManager")
+	_world_time_manager = get_tree().root.get_node_or_null("WorldTimeManager")
 	_load_debug_settings()
 	_build_window_overlays()
 	_build_turning_torso_beacon()

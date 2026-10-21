@@ -130,7 +130,7 @@ func _ready() -> void:
 	_cargo_economy_manager = get_node_or_null(cargo_economy_manager_path) as CargoEconomyManager
 	_autopilot_controller = get_node_or_null(autopilot_controller_path) as AutopilotController
 	_oresund_region = get_node_or_null(oresund_region_path)
-	var time_manager := get_node_or_null("/root/WorldTimeManager")
+	var time_manager := get_tree().root.get_node_or_null("WorldTimeManager")
 	_world_time_control = LocalTimeControlScript.new(time_manager) as WorldTimeControlPort
 
 	_status_panel = PanelContainer.new()

@@ -17,6 +17,7 @@ config/features=PackedStringArray("4.7", "Forward Plus")
 [autoload]
 
 WorldTimeManager="*res://scripts/world_time_manager.gd"
+MusicManager="*res://scripts/music_manager.gd"
 
 [display]
 

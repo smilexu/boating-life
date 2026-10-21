@@ -112,6 +112,17 @@ func get_visual_cargo_sink_m() -> float:
 	return maxf(_boat_controller.get_current_draft_m() - maxf(profile.empty_draft_m, 0.0), 0.0)
 
 
+## Read-only motion sample for local hull audio; reuses the buoyancy state this
+## controller already computes, so it adds no WaveSampler queries.
+func get_audio_motion_state() -> Dictionary:
+	return {
+		"heave_speed_mps": absf(_heave_velocity),
+		"pitch_rate_rad_s": absf(_pitch_velocity),
+		"roll_rate_rad_s": absf(_roll_velocity),
+		"available": _wave_sampler != null,
+	}
+
+
 func _build_sample_offsets() -> void:
 	_sample_offsets = [
 		Vector3(-half_beam, 0.0, -fore_sample_distance),

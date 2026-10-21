@@ -4,7 +4,7 @@ class_name WeatherRuntimeDiagnostics
 ## Compact developer-only readout; it does not consume F3 or F12 shortcuts.
 
 @export_node_path("Node") var authority_path := NodePath("../WeatherRuntimeAuthority")
-@export_node_path("Node") var world_time_manager_path := NodePath("/root/WorldTimeManager")
+@export_node_path("Node") var world_time_manager_path := NodePath("../../WorldTimeManager")
 @export_node_path("Node") var weather_state_controller_path := NodePath("../WeatherStateController")
 @export_node_path("Node") var wind_field_path := NodePath("../WindField")
 @export_node_path("Node") var wind_field_debug_panel_path := NodePath("../WindFieldDebugPanel")

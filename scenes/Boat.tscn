@@ -11,12 +11,15 @@
 [ext_resource type="PackedScene" path="res://scenes/StandardCargoContainer.tscn" id="9_container_scene"]
 [ext_resource type="PackedScene" path="res://scenes/BoatExhaustSmokeSystem.tscn" id="11_exhaust_smoke"]
 [ext_resource type="Script" uid="uid://d1ip4einbvys1" path="res://scripts/exhaust_socket_editor_gizmo.gd" id="12_exhaust_socket_gizmo"]
+[ext_resource type="Resource" path="res://resources/audio/powerboat_default_engine.tres" id="13_engine_audio_profile"]
 
 [node name="Boat" type="Node3D" unique_id=1227113286]
 
 [node name="MotionRoot" type="Node3D" parent="." unique_id=1098559663]
 script = ExtResource("1_controller")
 draft_profile = ExtResource("7_draft_profile")
+propulsion_type = 1
+engine_audio_profile = ExtResource("13_engine_audio_profile")
 
 [node name="VisualRoot" type="Node3D" parent="MotionRoot" unique_id=86996725]
 script = ExtResource("5_buoyancy")

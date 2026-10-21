@@ -68,6 +68,7 @@ var _schedule_rng := RandomNumberGenerator.new()
 var _debug_rng := RandomNumberGenerator.new()
 var _schedule_remaining := -1.0
 var _active_event: Dictionary = {}
+var _event_sequence := 0
 var _active_event_elapsed := 0.0
 var _current_flash_level := 0.0
 var _preview_frozen := false
@@ -381,6 +382,8 @@ func _start_visual_event(event: Dictionary) -> void:
 	if event.is_empty():
 		return
 	_active_event = event.duplicate(true)
+	_event_sequence += 1
+	_active_event["event_id"] = _event_sequence
 	_active_event_elapsed = 0.0
 	_current_flash_level = 0.0
 	if _graphics_available:
@@ -492,8 +495,6 @@ func _unregister_cloud_light() -> void:
 
 
 func _configure_event_geometry(event: Dictionary) -> void:
-	if _lightning_mesh == null or _flash_light == null:
-		return
 	var camera := get_viewport().get_camera_3d()
 	if camera == null:
 		return
@@ -530,6 +531,14 @@ func _configure_event_geometry(event: Dictionary) -> void:
 	var direction := forward.rotated(Vector3.UP, angle).normalized()
 	var origin := camera_position + direction * distance
 	origin.y = cloud_height
+	event["world_position"] = origin
+	event["distance_m"] = camera_position.distance_to(origin)
+	var sound_source_position := origin
+	if event_type in ["near_cg", "medium_cg", "distant_cg"]:
+		sound_source_position.y = 0.0
+	event["sound_source_position"] = sound_source_position
+	if _lightning_mesh == null or _flash_light == null:
+		return
 	var event_intensity := float(event.get("intensity", 0.0))
 	var geometry := BoltGeometryScript.build(
 		event_type,

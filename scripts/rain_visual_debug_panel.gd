@@ -1,11 +1,13 @@
 extends CanvasLayer
 class_name RainVisualDebugPanel
 
-## Local-only rain presentation tools. R toggles this panel.
-## Closing the panel always clears local rain/lightning overrides and resumes formal input.
+## Local-only rain, lightning, and audio presentation tools. R toggles this panel.
+## Closing the panel clears every local override and resumes formal input.
 
 @export_node_path("Node") var rain_visual_controller_path := NodePath("../RainVisualController")
 @export_node_path("Node") var lightning_event_controller_path := NodePath("../LightningEventController")
+@export_node_path("Node") var environment_audio_manager_path := NodePath("../EnvironmentAudioManager")
+@export_node_path("Node") var boat_audio_controller_path := NodePath("../BoatAudioController")
 @export var show_in_debug_builds := true
 
 const RAIN_PRESETS := [
@@ -18,6 +20,9 @@ const RAIN_PRESETS := [
 ]
 
 var _rain_controller: Node
+var _environment_audio_manager: Node
+var _boat_audio_controller: Node
+var _audio_status_label: Label
 var _panel: PanelContainer
 var _status_label: Label
 var _quality_option: OptionButton
@@ -58,6 +63,8 @@ func _ready() -> void:
 	layer = 70
 	_rain_controller = get_node_or_null(rain_visual_controller_path)
 	_lightning_controller = get_node_or_null(lightning_event_controller_path)
+	_environment_audio_manager = get_node_or_null(environment_audio_manager_path)
+	_boat_audio_controller = get_node_or_null(boat_audio_controller_path)
 	visible = false
 	if not show_in_debug_builds or not OS.is_debug_build() or OS.has_feature("dedicated_server") or DisplayServer.get_name().to_lower() == "headless":
 		set_process(false)
@@ -73,6 +80,7 @@ func _process(delta: float) -> void:
 		return
 	_refresh_elapsed = 0.0
 	_refresh_status()
+	_refresh_audio_status()
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -194,6 +202,7 @@ func _build_panel() -> void:
 	for slider in [_density_slider, _near_density_slider, _length_slider, _opacity_slider, _wind_slider, _micro_slider, _ring_size_slider, _ring_probability_slider, _impact_slider, _haze_slider]:
 		slider.value_changed.connect(_on_visual_control_changed)
 	_add_thunderstorm_debug_section(body)
+	_add_audio_debug_section(body)
 	_refresh_status()
 
 
@@ -277,6 +286,128 @@ func _add_thunderstorm_debug_section(body: VBoxContainer) -> void:
 	body.add_child(restore)
 
 
+func _add_audio_debug_section(body: VBoxContainer) -> void:
+	var separator := HSeparator.new()
+	body.add_child(separator)
+	var title := Label.new()
+	title.text = "动态音效测试（本地）"
+	title.add_theme_font_size_override("font_size", 15)
+	body.add_child(title)
+	var hint := Label.new()
+	hint.text = "仅覆盖声音混音输入，不改正式天气、风场、波浪、船舶状态或设置存档。关闭 R 面板自动恢复。"
+	hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	hint.add_theme_font_size_override("font_size", 12)
+	hint.add_theme_color_override("font_color", Color(0.69, 0.83, 0.85))
+	body.add_child(hint)
+	_audio_status_label = Label.new()
+	_audio_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_audio_status_label.add_theme_font_size_override("font_size", 12)
+	body.add_child(_audio_status_label)
+	var presets := GridContainer.new()
+	presets.columns = 2
+	presets.add_theme_constant_override("h_separation", 6)
+	presets.add_theme_constant_override("v_separation", 6)
+	body.add_child(presets)
+	_add_audio_test_preset(presets, "静水 / 熄火", {
+		"relative_wind_mps": 0.0, "rain_mm_per_hour": 0.0, "sea_amplitude_rms_m": 0.3,
+		"engine_running": false, "engine_power": 0.0, "heave_speed_mps": 0.0,
+		"pitch_rate_rad_s": 0.0, "roll_rate_rad_s": 0.0, "storm_intensity": 0.0,
+	})
+	_add_audio_test_preset(presets, "平静巡航", {
+		"relative_wind_mps": 5.0, "rain_mm_per_hour": 0.0, "sea_amplitude_rms_m": 0.8,
+		"engine_running": true, "engine_power": 0.72, "heave_speed_mps": 0.05,
+		"pitch_rate_rad_s": 0.08, "roll_rate_rad_s": 0.08, "storm_intensity": 0.0,
+	})
+	_add_audio_test_preset(presets, "中雨", {
+		"relative_wind_mps": 8.0, "rain_mm_per_hour": 5.0, "sea_amplitude_rms_m": 1.8,
+		"engine_running": true, "engine_power": 0.62, "heave_speed_mps": 0.12,
+		"pitch_rate_rad_s": 0.18, "roll_rate_rad_s": 0.16, "storm_intensity": 0.0,
+	})
+	_add_audio_test_preset(presets, "强降雨 + 大浪", {
+		"relative_wind_mps": 16.0, "rain_mm_per_hour": 22.0, "sea_amplitude_rms_m": 4.0,
+		"engine_running": true, "engine_power": 0.72, "heave_speed_mps": 0.4,
+		"pitch_rate_rad_s": 0.55, "roll_rate_rad_s": 0.5, "storm_intensity": 0.0,
+	})
+	_add_audio_test_preset(presets, "强雷暴", {
+		"relative_wind_mps": 15.0, "rain_mm_per_hour": 22.0, "sea_amplitude_rms_m": 4.0,
+		"engine_running": true, "engine_power": 0.62, "heave_speed_mps": 0.4,
+		"pitch_rate_rad_s": 0.35, "roll_rate_rad_s": 0.3, "storm_intensity": 0.8,
+	})
+	var restore_audio := Button.new()
+	restore_audio.text = "恢复正式音效输入"
+	restore_audio.pressed.connect(_clear_audio_debug_override)
+	body.add_child(restore_audio)
+	_refresh_audio_status()
+
+
+func _add_audio_test_preset(parent: GridContainer, label: String, values: Dictionary) -> void:
+	var button := Button.new()
+	button.text = label
+	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	button.pressed.connect(func(): _apply_audio_debug_override(values))
+	parent.add_child(button)
+
+
+func _apply_audio_debug_override(values: Dictionary) -> void:
+	if _environment_audio_manager != null and _environment_audio_manager.has_method("set_debug_audio_override"):
+		_environment_audio_manager.call("set_debug_audio_override", values)
+	if _boat_audio_controller != null and _boat_audio_controller.has_method("set_debug_audio_override"):
+		_boat_audio_controller.call("set_debug_audio_override", values)
+	_refresh_audio_status()
+
+
+func _clear_audio_debug_override() -> void:
+	if _environment_audio_manager != null and _environment_audio_manager.has_method("clear_debug_audio_override"):
+		_environment_audio_manager.call("clear_debug_audio_override")
+	if _boat_audio_controller != null and _boat_audio_controller.has_method("clear_debug_audio_override"):
+		_boat_audio_controller.call("clear_debug_audio_override")
+	_refresh_audio_status()
+
+
+func _refresh_audio_status() -> void:
+	if _audio_status_label == null:
+		return
+	if _environment_audio_manager == null or not _environment_audio_manager.has_method("get_audio_diagnostics"):
+		_audio_status_label.text = "音效诊断不可用。"
+		return
+	var environment: Dictionary = _environment_audio_manager.call("get_audio_diagnostics")
+	var boat: Dictionary = _boat_audio_controller.call("get_audio_diagnostics") if _boat_audio_controller != null and _boat_audio_controller.has_method("get_audio_diagnostics") else {}
+	var targets: Dictionary = environment.get("target_loop_gains", {})
+	var actuals: Dictionary = environment.get("actual_loop_gains", {})
+	var boat_targets: Dictionary = boat.get("target_loop_gains", {})
+	var boat_actuals: Dictionary = boat.get("actual_loop_gains", {})
+	var override_label := "本地音效覆盖" if bool(environment.get("audio_test_override_active", false)) else "正式天气 / 运行状态"
+	_audio_status_label.text = "%s · 风 %.1f m/s · 雨 %.1f mm/h · 海况 RMS %.2f m · duck %.1f dB\n目标 W01 %.0f%% W02 %.0f%% R02 %.0f%% R03 %.0f%% SW01 %.0f%% SW02 %.0f%% SW03 %.0f%%\n实际 W01 %.0f%% W02 %.0f%% R02 %.0f%% R03 %.0f%% SW01 %.0f%% SW02 %.0f%% SW03 %.0f%% · 引擎 %.0f%% / %.0f%%" % [
+		override_label,
+		float(environment.get("relative_wind_mps", 0.0)),
+		float(environment.get("rain_mm_per_hour", 0.0)),
+		float(environment.get("sea_amplitude_rms_m", 0.0)),
+		float(environment.get("music_ducking_db", 0.0)),
+		float(targets.get("W01", 0.0)) * 100.0,
+		float(targets.get("W02", 0.0)) * 100.0,
+		float(targets.get("R02", 0.0)) * 100.0,
+		float(targets.get("R03", 0.0)) * 100.0,
+		float(targets.get("SW01", 0.0)) * 100.0,
+		float(targets.get("SW02", 0.0)) * 100.0,
+		float(targets.get("SW03", 0.0)) * 100.0,
+		float(actuals.get("W01", 0.0)) * 100.0,
+		float(actuals.get("W02", 0.0)) * 100.0,
+		float(actuals.get("R02", 0.0)) * 100.0,
+		float(actuals.get("R03", 0.0)) * 100.0,
+		float(actuals.get("SW01", 0.0)) * 100.0,
+		float(actuals.get("SW02", 0.0)) * 100.0,
+		float(actuals.get("SW03", 0.0)) * 100.0,
+		float(boat_targets.get("engine", 0.0)) * 100.0,
+		float(boat_actuals.get("engine", 0.0)) * 100.0,
+	]
+	_audio_status_label.text += "\n船体 S01 %.0f%% / %.0f%% · S02 %.0f%% / %.0f%%" % [
+		float(boat_targets.get("S01", 0.0)) * 100.0,
+		float(boat_actuals.get("S01", 0.0)) * 100.0,
+		float(boat_targets.get("S02", 0.0)) * 100.0,
+		float(boat_actuals.get("S02", 0.0)) * 100.0,
+	]
+
+
 func _add_event_button(parent: GridContainer, label: String, event_type: String) -> void:
 	var button := Button.new()
 	button.text = label
@@ -323,8 +454,10 @@ func _set_panel_open(open: bool) -> void:
 	if not open:
 		_clear_debug_override()
 		_clear_thunder_debug_override()
+		_clear_audio_debug_override()
 	else:
 		_refresh_status()
+		_refresh_audio_status()
 
 
 func _set_debug_rate(rate_mm_per_hour: float) -> void:

@@ -91,7 +91,7 @@ func _prepare_main_scene() -> void:
 		weather_state.call("set_weather_by_index", 0)
 	else:
 		_main.get_node("WeatherController").call("set_weather_by_index", 0)
-	var time_manager := get_node_or_null("/root/WorldTimeManager")
+	var time_manager := get_tree().root.get_node_or_null("WorldTimeManager")
 	if time_manager != null:
 		time_manager.set("autosave_enabled", false)
 		time_manager.call("pause_time")
@@ -274,7 +274,7 @@ func _set_depth_draw_mode(index: int) -> void:
 
 
 func _set_time_of_day(night: bool) -> void:
-	var time_manager := get_node_or_null("/root/WorldTimeManager")
+	var time_manager := get_tree().root.get_node_or_null("WorldTimeManager")
 	if time_manager == null:
 		return
 	time_manager.call("pause_time")
