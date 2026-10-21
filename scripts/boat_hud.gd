@@ -67,6 +67,12 @@ var _extreme_sea_status: Label
 var _wave_compactness_slider: HSlider
 var _wave_sharpness_slider: HSlider
 var _extreme_wave_defaults_button: Button
+var _shallow_wave_constraint_toggle: CheckButton
+var _shallow_wave_full_depth_slider: HSlider
+var _shallow_wave_min_scale_slider: HSlider
+var _shallow_wave_safe_ratio_slider: HSlider
+var _shallow_wave_defaults_button: Button
+var _shallow_wave_status: Label
 var _quality_option: OptionButton
 var _frame_limit_option: OptionButton
 var _window_mode_button: Button
@@ -449,6 +455,31 @@ func _build_debug_panel() -> void:
 		layout.add_child(_extreme_wave_defaults_button)
 		_extreme_sea_status = _make_debug_label()
 		layout.add_child(_extreme_sea_status)
+
+		var shallow_wave_title := Label.new()
+		shallow_wave_title.text = "浅水波浪约束（仅开发测试）"
+		shallow_wave_title.add_theme_font_size_override("font_size", 15)
+		shallow_wave_title.add_theme_color_override("font_color", Color(0.94, 0.96, 0.94))
+		layout.add_child(shallow_wave_title)
+		_shallow_wave_constraint_toggle = CheckButton.new()
+		_shallow_wave_constraint_toggle.text = "开启浅水波浪约束"
+		_shallow_wave_constraint_toggle.toggled.connect(_on_shallow_wave_constraint_toggled)
+		layout.add_child(_shallow_wave_constraint_toggle)
+		_shallow_wave_full_depth_slider = _add_slider_row(layout, "深水完整波浪阈值（m）", 30.0, 60.0, 1.0)
+		_shallow_wave_min_scale_slider = _add_slider_row(layout, "3 m 水深振幅保留率", 0.0, 0.60, 0.01)
+		_shallow_wave_safe_ratio_slider = _add_slider_row(layout, "波谷安全余量（%）", 0.10, 0.50, 0.01)
+		_shallow_wave_min_scale_slider.value = 0.40
+		_shallow_wave_safe_ratio_slider.value = 0.20
+		_shallow_wave_full_depth_slider.value_changed.connect(_on_shallow_wave_options_changed)
+		_shallow_wave_min_scale_slider.value_changed.connect(_on_shallow_wave_options_changed)
+		_shallow_wave_safe_ratio_slider.value_changed.connect(_on_shallow_wave_options_changed)
+		_shallow_wave_defaults_button = Button.new()
+		_shallow_wave_defaults_button.text = "恢复浅水约束默认值"
+		_shallow_wave_defaults_button.pressed.connect(_on_shallow_wave_defaults_pressed)
+		layout.add_child(_shallow_wave_defaults_button)
+		_shallow_wave_status = _make_debug_label()
+		layout.add_child(_shallow_wave_status)
+		_sync_shallow_wave_controls()
 
 	var settings_title := Label.new()
 	settings_title.text = "性能与显示"
@@ -1268,6 +1299,7 @@ func _update_debug_status() -> void:
 			_wave_slider.set_value_no_signal(float(_wave_sampler.get("wave_strength")))
 		_wave_slider.editable = not extreme_active
 		_update_extreme_sea_status()
+		_update_shallow_wave_status()
 	var fps := Engine.get_frames_per_second()
 	var draw_calls := int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	var visible_objects := int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
@@ -1608,6 +1640,9 @@ func _on_extreme_sea_selected(index: int) -> void:
 		return
 	if index == 0:
 		_wave_sampler.call("clear_extreme_sea_test")
+		if _shallow_wave_constraint_toggle != null:
+			_shallow_wave_constraint_toggle.set_pressed_no_signal(false)
+			_apply_shallow_wave_options()
 		_update_extreme_sea_status()
 		return
 	if not _apply_selected_extreme_sea_shape():
@@ -1615,6 +1650,9 @@ func _on_extreme_sea_selected(index: int) -> void:
 		_update_extreme_sea_status()
 		return
 	_wave_slider.editable = false
+	if _shallow_wave_constraint_toggle != null:
+		_shallow_wave_constraint_toggle.set_pressed_no_signal(true)
+		_apply_shallow_wave_options()
 	_update_extreme_sea_status()
 
 
@@ -1633,6 +1671,81 @@ func _on_extreme_wave_defaults_pressed() -> void:
 	if _extreme_sea_option != null and _extreme_sea_option.selected > 0:
 		_apply_selected_extreme_sea_shape()
 	_update_extreme_sea_status()
+
+
+func _on_shallow_wave_constraint_toggled(_enabled: bool) -> void:
+	_apply_shallow_wave_options()
+
+
+func _on_shallow_wave_options_changed(_value: float) -> void:
+	_apply_shallow_wave_options()
+
+
+func _on_shallow_wave_defaults_pressed() -> void:
+	if _shallow_wave_constraint_toggle == null:
+		return
+	_shallow_wave_full_depth_slider.set_value_no_signal(30.0)
+	_shallow_wave_min_scale_slider.set_value_no_signal(0.40)
+	_shallow_wave_safe_ratio_slider.set_value_no_signal(0.20)
+	_shallow_wave_constraint_toggle.set_pressed_no_signal(
+		_extreme_sea_option != null and _extreme_sea_option.selected > 0
+	)
+	_apply_shallow_wave_options()
+
+
+func _sync_shallow_wave_controls() -> void:
+	if _shallow_wave_constraint_toggle == null:
+		return
+	if _wave_sampler == null:
+		_shallow_wave_constraint_toggle.set_pressed_no_signal(false)
+		return
+	_shallow_wave_constraint_toggle.set_pressed_no_signal(bool(_wave_sampler.get("shallow_wave_constraint_enabled")))
+	_shallow_wave_full_depth_slider.set_value_no_signal(float(_wave_sampler.get("shallow_wave_full_depth_m")))
+	_shallow_wave_min_scale_slider.set_value_no_signal(float(_wave_sampler.get("shallow_wave_min_amplitude_scale")))
+	_shallow_wave_safe_ratio_slider.set_value_no_signal(float(_wave_sampler.get("shallow_wave_safe_depth_ratio")))
+
+
+func _apply_shallow_wave_options() -> void:
+	if _wave_sampler == null or not _wave_sampler.has_method("set_shallow_wave_constraint_options"):
+		return
+	_wave_sampler.call(
+		"set_shallow_wave_constraint_options",
+		_shallow_wave_constraint_toggle.button_pressed,
+		_shallow_wave_full_depth_slider.value,
+		_shallow_wave_min_scale_slider.value,
+		_shallow_wave_safe_ratio_slider.value
+	)
+	_update_shallow_wave_status()
+
+
+func _update_shallow_wave_status() -> void:
+	if _shallow_wave_status == null:
+		return
+	if _wave_sampler == null or not _wave_sampler.has_method("get_shallow_wave_diagnostics"):
+		_shallow_wave_status.text = "浅水约束数据不可用"
+		return
+	var diagnostics: Dictionary = _wave_sampler.call("get_shallow_wave_diagnostics", _controller.global_position)
+	var coverage := float(diagnostics.get("coverage", 0.0))
+	var depth_text := "未知水深（按浅水保守处理）"
+	if bool(diagnostics.get("valid", false)):
+		depth_text = "%.2f m LAT · 有效" % float(diagnostics.get("depth_m", 0.0))
+	elif coverage > 0.0:
+		depth_text = "纹理覆盖 %.0f%% · 保守深度 %.2f m · 无效" % [coverage * 100.0, float(diagnostics.get("effective_depth_m", 0.0))]
+	var theoretical_trough := float(diagnostics.get("theoretical_max_trough_excursion_m", 0.0))
+	var constrained_trough := float(diagnostics.get("constrained_max_trough_excursion_m", theoretical_trough))
+	_shallow_wave_status.text = "当前位置水深：%s\n安全余量 %.0f%% · 允许最大波谷下探 %.2f m · 约束%s\n视觉分区倍率 %.2f · 波谷安全倍率 %.2f · 最终振幅倍率 %.2f\n原始理论最大波谷 %.2f m · 约束后最大波谷 %.2f m\n完整波浪阈值 %.0f m · 3 m 振幅点 %.2f" % [
+		depth_text,
+		float(diagnostics.get("safe_depth_ratio", 0.20)) * 100.0,
+		float(diagnostics.get("allowed_trough_m", 0.0)),
+		"开启" if bool(diagnostics.get("enabled", false)) else "关闭",
+		float(diagnostics.get("visual_zone_scale", 1.0)),
+		float(diagnostics.get("safety_scale", 1.0)),
+		float(diagnostics.get("amplitude_scale", 1.0)),
+		theoretical_trough,
+		constrained_trough,
+		float(_wave_sampler.get("shallow_wave_full_depth_m")),
+		float(_wave_sampler.get("shallow_wave_min_amplitude_scale")),
+	]
 
 
 func _apply_selected_extreme_sea_shape() -> bool:

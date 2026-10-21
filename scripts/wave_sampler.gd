@@ -15,6 +15,25 @@ const EXTREME_SHAPE_TRANSITION_SECONDS := EXTREME_TRANSITION_SECONDS
 @export_node_path("Node3D") var ocean_path := NodePath("../Ocean")
 ## World-space point whose wave phase stays continuous while test wavelengths change.
 @export_node_path("Node3D") var phase_anchor_path := NodePath("../PlayerBoat/MotionRoot")
+@export_node_path("Node") var bathymetry_manager_path := NodePath("../BathymetryManager")
+
+@export_category("Shallow Wave Constraint")
+@export var shallow_wave_constraint_enabled := false:
+	set(value):
+		shallow_wave_constraint_enabled = value and OS.is_debug_build()
+		_apply_shallow_wave_parameters()
+@export_range(30.0, 60.0, 1.0) var shallow_wave_full_depth_m := 30.0:
+	set(value):
+		shallow_wave_full_depth_m = clampf(value, 30.0, 60.0)
+		_apply_shallow_wave_parameters()
+@export_range(0.0, 0.60, 0.01) var shallow_wave_min_amplitude_scale := 0.40:
+	set(value):
+		shallow_wave_min_amplitude_scale = clampf(value, 0.0, 0.60)
+		_apply_shallow_wave_parameters()
+@export_range(0.10, 0.50, 0.01) var shallow_wave_safe_depth_ratio := 0.20:
+	set(value):
+		shallow_wave_safe_depth_ratio = clampf(value, 0.10, 0.50)
+		_apply_shallow_wave_parameters()
 
 @export var wave_settings: SeaWaveSettings:
 	set(value):
@@ -34,6 +53,7 @@ const EXTREME_SHAPE_TRANSITION_SECONDS := EXTREME_TRANSITION_SECONDS
 var wave_time_seconds := 0.0
 var _ocean: Node3D
 var _phase_anchor: Node3D
+var _bathymetry_manager: BathymetryManager
 var _extreme_test_active := false
 var _extreme_test_restoring := false
 var _extreme_test_target_height_m := 0.0
@@ -60,7 +80,9 @@ func _enter_tree() -> void:
 func _ready() -> void:
 	_ocean = get_node_or_null(ocean_path) as Node3D
 	_phase_anchor = get_node_or_null(phase_anchor_path) as Node3D
+	_bathymetry_manager = get_node_or_null(bathymetry_manager_path) as BathymetryManager
 	_apply_wave_parameters()
+	_apply_shallow_wave_parameters()
 
 
 func _process(delta: float) -> void:
@@ -110,6 +132,7 @@ func set_extreme_sea_test(settings: SeaWaveSettings, target_height_m: float) -> 
 func clear_extreme_sea_test() -> void:
 	if not _extreme_test_active:
 		return
+	shallow_wave_constraint_enabled = false
 	var from_settings := _copy_wave_settings(get_effective_wave_settings())
 	var from_strength := get_effective_wave_strength()
 	_extreme_test_restoring = true
@@ -152,6 +175,184 @@ func get_wave_parameter_revision() -> int:
 	return _wave_parameter_revision
 
 
+func set_shallow_wave_constraint_options(
+	enabled: bool,
+	full_depth_m: float,
+	minimum_scale: float,
+	safe_depth_ratio: float
+) -> void:
+	shallow_wave_full_depth_m = full_depth_m
+	shallow_wave_min_amplitude_scale = minimum_scale
+	shallow_wave_safe_depth_ratio = safe_depth_ratio
+	shallow_wave_constraint_enabled = enabled
+	_apply_shallow_wave_parameters()
+
+
+func get_theoretical_max_trough_excursion() -> float:
+	return _theoretical_max_trough_excursion(get_effective_wave_settings(), get_effective_wave_strength())
+
+
+func get_shallow_wave_diagnostics(world_position: Vector3) -> Dictionary:
+	var surface := sample_surface(world_position, wave_time_seconds)
+	var source_xz: Vector2 = surface.get("source_xz", Vector2(world_position.x, world_position.z))
+	var state: Dictionary = surface.get("shallow_wave_state", {})
+	if state.is_empty() or not state.has("depth_m"):
+		state = _calculate_shallow_wave_state(source_xz, _get_water_plane_y(), get_theoretical_max_trough_excursion())
+	state["wavelength_scale"] = 1.0
+	state["frequency_scale"] = 1.0
+	state["theoretical_max_trough_excursion_m"] = get_theoretical_max_trough_excursion()
+	state["constrained_max_trough_excursion_m"] = (
+		float(state.get("amplitude_scale", 1.0))
+		* float(state["theoretical_max_trough_excursion_m"])
+	)
+	state["source_xz"] = source_xz
+	return state
+
+
+## Matches the vertical displacement envelope in P_DEG after the shader's
+## wave-count average. The ratio is reserved against the LAT depth from the
+## shared bathymetry sample; the seabed renderer separately applies its LAT
+## surface offset. Everyday low-energy seas retain the existing zone protection.
+static func calculate_shallow_wave_scale_components(
+	effective_depth_m: float,
+	max_trough_excursion_m: float,
+	safe_depth_ratio: float,
+	full_depth_m: float,
+	minimum_scale: float
+) -> Dictionary:
+	var max_trough := maxf(max_trough_excursion_m, 0.0)
+	var depth := maxf(effective_depth_m, 0.0)
+	var ratio := clampf(safe_depth_ratio, 0.10, 0.50)
+	var minimum_at_three_m := clampf(minimum_scale, 0.0, 0.60)
+	var visual_zone_scale: float
+	if depth < 3.0:
+		visual_zone_scale = lerpf(0.0, minimum_at_three_m, _smoothstep(0.0, 3.0, depth))
+	elif depth < 5.0:
+		visual_zone_scale = lerpf(minimum_at_three_m, 0.60, _smoothstep(3.0, 5.0, depth))
+	elif depth < 10.0:
+		visual_zone_scale = lerpf(0.60, 0.80, _smoothstep(5.0, 10.0, depth))
+	elif depth < 15.0:
+		visual_zone_scale = lerpf(0.80, 0.90, _smoothstep(10.0, 15.0, depth))
+	elif depth < 20.0:
+		visual_zone_scale = lerpf(0.90, 0.95, _smoothstep(15.0, 20.0, depth))
+	elif depth < full_depth_m:
+		visual_zone_scale = lerpf(0.95, 1.0, _smoothstep(20.0, maxf(full_depth_m, 20.01), depth))
+	else:
+		visual_zone_scale = 1.0
+	# The profile fades in from ordinary low-energy weather to the 5 m trough
+	# envelope of the 10 m test preset. Its safety cap remains independent.
+	var extreme_weight := _smoothstep(1.0, 5.0, max_trough)
+	visual_zone_scale = lerpf(1.0, visual_zone_scale, extreme_weight)
+	var allowed_trough_m := maxf(depth * (1.0 - ratio), 0.0)
+	var safety_scale := 1.0
+	if max_trough > 0.000001:
+		safety_scale = clampf(allowed_trough_m / max_trough, 0.0, 1.0)
+	var final_scale := clampf(minf(visual_zone_scale, safety_scale), 0.0, 1.0)
+	return {
+		"visual_zone_scale": visual_zone_scale,
+		"safety_scale": safety_scale,
+		"allowed_trough_m": allowed_trough_m,
+		"amplitude_scale": final_scale,
+	}
+
+
+static func calculate_shallow_wave_amplitude_scale(
+	effective_depth_m: float,
+	max_trough_excursion_m: float,
+	safe_depth_ratio: float,
+	full_depth_m: float,
+	minimum_scale: float
+) -> float:
+	return float(calculate_shallow_wave_scale_components(
+		effective_depth_m,
+		max_trough_excursion_m,
+		safe_depth_ratio,
+		full_depth_m,
+		minimum_scale
+	)["amplitude_scale"])
+
+
+static func _smoothstep(edge0: float, edge1: float, value: float) -> float:
+	if edge1 <= edge0:
+		return 1.0 if value >= edge1 else 0.0
+	var t := clampf((value - edge0) / (edge1 - edge0), 0.0, 1.0)
+	return t * t * (3.0 - 2.0 * t)
+
+
+func _theoretical_max_trough_excursion(settings: SeaWaveSettings, strength: float) -> float:
+	if settings == null or settings.waves.is_empty():
+		return 0.0
+	var count := mini(settings.waves.size(), MAX_SHADER_WAVES)
+	var total := 0.0
+	for index in range(count):
+		var wave: GerstnerWave = settings.waves[index]
+		total += absf(wave.steepness * strength)
+	return total / float(count)
+
+
+func _get_depth_coverage_limits() -> Vector2:
+	if water_material == null:
+		return Vector2(0.20, 0.80)
+	return Vector2(
+		float(water_material.get_shader_parameter("valid_coverage_min")),
+		float(water_material.get_shader_parameter("valid_coverage_max"))
+	)
+
+
+func _calculate_shallow_wave_state(source_xz: Vector2, surface_y: float, max_trough: float) -> Dictionary:
+	var limits := _get_depth_coverage_limits()
+	var depth_sample: Dictionary
+	if _bathymetry_manager != null and _bathymetry_manager.has_method("sample_shader_depth_at_world_position"):
+		depth_sample = _bathymetry_manager.sample_shader_depth_at_world_position(
+			Vector3(source_xz.x, surface_y, source_xz.y), limits.x, limits.y
+		)
+	else:
+		depth_sample = {
+			"depth_m": 64.0,
+			"coverage": 0.0,
+			"validity": 0.0,
+			"effective_depth_m": 0.0,
+			"valid": false,
+		}
+	var effective_depth := float(depth_sample.get("effective_depth_m", 0.0))
+	var scale_components := calculate_shallow_wave_scale_components(
+		effective_depth,
+		max_trough,
+		shallow_wave_safe_depth_ratio,
+		shallow_wave_full_depth_m,
+		shallow_wave_min_amplitude_scale
+	)
+	var active := shallow_wave_constraint_enabled and OS.is_debug_build()
+	return {
+		"depth_m": float(depth_sample.get("depth_m", 64.0)),
+		"effective_depth_m": effective_depth,
+		"coverage": float(depth_sample.get("coverage", 0.0)),
+		"validity": float(depth_sample.get("validity", 0.0)),
+		"valid": bool(depth_sample.get("valid", false)),
+		"depth_zone_and_safety_scale": float(scale_components["amplitude_scale"]),
+		"visual_zone_scale": float(scale_components["visual_zone_scale"]),
+		"safety_scale": float(scale_components["safety_scale"]),
+		"allowed_trough_m": float(scale_components["allowed_trough_m"]),
+		"safe_depth_ratio": clampf(shallow_wave_safe_depth_ratio, 0.10, 0.50),
+		"constrained_amplitude_scale": float(scale_components["amplitude_scale"]),
+		"amplitude_scale": float(scale_components["amplitude_scale"]) if active else 1.0,
+		"enabled": active,
+	}
+
+
+func _apply_shallow_wave_parameters() -> void:
+	if water_material == null:
+		return
+	water_material.set_shader_parameter("shallow_wave_constraint_enabled", shallow_wave_constraint_enabled and OS.is_debug_build())
+	water_material.set_shader_parameter("shallow_wave_full_depth_m", shallow_wave_full_depth_m)
+	water_material.set_shader_parameter("shallow_wave_min_amplitude_scale", shallow_wave_min_amplitude_scale)
+	water_material.set_shader_parameter("shallow_wave_safe_depth_ratio", shallow_wave_safe_depth_ratio)
+	water_material.set_shader_parameter(
+		"shallow_wave_max_trough_excursion_m",
+		get_theoretical_max_trough_excursion()
+	)
+
+
 ## `world_position.xz` is a world-space position on the undeformed water plane.
 ## The sampler inverts Gerstner horizontal displacement before returning height
 ## and the shader's approximate normal at that world-space location.
@@ -167,11 +368,12 @@ func sample_surface(world_position: Vector3, sample_time_seconds: float) -> Dict
 
 	var target_xz := Vector2(world_position.x, world_position.z)
 	var source_xz := target_xz
+	var constraint_active := shallow_wave_constraint_enabled and OS.is_debug_build()
 	for _iteration in range(INVERSE_ITERATIONS):
 		var field := _calculate_wave_field(source_xz, effective_time)
 		var fade := _vertex_wave_fade(source_xz, water_y)
 		var displacement: Vector3 = field["displacement"]
-		if fade >= 0.999:
+		if fade >= 0.999 and not constraint_active:
 			var residual := source_xz + Vector2(displacement.x, displacement.z) - target_xz
 			var jacobian: Vector4 = field["horizontal_jacobian"]
 			var determinant := jacobian.x * jacobian.w - jacobian.y * jacobian.z
@@ -198,6 +400,7 @@ func sample_surface(world_position: Vector3, sample_time_seconds: float) -> Dict
 		"normal": final_normal,
 		"displacement": final_displacement,
 		"source_xz": source_xz,
+		"shallow_wave_state": final_field.get("shallow_wave_state", {}),
 	}
 
 
@@ -210,19 +413,29 @@ func _calculate_wave_field(source_xz: Vector2, sample_time_seconds: float) -> Di
 	var displacement := Vector3.ZERO
 	var normal_sum := Vector3.ZERO
 	var horizontal_jacobian := Vector4(1.0, 0.0, 0.0, 1.0)
+	var max_trough := _theoretical_max_trough_excursion(active_settings, active_strength)
+	var shallow_state := {
+		"amplitude_scale": 1.0,
+		"depth_zone_and_safety_scale": 1.0,
+		"enabled": false,
+	}
+	if shallow_wave_constraint_enabled and OS.is_debug_build():
+		shallow_state = _calculate_shallow_wave_state(source_xz, _get_water_plane_y(), max_trough)
 	if wave_count == 0:
 		return {
 			"displacement": displacement,
 			"normal": Vector3.UP,
 			"horizontal_jacobian": horizontal_jacobian,
+			"shallow_wave_state": shallow_state,
 		}
+	var shallow_scale := float(shallow_state.get("amplitude_scale", 1.0))
 
 	for index in range(wave_count):
 		var wave: GerstnerWave = active_settings.waves[index]
 		var direction_radians := deg_to_rad(wave.direction_degrees)
 		var direction := Vector2(sin(direction_radians), cos(direction_radians))
 		var phase_radians := deg_to_rad(wave.phase_degrees)
-		var steepness := wave.steepness * active_strength
+		var steepness := wave.steepness * active_strength * shallow_scale
 		var amplitude := wave.amplitude * active_strength
 		var theta := (
 			TAU * wave.frequency * direction.dot(source_xz)
@@ -253,6 +466,7 @@ func _calculate_wave_field(source_xz: Vector2, sample_time_seconds: float) -> Di
 		"displacement": displacement / divisor,
 		"normal": normal_sum / divisor,
 		"horizontal_jacobian": horizontal_jacobian,
+		"shallow_wave_state": shallow_state,
 	}
 
 
@@ -307,6 +521,11 @@ func _apply_wave_parameters() -> void:
 	water_material.set_shader_parameter("WaveSpeeds", speeds)
 	water_material.set_shader_parameter("WavePhases", phases)
 	water_material.set_shader_parameter("WaveTime", wave_time_seconds)
+	water_material.set_shader_parameter(
+		"shallow_wave_max_trough_excursion_m",
+		_theoretical_max_trough_excursion(active_settings, active_strength)
+	)
+	_apply_shallow_wave_parameters()
 	_wave_parameter_revision += 1
 
 

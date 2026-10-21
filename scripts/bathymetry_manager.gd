@@ -45,6 +45,7 @@ var _estimated_depth_metadata: Dictionary = {}
 var _estimated_depth_map_points := PackedVector2Array()
 var _unresolved_depth_map_points := PackedVector2Array()
 var _depth_texture: ImageTexture
+var _depth_texture_image: Image
 var _depth_texture_bounds := Vector4.ZERO
 var _land_mask: Image
 var _land_mask_meta: Dictionary = {}
@@ -93,6 +94,91 @@ func get_depth_at_world_position(world_position: Vector3, allow_estimated: bool 
 	var calm_plane_position := Vector3(world_position.x, 0.0, world_position.z)
 	var geodetic := georeference.world_to_geodetic(calm_plane_position)
 	return get_depth_at_geodetic(geodetic.x, geodetic.y, true, allow_estimated)
+
+
+## Samples the same preloaded RG8 image used by the water shader. This avoids
+## GPU readback and mirrors its world-to-UV mapping and linear texture filter.
+func sample_shader_depth_at_world_position(
+	world_position: Vector3,
+	coverage_min: float = 0.20,
+	coverage_max: float = 0.80
+) -> Dictionary:
+	if _depth_texture_image == null or _depth_texture_image.is_empty():
+		return _invalid_shader_depth_sample()
+	var extent := Vector2(_depth_texture_bounds.z - _depth_texture_bounds.x, _depth_texture_bounds.w - _depth_texture_bounds.y)
+	if extent.x <= 0.0 or extent.y <= 0.0:
+		return _invalid_shader_depth_sample()
+	var east := world_position.x
+	var north := -world_position.z
+	var uv := Vector2(
+		(east - _depth_texture_bounds.x) / extent.x,
+		(_depth_texture_bounds.w - north) / extent.y
+	)
+	if uv.x < 0.0 or uv.y < 0.0 or uv.x > 1.0 or uv.y > 1.0:
+		return _invalid_shader_depth_sample()
+
+	# Godot's linear sampler addresses texels at uv * size - 0.5. Clamp the
+	# neighbors to match repeat_disable at the texture edge.
+	var pixel_position := uv * Vector2(_depth_texture_image.get_width(), _depth_texture_image.get_height()) - Vector2(0.5, 0.5)
+	pixel_position.x = clampf(pixel_position.x, 0.0, float(_depth_texture_image.get_width() - 1))
+	pixel_position.y = clampf(pixel_position.y, 0.0, float(_depth_texture_image.get_height() - 1))
+	var x0 := int(floor(pixel_position.x))
+	var y0 := int(floor(pixel_position.y))
+	var x1 := mini(x0 + 1, _depth_texture_image.get_width() - 1)
+	var y1 := mini(y0 + 1, _depth_texture_image.get_height() - 1)
+	var tx := pixel_position.x - float(x0)
+	var ty := pixel_position.y - float(y0)
+	var c00 := _depth_texture_image.get_pixel(x0, y0)
+	var c10 := _depth_texture_image.get_pixel(x1, y0)
+	var c01 := _depth_texture_image.get_pixel(x0, y1)
+	var c11 := _depth_texture_image.get_pixel(x1, y1)
+	var red_top := lerpf(c00.r, c10.r, tx)
+	var red_bottom := lerpf(c01.r, c11.r, tx)
+	var green_top := lerpf(c00.g, c10.g, tx)
+	var green_bottom := lerpf(c01.g, c11.g, tx)
+	var encoded_depth := lerpf(red_top, red_bottom, ty)
+	var texture_coverage := clampf(lerpf(green_top, green_bottom, ty), 0.0, 1.0)
+	var edge_pixels := minf(
+		minf(uv.x, 1.0 - uv.x) * float(_depth_texture_image.get_width()),
+		minf(uv.y, 1.0 - uv.y) * float(_depth_texture_image.get_height())
+	)
+	var edge_coverage := _smoothstep_value(0.0, 2.0, edge_pixels)
+	var coverage := texture_coverage * edge_coverage
+	var validity := _smoothstep_value(coverage_min, coverage_max, coverage)
+	var depth_m := encoded_depth * 64.0
+	return {
+		"depth_m": depth_m,
+		"coverage": coverage,
+		"texture_coverage": texture_coverage,
+		"edge_coverage": edge_coverage,
+		"validity": validity,
+		# Unknown/partial coverage is treated as shallower, never as deep water.
+		"effective_depth_m": depth_m * validity,
+		"valid": validity >= 0.999,
+		"source": "EMODnet GPU depth texture",
+		"vertical_datum": "LAT",
+	}
+
+
+func _invalid_shader_depth_sample() -> Dictionary:
+	return {
+		"depth_m": 64.0,
+		"coverage": 0.0,
+		"texture_coverage": 0.0,
+		"edge_coverage": 0.0,
+		"validity": 0.0,
+		"effective_depth_m": 0.0,
+		"valid": false,
+		"source": "Unavailable bathymetry texture",
+		"vertical_datum": "LAT",
+	}
+
+
+func _smoothstep_value(edge0: float, edge1: float, value: float) -> float:
+	if edge1 <= edge0:
+		return 1.0 if value >= edge1 else 0.0
+	var t := clampf((value - edge0) / (edge1 - edge0), 0.0, 1.0)
+	return t * t * (3.0 - 2.0 * t)
 
 
 func get_depth_at_geodetic(latitude_deg: float, longitude_deg: float, check_osm_land_mask: bool = true, allow_estimated: bool = false) -> Dictionary:
@@ -397,11 +483,13 @@ func _load_depth_texture(metadata: Dictionary) -> void:
 	if image.is_empty():
 		push_warning("Could not create the bathymetry depth-color image; sea tint stays disabled.")
 		return
-	_depth_texture = ImageTexture.create_from_image(image)
+	_depth_texture_image = image
+	_depth_texture = ImageTexture.create_from_image(_depth_texture_image)
 	_depth_texture_bounds = Vector4(float(bounds[0]), float(bounds[1]), float(bounds[2]), float(bounds[3]))
 	if water_material != null:
 		water_material.set_shader_parameter("bathymetry_depth_texture", _depth_texture)
 		water_material.set_shader_parameter("bathymetry_bounds_east_north", _depth_texture_bounds)
+		water_material.set_shader_parameter("bathymetry_texture_size", Vector2(float(width), float(height)))
 		print("Bathymetry tint texture loaded: %d×%d RG8" % [width, height])
 	else:
 		push_warning("BathymetryManager has no ShaderMaterial reference; sea tint stays disabled.")

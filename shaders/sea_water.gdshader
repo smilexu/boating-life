@@ -105,6 +105,7 @@ group_uniforms BathymetryColor;
 uniform sampler2D bathymetry_depth_texture : filter_linear, repeat_disable;
 uniform bool enable_depth_color = true;
 uniform vec4 bathymetry_bounds_east_north = vec4(0.0, 0.0, 1.0, 1.0);
+uniform vec2 bathymetry_texture_size = vec2(1.0, 1.0);
 uniform vec4 shallow_water_color : source_color = vec4(0.22, 0.62, 0.48, 1.0);
 uniform vec4 mid_water_color : source_color = vec4(0.06, 0.42, 0.46, 1.0);
 uniform vec4 blue_water_color : source_color = vec4(0.04, 0.30, 0.44, 1.0);
@@ -115,6 +116,11 @@ uniform float shallow_depth_threshold : hint_range(0.0, 10.0) = 2.0;
 uniform float mid_depth_threshold : hint_range(0.1, 15.0) = 5.0;
 uniform float blue_depth_threshold : hint_range(0.2, 20.0) = 10.0;
 uniform float deep_depth_threshold : hint_range(1.0, 80.0) = 20.0;
+uniform bool shallow_wave_constraint_enabled = false;
+uniform float shallow_wave_full_depth_m = 30.0;
+uniform float shallow_wave_min_amplitude_scale = 0.40;
+uniform float shallow_wave_safe_depth_ratio = 0.20;
+uniform float shallow_wave_max_trough_excursion_m = 0.0;
 // 0=full, 1=flat base, 2=waves/no albedo pattern/no bathymetry,
 // 3=waves/no albedo pattern/with bathymetry, 4=normal, 5=Fresnel,
 // 6=depth validity, 7=diffuse/shadows only, 8=specular/reflection only,
@@ -249,6 +255,79 @@ float water_fade_out(float fade_min, float fade_max, float value) {
 	return 1.0 - smoothstep(fade_start, fade_end, value);
 }
 
+// Texture RG channels store 0–64 m depth and valid-water coverage. The texture
+// uses the same local east/north frame as GeoReference.
+vec2 sample_bathymetry(vec2 world_east_north) {
+	vec2 extent = bathymetry_bounds_east_north.zw - bathymetry_bounds_east_north.xy;
+	if (extent.x <= 0.0 || extent.y <= 0.0) {
+		return vec2(64.0, 0.0);
+	}
+	vec2 uv = vec2(
+		(world_east_north.x - bathymetry_bounds_east_north.x) / extent.x,
+		(bathymetry_bounds_east_north.w - world_east_north.y) / extent.y
+	);
+	if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) {
+		return vec2(64.0, 0.0);
+	}
+	vec2 encoded = textureLod(bathymetry_depth_texture, uv, 0.0).rg;
+	return vec2(encoded.r * 64.0, encoded.g);
+}
+
+float shallow_wave_amplitude_scale(vec2 source_xz) {
+	if (!shallow_wave_constraint_enabled || shallow_wave_max_trough_excursion_m <= 0.000001) {
+		return 1.0;
+	}
+	vec2 world_east_north = vec2(source_xz.x, -source_xz.y);
+	vec2 extent = bathymetry_bounds_east_north.zw - bathymetry_bounds_east_north.xy;
+	if (extent.x <= 0.0 || extent.y <= 0.0) {
+		return 0.0;
+	}
+	vec2 uv = vec2(
+		(world_east_north.x - bathymetry_bounds_east_north.x) / extent.x,
+		(bathymetry_bounds_east_north.w - world_east_north.y) / extent.y
+	);
+	if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) {
+		return 0.0;
+	}
+	vec2 bathymetry = sample_bathymetry(world_east_north);
+	vec2 safe_texture_size = max(bathymetry_texture_size, vec2(1.0));
+	float edge_pixels = min(
+		min(uv.x, 1.0 - uv.x) * safe_texture_size.x,
+		min(uv.y, 1.0 - uv.y) * safe_texture_size.y
+	);
+	float edge_coverage = smoothstep(0.0, 2.0, edge_pixels);
+	float validity = smoothstep(valid_coverage_min, valid_coverage_max, bathymetry.y * edge_coverage);
+	// Fade unknown or partly covered cells toward zero depth so they cannot
+	// silently receive the full deep-water wave profile.
+	float effective_depth = bathymetry.x * validity;
+	float zone_scale;
+	if (effective_depth < 3.0) {
+		zone_scale = mix(0.0, shallow_wave_min_amplitude_scale, smoothstep(0.0, 3.0, effective_depth));
+	} else if (effective_depth < 5.0) {
+		zone_scale = mix(shallow_wave_min_amplitude_scale, 0.60, smoothstep(3.0, 5.0, effective_depth));
+	} else if (effective_depth < 10.0) {
+		zone_scale = mix(0.60, 0.80, smoothstep(5.0, 10.0, effective_depth));
+	} else if (effective_depth < 15.0) {
+		zone_scale = mix(0.80, 0.90, smoothstep(10.0, 15.0, effective_depth));
+	} else if (effective_depth < 20.0) {
+		zone_scale = mix(0.90, 0.95, smoothstep(15.0, 20.0, effective_depth));
+	} else if (effective_depth < shallow_wave_full_depth_m) {
+		zone_scale = mix(0.95, 1.0, smoothstep(20.0, max(shallow_wave_full_depth_m, 20.01), effective_depth));
+	} else {
+		zone_scale = 1.0;
+	}
+	// The 10 m test envelope has a 5 m maximum trough. Smaller everyday seas
+	// use less of the zone attenuation; the bed-clearance cap remains active.
+	float extreme_weight = smoothstep(1.0, 5.0, shallow_wave_max_trough_excursion_m);
+	zone_scale = mix(1.0, zone_scale, extreme_weight);
+	float allowed_trough = max(effective_depth * (1.0 - clamp(shallow_wave_safe_depth_ratio, 0.10, 0.50)), 0.0);
+	float safety_scale = 1.0;
+	if (shallow_wave_max_trough_excursion_m > 0.000001) {
+		safety_scale = clamp(allowed_trough / shallow_wave_max_trough_excursion_m, 0.0, 1.0);
+	}
+	return clamp(min(zone_scale, safety_scale), 0.0, 1.0);
+}
+
 // Rotate a vector from vec3(0,1,0) to the normal, rotation about the z and y axes.
 vec3 rotate_to_normal(vec3 point, vec3 normal)
 {
@@ -331,12 +410,16 @@ void vertex() {
 #ifdef VERTEX_WAVE_FADE
 	vertex_fade_alpha = water_fade_out(vertex_wave_fade_min, vertex_wave_fade_max, distance_from_camera);
 #endif
+	float shallow_wave_scale = 1.0;
+	if (shallow_wave_constraint_enabled) {
+		shallow_wave_scale = shallow_wave_amplitude_scale(wave_coords);
+	}
 	
 	// Calculate offset for every wave, take average
 #ifdef VERTEX_WAVE
 	vec3 vertexWave = vec3(0,0,0);
 	for (int i = 0; i < WaveCount; i++) {
-		vertexWave += P_DEG(wave_coords.x, wave_coords.y, time, WaveSteepnesses[i], WaveAmplitudes[i], WaveDirectionsDegrees[i], WaveFrequencies[i], WaveSpeeds[i], WavePhases[i]);
+		vertexWave += P_DEG(wave_coords.x, wave_coords.y, time, WaveSteepnesses[i] * shallow_wave_scale, WaveAmplitudes[i], WaveDirectionsDegrees[i], WaveFrequencies[i], WaveSpeeds[i], WavePhases[i]);
 	}
 	vertexWave = vertexWave / float(WaveCount);
 	if (vertex_displace_from_mesh_normal) {
@@ -350,7 +433,7 @@ void vertex() {
 	// Calculate normal for each wave, take average
 	vec3 normalWave = vec3(0,0,0);
 	for (int i = 0; i < WaveCount; i++) {
-		normalWave += N_DEG(wave_coords.x, wave_coords.y, time, WaveSteepnesses[i], WaveAmplitudes[i], WaveDirectionsDegrees[i], WaveFrequencies[i], WaveSpeeds[i], WavePhases[i]);
+		normalWave += N_DEG(wave_coords.x, wave_coords.y, time, WaveSteepnesses[i] * shallow_wave_scale, WaveAmplitudes[i], WaveDirectionsDegrees[i], WaveFrequencies[i], WaveSpeeds[i], WavePhases[i]);
 	}
 	normalWave = normalize(normalWave / float(WaveCount));
 	if (normal_wave_from_mesh_normal) {
@@ -416,25 +499,6 @@ vec2 rotate_water_vector(vec2 value, float angle) {
 	float c = cos(angle);
 	float s = sin(angle);
 	return vec2(c * value.x - s * value.y, s * value.x + c * value.y);
-}
-
-// Texture RG channels store 0–64 m depth and valid-water coverage. The texture
-// is baked into the same local east/north frame as GeoReference and does not
-// follow the camera-snapped ocean mesh.
-vec2 sample_bathymetry(vec2 world_east_north) {
-	vec2 extent = bathymetry_bounds_east_north.zw - bathymetry_bounds_east_north.xy;
-	if (extent.x <= 0.0 || extent.y <= 0.0) {
-		return vec2(64.0, 0.0);
-	}
-	vec2 uv = vec2(
-		(world_east_north.x - bathymetry_bounds_east_north.x) / extent.x,
-		(bathymetry_bounds_east_north.w - world_east_north.y) / extent.y
-	);
-	if (uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0) {
-		return vec2(64.0, 0.0);
-	}
-	vec2 encoded = textureLod(bathymetry_depth_texture, uv, 0.0).rg;
-	return vec2(encoded.r * 64.0, encoded.g);
 }
 
 vec3 bathymetry_tint(float depth_m, vec3 base_color) {
