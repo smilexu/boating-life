@@ -1,7 +1,8 @@
 extends Node
 class_name WeatherController
 
-## Owns weather presets, cloud amount, water appearance and wave strength.
+## Applies visual weather presets, cloud amount, water appearance and wave strength.
+## WeatherStateController owns formal weather identity and wind targets.
 ## DayNightVisualController composes these weather baselines with the solar
 ## state and is the only runtime writer of final sky, light, fog and cloud light.
 
@@ -164,26 +165,19 @@ func _process(delta: float) -> void:
 		_transition_active = false
 
 
-func _unhandled_key_input(event: InputEvent) -> void:
-	if not event is InputEventKey or not event.pressed or event.echo:
-		return
-	match event.physical_keycode:
-		KEY_1:
-			set_weather_by_index(Preset.CLEAR)
-		KEY_2:
-			set_weather_by_index(Preset.PARTLY_CLOUDY)
-		KEY_3:
-			set_weather_by_index(Preset.OVERCAST)
-		_:
-			return
-	get_viewport().set_input_as_handled()
-
-
-func set_weather_by_index(index: int) -> void:
+func set_weather_by_index(index: int, immediate: bool = false) -> void:
 	if index < 0 or index >= WEATHER_PRESETS.size():
 		return
 	var preset: Dictionary = WEATHER_PRESETS[index]
 	current_weather_name = str(preset["name"])
+	if immediate:
+		_current = _copy_state(preset, index)
+		_from = _current.duplicate(true)
+		_target = _current.duplicate(true)
+		_transition_elapsed = 0.0
+		_transition_active = false
+		_apply_current_state()
+		return
 	_from = _current.duplicate(true)
 	_target = _copy_state(preset, index)
 	_transition_elapsed = 0.0

@@ -12,17 +12,12 @@ const STANDARD_CONTAINER_ASSET_ID: StringName = &"standard_container"
 @export_node_path("Node3D") var vessel_controller_path := NodePath("..")
 @export var slot_paths: Array[NodePath] = []
 @export var container_scene: PackedScene
-@export var test_cargo_item: CargoItemDefinition
-
-@export_category("Developer test")
-@export var developer_tools_enabled := true
 
 var _boat: BoatController
 var _slots: Array[Marker3D] = []
 var _visuals: Array[Node3D] = []
 var _manifest: Array[CargoItemDefinition] = []
 var _cargo_instances: Array[Dictionary] = []
-var _instance_counter := 1
 
 
 func _ready() -> void:
@@ -102,17 +97,6 @@ func get_total_weight_kg() -> float:
 		if item != null:
 			total += maxf(item.weight_kg, 0.0)
 	return total
-
-
-func try_load_cargo(item: CargoItemDefinition) -> Dictionary:
-	if item == null:
-		return _result(false, "invalid_item", "未提供货物定义")
-	var instance_id := "debug-cargo-%06d" % _instance_counter
-	_instance_counter += 1
-	var result := try_load_contract_items("", [item], PackedStringArray([instance_id]))
-	if not bool(result.get("accepted", false)):
-		return result
-	return _result(true, "loaded", "已装载 %s" % item.display_name)
 
 
 func try_load_contract_items(contract_id: String, items: Array[CargoItemDefinition], instance_ids: PackedStringArray) -> Dictionary:
@@ -251,50 +235,6 @@ func restore_cargo_instances(snapshot: Array) -> bool:
 	return true
 
 
-func cycle_debug_test_loadout() -> Dictionary:
-	if not developer_tools_enabled:
-		return _result(false, "developer_tools_disabled", "开发测试装载已关闭")
-	if test_cargo_item == null:
-		return _result(false, "missing_test_item", "测试货物未配置")
-	if _has_contract_cargo():
-		return _result(false, "contract_cargo_loaded", "合同货物在船时不能切换开发测试货柜")
-	var next_count := (_manifest.size() + 1) % (mini(_slots.size(), 2) + 1)
-	_manifest.clear()
-	_cargo_instances.clear()
-	if next_count == 0:
-		_commit_loadout()
-		return _result(true, "test_loadout_changed", "开发测试装载：0 个货柜")
-	for _index in range(next_count):
-		var result := try_load_cargo(test_cargo_item)
-		if not bool(result.get("accepted", false)):
-			_manifest.clear()
-			_commit_loadout()
-			return result
-	return _result(true, "test_loadout_changed", "开发测试装载：%d 个货柜" % _manifest.size())
-
-
-func set_debug_test_loadout(container_count: int) -> Dictionary:
-	if not developer_tools_enabled:
-		return _result(false, "developer_tools_disabled", "开发测试装载已关闭")
-	if test_cargo_item == null:
-		return _result(false, "missing_test_item", "测试货物未配置")
-	if _has_contract_cargo():
-		return _result(false, "contract_cargo_loaded", "合同货物在船时不能覆盖开发测试装载")
-	var requested_count := clampi(container_count, 0, mini(_slots.size(), 2))
-	_manifest.clear()
-	_cargo_instances.clear()
-	if requested_count == 0:
-		_commit_loadout()
-		return _result(true, "test_loadout_changed", "开发测试装载：0 个货柜")
-	for _index in range(requested_count):
-		var result := try_load_cargo(test_cargo_item)
-		if not bool(result.get("accepted", false)):
-			_manifest.clear()
-			_commit_loadout()
-			return result
-	return _result(true, "test_loadout_changed", "开发测试装载：%d 个货柜" % _manifest.size())
-
-
 func get_debug_snapshot() -> Dictionary:
 	var profile: VesselDraftProfile = _boat.draft_profile if _boat != null else null
 	var dimensions := _get_model_dimensions_m()
@@ -314,23 +254,6 @@ func get_debug_snapshot() -> Dictionary:
 		"slot_count": _slots.size(),
 		"visible_container_count": _get_visible_container_count(),
 	}
-
-
-func _unhandled_key_input(event: InputEvent) -> void:
-	if not developer_tools_enabled or not (OS.has_feature("editor") or OS.has_feature("debug")):
-		return
-	if not event is InputEventKey or not event.pressed or event.echo:
-		return
-	if not event.is_action_pressed("cargo_debug_cycle"):
-		return
-	var result := cycle_debug_test_loadout()
-	if bool(result.get("accepted", false)):
-		print("[CargoLoadout] %s · %d kg · 吃水 %.2f m" % [
-			str(result.get("message", "")), get_total_weight_kg(), _boat.get_current_draft_m(),
-		])
-	else:
-		push_warning("[CargoLoadout] %s" % str(result.get("message", "装载失败")))
-	get_viewport().set_input_as_handled()
 
 
 func _commit_loadout() -> void:

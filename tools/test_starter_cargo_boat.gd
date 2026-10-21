@@ -64,8 +64,9 @@ func _run() -> void:
 	_expect(slots[0].position.y > 0.0 and slots[1].position.y > 0.0, "container slot bases sit above the motion waterline")
 
 	var empty_draft := boat.get_current_draft_m()
-	var result := loadout.set_debug_test_loadout(1)
-	_expect(bool(result.get("accepted", false)), "one 200 kg test container loads")
+	var test_container := load("res://resources/cargo/test_standard_container.tres") as CargoItemDefinition
+	var result := loadout.try_load_contract_items("starter_boat_test_one", [test_container], PackedStringArray(["starter-test-cargo-1"]))
+	_expect(bool(result.get("accepted", false)), "one 200 kg cargo fixture loads through the contract cargo API")
 	snapshot = loadout.get_debug_snapshot()
 	_expect(int(snapshot.get("container_count", 0)) == 1 and int(snapshot.get("visible_container_count", 0)) == 1, "one loaded item displays exactly one container visual")
 	_expect(int(snapshot.get("used_space_units", 0)) == 1 and is_equal_approx(boat.current_cargo_weight_kg, 200.0), "one container consumes one space and updates the authoritative boat load")
@@ -73,8 +74,9 @@ func _run() -> void:
 	_expect(one_draft > empty_draft, "one-container draft is greater than empty draft")
 	_expect(is_equal_approx(float(visual_buoyancy.call("get_visual_cargo_sink_m")), one_draft - empty_draft), "one-container visual sink uses the same draft delta as navigation")
 
-	result = loadout.set_debug_test_loadout(2)
-	_expect(bool(result.get("accepted", false)), "two test containers fit the vessel")
+	loadout.remove_contract_cargo("starter_boat_test_one")
+	result = loadout.try_load_contract_items("starter_boat_test_two", [test_container, test_container], PackedStringArray(["starter-test-cargo-2a", "starter-test-cargo-2b"]))
+	_expect(bool(result.get("accepted", false)), "two fixture containers fit the vessel through the contract cargo API")
 	snapshot = loadout.get_debug_snapshot()
 	_expect(int(snapshot.get("container_count", 0)) == 2 and int(snapshot.get("visible_container_count", 0)) == 2, "two loaded items display exactly two container visuals")
 	_expect(int(snapshot.get("used_space_units", 0)) == 2 and is_equal_approx(boat.current_cargo_weight_kg, 400.0), "two containers use both cargo spaces and total 400 kg")
@@ -90,7 +92,7 @@ func _run() -> void:
 	oversized_item.weight_kg = 50.0
 	oversized_item.space_units = 1
 	oversized_item.visual_asset_id = &"none"
-	result = loadout.try_load_cargo(oversized_item)
+	result = loadout.try_load_contract_items("starter_boat_test_oversized", [oversized_item], PackedStringArray(["starter-test-oversized"]))
 	_expect(not bool(result.get("accepted", true)) and str(result.get("code", "")) == "space_limit", "space over-capacity item is rejected")
 	var overweight_item := CargoItemDefinition.new()
 	overweight_item.cargo_id = &"test_overweight"
@@ -98,12 +100,12 @@ func _run() -> void:
 	overweight_item.weight_kg = 600.0
 	overweight_item.space_units = 1
 	overweight_item.visual_asset_id = &"none"
-	loadout.set_debug_test_loadout(0)
-	result = loadout.try_load_cargo(overweight_item)
+	loadout.remove_contract_cargo("starter_boat_test_two")
+	result = loadout.try_load_contract_items("starter_boat_test_overweight", [overweight_item], PackedStringArray(["starter-test-overweight"]))
 	_expect(not bool(result.get("accepted", true)) and str(result.get("code", "")) == "weight_limit", "cargo exceeding maximum weight is rejected")
 	_expect(is_zero_approx(boat.current_cargo_weight_kg), "rejected cargo does not alter vessel cargo weight")
 
-	loadout.set_debug_test_loadout(0)
+	loadout.remove_contract_cargo("starter_boat_test_overweight")
 	var harbor_config: Dictionary = harbor.call("get_port_configuration")
 	boat.global_position = harbor_config["berth_position"]
 	boat.global_rotation.y = deg_to_rad(float(harbor_config["berth_heading_degrees"]))
@@ -112,17 +114,7 @@ func _run() -> void:
 	_expect(bool(harbor.call("request_dock")), "starter cargo boat retains Malmö docking")
 	_expect(bool(harbor.call("request_undock")), "starter cargo boat retains Malmö undocking")
 
-	# Exercise the same F12 action that the developer key uses in the running scene.
-	var f12 := InputEventKey.new()
-	f12.keycode = KEY_F12
-	f12.physical_keycode = KEY_F12
-	f12.pressed = true
-	loadout._unhandled_key_input(f12)
-	_expect(is_equal_approx(boat.current_cargo_weight_kg, 200.0), "F12 test action advances empty vessel to one container")
-	loadout._unhandled_key_input(f12)
-	_expect(is_equal_approx(boat.current_cargo_weight_kg, 400.0), "F12 test action advances to two containers")
-	loadout._unhandled_key_input(f12)
-	_expect(is_zero_approx(boat.current_cargo_weight_kg) and int(loadout.get_debug_snapshot().get("visible_container_count", 0)) == 0, "F12 wraps back to empty without residual visuals")
+	_expect(not InputMap.has_action("cargo_debug_cycle"), "cargo debug shortcut is removed from the project input map")
 
 	main.queue_free()
 	await process_frame

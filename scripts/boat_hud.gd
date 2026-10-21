@@ -12,6 +12,7 @@ const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 
 @export_node_path("Node3D") var controller_path := NodePath("../MotionRoot")
 @export_node_path("Node") var weather_controller_path := NodePath("../../WeatherController")
+@export_node_path("Node") var weather_state_controller_path := NodePath("../../WeatherStateController")
 @export_node_path("Node") var day_night_visual_controller_path := NodePath("../../DayNightVisualController")
 @export_node_path("Node") var wave_sampler_path := NodePath("../../WaveSampler")
 @export_node_path("Node") var quality_manager_path := NodePath("../../QualityManager")
@@ -25,6 +26,7 @@ const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 
 var _controller: BoatController
 var _weather_controller: Node
+var _weather_state_controller: Node
 var _day_night_visual_controller: Node
 var _wave_sampler: Node
 var _quality_manager: Node
@@ -117,6 +119,7 @@ func _ready() -> void:
 		push_error("Boat HUD could not find its controller at %s." % controller_path)
 		return
 	_weather_controller = get_node_or_null(weather_controller_path)
+	_weather_state_controller = get_node_or_null(weather_state_controller_path)
 	_day_night_visual_controller = get_node_or_null(day_night_visual_controller_path)
 	_wave_sampler = get_node_or_null(wave_sampler_path)
 	_quality_manager = get_node_or_null(quality_manager_path)
@@ -321,7 +324,7 @@ func _update_status() -> void:
 	var mode_text := "自动巡航" if _controller.is_autopilot else "手动驾驶"
 	if _controller.is_motion_paused:
 		mode_text += " · 已暂停"
-	_status_label.text = "航速  %.1f m/s  ·  %.1f kn\n模式  %s\nW 前进  ·  S 减速/倒车  ·  A/D 转向  ·  Space 暂停  ·  T 自动巡航\n右键拖动观察 / 调整高视角角度  ·  O 高视角切换  ·  1/2/3 天气  ·  M 地图调试  ·  F3 视觉调试  ·  F10 水面诊断" % [
+	_status_label.text = "航速  %.1f m/s  ·  %.1f kn\n模式  %s\nW 前进  ·  S 减速/倒车  ·  A/D 转向  ·  Space 暂停  ·  T 自动巡航\n右键拖动观察 / 调整高视角角度  ·  O 高视角切换  ·  0 自动天气 / 1-3 手动天气  ·  M 地图调试  ·  F3 视觉调试  ·  F10 水面诊断  ·  F12 风场测试" % [
 		_controller.speed_mps,
 		knots,
 		mode_text
@@ -1708,7 +1711,11 @@ func _on_clear_calendar_override_pressed() -> void:
 
 
 func _on_weather_button_pressed(index: int) -> void:
-	if _weather_controller != null:
+	if _weather_state_controller != null:
+		_weather_state_controller.call("set_weather_by_index", index)
+		_refresh_weather_controls()
+	elif _weather_controller != null:
+		# Fallback for isolated visual-controller tests that do not instantiate W2.1.
 		_weather_controller.call("set_weather_by_index", index)
 		_refresh_weather_controls()
 

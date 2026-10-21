@@ -1,0 +1,437 @@
+{
+  "schema_version": 2,
+  "provider_id": "offline_weather_simulation_fixture",
+  "region_id": "oresund",
+  "latitude": 55.64,
+  "longitude": 12.78,
+  "forecast_issued_at_utc": "2026-10-19T18:00:00Z",
+  "retrieved_at_utc": "2026-10-19T18:05:00Z",
+  "valid_from_utc": "2026-10-20T00:00:00Z",
+  "valid_until_utc": "2026-10-22T00:00:00Z",
+  "timeseries": [
+    {
+      "valid_time_utc": "2026-10-20T00:00:00Z",
+      "air_temperature_c": 10.0,
+      "relative_humidity_percent": 84.0,
+      "air_pressure_hpa": 1011.0,
+      "wind_speed_mps": 5.0,
+      "wind_gust_mps": 7.0,
+      "wind_from_direction_deg": 358.0,
+      "cloud_fraction": 0.84,
+      "precipitation_periods": [
+        {
+          "duration_hours": 1,
+          "period_start_utc": "2026-10-20T00:00:00Z",
+          "period_end_utc": "2026-10-20T01:00:00Z",
+          "precipitation_amount_mm": 0.0,
+          "precipitation_probability": 0.05,
+          "source_period_key": "next_1_hours",
+          "source_field": "details.precipitation_amount/probability",
+          "source_fields": [
+            "details.precipitation_amount",
+            "details.probability_of_precipitation"
+          ]
+        }
+      ],
+      "weather_symbol_periods": [
+        {
+          "duration_hours": 1,
+          "period_start_utc": "2026-10-20T00:00:00Z",
+          "period_end_utc": "2026-10-20T01:00:00Z",
+          "symbol_code": "cloudy",
+          "source_period_key": "next_1_hours",
+          "source_field": "summary.symbol_code"
+        }
+      ]
+    },
+    {
+      "valid_time_utc": "2026-10-20T02:00:00Z",
+      "air_temperature_c": 9.8,
+      "relative_humidity_percent": 85.0,
+      "air_pressure_hpa": 1011.0,
+      "wind_speed_mps": 5.4,
+      "wind_gust_mps": 7.4,
+      "wind_from_direction_deg": 1.0,
+      "cloud_fraction": 0.88,
+      "precipitation_periods": [
+        {
+          "duration_hours": 1,
+          "period_start_utc": "2026-10-20T02:00:00Z",
+          "period_end_utc": "2026-10-20T03:00:00Z",
+          "precipitation_amount_mm": 0.0,
+          "precipitation_probability": 0.08,
+          "source_period_key": "next_1_hours",
+          "source_field": "details.precipitation_amount/probability",
+          "source_fields": [
+            "details.precipitation_amount",
+            "details.probability_of_precipitation"
+          ]
+        }
+      ],
+      "weather_symbol_periods": [
+        {
+          "duration_hours": 1,
+          "period_start_utc": "2026-10-20T02:00:00Z",
+          "period_end_utc": "2026-10-20T03:00:00Z",
+          "symbol_code": "cloudy",
+          "source_period_key": "next_1_hours",
+          "source_field": "summary.symbol_code"
+        }
+      ]
+    },
+    {
+      "valid_time_utc": "2026-10-20T07:00:00Z",
+      "air_temperature_c": 11.5,
+      "relative_humidity_percent": 78.0,
+      "air_pressure_hpa": 1012.0,
+      "wind_speed_mps": 6.1,
+      "wind_gust_mps": 8.5,
+      "wind_from_direction_deg": 8.0,
+      "cloud_fraction": 0.73,
+      "precipitation_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-20T07:00:00Z",
+          "period_end_utc": "2026-10-20T13:00:00Z",
+          "precipitation_amount_mm": 0.6,
+          "precipitation_probability": 0.42,
+          "source_period_key": "next_6_hours",
+          "source_field": "details.precipitation_amount/probability",
+          "source_fields": [
+            "details.precipitation_amount",
+            "details.probability_of_precipitation"
+          ]
+        }
+      ],
+      "weather_symbol_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-20T07:00:00Z",
+          "period_end_utc": "2026-10-20T13:00:00Z",
+          "symbol_code": "cloudy",
+          "source_period_key": "next_6_hours",
+          "source_field": "summary.symbol_code"
+        }
+      ]
+    },
+    {
+      "valid_time_utc": "2026-10-20T13:00:00Z",
+      "air_temperature_c": 13.0,
+      "relative_humidity_percent": 74.0,
+      "air_pressure_hpa": 1012.5,
+      "wind_speed_mps": 7.2,
+      "wind_gust_mps": 10.0,
+      "wind_from_direction_deg": 18.0,
+      "cloud_fraction": 0.62,
+      "precipitation_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-20T13:00:00Z",
+          "period_end_utc": "2026-10-20T19:00:00Z",
+          "precipitation_amount_mm": 1.2,
+          "precipitation_probability": 0.68,
+          "source_period_key": "next_6_hours",
+          "source_field": "details.precipitation_amount/probability",
+          "source_fields": [
+            "details.precipitation_amount",
+            "details.probability_of_precipitation"
+          ]
+        }
+      ],
+      "weather_symbol_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-20T13:00:00Z",
+          "period_end_utc": "2026-10-20T19:00:00Z",
+          "symbol_code": "lightrain",
+          "source_period_key": "next_6_hours",
+          "source_field": "summary.symbol_code"
+        }
+      ]
+    },
+    {
+      "valid_time_utc": "2026-10-20T19:00:00Z",
+      "air_temperature_c": 11.2,
+      "relative_humidity_percent": 87.0,
+      "air_pressure_hpa": 1010.0,
+      "wind_speed_mps": 6.8,
+      "wind_gust_mps": 9.4,
+      "wind_from_direction_deg": 32.0,
+      "cloud_fraction": 0.92,
+      "precipitation_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-20T19:00:00Z",
+          "period_end_utc": "2026-10-21T01:00:00Z",
+          "precipitation_amount_mm": 1.8,
+          "precipitation_probability": 0.82,
+          "source_period_key": "next_6_hours",
+          "source_field": "details.precipitation_amount/probability",
+          "source_fields": [
+            "details.precipitation_amount",
+            "details.probability_of_precipitation"
+          ]
+        }
+      ],
+      "weather_symbol_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-20T19:00:00Z",
+          "period_end_utc": "2026-10-21T01:00:00Z",
+          "symbol_code": "rain",
+          "source_period_key": "next_6_hours",
+          "source_field": "summary.symbol_code"
+        }
+      ]
+    },
+    {
+      "valid_time_utc": "2026-10-20T23:00:00Z",
+      "air_temperature_c": 10.5,
+      "relative_humidity_percent": 90.0,
+      "air_pressure_hpa": 1009.0,
+      "wind_speed_mps": 6.5,
+      "wind_gust_mps": 9.0,
+      "wind_from_direction_deg": 40.0,
+      "cloud_fraction": 0.96,
+      "precipitation_periods": [
+        {
+          "duration_hours": 1,
+          "period_start_utc": "2026-10-20T23:00:00Z",
+          "period_end_utc": "2026-10-21T00:00:00Z",
+          "precipitation_amount_mm": 0.4,
+          "precipitation_probability": 0.74,
+          "source_period_key": "next_1_hours",
+          "source_field": "details.precipitation_amount/probability",
+          "source_fields": [
+            "details.precipitation_amount",
+            "details.probability_of_precipitation"
+          ]
+        }
+      ],
+      "weather_symbol_periods": [
+        {
+          "duration_hours": 1,
+          "period_start_utc": "2026-10-20T23:00:00Z",
+          "period_end_utc": "2026-10-21T00:00:00Z",
+          "symbol_code": "rain",
+          "source_period_key": "next_1_hours",
+          "source_field": "summary.symbol_code"
+        }
+      ]
+    },
+    {
+      "valid_time_utc": "2026-10-21T00:00:00Z",
+      "air_temperature_c": 10.3,
+      "relative_humidity_percent": 89.0,
+      "air_pressure_hpa": 1009.0,
+      "wind_speed_mps": 6.4,
+      "wind_gust_mps": 8.8,
+      "wind_from_direction_deg": 42.0,
+      "cloud_fraction": 0.94,
+      "precipitation_periods": [
+        {
+          "duration_hours": 1,
+          "period_start_utc": "2026-10-21T00:00:00Z",
+          "period_end_utc": "2026-10-21T01:00:00Z",
+          "precipitation_amount_mm": 0.3,
+          "precipitation_probability": 0.72,
+          "source_period_key": "next_1_hours",
+          "source_field": "details.precipitation_amount/probability",
+          "source_fields": [
+            "details.precipitation_amount",
+            "details.probability_of_precipitation"
+          ]
+        }
+      ],
+      "weather_symbol_periods": [
+        {
+          "duration_hours": 1,
+          "period_start_utc": "2026-10-21T00:00:00Z",
+          "period_end_utc": "2026-10-21T01:00:00Z",
+          "symbol_code": "rain",
+          "source_period_key": "next_1_hours",
+          "source_field": "summary.symbol_code"
+        }
+      ]
+    },
+    {
+      "valid_time_utc": "2026-10-21T02:00:00Z",
+      "air_temperature_c": 10.0,
+      "relative_humidity_percent": 88.0,
+      "air_pressure_hpa": 1010.0,
+      "wind_speed_mps": 6.0,
+      "wind_gust_mps": 8.0,
+      "wind_from_direction_deg": 48.0,
+      "cloud_fraction": 0.91,
+      "precipitation_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-21T02:00:00Z",
+          "period_end_utc": "2026-10-21T08:00:00Z",
+          "precipitation_amount_mm": 0.0,
+          "precipitation_probability": 0.15,
+          "source_period_key": "next_6_hours",
+          "source_field": "details.precipitation_amount/probability",
+          "source_fields": [
+            "details.precipitation_amount",
+            "details.probability_of_precipitation"
+          ]
+        }
+      ],
+      "weather_symbol_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-21T02:00:00Z",
+          "period_end_utc": "2026-10-21T08:00:00Z",
+          "symbol_code": "cloudy",
+          "source_period_key": "next_6_hours",
+          "source_field": "summary.symbol_code"
+        }
+      ]
+    },
+    {
+      "valid_time_utc": "2026-10-21T08:00:00Z",
+      "air_temperature_c": 11.7,
+      "relative_humidity_percent": 81.0,
+      "air_pressure_hpa": 1012.0,
+      "wind_speed_mps": 5.4,
+      "wind_gust_mps": 7.4,
+      "wind_from_direction_deg": 65.0,
+      "cloud_fraction": 0.67,
+      "precipitation_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-21T08:00:00Z",
+          "period_end_utc": "2026-10-21T14:00:00Z",
+          "precipitation_amount_mm": 0.0,
+          "precipitation_probability": 0.12,
+          "source_period_key": "next_6_hours",
+          "source_field": "details.precipitation_amount/probability",
+          "source_fields": [
+            "details.precipitation_amount",
+            "details.probability_of_precipitation"
+          ]
+        }
+      ],
+      "weather_symbol_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-21T08:00:00Z",
+          "period_end_utc": "2026-10-21T14:00:00Z",
+          "symbol_code": "partlycloudy_day",
+          "source_period_key": "next_6_hours",
+          "source_field": "summary.symbol_code"
+        }
+      ]
+    },
+    {
+      "valid_time_utc": "2026-10-21T14:00:00Z",
+      "air_temperature_c": 14.2,
+      "relative_humidity_percent": 70.0,
+      "air_pressure_hpa": 1013.0,
+      "wind_speed_mps": 4.8,
+      "wind_gust_mps": 6.3,
+      "wind_from_direction_deg": 82.0,
+      "cloud_fraction": 0.38,
+      "precipitation_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-21T14:00:00Z",
+          "period_end_utc": "2026-10-21T20:00:00Z",
+          "precipitation_amount_mm": 0.0,
+          "precipitation_probability": 0.08,
+          "source_period_key": "next_6_hours",
+          "source_field": "details.precipitation_amount/probability",
+          "source_fields": [
+            "details.precipitation_amount",
+            "details.probability_of_precipitation"
+          ]
+        }
+      ],
+      "weather_symbol_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-21T14:00:00Z",
+          "period_end_utc": "2026-10-21T20:00:00Z",
+          "symbol_code": "partlycloudy_day",
+          "source_period_key": "next_6_hours",
+          "source_field": "summary.symbol_code"
+        }
+      ]
+    },
+    {
+      "valid_time_utc": "2026-10-21T20:00:00Z",
+      "air_temperature_c": 11.9,
+      "relative_humidity_percent": 78.0,
+      "air_pressure_hpa": 1014.0,
+      "wind_speed_mps": 4.4,
+      "wind_gust_mps": 5.5,
+      "wind_from_direction_deg": 94.0,
+      "cloud_fraction": 0.31,
+      "precipitation_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-21T20:00:00Z",
+          "period_end_utc": "2026-10-22T02:00:00Z",
+          "precipitation_amount_mm": 0.0,
+          "precipitation_probability": 0.03,
+          "source_period_key": "next_6_hours",
+          "source_field": "details.precipitation_amount/probability",
+          "source_fields": [
+            "details.precipitation_amount",
+            "details.probability_of_precipitation"
+          ]
+        }
+      ],
+      "weather_symbol_periods": [
+        {
+          "duration_hours": 6,
+          "period_start_utc": "2026-10-21T20:00:00Z",
+          "period_end_utc": "2026-10-22T02:00:00Z",
+          "symbol_code": "fair_night",
+          "source_period_key": "next_6_hours",
+          "source_field": "summary.symbol_code"
+        }
+      ]
+    },
+    {
+      "valid_time_utc": "2026-10-22T00:00:00Z",
+      "air_temperature_c": 10.7,
+      "relative_humidity_percent": 81.0,
+      "air_pressure_hpa": 1014.0,
+      "wind_speed_mps": 4.2,
+      "wind_gust_mps": 5.2,
+      "wind_from_direction_deg": 100.0,
+      "cloud_fraction": 0.28,
+      "precipitation_periods": [
+        {
+          "duration_hours": 1,
+          "period_start_utc": "2026-10-22T00:00:00Z",
+          "period_end_utc": "2026-10-22T01:00:00Z",
+          "precipitation_amount_mm": 0.0,
+          "precipitation_probability": 0.02,
+          "source_period_key": "next_1_hours",
+          "source_field": "details.precipitation_amount/probability",
+          "source_fields": [
+            "details.precipitation_amount",
+            "details.probability_of_precipitation"
+          ]
+        }
+      ],
+      "weather_symbol_periods": [
+        {
+          "duration_hours": 1,
+          "period_start_utc": "2026-10-22T00:00:00Z",
+          "period_end_utc": "2026-10-22T01:00:00Z",
+          "symbol_code": "clearsky_night",
+          "source_period_key": "next_1_hours",
+          "source_field": "summary.symbol_code"
+        }
+      ]
+    }
+  ],
+  "source_metadata": {
+    "attribution": "Synthetic offline fixture; not observed weather",
+    "fixture": true
+  }
+}

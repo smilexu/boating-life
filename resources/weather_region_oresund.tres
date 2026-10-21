@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="WeatherRegion" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/weather_region.gd" id="1_region"]
+
+[resource]
+script = ExtResource("1_region")
+region_id = "oresund"
+display_name = "Øresund"
+latitude = 55.64
+longitude = 12.78
+altitude_m = 0
+use_altitude = false

@@ -1,0 +1,85 @@
+{
+  "type": "Feature",
+  "geometry": {
+    "type": "Point",
+    "coordinates": [12.78, 55.64, 0]
+  },
+  "properties": {
+    "meta": {
+      "updated_at": "2026-10-20T12:00:00Z",
+      "units": {
+        "air_pressure_at_sea_level": "hPa",
+        "air_temperature": "celsius",
+        "cloud_area_fraction": "%",
+        "precipitation_amount": "mm",
+        "probability_of_precipitation": "%",
+        "relative_humidity": "%",
+        "wind_from_direction": "degrees",
+        "wind_speed": "m/s",
+        "wind_speed_of_gust": "m/s"
+      }
+    },
+    "timeseries": [
+      {
+        "time": "2026-10-20T12:00:00Z",
+        "data": {
+          "instant": {
+            "details": {
+              "air_pressure_at_sea_level": 1012.4,
+              "air_temperature": 11.2,
+              "cloud_area_fraction": 62,
+              "relative_humidity": 70,
+              "wind_from_direction": 275,
+              "wind_speed": 5.6,
+              "wind_speed_of_gust": 8.1
+            }
+          },
+          "next_1_hours": {
+            "summary": {"symbol_code": "partlycloudy_day"},
+            "details": {
+              "precipitation_amount": 0.2,
+              "probability_of_precipitation": 40
+            }
+          }
+        }
+      },
+      {
+        "time": "2026-10-20T13:00:00Z",
+        "data": {
+          "instant": {
+            "details": {
+              "air_pressure_at_sea_level": 1011.8,
+              "air_temperature": 11.5,
+              "cloud_area_fraction": 75,
+              "relative_humidity": 73,
+              "wind_from_direction": 280,
+              "wind_speed": 6.0
+            }
+          },
+          "next_6_hours": {
+            "summary": {"symbol_code": "cloudy"},
+            "details": {
+              "precipitation_amount": 1.4,
+              "probability_of_precipitation": 55
+            }
+          }
+        }
+      },
+      {
+        "time": "2026-10-20T19:00:00Z",
+        "data": {
+          "instant": {
+            "details": {
+              "air_pressure_at_sea_level": 1010.2,
+              "air_temperature": 9.8,
+              "cloud_area_fraction": 90,
+              "relative_humidity": 81,
+              "wind_from_direction": 290,
+              "wind_speed": 6.3
+            }
+          }
+        }
+      }
+    ]
+  }
+}

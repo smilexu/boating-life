@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="WeatherWindProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/weather_wind_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+mean_wind_speed_mps = 7.0
+mean_wind_from_degrees = 260.0
+gust_strength_mps = 2.5
+gust_time_scale_seconds = 20.0
+gust_space_scale_meters = 400.0
+gust_direction_variation_degrees = 10.0
+seed_strategy = 0
+random_seed = 74291
+source_note = "Temporary gameplay tuning for W2.1 integration tests; not Nordic climate data."

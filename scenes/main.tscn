@@ -1,4 +1,4 @@
-[gd_scene load_steps=41 format=3]
+[gd_scene load_steps=52 format=3]
 
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
 [ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
@@ -36,6 +36,17 @@
 [ext_resource type="Script" path="res://scripts/autopilot_controller.gd" id="34_autopilot"]
 [ext_resource type="PackedScene" path="res://scenes/OresundBridge.tscn" id="35_oresund_bridge"]
 [ext_resource type="PackedScene" path="res://scenes/OresundWindFarms.tscn" id="36_oresund_wind_farms"]
+[ext_resource type="Script" path="res://scripts/wind_field.gd" id="37_wind_field"]
+[ext_resource type="Script" path="res://scripts/wind_field_debug_panel.gd" id="38_wind_debug_panel"]
+[ext_resource type="Script" path="res://scripts/weather_state_controller.gd" id="39_weather_state"]
+[ext_resource type="Resource" path="res://resources/weather_wind_clear.tres" id="40_clear_wind"]
+[ext_resource type="Resource" path="res://resources/weather_wind_partly_cloudy.tres" id="41_partly_wind"]
+[ext_resource type="Resource" path="res://resources/weather_wind_overcast.tres" id="42_overcast_wind"]
+[ext_resource type="Resource" path="res://resources/weather_region_oresund.tres" id="43_oresund_weather_region"]
+[ext_resource type="Script" path="res://scripts/weather_runtime/weather_runtime_godot_adapter.gd" id="44_weather_runtime_adapter"]
+[ext_resource type="Script" path="res://scripts/weather_runtime/weather_runtime_authority.gd" id="45_weather_runtime_authority"]
+[ext_resource type="Script" path="res://scripts/weather_runtime/weather_runtime_diagnostics.gd" id="46_weather_runtime_diagnostics"]
+[ext_resource type="Script" path="res://scripts/weather_runtime/weather_runtime_preview_panel.gd" id="47_weather_runtime_preview"]
 
 [sub_resource type="Compositor" id="Compositor_volumetric_clouds"]
 compositor_effects = Array[CompositorEffect]([ExtResource("11_cloud_effect")])
@@ -112,6 +123,64 @@ small_structures_wind_speed = 7.0
 script = ExtResource("8_weather")
 water_material = ExtResource("5_water_material")
 cloud_profiles = ExtResource("9_cloud_profiles")
+
+[node name="WindField" type="Node" parent="."]
+script = ExtResource("37_wind_field")
+mean_wind_speed_mps = 6.0
+mean_wind_from_degrees = 240.0
+gust_strength_mps = 2.0
+gust_time_scale_seconds = 24.0
+gust_space_scale_meters = 450.0
+random_seed = 74291
+
+[node name="WeatherStateController" type="Node" parent="."]
+script = ExtResource("39_weather_state")
+weather_controller_path = NodePath("../WeatherController")
+wind_field_path = NodePath("../WindField")
+world_time_manager_path = NodePath("/root/WorldTimeManager")
+clear_wind_profile = ExtResource("40_clear_wind")
+partly_cloudy_wind_profile = ExtResource("41_partly_wind")
+overcast_wind_profile = ExtResource("42_overcast_wind")
+initial_weather = 0
+wind_transition_simulation_seconds = 300.0
+manual_test_transition_real_seconds = 5.0
+runtime_wind_tracking_seconds = 2.0
+
+[node name="WeatherRuntimeGodotAdapter" type="Node" parent="."]
+script = ExtResource("44_weather_runtime_adapter")
+weather_state_controller_path = NodePath("../WeatherStateController")
+
+[node name="WeatherRuntimeAuthority" type="Node" parent="."]
+script = ExtResource("45_weather_runtime_authority")
+weather_region = ExtResource("43_oresund_weather_region")
+world_time_manager_path = NodePath("/root/WorldTimeManager")
+godot_adapter_path = NodePath("../WeatherRuntimeGodotAdapter")
+cycles_per_real_day = 24
+timeline_calendar_days = 7
+simulation_seed = 74291
+sample_interval_real_seconds = 2.0
+provider_check_interval_seconds = 60.0
+forecast_update_blend_cycles = 1.0
+
+[node name="WeatherRuntimeDiagnostics" type="CanvasLayer" parent="."]
+script = ExtResource("46_weather_runtime_diagnostics")
+authority_path = NodePath("../WeatherRuntimeAuthority")
+world_time_manager_path = NodePath("/root/WorldTimeManager")
+weather_state_controller_path = NodePath("../WeatherStateController")
+wind_field_path = NodePath("../WindField")
+wind_field_debug_panel_path = NodePath("../WindFieldDebugPanel")
+
+[node name="WeatherRuntimePreviewPanel" type="CanvasLayer" parent="."]
+script = ExtResource("47_weather_runtime_preview")
+authority_path = NodePath("../WeatherRuntimeAuthority")
+state_controller_path = NodePath("../WeatherStateController")
+show_in_debug_builds = true
+
+[node name="WindFieldDebugPanel" type="CanvasLayer" parent="."]
+script = ExtResource("38_wind_debug_panel")
+wind_field_path = NodePath("../WindField")
+sample_source_path = NodePath("../PlayerBoat/MotionRoot")
+weather_state_controller_path = NodePath("../WeatherStateController")
 
 [node name="DayNightVisualController" type="Node" parent="."]
 script = ExtResource("17_day_night")

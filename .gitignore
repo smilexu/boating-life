@@ -3,6 +3,9 @@
 .import/
 .DS_Store
 
+# Local-only provider contacts and secrets; keep the blank example tracked.
+/config/weather_provider.local.json
+
 # Exported builds
 build/
 exports/

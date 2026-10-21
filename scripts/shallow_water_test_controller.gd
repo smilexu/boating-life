@@ -86,8 +86,11 @@ func _prepare_main_scene() -> void:
 	var boat_hud := _main.get_node_or_null("PlayerBoat/BoatHUD")
 	if boat_hud != null:
 		boat_hud.set("visible", false)
-	var weather := _main.get_node("WeatherController")
-	weather.call("set_weather_by_index", 0)
+	var weather_state := _main.get_node_or_null("WeatherStateController")
+	if weather_state != null:
+		weather_state.call("set_weather_by_index", 0)
+	else:
+		_main.get_node("WeatherController").call("set_weather_by_index", 0)
 	var time_manager := get_node_or_null("/root/WorldTimeManager")
 	if time_manager != null:
 		time_manager.set("autosave_enabled", false)

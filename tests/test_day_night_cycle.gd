@@ -144,6 +144,7 @@ func _test_scene_outputs() -> void:
 	await process_frame
 	var controller := main.get_node_or_null("DayNightVisualController")
 	var weather := main.get_node_or_null("WeatherController")
+	var weather_state := main.get_node_or_null("WeatherStateController")
 	var sunlight := main.get_node_or_null("Sunlight") as DirectionalLight3D
 	var moonlight := main.get_node_or_null("Moonlight") as DirectionalLight3D
 	var night_cloud_fill := main.get_node_or_null("NightCloudFill") as DirectionalLight3D
@@ -152,8 +153,8 @@ func _test_scene_outputs() -> void:
 	var clouds_driver := main.get_node_or_null("SunshineCloudsDriverGD") as SunshineCloudsDriverGD
 	var clouds: SunshineCloudsGD = clouds_driver.clouds_resource if clouds_driver != null else null
 	var water_material := (main.get_node_or_null("WeatherController") as WeatherController).water_material
-	_check(controller != null and weather != null and sunlight != null and moonlight != null and night_cloud_fill != null and boat_sky_fill != null and quality != null and clouds != null, "main scene owns solar, lunar, boat fill, cloud-fill, weather, quality and existing cloud systems")
-	if controller == null or weather == null or sunlight == null or moonlight == null or night_cloud_fill == null or boat_sky_fill == null or quality == null:
+	_check(controller != null and weather != null and weather_state != null and sunlight != null and moonlight != null and night_cloud_fill != null and boat_sky_fill != null and quality != null and clouds != null, "main scene owns solar, lunar, boat fill, cloud-fill, weather-state, quality and existing cloud systems")
+	if controller == null or weather == null or weather_state == null or sunlight == null or moonlight == null or night_cloud_fill == null or boat_sky_fill == null or quality == null:
 		main.queue_free()
 		return
 	_manager.call("pause_time")
@@ -243,10 +244,10 @@ func _test_scene_outputs() -> void:
 	_check(full_moon_fill > new_moon_fill, "full-moon night gently brightens the existing boat fill compared with new moon")
 	_check(clouds.cloud_ambient_color.r < 0.8 and clouds.cloud_ambient_color.b > clouds.cloud_ambient_color.r, "night clouds use a bounded cool low-light ambient palette")
 	var clear_night_cloud_fill_energy := night_cloud_fill.light_energy
-	weather.call("set_weather_by_index", 2)
+	weather_state.call("set_weather_by_index", 2)
 	await _await_visual_frame()
 	_check(night_cloud_fill.light_energy < clear_night_cloud_fill_energy, "overcast night softens cloud fill compared with clear night")
-	weather.call("set_weather_by_index", 0)
+	weather_state.call("set_weather_by_index", 0)
 	await _await_visual_frame()
 
 	_manager.call("set_calendar_date", 2026, 7, 15)
@@ -329,7 +330,7 @@ func _test_scene_outputs() -> void:
 	weather.set("transition_seconds", 1.0)
 	_manager.call("set_time_scale", 60.0)
 	_manager.call("resume_time")
-	weather.call("set_weather_by_index", 2)
+	weather_state.call("set_weather_by_index", 2)
 	await create_timer(0.35).timeout
 	var mid_transition_color: Color = water_material.get_shader_parameter("albedo")
 	_check(weather.current_weather_name == "Overcast", "weather selection remains independent of the accelerated day clock")
@@ -357,7 +358,7 @@ func _test_boat_navigation_smoke(main: Node) -> void:
 	Input.action_release("boat_turn_left")
 	_check(absf(wrapf(boat_controller.rotation.y - initial_heading, -PI, PI)) > 0.1, "manual steering still changes the boat heading")
 	var autopilot_start := boat_controller.global_position
-	boat_controller.call("_toggle_autopilot")
+	boat_controller.submit_autopilot_command(0.0, boat_controller.speed_mps)
 	for _frame in range(60):
 		boat_controller._process(1.0 / 60.0)
 	_check(boat_controller.is_autopilot and boat_controller.global_position.distance_to(autopilot_start) > 0.5, "autopilot still advances the boat along its held heading")

@@ -9,7 +9,6 @@
 [ext_resource type="Resource" path="res://resources/vessels/starter_cargo_boat_draft.tres" id="7_draft_profile"]
 [ext_resource type="Script" uid="uid://dv68k2n40sq6e" path="res://scripts/cargo_loadout_controller.gd" id="8_cargo_loadout"]
 [ext_resource type="PackedScene" path="res://scenes/StandardCargoContainer.tscn" id="9_container_scene"]
-[ext_resource type="Resource" path="res://resources/cargo/test_standard_container.tres" id="10_test_cargo"]
 [ext_resource type="PackedScene" path="res://scenes/BoatExhaustSmokeSystem.tscn" id="11_exhaust_smoke"]
 [ext_resource type="Script" uid="uid://d1ip4einbvys1" path="res://scripts/exhaust_socket_editor_gizmo.gd" id="12_exhaust_socket_gizmo"]
 
@@ -60,7 +59,6 @@ omni_attenuation = 0.9
 script = ExtResource("8_cargo_loadout")
 slot_paths = Array[NodePath]([NodePath("../VisualRoot/CargoSlots/CargoSlot_01"), NodePath("../VisualRoot/CargoSlots/CargoSlot_02")])
 container_scene = ExtResource("9_container_scene")
-test_cargo_item = ExtResource("10_test_cargo")
 
 [node name="FollowCameraRig" type="Node3D" parent="." unique_id=2028145011]
 script = ExtResource("2_follow_camera")
