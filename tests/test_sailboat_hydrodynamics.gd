@@ -102,7 +102,7 @@ func _test_lab_zero_wind_and_stationary_rudder() -> void:
 	var boat: RigidBody3D = lab.get_node("SailboatBody")
 	var debug_panel: CanvasLayer = lab.get_node("DebugPanel")
 	var tabs := debug_panel.find_child("SailboatDebugTabs", true, false) as TabContainer
-	_expect(tabs != null and tabs.get_tab_count() == 6, "C3 leaves the existing six-tab SailboatLab debug panel unchanged")
+	_expect(tabs != null and tabs.get_tab_count() == 7, "underwater inspection is added alongside the existing hydrodynamics tabs")
 	_expect(lab.get_node_or_null("SailboatBody/VisualRoot/RudderPivot/RudderBlade") != null, "low-poly visual rudder is attached to the boat model")
 	boat.call("set_dynamic_waves_enabled", false)
 	boat.call("reset_to_neutral")
@@ -122,7 +122,7 @@ func _test_lab_zero_wind_and_stationary_rudder() -> void:
 	_expect(float(stationary_helm["rudder_water_speed_mps"]) < 0.03, "a rudder at rest has no point-flow speed")
 	_expect(absf(float(stationary_helm["yaw_rate_rad_s"])) < 0.01, "full rudder at rest cannot spin the boat without water flow")
 	var d_key := InputEventKey.new()
-	d_key.keycode = KEY_D
+	d_key.physical_keycode = KEY_D
 	d_key.pressed = true
 	boat.call("_input", d_key)
 	_expect(float(boat.get_debug_snapshot()["target_rudder_angle_rad"]) > 0.0, "D key maps to starboard helm")

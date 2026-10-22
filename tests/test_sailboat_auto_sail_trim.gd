@@ -130,7 +130,7 @@ func _test_lab_integration() -> void:
 	var panel := lab.get_node("DebugPanel")
 	var toggle := panel.find_child("AutoSailTrimToggle", true, false) as CheckButton
 	var tabs := panel.find_child("SailboatDebugTabs", true, false) as TabContainer
-	_expect(toggle != null and tabs != null and tabs.get_tab_count() == 6, "AUTO toggle is integrated in the existing sail tab without adding a tab")
+	_expect(toggle != null and tabs != null and tabs.get_tab_count() == 7, "AUTO stays in the sail tab alongside the new underwater inspection tab")
 	if boat.has_method("set_auto_sail_trim_enabled"):
 		boat.call("set_dynamic_waves_enabled", false)
 		boat.call("set_lab_test_wind", 8.0, 270.0)
@@ -173,7 +173,7 @@ func _test_lab_integration() -> void:
 			boat.call("set_target_rudder_angle", deg_to_rad(-10.0))
 			_expect(bool(boat.call("get_auto_sail_trim_enabled")), "manual rudder control leaves automatic sail trim enabled")
 			var jib_key := InputEventKey.new()
-			jib_key.keycode = KEY_J
+			jib_key.physical_keycode = KEY_J
 			jib_key.pressed = true
 			boat.call("_input", jib_key)
 			_expect(not bool(boat.call("get_auto_sail_trim_enabled")), "J/L manual Jib input takes control and switches AUTO back to MANUAL")

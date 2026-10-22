@@ -19,6 +19,10 @@ render_mode blend_mix,depth_draw_always,cull_disabled,diffuse_burley,specular_sc
 uniform bool freeze_time = false; // Toki wo tomare.
 uniform vec4 albedo: source_color;
 uniform vec4 albedo_fresnel: source_color;
+// Presentation-only multiplier. SailboatLab changes this on its private
+// ShaderMaterial instance to inspect submerged visuals; the default keeps
+// every existing scene fully opaque and does not affect wave sampling.
+uniform float debug_visual_alpha_scale : hint_range(0.0, 1.0) = 1.0;
 uniform sampler2D texture_albedo: source_color;
 uniform float specular : hint_range(0.0, 1.0) = 0.5;
 uniform float metallic : hint_range(0.0, 1.0) = 0.0;
@@ -1014,5 +1018,6 @@ void fragment() {
 		SPECULAR = 0.0;
 		ALPHA = 1.0;
 	}
+	ALPHA *= debug_visual_alpha_scale;
 
 }

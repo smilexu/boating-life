@@ -51,7 +51,7 @@ static func world_arm_from_local_point(point_local: Vector3, center_of_mass_loca
 @export var profile: Resource
 @export_node_path("Node") var wave_sampler_path: NodePath = ^"../WaveSampler"
 @export_node_path("Node") var wind_field_path: NodePath = ^"../WindField"
-@export_node_path("Node3D") var sail_visual_pivot_path: NodePath = ^"VisualRoot/SailPivot"
+@export_node_path("Node3D") var sail_visual_pivot_path: NodePath = ^"VisualRoot/VisualBoomPivot"
 @export_node_path("Node3D") var rudder_visual_pivot_path: NodePath = ^"VisualRoot/RudderPivot"
 @export_node_path("Node3D") var rudder_angle_marker_path: NodePath = ^"VisualRoot/RudderAngleMarker"
 @export_node_path("MeshInstance3D") var headsail_visual_path: NodePath = ^"VisualRoot/HeadsailVisual"
@@ -309,8 +309,7 @@ func _ready() -> void:
 	_headsail_induced_drag_factor = float(profile.get("headsail_induced_drag_factor"))
 	_headsail_flat_plate_drag_factor = float(profile.get("headsail_flat_plate_drag_factor"))
 	_headsail_wrong_side_lift_retention = float(profile.get("headsail_wrong_side_lift_retention"))
-	if _headsail_visual != null and _headsail_visual.has_method("configure"):
-		_headsail_visual.call("configure", _headsail_head_local_m, _headsail_tack_local_m, _headsail_clew_neutral_local_m)
+	if _headsail_visual != null:
 		_headsail_visual.visible = _headsail_enabled
 	_water_density_kg_m3 = float(profile.get("water_density_kg_m3"))
 	_keel_center_local_m = profile.get("keel_center_local_m")
@@ -808,6 +807,7 @@ func get_debug_snapshot() -> Dictionary:
 		"water_height_m": water_height_m,
 		"buoyancy_total_n": _last_total_buoyancy_n,
 		"float_point_count": _float_offsets.size(),
+		"float_point_offsets_local_m": _float_offsets,
 		"submerged_point_count": _last_submerged_count,
 		"force_calculation_usec": _last_calculation_usec,
 		"physics_delta_s": _last_physics_delta,

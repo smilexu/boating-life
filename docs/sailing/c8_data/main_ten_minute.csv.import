@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://ck0uu3eutwxof"
+
+[deps]
+
+files=["res://docs/sailing/c8_data/main_ten_minute.heading.translation", "res://docs/sailing/c8_data/main_ten_minute.headsail.translation", "res://docs/sailing/c8_data/main_ten_minute.headsail.translation", "res://docs/sailing/c8_data/main_ten_minute.headsail.translation", "res://docs/sailing/c8_data/main_ten_minute.headsail.translation", "res://docs/sailing/c8_data/main_ten_minute.main.translation", "res://docs/sailing/c8_data/main_ten_minute.main.translation", "res://docs/sailing/c8_data/main_ten_minute.phase.translation", "res://docs/sailing/c8_data/main_ten_minute.sim.translation", "res://docs/sailing/c8_data/main_ten_minute.sog.translation", "res://docs/sailing/c8_data/main_ten_minute.tilt.translation", "res://docs/sailing/c8_data/main_ten_minute.true.translation", "res://docs/sailing/c8_data/main_ten_minute.true.translation", "res://docs/sailing/c8_data/main_ten_minute.wave.translation", "res://docs/sailing/c8_data/main_ten_minute.wind.translation"]
+
+source_file="res://docs/sailing/c8_data/main_ten_minute.csv"
+dest_files=["res://docs/sailing/c8_data/main_ten_minute.heading.translation", "res://docs/sailing/c8_data/main_ten_minute.headsail.translation", "res://docs/sailing/c8_data/main_ten_minute.headsail.translation", "res://docs/sailing/c8_data/main_ten_minute.headsail.translation", "res://docs/sailing/c8_data/main_ten_minute.headsail.translation", "res://docs/sailing/c8_data/main_ten_minute.main.translation", "res://docs/sailing/c8_data/main_ten_minute.main.translation", "res://docs/sailing/c8_data/main_ten_minute.phase.translation", "res://docs/sailing/c8_data/main_ten_minute.sim.translation", "res://docs/sailing/c8_data/main_ten_minute.sog.translation", "res://docs/sailing/c8_data/main_ten_minute.tilt.translation", "res://docs/sailing/c8_data/main_ten_minute.true.translation", "res://docs/sailing/c8_data/main_ten_minute.true.translation", "res://docs/sailing/c8_data/main_ten_minute.wave.translation", "res://docs/sailing/c8_data/main_ten_minute.wind.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

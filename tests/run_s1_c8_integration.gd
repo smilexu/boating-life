@@ -30,12 +30,18 @@ func _run() -> void:
 	var motorboat_card := main.find_child("PowerboatCard", true, false) as Control
 	var sailboat_preview := sailboat_card.find_child("ModelPreviewViewport", true, false) as SubViewport if sailboat_card != null else null
 	var motorboat_preview := motorboat_card.find_child("ModelPreviewViewport", true, false) as SubViewport if motorboat_card != null else null
+	var sailboat_name_label := sailboat_card.find_child("VesselNameLabel", true, false) as Label if sailboat_card != null else null
+	var sailboat_type_label := sailboat_card.find_child("VesselTypeLabel", true, false) as Label if sailboat_card != null else null
+	var sailboat_details_label := sailboat_card.find_child("VesselDetailsLabel", true, false) as Label if sailboat_card != null else null
 	_check(controller != null, "Main retains its BoatController navigation facade")
 	_check(sailboat != null, "Main has the reusable SailingBoat8m body")
 	_check(vessel_picker != null, "Main HUD has a separate vessel picker outside F3")
 	_check(main.find_child("VesselSelectionButton", true, false) == null, "F3 debug panel no longer exposes vessel switching")
 	_check(sailboat_card != null and motorboat_card != null, "Vessel picker lists both current vessel models")
 	_check(sailboat_preview != null and motorboat_preview != null, "Each vessel card has an isolated 3D preview viewport")
+	_check(sailboat_name_label != null and sailboat_name_label.text == "Nordic 28", "Picker shows the Nordic 28 vessel name")
+	_check(sailboat_type_label != null and sailboat_type_label.text.contains("休闲巡航帆船"), "Picker classifies Nordic 28 as a leisure cruising sailboat")
+	_check(sailboat_details_label != null and sailboat_details_label.text.contains("主帆") and sailboat_details_label.text.contains("前帆") and sailboat_details_label.text.contains("AUTO"), "Picker describes the implemented sailboat equipment and controls")
 	if controller == null or sailboat == null:
 		quit(1)
 		return
@@ -59,7 +65,19 @@ func _run() -> void:
 		_check(float(spawn_depth.get("depth_m", 0.0)) >= 1.4, "Sailboat spawn DTM depth exceeds 0.9 m draft plus 0.5 m nominal margin")
 		_check(not bool(spawn_depth.get("navigation_grade", false)), "Spawn depth is explicitly treated as coarse DTM, not navigation-grade")
 
-	var reference_position := spawn_marker.global_position if spawn_marker != null else controller.global_position
+	var reference_position := controller.global_position
+	if vessel_hud != null:
+		var open_picker_event := InputEventKey.new()
+		open_picker_event.physical_keycode = KEY_I
+		open_picker_event.pressed = true
+		vessel_hud.call("_unhandled_key_input", open_picker_event)
+	_check(vessel_picker != null and vessel_picker.visible, "I opens the current vessel picker")
+	if vessel_hud != null:
+		var close_picker_event := InputEventKey.new()
+		close_picker_event.physical_keycode = KEY_I
+		close_picker_event.pressed = true
+		vessel_hud.call("_unhandled_key_input", close_picker_event)
+	_check(vessel_picker != null and not vessel_picker.visible, "I closes the current vessel picker")
 	if vessel_hud != null:
 		vessel_hud.call("_open_vessel_picker")
 	var sailboat_select_button := sailboat_card.find_child("SelectButton", true, false) as Button if sailboat_card != null else null
@@ -68,12 +86,35 @@ func _run() -> void:
 	else:
 		controller.set_sailing_enabled(true)
 	_check(controller.is_sailing_active(), "Vessel picker activates the sailboat")
+	var player_forward := -controller.global_transform.basis.z
+	var sailboat_forward := -sailboat.global_transform.basis.z
+	player_forward.y = 0.0
+	sailboat_forward.y = 0.0
+	_check(player_forward.normalized().dot(sailboat_forward.normalized()) > 0.99, "Sailboat preserves the current player vessel heading at spawn")
 	for _frame in range(30):
 		await physics_frame
 	_check(controller.is_sailing_active(), "Sailboat becomes the active vessel")
 	_check(not sailboat.freeze and sailboat.visible, "Selected sailboat is active and visible")
 	_check(sailboat.get_node("CollisionShape3D").disabled == false, "Selected sailboat collision is enabled")
-	_check(Vector2(sailboat.global_position.x - reference_position.x, sailboat.global_position.z - reference_position.z).length() < 1.0, "Sailboat spawns at its dedicated Malmö open-water marker")
+	var follow_camera := main.get_node_or_null("PlayerBoat/FollowCameraRig")
+	_check(follow_camera != null and float(follow_camera.call("_get_vessel_follow_distance")) >= 17.5, "Shared third-person camera backs out for the taller Nordic 28 rig")
+	if follow_camera != null:
+		var zoom_out_event := InputEventMouseButton.new()
+		zoom_out_event.button_index = MOUSE_BUTTON_WHEEL_DOWN
+		zoom_out_event.pressed = true
+		follow_camera.call("_unhandled_input", zoom_out_event)
+		_check(float(follow_camera.get("_zoom_offset_m")) > 0.0, "Mouse wheel can pull the third-person camera back to show the full rig")
+		var zoom_in_event := InputEventMouseButton.new()
+		zoom_in_event.button_index = MOUSE_BUTTON_WHEEL_UP
+		zoom_in_event.pressed = true
+		follow_camera.call("_unhandled_input", zoom_in_event)
+		_check(is_zero_approx(float(follow_camera.get("_zoom_offset_m"))), "Mouse wheel zoom restores its previous camera distance")
+	_check(sailboat.scene_file_path == "res://scenes/boats/SailingBoat8m.tscn", "Main instantiates the same reusable SailingBoat8m scene used by SailboatLab")
+	var spawn_distance_from_player := Vector2(sailboat.global_position.x - reference_position.x, sailboat.global_position.z - reference_position.z).length()
+	_check(spawn_distance_from_player >= 8.0 and spawn_distance_from_player <= 30.0, "Sailboat selects a clear, depth-checked spawn close to the current player vessel")
+	if depth_provider != null:
+		var selected_spawn_depth := depth_provider.evaluate_world_position(sailboat.global_position, 0.9, 0.5)
+		_check(str(selected_spawn_depth.get("status", "")) == NavigationDepthProvider.STATUS_SAFE, "Selected nearby sailboat spawn meets the configured draft and depth margin")
 	var wind_path: NodePath = sailboat.get("wind_field_path")
 	var wave_path: NodePath = sailboat.get("wave_sampler_path")
 	_check(sailboat.get_node_or_null(wind_path) == main.get_node("WindField"), "Sailboat reads Main WindField")
@@ -152,10 +193,22 @@ func _run() -> void:
 	var compass_widget := vessel_hud.find_child("CompassHUD", true, false) as Control if vessel_hud != null else null
 	_check(compass_widget != null and compass_widget.visible, "the shared heading ribbon returns when the powerboat is active")
 	_check(controller.has_engine(), "Powerboat engine capability is restored")
+	_check(follow_camera != null and is_equal_approx(float(follow_camera.call("_get_vessel_follow_distance")), float(follow_camera.get("follow_distance"))), "Camera returns to the original powerboat distance after switching back")
 	if economy != null:
 		var motorboat_result := economy.accept_contract("c8_motorboat_unknown_probe")
 		_check(str(motorboat_result.get("code", "")) == "unknown_contract", "Powerboat cargo API retains its previous contract lookup path")
 	_check(get_nodes_in_group("wave_sampler").size() == 1, "Vessel switching does not duplicate WaveSampler")
+	for switch_index in range(5):
+		_check(controller.set_sailing_enabled(true), "Repeated switch %d activates Nordic 28" % (switch_index + 1))
+		await physics_frame
+		_check(controller.is_sailing_active() and not sailboat.freeze, "Nordic 28 remains the active physics vessel after repeated switch")
+		_check(controller.set_sailing_enabled(false), "Repeated switch %d returns to the powerboat" % (switch_index + 1))
+		await physics_frame
+		_check(not controller.is_sailing_active() and sailboat.freeze and not sailboat.visible, "Powerboat switch freezes and hides Nordic 28")
+		_check(get_nodes_in_group("wave_sampler").size() == 1, "Repeated switching keeps one shared WaveSampler")
+	_check(main.find_children("SailingBoat8m", "RigidBody3D", true, false).size() == 1, "Repeated switching does not instantiate duplicate sailboat bodies")
+	_check(main.find_children("WindField", "Node", true, false).size() == 1, "Repeated switching keeps one shared WindField")
+	_check(main.find_children("WaveSampler", "Node", true, false).size() == 1, "Repeated switching keeps one shared WaveSampler scene node")
 	print("S1-C8 integration checks: %d failed" % _failures.size())
 	for failure in _failures:
 		push_error(failure)

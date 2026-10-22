@@ -46,12 +46,24 @@ var _rudder_target_value_label: Label
 var _hydrodynamics_metrics_label: Label
 var _wind_test_status_label: Label
 var _wind_test_buttons: Array[Button] = []
+var _water_display_option: OptionButton
+var _inspection_camera_option: OptionButton
+var _inspection_markers: Dictionary = {}
+var _rudder_heading_marker_toggle: CheckButton
+var _underwater_metrics_label: Label
+var _sail_visual_controller: Node
+var _sail_billow_toggle: CheckButton
+var _sail_wireframe_toggle: CheckButton
+var _sail_logo_toggle: CheckButton
+var _sail_rigging_toggle: CheckButton
+var _sail_visual_metrics_label: Label
 
 
 func _ready() -> void:
 	_boat = get_node_or_null(boat_path)
 	_lab_root = get_parent()
 	_wave_sampler = get_node_or_null(^"../WaveSampler") as WaveSampler
+	_sail_visual_controller = _boat.get_node_or_null("VisualRoot/SailVisuals") if _boat != null else null
 	_build_panel()
 	if _boat == null:
 		push_error("SailboatLabDebugPanel cannot find its test RigidBody3D.")
@@ -72,6 +84,7 @@ func _build_panel() -> void:
 	add_child(root)
 
 	var panel := PanelContainer.new()
+	panel.name = "SailboatLabDebugPanelContent"
 	panel.anchor_left = 0.02
 	panel.anchor_top = 0.025
 	panel.anchor_right = 0.34
@@ -251,6 +264,22 @@ func _build_panel() -> void:
 	_headsail_metrics_label = _make_note("等待前帆物理快照。")
 	_headsail_metrics_label.name = "HeadsailAerodynamicsDiagnostics"
 	sail_page.add_child(_headsail_metrics_label)
+	sail_page.add_child(_section_title("帆面视觉诊断 · 仅影响可见帆布与索具"))
+	_sail_billow_toggle = _make_visual_check("帆布鼓风形变", true, "SailBillowToggle")
+	_sail_wireframe_toggle = _make_visual_check("显示帆面细分网格", false, "SailMeshToggle")
+	_sail_logo_toggle = _make_visual_check("显示主帆微笑 Logo", true, "SailLogoToggle")
+	_sail_rigging_toggle = _make_visual_check("显示固定与活动索具", true, "SailRiggingToggle")
+	sail_page.add_child(_sail_billow_toggle)
+	sail_page.add_child(_sail_wireframe_toggle)
+	sail_page.add_child(_sail_logo_toggle)
+	sail_page.add_child(_sail_rigging_toggle)
+	_sail_billow_toggle.toggled.connect(_on_sail_visual_option_toggled)
+	_sail_wireframe_toggle.toggled.connect(_on_sail_visual_option_toggled)
+	_sail_logo_toggle.toggled.connect(_on_sail_visual_option_toggled)
+	_sail_rigging_toggle.toggled.connect(_on_sail_visual_option_toggled)
+	_sail_visual_metrics_label = _make_note("帆面鼓风与索具状态读取中。")
+	_sail_visual_metrics_label.name = "SailVisualDiagnostics"
+	sail_page.add_child(_sail_visual_metrics_label)
 	sail_page.add_child(_section_title("本地风向测试 · 不修改正式天气"))
 	_wind_test_status_label = _make_note("风场状态读取中。")
 	sail_page.add_child(_wind_test_status_label)
@@ -277,6 +306,52 @@ func _build_panel() -> void:
 	_hydrodynamics_metrics_label = _make_note("等待水动力快照。")
 	_hydrodynamics_metrics_label.name = "SailboatHydrodynamicsDiagnostics"
 	sail_page.add_child(_hydrodynamics_metrics_label)
+
+	var underwater_page := _new_scroll_page(tabs, "水下结构检查")
+	underwater_page.add_child(_section_title("海面显示 · 仅控制可见水面 Mesh"))
+	_water_display_option = OptionButton.new()
+	_water_display_option.add_item("正常海面")
+	_water_display_option.add_item("半透明海面（约 25% 不透明）")
+	_water_display_option.add_item("隐藏海面")
+	_water_display_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_water_display_option.item_selected.connect(_on_water_display_selected)
+	underwater_page.add_child(_water_display_option)
+	underwater_page.add_child(_make_note("隐藏海面只隐藏水面视觉 Mesh；WaveSampler、四点浮力、刚体、风浪与天气继续运行。半透明使用 SailboatLab 私有材质副本。"))
+
+	underwater_page.add_child(_section_title("观察摄像机"))
+	_inspection_camera_option = OptionButton.new()
+	_inspection_camera_option.add_item("平滑跟随")
+	_inspection_camera_option.add_item("固定实验室视角")
+	_inspection_camera_option.add_item("水下结构检查")
+	_inspection_camera_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_inspection_camera_option.item_selected.connect(_on_inspection_camera_selected)
+	underwater_page.add_child(_inspection_camera_option)
+	underwater_page.add_child(_make_note("C 循环摄像机模式；水下模式：右键拖动旋转，中键拖动平移，滚轮缩放。滚轮在调试面板上仍用于滚动内容。镜头只移动相机，不影响船体。"))
+
+	underwater_page.add_child(_section_title("水下调试标记 · 位置来自当前刚体 / 船型参数"))
+	_add_inspection_marker_toggle(underwater_page, "rudder_axis", "显示船舵旋转轴")
+	_add_inspection_marker_toggle(underwater_page, "rudder_force_point", "显示船舵物理施力点")
+	_add_inspection_marker_toggle(underwater_page, "keel_force_point", "显示龙骨物理施力点")
+	_add_inspection_marker_toggle(underwater_page, "collision_outline", "显示船体碰撞轮廓")
+	_add_inspection_marker_toggle(underwater_page, "float_points", "显示四个浮力采样点")
+	_rudder_heading_marker_toggle = CheckButton.new()
+	_rudder_heading_marker_toggle.name = "RudderHeadingMarkerToggle"
+	_rudder_heading_marker_toggle.text = "显示水面舵角方向调试标记"
+	_rudder_heading_marker_toggle.button_pressed = false
+	_rudder_heading_marker_toggle.toggled.connect(_on_rudder_heading_marker_toggled)
+	underwater_page.add_child(_rudder_heading_marker_toggle)
+	underwater_page.add_child(_make_note("黄色方向标记默认隐藏；仅在检查舵角时显示，不参与操舵或物理。"))
+
+	underwater_page.add_child(_section_title("舵角观察 · 使用现有目标角接口与转舵限速"))
+	var rudder_presets := HBoxContainer.new()
+	for rudder_degrees in [-35.0, 0.0, 35.0]:
+		var rudder_button := _make_button("舵 %+.0f°" % rudder_degrees, _set_rudder_inspection_preset.bind(rudder_degrees))
+		rudder_presets.add_child(rudder_button)
+	underwater_page.add_child(rudder_presets)
+	_underwater_metrics_label = _make_note("读取 Nordic 28 舵与船壳几何中。")
+	_underwater_metrics_label.name = "UnderwaterInspectionDiagnostics"
+	underwater_page.add_child(_underwater_metrics_label)
+	underwater_page.add_child(_make_note("颜色：橙=舵轴，青=舵力点，紫=龙骨力点，黄=浮力点，绿线框=碰撞体。视觉舵叶和物理受力点分别显示。"))
 
 	var footer := Label.new()
 	footer.text = "独立场景 · 不接入动力船或正式天气；主帆仅以真实力驱动刚体"
@@ -330,6 +405,15 @@ func _make_note(text: String) -> Label:
 	return label
 
 
+func _add_inspection_marker_toggle(parent: VBoxContainer, marker_name: String, title: String) -> void:
+	var toggle := CheckButton.new()
+	toggle.text = title
+	toggle.button_pressed = false
+	toggle.toggled.connect(_on_inspection_marker_toggled.bind(marker_name))
+	_inspection_markers[marker_name] = toggle
+	parent.add_child(toggle)
+
+
 func _make_wave_slider(minimum: float, maximum: float, step: float, initial_value: float) -> HSlider:
 	var slider := HSlider.new()
 	slider.min_value = minimum
@@ -356,14 +440,16 @@ func _refresh_metrics() -> void:
 			]
 		_attitude_feedback_label.text = action_text
 	_refresh_wave_metrics(data)
+	_refresh_underwater_metrics(data)
 	_refresh_sail_metrics(data)
+	_refresh_sail_visual_metrics()
 	_refresh_auto_trim_controls(data)
 	_refresh_headsail_metrics(data)
 	_refresh_hydrodynamics_metrics(data)
 	_refresh_turn_diagnostics(data)
 	if _camera_mode_label != null:
-		var follow_enabled := bool(_lab_root.call("is_camera_follow_enabled")) if _lab_root != null and _lab_root.has_method("is_camera_follow_enabled") else false
-		_camera_mode_label.text = "摄像机：%s · C 切换，Delete/Backspace 重载整个 SailboatLab" % ("平滑跟随" if follow_enabled else "固定观察")
+		var camera_label := str(_lab_root.call("get_camera_mode_label")) if _lab_root != null and _lab_root.has_method("get_camera_mode_label") else "未知"
+		_camera_mode_label.text = "摄像机：%s · C 循环切换，Delete/Backspace 重载整个 SailboatLab" % camera_label
 	var velocity: Vector3 = data.get("linear_velocity_mps", Vector3.ZERO)
 	var angular_velocity: Vector3 = data.get("angular_velocity_rad_s", Vector3.ZERO)
 	_metrics_label.text = (
@@ -392,6 +478,90 @@ func _refresh_metrics() -> void:
 		float(data.get("buoyancy_strength", 1.0)),
 		float(data.get("damping_ratio", 0.0)),
 	]
+
+
+func _refresh_underwater_metrics(_physics_data: Dictionary) -> void:
+	if _lab_root == null or _underwater_metrics_label == null:
+		return
+	if _water_display_option != null and _lab_root.has_method("get_water_display_mode"):
+		_water_display_option.select(int(_lab_root.call("get_water_display_mode")))
+	if _inspection_camera_option != null and _lab_root.has_method("get_camera_mode"):
+		_inspection_camera_option.select(int(_lab_root.call("get_camera_mode")))
+	var rudder_heading_marker := _boat.get_node_or_null("VisualRoot/RudderAngleMarker") as Node3D if _boat != null else null
+	if _rudder_heading_marker_toggle != null and rudder_heading_marker != null:
+		_rudder_heading_marker_toggle.set_pressed_no_signal(rudder_heading_marker.visible)
+	var visuals := _boat.get_node_or_null("UnderwaterDebugVisuals")
+	if visuals == null or not visuals.has_method("get_inspection_snapshot"):
+		_underwater_metrics_label.text = "水下视觉标记脚本未连接。"
+		return
+	for marker_name in _inspection_markers:
+		var toggle := _inspection_markers[marker_name] as CheckButton
+		toggle.set_pressed_no_signal(bool(visuals.call("is_marker_enabled", marker_name)))
+	var data: Dictionary = visuals.call("get_inspection_snapshot")
+	var hull_size: Vector3 = data.get("nordic_hull_size_m", Vector3.ZERO)
+	var hull_min: Vector3 = data.get("nordic_hull_min_local_m", Vector3.ZERO)
+	var hull_max: Vector3 = data.get("nordic_hull_max_local_m", Vector3.ZERO)
+	var waterline_y := float(data.get("waterline_local_y_m", 0.0))
+	var rudder_pivot: Vector3 = data.get("rudder_pivot_local_m", Vector3.ZERO)
+	var rudder_force: Vector3 = data.get("rudder_force_point_local_m", Vector3.ZERO)
+	var keel_force: Vector3 = data.get("keel_force_point_local_m", Vector3.ZERO)
+	var axis: Vector3 = data.get("rudder_axis_local", Vector3.UP)
+	var rudder_min: Vector3 = data.get("rudder_blade_min_local_m", Vector3.ZERO)
+	var rudder_max: Vector3 = data.get("rudder_blade_max_local_m", Vector3.ZERO)
+	var rudder_visual_blade_size: Vector3 = data.get("rudder_visual_blade_size_m", Vector3.ZERO)
+	var actual_angle := rad_to_deg(float(data.get("rudder_actual_angle_rad", 0.0)))
+	var visual_angle := rad_to_deg(float(data.get("rudder_visual_angle_rad", 0.0)))
+	var float_points: PackedVector3Array = data.get("float_points_local_m", PackedVector3Array())
+	var collision_bounds: Dictionary = data.get("collision_shape_bounds_local_m", {})
+	var collision_size: Vector3 = collision_bounds.get("size", Vector3.ZERO)
+	var hull_text := "Nordic 28 船壳 Mesh 未找到"
+	if bool(data.get("nordic_hull_found", false)):
+		hull_text = "Nordic 28 实际可见包围盒 %.2f × %.2f × %.2f m · 局部 Y %.2f…%.2f m · 水线参考 Y %.2f m" % [
+			hull_size.x, hull_size.y, hull_size.z, hull_min.y, hull_max.y, waterline_y,
+		]
+	var rudder_text := "船舵视觉节点未找到"
+	if bool(data.get("rudder_pivot_found", false)):
+		rudder_text = (
+			"RudderPivot 局部 (%.2f, %.2f, %.2f) m · 旋转轴局部 (%.2f, %.2f, %.2f)\n"
+			+ "视觉舵角 %+.1f° · 物理舵角 %+.1f° · 物理力点 (%.2f, %.2f, %.2f) m\n"
+			+ "舵叶局部 AABB Y %.2f…%.2f m · 舵轴到力点距离 %.2f m · 力点位于弦长 %.0f%%"
+		) % [
+			rudder_pivot.x, rudder_pivot.y, rudder_pivot.z,
+			axis.x, axis.y, axis.z, visual_angle, actual_angle,
+			rudder_force.x, rudder_force.y, rudder_force.z,
+			rudder_min.y, rudder_max.y, rudder_pivot.distance_to(rudder_force),
+			float(data.get("rudder_force_point_chord_fraction", NAN)) * 100.0,
+		]
+	var float_text := "；".join(_format_local_points(float_points))
+	_underwater_metrics_label.text = (
+		"显示：%s · 摄像机：%s\n" % [
+			str(_lab_root.call("get_water_display_mode_label")) if _lab_root.has_method("get_water_display_mode_label") else "未知",
+			str(_lab_root.call("get_camera_mode_label")) if _lab_root.has_method("get_camera_mode_label") else "未知",
+		]
+		+ hull_text + "\n"
+		+ rudder_text + "\n"
+		+ "船尾网格底面 Y %.3f m · 视觉舵轴嵌入 %.3f m · 舵轴连接段 %.2f m · 舵叶约 %.2f × %.2f × %.2f m\n" % [
+			float(data.get("rudder_hull_bottom_y_local_m", NAN)),
+			float(data.get("rudder_axis_embed_m", 0.0)),
+			float(data.get("rudder_stock_length_m", 0.0)),
+			rudder_visual_blade_size.x,
+			rudder_visual_blade_size.y,
+			rudder_visual_blade_size.z,
+		]
+		+ "龙骨物理力点：(%.2f, %.2f, %.2f) m · 碰撞：%s %.2f × %.2f × %.2f m\n" % [
+			keel_force.x, keel_force.y, keel_force.z,
+			str(data.get("collision_shape_type", "不可用")), collision_size.x, collision_size.y, collision_size.z,
+		]
+		+ "浮力采样点（刚体局部）：" + float_text
+	)
+
+
+func _format_local_points(points: PackedVector3Array) -> PackedStringArray:
+	var formatted := PackedStringArray()
+	for index in range(points.size()):
+		var point := points[index]
+		formatted.append("%d:(%.2f, %.2f, %.2f)" % [index + 1, point.x, point.y, point.z])
+	return formatted
 
 
 func _refresh_turn_diagnostics(data: Dictionary) -> void:
@@ -728,6 +898,50 @@ func _add_wind_test_button(parent: VBoxContainer, text: String, speed_mps: float
 	_wind_test_buttons.append(button)
 
 
+func _make_visual_check(label_text: String, initial_value: bool, node_name: String) -> CheckButton:
+	var toggle := CheckButton.new()
+	toggle.name = node_name
+	toggle.text = label_text
+	toggle.button_pressed = initial_value
+	toggle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return toggle
+
+
+func _on_sail_visual_option_toggled(_enabled: bool) -> void:
+	if _sail_visual_controller != null and _sail_visual_controller.has_method("set_debug_options"):
+		_sail_visual_controller.call(
+			"set_debug_options",
+			_sail_billow_toggle.button_pressed,
+			_sail_wireframe_toggle.button_pressed,
+			_sail_logo_toggle.button_pressed,
+			_sail_rigging_toggle.button_pressed
+		)
+	_refresh_sail_visual_metrics()
+
+
+func _refresh_sail_visual_metrics() -> void:
+	if _sail_visual_metrics_label == null:
+		return
+	if _sail_visual_controller == null or not _sail_visual_controller.has_method("get_visual_snapshot"):
+		_sail_visual_metrics_label.text = "此帆船没有 Nordic 28 帆面诊断控制器。"
+		return
+	var visual: Dictionary = _sail_visual_controller.call("get_visual_snapshot")
+	var main_mesh: Dictionary = visual.get("main_mesh", {})
+	var jib_mesh: Dictionary = visual.get("jib_mesh", {})
+	_sail_visual_metrics_label.text = (
+		"主帆 %d×%d 网格 · %d 顶点 · 鼓风 %.0f%% · 最大鼓幅 %.2f m\n"
+		+ "Jib %d×%d 网格 · %d 顶点 · 鼓风 %.0f%%\n"
+		+ "当前受风：%s · Jib %s · 索具线 %d"
+	) % [
+		int(main_mesh.get("rows", 0)), int(main_mesh.get("columns", 0)), int(main_mesh.get("vertex_count", 0)),
+		float(visual.get("main_fill", 0.0)) * 100.0, float(main_mesh.get("maximum_billow_m", 0.0)),
+		int(jib_mesh.get("rows", 0)), int(jib_mesh.get("columns", 0)), int(jib_mesh.get("vertex_count", 0)),
+		float(visual.get("jib_fill", 0.0)) * 100.0,
+		str(visual.get("main_side", "未知")), "启用" if bool(visual.get("headsail_enabled", true)) else "关闭",
+		int(visual.get("rigging_line_count", 0)),
+	]
+
+
 func _set_lab_test_wind(speed_mps: float, from_degrees: float) -> void:
 	if _boat != null and _boat.has_method("set_lab_test_wind"):
 		_boat.call("set_lab_test_wind", speed_mps, from_degrees)
@@ -740,6 +954,40 @@ func _on_dynamic_wave_toggled(enabled: bool) -> void:
 		lab_root.call("set_dynamic_waves_enabled", enabled)
 	elif _boat != null:
 		_boat.call("set_dynamic_waves_enabled", enabled)
+	_refresh_metrics()
+
+
+func _on_water_display_selected(mode: int) -> void:
+	if _lab_root != null and _lab_root.has_method("set_water_display_mode"):
+		_lab_root.call("set_water_display_mode", mode)
+	_refresh_metrics()
+
+
+func _on_inspection_camera_selected(mode: int) -> void:
+	if _lab_root != null and _lab_root.has_method("set_camera_mode"):
+		_lab_root.call("set_camera_mode", mode)
+	_refresh_metrics()
+
+
+func _on_inspection_marker_toggled(enabled: bool, marker_name: String) -> void:
+	var visuals := _boat.get_node_or_null("UnderwaterDebugVisuals") if _boat != null else null
+	if visuals != null and visuals.has_method("set_marker_enabled"):
+		visuals.call("set_marker_enabled", marker_name, enabled)
+	_refresh_underwater_metrics(_boat.call("get_debug_snapshot") if _boat != null else {})
+
+
+func _on_rudder_heading_marker_toggled(enabled: bool) -> void:
+	var marker := _boat.get_node_or_null("VisualRoot/RudderAngleMarker") as Node3D if _boat != null else null
+	if marker != null:
+		marker.visible = enabled
+	_refresh_metrics()
+
+
+func _set_rudder_inspection_preset(angle_degrees: float) -> void:
+	if _boat != null and _boat.has_method("set_target_rudder_angle"):
+		_boat.call("set_target_rudder_angle", deg_to_rad(angle_degrees))
+	if _rudder_target_slider != null:
+		_rudder_target_slider.set_value_no_signal(angle_degrees)
 	_refresh_metrics()
 
 

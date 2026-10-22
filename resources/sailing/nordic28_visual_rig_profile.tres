@@ -1,0 +1,23 @@
+[gd_resource type="Resource" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://resources/sailing/nordic28_visual_rig_profile.gd" id="1_visual_profile"]
+
+[resource]
+script = ExtResource("1_visual_profile")
+mast_base_local_m = Vector3(0, 1.3184, -1)
+mast_length_m = 6.5
+visual_assembly_offset_local_m = Vector3(0, -0.3, 0)
+boom_pivot_local_m = Vector3(0, 1.9111, -1)
+boom_length_m = 3.3
+boom_clearance_over_roof_m = 0.4
+main_head_local_m = Vector3(0, 7.6384, -1)
+jib_head_local_m = Vector3(0, 5.95, -1)
+jib_tack_local_m = Vector3(0, 1.9614, -3.5498)
+jib_clew_local_m = Vector3(0, 1.6686, -1.1498)
+helm_station_local_m = Vector3(0, 0, 2.72)
+helm_pedestal_height_m = 0.72
+helm_pedestal_base_size_m = Vector2(0.48, 0.38)
+helm_pedestal_top_size_m = Vector2(0.32, 0.26)
+helm_wheel_outer_radius_m = 0.353
+helm_wheel_degrees_per_rudder_degree = 5.142857
+helm_wheel_rotation_sign = -1.0

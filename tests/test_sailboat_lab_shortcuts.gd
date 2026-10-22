@@ -34,7 +34,9 @@ func _run() -> void:
 		await process_frame
 		_expect(camera.global_position.is_equal_approx(fixed_camera_position), "fixed observation mode keeps the original camera position")
 		lab.call("_input", event)
-		_expect(bool(lab.call("is_camera_follow_enabled")), "C switches back to follow mode")
+		_expect(int(lab.call("get_camera_mode")) == 2, "second C selects underwater inspection mode")
+		lab.call("_input", event)
+		_expect(bool(lab.call("is_camera_follow_enabled")), "third C returns to smooth follow mode")
 		var follow_start_x := camera.global_position.x
 		boat.global_position += Vector3(5.0, 0.0, 0.0)
 		await process_frame

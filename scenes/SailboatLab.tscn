@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://scripts/sailboat_lab.gd" id="1_lab"]
 [ext_resource type="Script" path="res://scripts/sailboat_lab_debug_panel.gd" id="2_debug"]
@@ -9,6 +9,7 @@
 [ext_resource type="Resource" path="res://resources/oresund_georeference.tres" id="7_georeference"]
 [ext_resource type="Script" path="res://scripts/wind_field.gd" id="8_wind_field"]
 [ext_resource type="PackedScene" path="res://scenes/boats/SailingBoat8m.tscn" id="9_sailing_boat"]
+[ext_resource type="Script" path="res://scripts/sailboat_underwater_debug_visuals.gd" id="10_underwater_visuals"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_water"]
 size = Vector2(320, 320)
@@ -57,6 +58,9 @@ gust_direction_variation_degrees = 0.0
 wave_sampler_path = NodePath("../WaveSampler")
 wind_field_path = NodePath("../WindField")
 auto_reset_on_ready = true
+
+[node name="UnderwaterDebugVisuals" type="Node3D" parent="SailboatBody"]
+script = ExtResource("10_underwater_visuals")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 rotation_degrees = Vector3(-48, -28, 0)

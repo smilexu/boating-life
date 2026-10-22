@@ -137,24 +137,36 @@ func _test_lab_integration() -> void:
 	var debug_panel := lab.get_node("DebugPanel") as CanvasLayer
 	var visual_root := boat.get_node("VisualRoot") as Node3D
 	var mast := visual_root.get_node("Mast") as MeshInstance3D
-	var sail_visual := visual_root.get_node("SailPivot") as Node3D
+	var sail_visual := visual_root.get_node("VisualBoomPivot") as Node3D
 	var boom := sail_visual.get_node("Boom") as MeshInstance3D
 	var mainsail := sail_visual.get_node("MainSailMesh") as MeshInstance3D
-	var sail_material := mainsail.material_override as StandardMaterial3D
+	var mast_material := mast.material_override as StandardMaterial3D
+	var sail_material := mainsail.material_override as ShaderMaterial
 	var tabs := debug_panel.find_child("SailboatDebugTabs", true, false) as TabContainer
 	_expect(boat != null and field != null, "SailboatLab has an independent body and local WindField")
+	var visual_profile: Resource = visual_root.get_node("VisualRigAnchors").get("visual_profile")
+	_expect(
+		visual_root.position.is_equal_approx(visual_profile.get("visual_assembly_offset_local_m"))
+			and visual_root.position.is_equal_approx(Vector3(0.0, -0.30, 0.0)),
+		"Nordic 28 visual assembly uses the shared 30 cm draft offset"
+	)
 	_expect(mast != null and mast.mesh is CylinderMesh, "fixed mast uses a lightweight cylinder outside the sail pivot")
 	_expect(boom != null and boom.mesh is CylinderMesh, "boom is a lightweight cylinder attached to the sail pivot")
 	_expect(mainsail != null and mainsail.mesh is ArrayMesh, "mainsail is a static ArrayMesh rather than a rectangular placeholder")
-	_expect(sail_material != null and sail_material.transparency == BaseMaterial3D.TRANSPARENCY_DISABLED, "mainsail uses a solid cloth material")
-	_expect(sail_material != null and sail_material.cull_mode == BaseMaterial3D.CULL_DISABLED, "mainsail is visible from both sides")
+	_expect(mast_material != null and mast_material.albedo_color.r > 0.50 and mast_material.metallic > 0.25 and mast_material.roughness > 0.45, "mast and Boom use the approved soft silver-gray aluminum finish")
+	_expect(sail_material != null and not sail_material.shader.code.contains("blend_") , "mainsail uses opaque solid cloth shading")
+	_expect(sail_material != null and sail_material.shader.code.contains("cull_disabled"), "mainsail shader renders both sides")
 	if mast != null and mast.mesh is CylinderMesh:
 		var mast_mesh := mast.mesh as CylinderMesh
-		_expect(absf((mast.position.y - mast_mesh.height * 0.5) - 0.63) < 0.01, "mast foot sits at the test deck top")
-		_expect(absf((mast.position.y + mast_mesh.height * 0.5) - 5.28) < 0.02, "mast head reaches close to the mainsail head")
+		var rig_snapshot: Dictionary = visual_root.get_node("VisualRigAnchors").call("get_alignment_snapshot")
+		var visual_mast_base: Vector3 = rig_snapshot.get("visual_mast_base_local_m", Vector3.ZERO)
+		var visual_mast_top: Vector3 = rig_snapshot.get("visual_mast_top_local_m", Vector3.ZERO)
+		_expect(absf((mast.position.y - mast_mesh.height * 0.5) - visual_mast_base.y) < 0.01, "visual mast foot follows the approved Nordic 28 V2 mast step")
+		_expect(absf((mast.position.y + mast_mesh.height * 0.5) - visual_mast_top.y) < 0.02, "visual mast head follows the Nordic 28 rig anchor")
+		_expect(absf(mast_mesh.height - 6.50) < 0.001, "Nordic 28 V2 mast is 6.50 m tall")
 	if boom != null and boom.mesh is CylinderMesh:
-		_expect(absf((boom.mesh as CylinderMesh).height - 4.65) < 0.001, "boom length places the clew at the hull stern")
-	_expect(tabs != null and tabs.get_tab_count() == 6, "manual sail and aerodynamic telemetry remain in the shared tabbed debug panel")
+		_expect(absf((boom.mesh as CylinderMesh).height - 3.30) < 0.001, "Nordic 28 V2 Boom is 3.30 m and stops before the stern helm position")
+	_expect(tabs != null and tabs.get_tab_count() == 7, "underwater inspection is added while sail telemetry stays in the shared debug panel")
 	if boat == null or field == null:
 		lab.queue_free()
 		await process_frame
@@ -162,30 +174,33 @@ func _test_lab_integration() -> void:
 	var profile: Resource = boat.get("profile")
 	var sail_area := float(profile.get("main_sail_area_m2"))
 	var pressure_from_pivot: Vector3 = profile.get("main_sail_pressure_center_from_pivot_m")
-	_expect(absf(sail_area - 10.16025) < 0.001, "physical sail area matches the one-sided visual triangle planform area")
-	_expect(absf(sail_area - 0.5 * (4.45 - 0.08) * 4.65) < 0.001, "visual triangle area is derived from head, tack, and clew")
-	_expect(absf(pressure_from_pivot.y - 2.4) < 0.001 and absf(pressure_from_pivot.z - 0.8) < 0.001, "pressure centre is the calibrated sail-frame candidate, inside the triangle")
-	_expect(_point_inside_sail_triangle(Vector2(pressure_from_pivot.y, pressure_from_pivot.z)), "calibrated pressure centre lies within the visible triangle at every trim angle")
+	_expect(absf(sail_area - 10.16025) < 0.001, "Nordic 28 visual update leaves the calibrated physical mainsail area unchanged")
+	var rig_geometry: Dictionary = visual_root.get_node("VisualRigAnchors").call("get_alignment_snapshot")
+	_expect(absf(float(rig_geometry.get("main_visual_area_m2", 0.0)) - 9.450) < 0.002, "raised Boom gives a 9.45 m2 visual mainsail without changing physical area")
+	_expect(absf(float(rig_geometry.get("visual_boom_local_m", Vector3.ZERO).y) - 1.9111) < 0.001, "Nordic 28 V2.1 raises the visual Boom 10 cm")
+	_expect(absf(float(rig_geometry.get("jib_visual_area_m2", 0.0)) - 5.160) < 0.002, "Nordic 28 V2 fractional-height Jib remains near 5.16 m2 visually")
+	_expect(absf(pressure_from_pivot.y - 2.4) < 0.001 and absf(pressure_from_pivot.z - 0.8) < 0.001, "the original calibrated physical pressure-centre offset is unchanged")
 	if mainsail != null and mainsail.mesh is ArrayMesh:
 		var sail_arrays: Array = (mainsail.mesh as ArrayMesh).surface_get_arrays(0)
 		var sail_vertices: PackedVector3Array = sail_arrays[Mesh.ARRAY_VERTEX]
-		_expect(sail_vertices.size() == 6, "Bermuda sail has a front and back triangle")
-		if sail_vertices.size() >= 3:
-			var head := sail_vertices[0]
-			var tack := sail_vertices[1]
-			var clew := sail_vertices[2]
+		var sail_uvs: PackedVector2Array = sail_arrays[Mesh.ARRAY_TEX_UV]
+		_expect(sail_vertices.size() == 297 and sail_uvs.size() == sail_vertices.size(), "Bermuda sail has a subdivided UV-mapped cloth grid")
+		if sail_vertices.size() == 297:
+			var head := sail_vertices[26 * 11]
+			var tack := sail_vertices[0]
+			var clew := sail_vertices[10]
 			_expect(head.y > tack.y and head.y > clew.y, "sail head is above the tack and clew")
 			_expect(absf(head.x) < 0.001 and absf(tack.x) < 0.001 and absf(clew.x) < 0.001, "luff, tack, and clew share the sail plane at the mast")
 			_expect(clew.z > tack.z, "clew and boom extend aft along local +Z")
 			_expect(absf(tack.y - clew.y) < 0.001, "sail foot follows the boom at a consistent height")
 	_expect(mast.get_parent() == visual_root and mast.get_parent() != sail_visual, "mast stays fixed while the sail and boom share the trim pivot")
 	_expect(is_equal_approx(sail_visual.rotation.y, 0.0), "zero trim starts with the boom aimed aft on the centerline")
-	for trim_degrees in [-50.0, -30.0, 0.0, 30.0, 50.0]:
+	for trim_degrees in [-80.0, -60.0, -30.0, 0.0, 30.0, 60.0, 80.0]:
 		var expected_angle := deg_to_rad(trim_degrees)
 		boat.set("actual_sail_angle_rad", expected_angle)
 		boat.call("_process", 0.0)
 		_expect(absf(sail_visual.rotation.y - expected_angle) < 0.001, "visual pivot follows actual sail angle at %d degrees" % int(trim_degrees))
-		var rotated_clew := sail_visual.transform.basis * Vector3(0.0, 0.08, 4.65)
+		var rotated_clew := sail_visual.transform.basis * Vector3(0.0, 0.0, 3.30)
 		if trim_degrees > 0.0:
 			_expect(rotated_clew.x > 0.0, "positive trim angles from 30 to 50 degrees rotate aft hardware toward starboard")
 		elif trim_degrees < 0.0:
@@ -286,17 +301,6 @@ func _test_lab_integration() -> void:
 
 func _near(left: Vector3, right: Vector3, epsilon: float = 0.0001) -> bool:
 	return left.distance_to(right) <= epsilon
-
-
-func _point_inside_sail_triangle(point: Vector2) -> bool:
-	var head := Vector2(4.45, 0.04)
-	var tack := Vector2(0.08, 0.0)
-	var clew := Vector2(0.08, 4.65)
-	var denominator := (tack.y - clew.y) * (head.x - clew.x) + (clew.x - tack.x) * (head.y - clew.y)
-	var a := ((tack.y - clew.y) * (point.x - clew.x) + (clew.x - tack.x) * (point.y - clew.y)) / denominator
-	var b := ((clew.y - head.y) * (point.x - clew.x) + (head.x - clew.x) * (point.y - clew.y)) / denominator
-	var c := 1.0 - a - b
-	return a >= -0.0001 and b >= -0.0001 and c >= -0.0001
 
 
 func _expect(condition: bool, description: String) -> void:

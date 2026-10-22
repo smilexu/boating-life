@@ -127,18 +127,21 @@ func _build_card(vessel_name: String, vessel_type: String, details: String) -> v
 	preview_content.add_child(_preview_notice)
 
 	var type_label := Label.new()
+	type_label.name = "VesselTypeLabel"
 	type_label.text = vessel_type
 	type_label.add_theme_font_size_override("font_size", 13)
 	type_label.add_theme_color_override("font_color", Color(0.52, 0.79, 0.75))
 	layout.add_child(type_label)
 	var name_label := Label.new()
+	name_label.name = "VesselNameLabel"
 	name_label.text = vessel_name
 	name_label.add_theme_font_size_override("font_size", 20)
 	name_label.add_theme_color_override("font_color", Color(0.95, 0.97, 0.94))
 	layout.add_child(name_label)
 	var detail_label := Label.new()
+	detail_label.name = "VesselDetailsLabel"
 	detail_label.text = details
-	detail_label.custom_minimum_size.y = 66.0
+	detail_label.custom_minimum_size.y = 84.0
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail_label.add_theme_font_size_override("font_size", 14)
 	detail_label.add_theme_color_override("font_color", Color(0.80, 0.87, 0.86))

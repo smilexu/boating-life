@@ -3,6 +3,7 @@ extends SceneTree
 const AERO := preload("res://scripts/sailboat_aero_math.gd")
 const LAB_SCENE := preload("res://scenes/SailboatLab.tscn")
 const PROFILE := preload("res://resources/sailing/sailboat_lab_profile.tres")
+const NORDIC_VISUAL_PROFILE := preload("res://resources/sailing/nordic28_visual_rig_profile.tres")
 
 var _checks := 0
 var _failures: Array[String] = []
@@ -52,6 +53,7 @@ func _test_geometry_and_shared_aero() -> void:
 			if _triangles_overlap(main_triangle, jib_triangle):
 				overlap_found = true
 	_expect(not overlap_found and checked_angle_pairs == 957, "sampled full mainsail/Jib trim range has no triangle intersection")
+	_test_nordic28_visual_sail_clearance()
 
 	var port := AERO.calculate_sail_forces_for_chord(Vector3(8.0, 0.0, 0.0), Vector2(sin(deg_to_rad(30.0)), cos(deg_to_rad(30.0))), 5.196, 1.225, 1.25, 0.384, 0.08, 0.55, 0.9, 0.611, 0.873, 0.20)
 	var starboard := AERO.calculate_sail_forces_for_chord(Vector3(-8.0, 0.0, 0.0), Vector2(-sin(deg_to_rad(30.0)), cos(deg_to_rad(30.0))), 5.196, 1.225, 1.25, 0.384, 0.08, 0.55, 0.9, 0.611, 0.873, 0.20)
@@ -70,6 +72,88 @@ func _test_geometry_and_shared_aero() -> void:
 	_expect(is_zero_approx(float(luff.get("cl", 0.0))), "direct headwind jib luffs without artificial lift propulsion")
 
 
+func _test_nordic28_visual_sail_clearance() -> void:
+	var main_pivot: Vector3 = NORDIC_VISUAL_PROFILE.get("boom_pivot_local_m")
+	var main_head: Vector3 = NORDIC_VISUAL_PROFILE.get("main_head_local_m")
+	var boom_length := float(NORDIC_VISUAL_PROFILE.get("boom_length_m"))
+	var jib_head: Vector3 = NORDIC_VISUAL_PROFILE.get("jib_head_local_m")
+	var jib_tack: Vector3 = NORDIC_VISUAL_PROFILE.get("jib_tack_local_m")
+	var jib_neutral_clew: Vector3 = NORDIC_VISUAL_PROFILE.get("jib_clew_local_m")
+	var pairs_checked := 0
+	for main_degrees in [-80.0, -60.0, -30.0, 0.0, 30.0, 60.0, 80.0]:
+		var main_clew := main_pivot + Basis(Vector3.UP, deg_to_rad(main_degrees)) * Vector3(0.0, 0.0, boom_length)
+		var main_triangle := PackedVector3Array([main_head, main_pivot, main_clew])
+		for jib_degrees in [-70.0, -45.0, 0.0, 45.0, 70.0]:
+			var jib_clew := AERO.headsail_clew_from_sheet(jib_tack, jib_neutral_clew, deg_to_rad(jib_degrees))
+			var jib_triangle := PackedVector3Array([jib_head, jib_tack, jib_clew])
+			pairs_checked += 1
+			_expect(
+				not _triangles_cross_beyond_forestay_contact(main_triangle, jib_triangle),
+				"Nordic 28 V2 main and Jib only meet at the forestay/mast contact (%+.0f° / %+.0f°)" % [main_degrees, jib_degrees]
+			)
+	_expect(pairs_checked == 35, "Nordic 28 V2 checks both sail sides across representative trim combinations")
+
+
+func _triangles_cross_beyond_forestay_contact(first: PackedVector3Array, second: PackedVector3Array) -> bool:
+	var first_edges := [first[1] - first[0], first[2] - first[1], first[0] - first[2]]
+	var second_edges := [second[1] - second[0], second[2] - second[1], second[0] - second[2]]
+	var first_normal: Vector3 = first_edges[0].cross(first_edges[1]).normalized()
+	var second_normal: Vector3 = second_edges[0].cross(second_edges[1]).normalized()
+	var line_direction := first_normal.cross(second_normal)
+	if line_direction.length() <= 0.00001:
+		if absf(first_normal.dot(second[0] - first[0])) > 0.0001:
+			return false
+		var first_min_z := minf(first[0].z, minf(first[1].z, first[2].z))
+		var first_max_z := maxf(first[0].z, maxf(first[1].z, first[2].z))
+		var second_min_z := minf(second[0].z, minf(second[1].z, second[2].z))
+		var second_max_z := maxf(second[0].z, maxf(second[1].z, second[2].z))
+		return minf(first_max_z, second_max_z) - maxf(first_min_z, second_min_z) > 0.0001
+	line_direction = line_direction.normalized()
+	var common_head: Vector3 = second[0]
+	var first_interval := _triangle_line_interval(first, common_head, line_direction)
+	var second_interval := _triangle_line_interval(second, common_head, line_direction)
+	if first_interval.x > first_interval.y or second_interval.x > second_interval.y:
+		return false
+	return minf(first_interval.y, second_interval.y) - maxf(first_interval.x, second_interval.x) > 0.0001
+
+
+func _triangle_line_interval(triangle: PackedVector3Array, point: Vector3, direction: Vector3) -> Vector2:
+	var at_point := _triangle_barycentric_weights(triangle, point)
+	var one_unit_along := _triangle_barycentric_weights(triangle, point + direction)
+	var low := -INF
+	var high := INF
+	for index in range(3):
+		var slope: float = one_unit_along[index] - at_point[index]
+		if absf(slope) < 0.0000001:
+			if float(at_point[index]) < -0.0001:
+				return Vector2(INF, -INF)
+			continue
+		var bound := -float(at_point[index]) / slope
+		if slope > 0.0:
+			low = maxf(low, bound)
+		else:
+			high = minf(high, bound)
+	return Vector2(low, high)
+
+
+func _triangle_barycentric_weights(triangle: PackedVector3Array, point: Vector3) -> Array[float]:
+	var a := triangle[0]
+	var edge_a := triangle[1] - a
+	var edge_b := triangle[2] - a
+	var from_a := point - a
+	var dot_aa := edge_a.dot(edge_a)
+	var dot_ab := edge_a.dot(edge_b)
+	var dot_bb := edge_b.dot(edge_b)
+	var dot_pa := from_a.dot(edge_a)
+	var dot_pb := from_a.dot(edge_b)
+	var denominator := dot_aa * dot_bb - dot_ab * dot_ab
+	if absf(denominator) < 0.0000001:
+		return [0.0, 0.0, 0.0]
+	var weight_b := (dot_bb * dot_pa - dot_ab * dot_pb) / denominator
+	var weight_c := (dot_aa * dot_pb - dot_ab * dot_pa) / denominator
+	return [1.0 - weight_b - weight_c, weight_b, weight_c]
+
+
 func _test_lab_physics_and_visuals() -> void:
 	var lab := LAB_SCENE.instantiate()
 	root.add_child(lab)
@@ -82,14 +166,14 @@ func _test_lab_physics_and_visuals() -> void:
 	var tabs := debug_panel.find_child("SailboatDebugTabs", true, false) as TabContainer
 	_expect(visual != null and visual.mesh is ArrayMesh, "Jib is a lightweight ArrayMesh component under the boat visual root")
 	_expect(visual != null and visual.get_script().resource_path.ends_with("headsail_triangle_visual.gd"), "Jib visual has its independent low-cost triangle controller")
-	_expect(jib_controls != null and tabs != null and tabs.get_tab_count() == 6, "headsail controls extend the existing sail tab without adding another debug tab")
+	_expect(jib_controls != null and tabs != null and tabs.get_tab_count() == 7, "headsail controls stay in the sail tab alongside underwater inspection")
 	_expect(absf(float(profile.get("headsail_area_m2")) - 5.16) < 0.001, "Jib nominal area comes from the vessel Resource")
 	var jib_key := InputEventKey.new()
-	jib_key.keycode = KEY_J
+	jib_key.physical_keycode = KEY_J
 	jib_key.pressed = true
 	boat.call("_input", jib_key)
 	_expect(absf(float(boat.call("get_target_headsail_angle")) + deg_to_rad(10.0)) < 0.0001, "J decrements the independent Jib target angle")
-	jib_key.keycode = KEY_L
+	jib_key.physical_keycode = KEY_L
 	boat.call("_input", jib_key)
 	_expect(absf(float(boat.call("get_target_headsail_angle"))) < 0.0001, "L increments the independent Jib target angle")
 	boat.call("set_target_headsail_angle", PI)
@@ -105,20 +189,36 @@ func _test_lab_physics_and_visuals() -> void:
 	if visual != null:
 		var mesh := visual.mesh as ArrayMesh
 		var vertices: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
-		_expect(vertices.size() == 3, "dynamic headsail uses exactly one low-poly triangle")
-		if vertices.size() == 3:
-			_expect(vertices[0].y > vertices[1].y and vertices[0].y > vertices[2].y, "Jib head remains above Tack and Clew")
-			_expect(vertices[1].z < vertices[2].z, "neutral jib Clew sits aft of its bow Tack")
+		var visual_grid: Dictionary = visual.call("get_visual_snapshot")
+		var jib_columns := int(visual_grid.get("columns", 0))
+		var jib_rows := int(visual_grid.get("rows", 0))
+		var tack_index := 0
+		var clew_index := jib_columns
+		var head_index := jib_rows * (jib_columns + 1)
+		_expect(vertices.size() == (jib_rows + 1) * (jib_columns + 1) and vertices.size() > 3, "Jib uses a subdivided triangular cloth mesh")
+		if vertices.size() == (jib_rows + 1) * (jib_columns + 1):
+			_expect(vertices[head_index].y > vertices[tack_index].y and vertices[head_index].y > vertices[clew_index].y, "Jib head remains above Tack and Clew")
+			_expect(vertices[tack_index].z < vertices[clew_index].z, "neutral jib Clew sits aft of its bow Tack")
 		var pivot_parent := visual.get_parent()
 		_expect(pivot_parent == boat.get_node("VisualRoot"), "Jib Head and Tack do not inherit the mainsail Boom pivot")
+		var rig_snapshot: Dictionary = boat.get_node("VisualRoot/VisualRigAnchors").call("get_alignment_snapshot")
+		var visual_jib_head: Vector3 = rig_snapshot.get("visual_jib_head_local_m", Vector3.ZERO)
+		var visual_jib_tack: Vector3 = rig_snapshot.get("visual_jib_tack_local_m", Vector3.ZERO)
+		var neutral_visual_clew: Vector3 = rig_snapshot.get("visual_jib_clew_local_m", Vector3.ZERO)
 		visual.call("set_sheet_angle", deg_to_rad(30.0))
-		vertices = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
-		_expect(vertices[0].is_equal_approx(profile.get("headsail_head_local_m")) and vertices[1].is_equal_approx(profile.get("headsail_tack_local_m")), "sheet movement keeps Jib Head and Tack fixed")
 		var positive_visual_vertices: PackedVector3Array = visual.call("get_vertices_for_angle", deg_to_rad(30.0))
-		_expect(positive_visual_vertices[2].x > 0.0, "positive sheet moves the visual Clew to starboard")
+		_expect(positive_visual_vertices[head_index].is_equal_approx(visual_jib_head) and positive_visual_vertices[tack_index].is_equal_approx(visual_jib_tack), "sheet movement keeps Nordic 28 visual Jib Head and Tack fixed")
+		_expect(not positive_visual_vertices[tack_index].is_equal_approx(profile.get("headsail_tack_local_m")), "visual Jib Tack is independent from the unchanged physical Tack")
+		_expect(positive_visual_vertices[clew_index].x > 0.0, "positive sheet moves the visual Clew to starboard")
 		visual.call("set_sheet_angle", deg_to_rad(-30.0))
 		var negative_visual_vertices: PackedVector3Array = visual.call("get_vertices_for_angle", deg_to_rad(-30.0))
-		_expect(negative_visual_vertices[2].x < 0.0, "negative sheet moves the visual Clew to port")
+		_expect(negative_visual_vertices[clew_index].x < 0.0, "negative sheet moves the visual Clew to port")
+		for sheet_degrees in [-70.0, 0.0, 70.0]:
+			var sheet_angle := deg_to_rad(sheet_degrees)
+			var vertices_at_limit: PackedVector3Array = visual.call("get_vertices_for_angle", sheet_angle)
+			_expect(vertices_at_limit[head_index].is_equal_approx(visual_jib_head), "JibHead stays fixed at %+.0f°" % sheet_degrees)
+			_expect(vertices_at_limit[tack_index].is_equal_approx(visual_jib_tack), "JibTack stays fixed at %+.0f°" % sheet_degrees)
+			_expect(absf(vertices_at_limit[tack_index].distance_to(vertices_at_limit[clew_index]) - visual_jib_tack.distance_to(neutral_visual_clew)) < 0.001, "Jib foot length is preserved at %+.0f°" % sheet_degrees)
 
 	boat.call("set_dynamic_waves_enabled", false)
 	boat.call("reset_to_neutral")

@@ -444,8 +444,14 @@ func _build_vessel_picker() -> void:
 	var motor_name := "初始货运艇" if motor_profile != null else "动力艇"
 	var motor_details := "7.2 m × 2.56 m\n吃水 0.32–0.75 m · 货舱 2 格\n老式动力船 · OM02 发动机"
 	var sail_profile: Resource = sailboat_body.get("profile") as Resource if sailboat_body != null else null
-	var sail_name := "8 m 双帆帆船" if sail_profile != null else "帆船"
-	var sail_details := "8.0 m × 2.6 m · 吃水 0.90 m\n主帆 10.16 m² + Jib 5.16 m²\n双帆独立操控 · 支持 AUTO 自动操帆"
+	var sail_name := "Nordic 28"
+	var sail_length_m := float(sail_profile.get("vessel_length_m")) if sail_profile != null else 8.0
+	var sail_draft_m := float(sail_profile.get("draft_m")) if sail_profile != null else 0.9
+	var main_sail_area_m2 := float(sail_profile.get("main_sail_area_m2")) if sail_profile != null else 10.16
+	var headsail_area_m2 := float(sail_profile.get("headsail_area_m2")) if sail_profile != null else 5.16
+	var sail_details := "船长约 %.1f m · 外观宽约 2.75 m · 吃水 %.2f m\n风帆推进 · 主帆 %.2f m² + 前帆 %.2f m²\n主帆/前帆独立操控 · 支持 AUTO 自动操帆\n支持手动船舵 · 适合近海巡航与悠闲航行" % [
+		sail_length_m, sail_draft_m, main_sail_area_m2, headsail_area_m2,
+	]
 	var motor_card := VesselPreviewCardScript.new() as Control
 	motor_card.name = "PowerboatCard"
 	motor_card.call("configure", false, motor_name, "动力艇 · 初始货运船", motor_details, motorboat_source)
@@ -454,7 +460,7 @@ func _build_vessel_picker() -> void:
 	_vessel_picker_cards.append(motor_card)
 	var sail_card := VesselPreviewCardScript.new() as Control
 	sail_card.name = "SailboatCard"
-	sail_card.call("configure", true, sail_name, "帆船 · 8 m 单桅双帆", sail_details, sailboat_source)
+	sail_card.call("configure", true, sail_name, "休闲巡航帆船 · 风帆推进", sail_details, sailboat_source)
 	sail_card.connect("vessel_selected", _on_vessel_picker_card_selected)
 	card_row.add_child(sail_card)
 	_vessel_picker_cards.append(sail_card)

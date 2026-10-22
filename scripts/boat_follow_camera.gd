@@ -5,6 +5,9 @@ extends Node3D
 
 @export_node_path("Node3D") var target_path := NodePath("../MotionRoot")
 @export_range(4.0, 18.0, 0.5) var follow_distance := 14.0
+@export_range(14.0, 24.0, 0.5) var sailing_follow_distance := 18.0
+@export_range(0.5, 4.0, 0.1) var zoom_step_m := 1.5
+@export_range(18.0, 50.0, 1.0) var maximum_follow_distance := 36.0
 @export_range(16.0, 60.0, 1.0) var god_view_distance := 60.0
 @export_range(1.0, 8.0, 0.1) var follow_smoothing := 5.5
 @export_range(0.05, 1.5, 0.01) var mouse_sensitivity := 0.4
@@ -18,6 +21,7 @@ var _god_view_enabled := false
 var _saved_orbit_yaw := 0.0
 var _saved_orbit_elevation := 0.0
 var _smoothed_focus := Vector3.ZERO
+var _zoom_offset_m := 0.0
 
 @onready var _target: Node3D = get_node_or_null(target_path) as Node3D
 @onready var _camera: Camera3D = $Camera3D
@@ -63,6 +67,13 @@ func _unhandled_input(event: InputEvent) -> void:
 			maximum_elevation
 		)
 		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton and event.pressed and not _god_view_enabled:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			_zoom_offset_m = maxf(_zoom_offset_m - zoom_step_m, 4.0 - _get_vessel_follow_distance())
+			get_viewport().set_input_as_handled()
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			_zoom_offset_m = minf(_zoom_offset_m + zoom_step_m, maximum_follow_distance - _get_vessel_follow_distance())
+			get_viewport().set_input_as_handled()
 
 
 func _exit_tree() -> void:
@@ -99,7 +110,7 @@ func _get_focus_position() -> Vector3:
 func _get_desired_position() -> Vector3:
 	var target_transform := _target.global_transform
 	var heading := target_transform.basis.get_euler().y + orbit_yaw
-	var camera_distance := god_view_distance if _god_view_enabled else follow_distance
+	var camera_distance := god_view_distance if _god_view_enabled else _get_vessel_follow_distance() + _zoom_offset_m
 	var planar_distance := camera_distance * cos(orbit_elevation)
 	var offset := Vector3(
 		sin(heading) * planar_distance,
@@ -107,4 +118,11 @@ func _get_desired_position() -> Vector3:
 		cos(heading) * planar_distance
 	)
 	return _get_focus_position() + offset
+
+
+func _get_vessel_follow_distance() -> float:
+	var distance := follow_distance
+	if _target != null and _target.has_method("supports_sail_trim") and bool(_target.call("supports_sail_trim")):
+		distance = maxf(distance, sailing_follow_distance)
+	return clampf(distance, 4.0, maximum_follow_distance)
 

@@ -1,49 +1,36 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://scripts/sailboat_lab_body.gd" id="1_body"]
 [ext_resource type="Resource" path="res://resources/sailing/sailboat_lab_profile.tres" id="2_profile"]
 [ext_resource type="Script" path="res://scripts/sail_triangle_visual.gd" id="3_sail_triangle"]
-[ext_resource type="Script" path="res://scripts/sailboat_lab_hull_visual.gd" id="4_hull_visual"]
 [ext_resource type="Script" path="res://scripts/headsail_triangle_visual.gd" id="5_headsail_visual"]
+[ext_resource type="PackedScene" path="res://assets/boats/nordic28/boat_body.glb" id="6_nordic28_model"]
+[ext_resource type="Script" path="res://scripts/sailing_hull_material_adapter.gd" id="7_nordic28_material"]
+[ext_resource type="Resource" path="res://resources/sailing/nordic28_visual_rig_profile.tres" id="8_visual_rig_profile"]
+[ext_resource type="Script" path="res://scripts/nordic28_visual_rig_anchors.gd" id="9_visual_rig_anchors"]
+[ext_resource type="Script" path="res://scripts/nordic28_rudder_visual.gd" id="10_rudder_visual"]
+[ext_resource type="Script" path="res://scripts/nordic28_sail_visuals.gd" id="11_sail_visuals"]
+[ext_resource type="Script" path="res://scripts/nordic28_helm_visual.gd" id="12_helm_visual"]
 
 [sub_resource type="BoxShape3D" id="BoxShape_hull"]
 size = Vector3(2.5, 1.2, 7.4)
 
-[sub_resource type="BoxMesh" id="BoxMesh_hull"]
-size = Vector3(2.5, 1.05, 7.8)
-
-[sub_resource type="BoxMesh" id="BoxMesh_deck"]
-size = Vector3(2.35, 0.12, 7.45)
-
-[sub_resource type="BoxMesh" id="BoxMesh_keel"]
-size = Vector3(0.14, 1.15, 1.9)
-
-[sub_resource type="BoxMesh" id="BoxMesh_rudder"]
-size = Vector3(0.12, 0.74, 0.72)
-
 [sub_resource type="CylinderMesh" id="CylinderMesh_mast"]
 top_radius = 0.045
 bottom_radius = 0.075
-height = 4.65
+height = 6.5
 radial_segments = 8
 
 [sub_resource type="CylinderMesh" id="CylinderMesh_boom"]
 top_radius = 0.045
 bottom_radius = 0.06
-height = 4.65
+height = 3.3
 radial_segments = 8
 
-[sub_resource type="StandardMaterial3D" id="Material_hull"]
-albedo_color = Color(0.08, 0.24, 0.31, 1)
-roughness = 0.42
-
-[sub_resource type="StandardMaterial3D" id="Material_deck"]
-albedo_color = Color(0.72, 0.62, 0.42, 1)
-roughness = 0.72
-
 [sub_resource type="StandardMaterial3D" id="Material_mast"]
-albedo_color = Color(0.28, 0.18, 0.1, 1)
-roughness = 0.66
+albedo_color = Color(0.56, 0.61, 0.64, 1)
+metallic = 0.32
+roughness = 0.54
 
 [sub_resource type="StandardMaterial3D" id="Material_sail"]
 albedo_color = Color(0.95, 0.93, 0.86, 1)
@@ -66,6 +53,12 @@ roughness = 0.48
 [sub_resource type="BoxMesh" id="BoxMesh_rudder_marker"]
 size = Vector3(0.10, 0.07, 0.82)
 
+[sub_resource type="CylinderMesh" id="CylinderMesh_rudder_stock"]
+top_radius = 0.032
+bottom_radius = 0.032
+height = 0.5
+radial_segments = 8
+
 [node name="SailingBoat8m" type="RigidBody3D"]
 collision_layer = 1
 collision_mask = 1
@@ -73,7 +66,7 @@ script = ExtResource("1_body")
 profile = ExtResource("2_profile")
 wave_sampler_path = NodePath("../WaveSampler")
 wind_field_path = NodePath("../WindField")
-sail_visual_pivot_path = NodePath("VisualRoot/SailPivot")
+sail_visual_pivot_path = NodePath("VisualRoot/VisualBoomPivot")
 rudder_visual_pivot_path = NodePath("VisualRoot/RudderPivot")
 rudder_angle_marker_path = NodePath("VisualRoot/RudderAngleMarker")
 headsail_visual_path = NodePath("VisualRoot/HeadsailVisual")
@@ -84,32 +77,52 @@ position = Vector3(0, 0.03, 0)
 shape = SubResource("BoxShape_hull")
 
 [node name="VisualRoot" type="Node3D" parent="."]
-script = ExtResource("4_hull_visual")
 
-[node name="Hull" type="MeshInstance3D" parent="VisualRoot"]
-mesh = SubResource("BoxMesh_hull")
-material_override = SubResource("Material_hull")
+[node name="HullModelAdapter" type="Node3D" parent="VisualRoot"]
+position = Vector3(0, -1.45, 0.395)
+rotation_degrees = Vector3(0, 90, 0)
+scale = Vector3(6.91115, 6.91115, 6.91115)
 
-[node name="Deck" type="MeshInstance3D" parent="VisualRoot"]
-position = Vector3(0, 0.57, 0)
-mesh = SubResource("BoxMesh_deck")
-material_override = SubResource("Material_deck")
+[node name="Nordic28Model" parent="VisualRoot/HullModelAdapter" instance=ExtResource("6_nordic28_model")]
+script = ExtResource("7_nordic28_material")
 
-[node name="KeelPlaceholder" type="MeshInstance3D" parent="VisualRoot"]
-position = Vector3(0, -0.93, 0.15)
-mesh = SubResource("BoxMesh_keel")
-material_override = SubResource("Material_hull")
+[node name="VisualRigAnchors" type="Node3D" parent="VisualRoot"]
+script = ExtResource("9_visual_rig_anchors")
+visual_profile = ExtResource("8_visual_rig_profile")
+
+[node name="VisualMastBase" type="Marker3D" parent="VisualRoot/VisualRigAnchors"]
+
+[node name="VisualMastTop" type="Marker3D" parent="VisualRoot/VisualRigAnchors"]
+
+[node name="VisualBoomPivot" type="Marker3D" parent="VisualRoot/VisualRigAnchors"]
+
+[node name="VisualMainTack" type="Marker3D" parent="VisualRoot/VisualRigAnchors"]
+
+[node name="VisualMainHead" type="Marker3D" parent="VisualRoot/VisualRigAnchors"]
+
+[node name="VisualJibHead" type="Marker3D" parent="VisualRoot/VisualRigAnchors"]
+
+[node name="VisualJibTack" type="Marker3D" parent="VisualRoot/VisualRigAnchors"]
+
+[node name="VisualJibClew" type="Marker3D" parent="VisualRoot/VisualRigAnchors"]
+
+[node name="VisualMainClew" type="Marker3D" parent="VisualRoot/VisualRigAnchors"]
 
 [node name="RudderPivot" type="Node3D" parent="VisualRoot"]
 position = Vector3(0, -0.62, 3.18)
+script = ExtResource("10_rudder_visual")
+visual_profile = ExtResource("8_visual_rig_profile")
 
 [node name="RudderBlade" type="MeshInstance3D" parent="VisualRoot/RudderPivot"]
-position = Vector3(0, -0.20, 0.20)
-mesh = SubResource("BoxMesh_rudder")
-material_override = SubResource("Material_hull")
+material_override = SubResource("Material_mast")
+
+[node name="RudderStock" type="MeshInstance3D" parent="VisualRoot/RudderPivot"]
+mesh = SubResource("CylinderMesh_rudder_stock")
+material_override = SubResource("Material_mast")
 
 [node name="RudderAngleMarker" type="Node3D" parent="VisualRoot"]
 position = Vector3(0, 0.73, 3.08)
+visible = false
 
 [node name="BladeDirection" type="MeshInstance3D" parent="VisualRoot/RudderAngleMarker"]
 position = Vector3(0, 0, 0.22)
@@ -117,20 +130,20 @@ mesh = SubResource("BoxMesh_rudder_marker")
 material_override = SubResource("Material_rudder_marker")
 
 [node name="Mast" type="MeshInstance3D" parent="VisualRoot"]
-position = Vector3(0, 2.955, -0.75)
+position = Vector3(0, 3.825, -0.75)
 mesh = SubResource("CylinderMesh_mast")
 material_override = SubResource("Material_mast")
 
-[node name="SailPivot" type="Node3D" parent="VisualRoot"]
-position = Vector3(0, 0.65, -0.75)
+[node name="VisualBoomPivot" type="Node3D" parent="VisualRoot"]
+position = Vector3(0, 1.8, -0.75)
 
-[node name="Boom" type="MeshInstance3D" parent="VisualRoot/SailPivot"]
-position = Vector3(0, 0.08, 2.325)
+[node name="Boom" type="MeshInstance3D" parent="VisualRoot/VisualBoomPivot"]
+position = Vector3(0, 0, 2.325)
 rotation = Vector3(1.5707964, 0, 0)
 mesh = SubResource("CylinderMesh_boom")
 material_override = SubResource("Material_mast")
 
-[node name="MainSailMesh" type="MeshInstance3D" parent="VisualRoot/SailPivot"]
+[node name="MainSailMesh" type="MeshInstance3D" parent="VisualRoot/VisualBoomPivot"]
 script = ExtResource("3_sail_triangle")
 material_override = SubResource("Material_sail")
 
@@ -138,3 +151,9 @@ material_override = SubResource("Material_sail")
 script = ExtResource("5_headsail_visual")
 material_override = SubResource("Material_headsail")
 cast_shadow = 0
+
+[node name="SailVisuals" type="Node3D" parent="VisualRoot"]
+script = ExtResource("11_sail_visuals")
+
+[node name="HelmVisual" type="Node3D" parent="VisualRoot"]
+script = ExtResource("12_helm_visual")

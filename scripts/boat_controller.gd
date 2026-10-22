@@ -38,6 +38,8 @@ enum PropulsionType {
 @export var engine_audio_profile: EngineAudioProfileScript
 @export_node_path("RigidBody3D") var sailboat_body_path := NodePath("../SailingBoat8m")
 @export_node_path("Node3D") var sailboat_spawn_point_path := NodePath("../../SailboatSpawn")
+@export_node_path("Node") var navigation_depth_provider_path := NodePath("../../NavigationDepthProvider")
+@export_range(5.0, 50.0, 1.0) var sailboat_spawn_clearance_m := 14.0
 
 var speed_mps := 0.0
 var is_autopilot := false
@@ -50,12 +52,14 @@ var _autopilot_target_speed_mps := 0.0
 var _autopilot_speed_cap_mps := 0.0
 var _sailboat_body: RigidBody3D
 var _sailboat_spawn_point: Node3D
+var _navigation_depth_provider: Node
 var _sailboat_active := false
 
 
 func _ready() -> void:
 	_sailboat_body = get_node_or_null(sailboat_body_path) as RigidBody3D
 	_sailboat_spawn_point = get_node_or_null(sailboat_spawn_point_path) as Node3D
+	_navigation_depth_provider = get_node_or_null(navigation_depth_provider_path)
 	if _sailboat_body == null:
 		return
 	_sailboat_body.set_as_top_level(true)
@@ -144,9 +148,7 @@ func set_sailing_enabled(enabled: bool) -> bool:
 		is_motion_paused = false
 		_sailboat_body.set_as_top_level(true)
 		if _sailboat_body.has_method("prepare_for_main_spawn"):
-			var spawn_transform := global_transform
-			if is_instance_valid(_sailboat_spawn_point):
-				spawn_transform = _sailboat_spawn_point.global_transform
+			var spawn_transform := _find_nearby_safe_sailing_spawn()
 			_sailboat_body.call("prepare_for_main_spawn", spawn_transform)
 		_sailboat_active = true
 		_sailboat_body.call("set_vessel_active", true)
@@ -162,6 +164,72 @@ func set_sailing_enabled(enabled: bool) -> bool:
 		speed_mps = 0.0
 	vessel_mode_changed.emit(_sailboat_active)
 	return true
+
+
+func _find_nearby_safe_sailing_spawn() -> Transform3D:
+	var heading_basis := Basis(Vector3.UP, global_rotation.y)
+	var fallback_transform := Transform3D(heading_basis, Vector3(global_position.x, 0.0, global_position.z))
+	if is_instance_valid(_sailboat_spawn_point):
+		fallback_transform = _sailboat_spawn_point.global_transform
+	if _navigation_depth_provider == null or _sailboat_body == null:
+		return fallback_transform
+
+	var forward := -heading_basis.z
+	forward.y = 0.0
+	forward = forward.normalized() if forward.length_squared() > 0.0001 else Vector3.FORWARD
+	var right := heading_basis.x
+	right.y = 0.0
+	right = right.normalized() if right.length_squared() > 0.0001 else Vector3.RIGHT
+	var clearance := sailboat_spawn_clearance_m
+	var candidate_offsets := [
+		right * clearance,
+		-right * clearance,
+		forward * clearance,
+		-forward * clearance,
+		right * clearance * 1.5,
+		-right * clearance * 1.5,
+		forward * clearance * 1.5,
+		-forward * clearance * 1.5,
+	]
+	for candidate_offset: Vector3 in candidate_offsets:
+		var candidate := Transform3D(
+			heading_basis,
+			Vector3(global_position.x + candidate_offset.x, 0.0, global_position.z + candidate_offset.z)
+		)
+		if _is_sailing_spawn_depth_safe(candidate.origin) and _is_sailing_spawn_collision_free(candidate):
+			return candidate
+	return fallback_transform
+
+
+func _is_sailing_spawn_depth_safe(world_position: Vector3) -> bool:
+	if _navigation_depth_provider == null or _sailboat_body == null:
+		return false
+	var profile := _sailboat_body.get("profile") as Resource
+	if profile == null:
+		return false
+	var draft_m := float(profile.get("draft_m"))
+	var margin_m := float(_navigation_depth_provider.get("safety_margin_m"))
+	var result: Dictionary = _navigation_depth_provider.call(
+		"evaluate_world_position", world_position, draft_m, margin_m
+	)
+	return bool(result.get("valid", false)) \
+		and str(result.get("data_state", "")) == "water" \
+		and str(result.get("status", "")) == NavigationDepthProvider.STATUS_SAFE
+
+
+func _is_sailing_spawn_collision_free(spawn_transform: Transform3D) -> bool:
+	if _sailboat_body == null or get_world_3d() == null:
+		return false
+	var collision_shape := _sailboat_body.get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if collision_shape == null or collision_shape.shape == null:
+		return false
+	var query := PhysicsShapeQueryParameters3D.new()
+	query.shape = collision_shape.shape
+	query.transform = spawn_transform * collision_shape.transform
+	query.collision_mask = _sailboat_body.collision_mask
+	query.exclude = [_sailboat_body.get_rid()]
+	query.collide_with_areas = false
+	return get_world_3d().direct_space_state.intersect_shape(query, 1).is_empty()
 
 
 func set_sailing_manual_controls_enabled(enabled: bool) -> void:
