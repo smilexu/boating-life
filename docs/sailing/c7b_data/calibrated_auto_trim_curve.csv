@@ -1,0 +1,17 @@
+sail,point_index,awa_abs_degrees,sheet_magnitude_degrees,source
+main,0,0.000000,10.000000,profile_resource
+main,1,30.000000,10.000000,profile_resource
+main,2,45.000000,20.000000,profile_resource
+main,3,60.000000,30.000000,profile_resource
+main,4,80.199997,60.000000,profile_resource
+main,5,108.099998,79.900002,profile_resource
+main,6,143.100006,79.900002,profile_resource
+main,7,180.000000,79.900002,profile_resource
+jib,0,0.000000,10.000000,profile_resource
+jib,1,30.000000,10.000000,profile_resource
+jib,2,45.000000,15.000000,profile_resource
+jib,3,60.000000,25.000000,profile_resource
+jib,4,80.199997,55.000000,profile_resource
+jib,5,108.099998,70.000000,profile_resource
+jib,6,143.100006,70.000000,profile_resource
+jib,7,180.000000,70.000000,profile_resource

@@ -4,6 +4,29 @@ extends RefCounted
 const MIN_AIR_SPEED_MPS := 0.01
 
 
+static func headsail_clew_from_sheet(tack_local_m: Vector3, neutral_clew_local_m: Vector3, sheet_angle_rad: float) -> Vector3:
+	if (
+		not _finite_vector3(tack_local_m)
+		or not _finite_vector3(neutral_clew_local_m)
+		or not is_finite(sheet_angle_rad)
+	):
+		return neutral_clew_local_m
+	# The forestay/head/tack stay in place. Sheet the Clew around the Tack in the
+	# horizontal plane, preserving the foot length and keeping it above deck.
+	var tack_to_clew := neutral_clew_local_m - tack_local_m
+	return tack_local_m + Basis(Vector3.UP, sheet_angle_rad) * tack_to_clew
+
+
+static func triangular_sail_centroid(head_local_m: Vector3, tack_local_m: Vector3, clew_local_m: Vector3) -> Vector3:
+	return (head_local_m + tack_local_m + clew_local_m) / 3.0
+
+
+static func triangular_sail_area_m2(head_local_m: Vector3, tack_local_m: Vector3, clew_local_m: Vector3) -> float:
+	if not _finite_vector3(head_local_m) or not _finite_vector3(tack_local_m) or not _finite_vector3(clew_local_m):
+		return 0.0
+	return 0.5 * (tack_local_m - head_local_m).cross(clew_local_m - head_local_m).length()
+
+
 static func calculate_apparent_wind(
 	air_velocity_world_mps: Vector3,
 	boat_linear_velocity_world_mps: Vector3,
@@ -55,6 +78,38 @@ static func calculate_sail_forces(
 	full_lift_wind_from_angle_rad: float = deg_to_rad(50.0),
 	wrong_side_lift_retention: float = 1.0
 ) -> Dictionary:
+	## Backward-compatible mainsail API. A centred boom/chord points aft (+Z)
+	## and positive trim swings toward starboard (+X).
+	return calculate_sail_forces_for_chord(
+		apparent_velocity_local_mps,
+		Vector2(sin(sail_angle_rad), cos(sail_angle_rad)),
+		sail_area_m2,
+		air_density_kg_m3,
+		maximum_lift_coefficient,
+		stall_angle_rad,
+		base_drag_coefficient,
+		induced_drag_factor,
+		flat_plate_drag_factor,
+		no_sail_wind_from_angle_rad,
+		full_lift_wind_from_angle_rad,
+		wrong_side_lift_retention
+	)
+
+
+static func calculate_sail_forces_for_chord(
+	 apparent_velocity_local_mps: Vector3,
+	 chord_direction_xz: Vector2,
+	 sail_area_m2: float,
+	 air_density_kg_m3: float = 1.225,
+	 maximum_lift_coefficient: float = 1.25,
+	 stall_angle_rad: float = 0.384,
+	 base_drag_coefficient: float = 0.08,
+	 induced_drag_factor: float = 0.55,
+	 flat_plate_drag_factor: float = 0.90,
+	 no_sail_wind_from_angle_rad: float = deg_to_rad(35.0),
+	 full_lift_wind_from_angle_rad: float = deg_to_rad(50.0),
+	 wrong_side_lift_retention: float = 1.0
+) -> Dictionary:
 	var result := {
 		"valid": false,
 		"apparent_speed_mps": 0.0,
@@ -73,7 +128,7 @@ static func calculate_sail_forces(
 	}
 	if (
 		not _finite_vector3(apparent_velocity_local_mps)
-		or not is_finite(sail_angle_rad)
+		or not _finite_vector2(chord_direction_xz)
 		or not is_finite(sail_area_m2)
 		or not is_finite(air_density_kg_m3)
 		or not is_finite(maximum_lift_coefficient)
@@ -93,10 +148,12 @@ static func calculate_sail_forces(
 	if speed < MIN_AIR_SPEED_MPS:
 		return result
 	var flow_direction := apparent_xz / speed
-	# The sail chord is an unoriented line: use the signed angle in [-90°, 90°].
-	# The boom points from the mast aft (+Z) when centred and swings toward
-	# starboard (+X) for positive sheet angles, matching SailboatLab's visual pivot.
-	var chord_direction := Vector2(sin(sail_angle_rad), cos(sail_angle_rad))
+	# The aerodynamic chord is an unoriented line; keep its signed attack angle
+	# in [-90°, 90°]. The caller supplies the actual local XZ chord direction,
+	# allowing a jib and a boom-controlled mainsail to share the same model.
+	if chord_direction_xz.length_squared() < 0.000001:
+		return result
+	var chord_direction := chord_direction_xz.normalized()
 	var cross_y := chord_direction.y * flow_direction.x - chord_direction.x * flow_direction.y
 	var dot_value := chord_direction.dot(flow_direction)
 	var attack_angle := atan2(cross_y, dot_value)
@@ -113,10 +170,10 @@ static func calculate_sail_forces(
 	var full_lift_angle := clampf(full_lift_wind_from_angle_rad, no_sail_angle + 0.001, PI)
 	var luff_fraction := clampf((wind_from_angle - no_sail_angle) / (full_lift_angle - no_sail_angle), 0.0, 1.0)
 	var luffing_scale := luff_fraction * luff_fraction * (3.0 - 2.0 * luff_fraction)
-	# Treat the boom/chord as a directed geometric vector for the sheet-side
-	# check. If its lateral component points toward the wind source, lift is
-	# smoothly reduced as a game-level backing penalty. Drag remains active so
-	# following and quartering wind can still drive the boat by windage.
+	# Treat the sail's foot/chord as a directed geometric vector for the
+	# sheet-side check. If its lateral component points toward the wind source,
+	# lift is smoothly reduced as a game-level backing penalty. Drag remains
+	# active so following and quartering wind can still drive the boat by windage.
 	var wind_from_lateral := -flow_direction.x
 	var boom_lateral := chord_direction.x
 	var windward_sheet_alignment := maxf(wind_from_lateral * boom_lateral, 0.0)
@@ -234,6 +291,10 @@ static func move_sail_angle_toward(
 
 static func _finite_vector3(value: Vector3) -> bool:
 	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
+
+
+static func _finite_vector2(value: Vector2) -> bool:
+	return is_finite(value.x) and is_finite(value.y)
 
 
 static func _smooth_step(edge0: float, edge1: float, value: float) -> float:

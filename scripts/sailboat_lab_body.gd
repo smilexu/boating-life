@@ -5,6 +5,7 @@ const BUOYANCY_MATH := preload("res://scripts/sailboat_buoyancy_math.gd")
 const AERO_MATH := preload("res://scripts/sailboat_aero_math.gd")
 const HYDRO_MATH := preload("res://scripts/sailboat_hydrodynamics.gd")
 const NAVIGATION_MATH := preload("res://scripts/sailboat_navigation_math.gd")
+const AUTO_SAIL_TRIM_SCRIPT := preload("res://scripts/sailboat_auto_sail_trim.gd")
 const FLOAT_POINT_COUNT := 4
 const PERF_WINDOW_SIZE := 600
 
@@ -14,6 +15,7 @@ const PERF_WINDOW_SIZE := 600
 @export_node_path("Node3D") var sail_visual_pivot_path: NodePath = ^"VisualRoot/SailPivot"
 @export_node_path("Node3D") var rudder_visual_pivot_path: NodePath = ^"VisualRoot/RudderPivot"
 @export_node_path("Node3D") var rudder_angle_marker_path: NodePath = ^"VisualRoot/RudderAngleMarker"
+@export_node_path("MeshInstance3D") var headsail_visual_path: NodePath = ^"VisualRoot/HeadsailVisual"
 @export var dynamic_waves_enabled := true
 @export_range(-5.0, 5.0, 0.01, "or_greater", "or_less") var water_height_m := 0.0
 @export_range(0.0, 2.0, 0.01) var runtime_buoyancy_strength := 1.0
@@ -25,9 +27,18 @@ var _wind_field: WindField
 var _sail_visual_pivot: Node3D
 var _rudder_visual_pivot: Node3D
 var _rudder_angle_marker: Node3D
+var _headsail_visual: MeshInstance3D
 var _gravity_mps2 := 9.8
 var target_sail_angle_rad := 0.0
 var actual_sail_angle_rad := 0.0
+var target_headsail_angle_rad := 0.0
+var actual_headsail_angle_rad := 0.0
+var auto_sail_trim_enabled := false
+var _auto_sail_trim = AUTO_SAIL_TRIM_SCRIPT.new()
+var _auto_trim_applying_targets := false
+var _last_auto_trim_result: Dictionary = {}
+var _last_auto_trim_calculation_usec := 0
+var _headsail_enabled := true
 var target_rudder_angle_rad := 0.0
 var actual_rudder_angle_rad := 0.0
 var _rudder_key_a_pressed := false
@@ -49,6 +60,23 @@ var _sail_base_drag_coefficient := 0.08
 var _sail_induced_drag_factor := 0.55
 var _sail_flat_plate_drag_factor := 0.90
 var _sail_wrong_side_lift_retention := 0.20
+var _headsail_area_m2 := 5.16
+var _headsail_head_local_m := Vector3(0.0, 4.95, -0.75)
+var _headsail_tack_local_m := Vector3(0.0, 0.65, -3.55)
+var _headsail_clew_neutral_local_m := Vector3(0.0, 0.65, -1.15)
+var _headsail_pressure_center_offset_from_centroid_m := Vector3.ZERO
+var _headsail_pressure_center_clew_follow := 0.333333
+var _minimum_headsail_angle_rad := -1.222
+var _maximum_headsail_angle_rad := 1.222
+var _headsail_rotation_speed_rad_s := 0.52
+var _headsail_maximum_lift_coefficient := 1.25
+var _headsail_stall_angle_rad := 0.384
+var _headsail_no_sail_wind_from_angle_rad := 0.611
+var _headsail_full_lift_wind_from_angle_rad := 0.873
+var _headsail_base_drag_coefficient := 0.08
+var _headsail_induced_drag_factor := 0.55
+var _headsail_flat_plate_drag_factor := 0.90
+var _headsail_wrong_side_lift_retention := 0.20
 var _water_density_kg_m3 := 1025.0
 var _keel_center_local_m := Vector3(0.0, -1.05, 0.15)
 var _keel_area_m2 := 2.2
@@ -93,6 +121,7 @@ var _last_wave_sample_usec := 0
 var _last_wind_query_count := 0
 var _last_wind_sample_usec := 0
 var _last_aero_calculation_usec := 0
+var _last_headsail_aero_calculation_usec := 0
 var _last_true_wind_world_mps := Vector3.ZERO
 var _last_true_wind_from_degrees := 0.0
 var _last_apparent_wind_world_mps := Vector3.ZERO
@@ -113,12 +142,27 @@ var _last_sail_lift_force_local_n := Vector3.ZERO
 var _last_sail_drag_force_local_n := Vector3.ZERO
 var _last_sail_net_force_local_n := Vector3.ZERO
 var _last_sail_net_force_world_n := Vector3.ZERO
+var _last_headsail_apparent_wind_local_mps := Vector3.ZERO
+var _last_headsail_apparent_wind_speed_mps := 0.0
+var _last_headsail_angle_of_attack_rad := 0.0
+var _last_headsail_luffing_scale := 0.0
+var _last_headsail_wrong_side_lift_scale := 1.0
+var _last_headsail_cl := 0.0
+var _last_headsail_cd := 0.0
+var _last_headsail_effective_area_m2 := 0.0
+var _last_headsail_pressure_center_local_m := Vector3.ZERO
+var _last_headsail_lift_force_local_n := Vector3.ZERO
+var _last_headsail_drag_force_local_n := Vector3.ZERO
+var _last_headsail_net_force_local_n := Vector3.ZERO
+var _last_headsail_net_force_world_n := Vector3.ZERO
+var _last_headsail_torque_local_nm := Vector3.ZERO
 var _last_hull_drag_force_local_n := Vector3.ZERO
 var _last_keel_relative_water_velocity_local_mps := Vector3.ZERO
 var _last_keel_result: Dictionary = {}
 var _last_rudder_relative_water_velocity_local_mps := Vector3.ZERO
 var _last_rudder_result: Dictionary = {}
 var _last_sail_yaw_torque_nm := 0.0
+var _last_headsail_yaw_torque_nm := 0.0
 var _last_keel_yaw_torque_nm := 0.0
 var _last_rudder_yaw_torque_nm := 0.0
 var _last_total_horizontal_force_local_n := Vector3.ZERO
@@ -137,6 +181,7 @@ var _point_sample_times_seconds := PackedFloat32Array()
 var _wave_sample_usec_history := PackedInt64Array()
 var _wind_sample_usec_history := PackedInt64Array()
 var _aero_calculation_usec_history := PackedInt64Array()
+var _headsail_aero_calculation_usec_history := PackedInt64Array()
 var _keel_calculation_usec_history := PackedInt64Array()
 var _rudder_calculation_usec_history := PackedInt64Array()
 var _hull_drag_calculation_usec_history := PackedInt64Array()
@@ -150,6 +195,10 @@ func _ready() -> void:
 		push_error("SailboatLabBody requires a SailboatLabProfile resource.")
 		set_physics_process(false)
 		return
+	var main_trim_curve: PackedVector2Array = profile.get("auto_main_trim_curve_points_degrees")
+	var headsail_trim_curve: PackedVector2Array = profile.get("auto_headsail_trim_curve_points_degrees")
+	if not _auto_sail_trim.configure_curves(main_trim_curve, headsail_trim_curve):
+		push_warning("SailboatLabProfile has invalid AUTO sail-trim curve points; using the controller defaults.")
 
 	mass = float(profile.get("mass_kg"))
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
@@ -176,6 +225,7 @@ func _ready() -> void:
 	_sail_visual_pivot = get_node_or_null(sail_visual_pivot_path) as Node3D
 	_rudder_visual_pivot = get_node_or_null(rudder_visual_pivot_path) as Node3D
 	_rudder_angle_marker = get_node_or_null(rudder_angle_marker_path) as Node3D
+	_headsail_visual = get_node_or_null(headsail_visual_path) as MeshInstance3D
 	_sail_area_m2 = float(profile.get("main_sail_area_m2"))
 	_sail_pivot_local_m = profile.get("main_sail_pivot_local_m")
 	_sail_pressure_center_from_pivot_m = profile.get("main_sail_pressure_center_from_pivot_m")
@@ -191,6 +241,27 @@ func _ready() -> void:
 	_sail_induced_drag_factor = float(profile.get("sail_induced_drag_factor"))
 	_sail_flat_plate_drag_factor = float(profile.get("sail_flat_plate_drag_factor"))
 	_sail_wrong_side_lift_retention = float(profile.get("sail_wrong_side_lift_retention"))
+	_headsail_enabled = bool(profile.get("headsail_enabled"))
+	_headsail_area_m2 = float(profile.get("headsail_area_m2"))
+	_headsail_head_local_m = profile.get("headsail_head_local_m")
+	_headsail_tack_local_m = profile.get("headsail_tack_local_m")
+	_headsail_clew_neutral_local_m = profile.get("headsail_clew_neutral_local_m")
+	_headsail_pressure_center_offset_from_centroid_m = profile.get("headsail_pressure_center_offset_from_centroid_m")
+	_headsail_pressure_center_clew_follow = float(profile.get("headsail_pressure_center_clew_follow"))
+	_minimum_headsail_angle_rad = float(profile.get("min_headsail_angle_rad"))
+	_maximum_headsail_angle_rad = float(profile.get("max_headsail_angle_rad"))
+	_headsail_rotation_speed_rad_s = float(profile.get("headsail_rotation_speed_rad_s"))
+	_headsail_maximum_lift_coefficient = float(profile.get("headsail_max_lift_coefficient"))
+	_headsail_stall_angle_rad = float(profile.get("headsail_stall_angle_rad"))
+	_headsail_no_sail_wind_from_angle_rad = float(profile.get("headsail_no_sail_wind_from_angle_rad"))
+	_headsail_full_lift_wind_from_angle_rad = float(profile.get("headsail_full_lift_wind_from_angle_rad"))
+	_headsail_base_drag_coefficient = float(profile.get("headsail_base_drag_coefficient"))
+	_headsail_induced_drag_factor = float(profile.get("headsail_induced_drag_factor"))
+	_headsail_flat_plate_drag_factor = float(profile.get("headsail_flat_plate_drag_factor"))
+	_headsail_wrong_side_lift_retention = float(profile.get("headsail_wrong_side_lift_retention"))
+	if _headsail_visual != null and _headsail_visual.has_method("configure"):
+		_headsail_visual.call("configure", _headsail_head_local_m, _headsail_tack_local_m, _headsail_clew_neutral_local_m)
+		_headsail_visual.visible = _headsail_enabled
 	_water_density_kg_m3 = float(profile.get("water_density_kg_m3"))
 	_keel_center_local_m = profile.get("keel_center_local_m")
 	_keel_area_m2 = float(profile.get("keel_area_m2"))
@@ -225,6 +296,7 @@ func _ready() -> void:
 	_wave_sample_usec_history.resize(PERF_WINDOW_SIZE)
 	_wind_sample_usec_history.resize(PERF_WINDOW_SIZE)
 	_aero_calculation_usec_history.resize(PERF_WINDOW_SIZE)
+	_headsail_aero_calculation_usec_history.resize(PERF_WINDOW_SIZE)
 	_keel_calculation_usec_history.resize(PERF_WINDOW_SIZE)
 	_rudder_calculation_usec_history.resize(PERF_WINDOW_SIZE)
 	_hull_drag_calculation_usec_history.resize(PERF_WINDOW_SIZE)
@@ -241,6 +313,10 @@ func _process(_delta: float) -> void:
 		_rudder_visual_pivot.rotation.y = actual_rudder_angle_rad
 	if _rudder_angle_marker != null:
 		_rudder_angle_marker.rotation.y = actual_rudder_angle_rad
+	if _headsail_visual != null:
+		_headsail_visual.visible = _headsail_enabled
+		if _headsail_visual.has_method("set_sheet_angle"):
+			_headsail_visual.call("set_sheet_angle", actual_headsail_angle_rad)
 
 
 func _input(event: InputEvent) -> void:
@@ -255,6 +331,10 @@ func _input(event: InputEvent) -> void:
 	elif key_event.keycode == KEY_D:
 		_rudder_key_d_pressed = key_event.pressed
 		_update_keyboard_rudder_target()
+	elif key_event.pressed and key_event.keycode == KEY_J:
+		set_target_headsail_angle(target_headsail_angle_rad - deg_to_rad(10.0))
+	elif key_event.pressed and key_event.keycode == KEY_L:
+		set_target_headsail_angle(target_headsail_angle_rad + deg_to_rad(10.0))
 
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
@@ -285,6 +365,14 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		_sail_rotation_speed_rad_s,
 		_minimum_sail_angle_rad,
 		_maximum_sail_angle_rad
+	)
+	actual_headsail_angle_rad = AERO_MATH.move_sail_angle_toward(
+		actual_headsail_angle_rad,
+		target_headsail_angle_rad,
+		state.step,
+		_headsail_rotation_speed_rad_s,
+		_minimum_headsail_angle_rad,
+		_maximum_headsail_angle_rad
 	)
 	actual_rudder_angle_rad = HYDRO_MATH.move_rudder_angle_toward(
 		actual_rudder_angle_rad,
@@ -366,6 +454,46 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		_full_lift_wind_from_angle_rad,
 		_sail_wrong_side_lift_retention
 	)
+	var headsail_clew_local := AERO_MATH.headsail_clew_from_sheet(
+		_headsail_tack_local_m,
+		_headsail_clew_neutral_local_m,
+		actual_headsail_angle_rad
+	)
+	# Sheeting changes orientation, not the amount of sail cloth.
+	var headsail_effective_area := _headsail_area_m2
+	var headsail_pressure_center_local := AERO_MATH.triangular_sail_centroid(
+		_headsail_head_local_m,
+		_headsail_tack_local_m,
+		_headsail_clew_neutral_local_m
+	) + _headsail_pressure_center_offset_from_centroid_m
+	headsail_pressure_center_local += (headsail_clew_local - _headsail_clew_neutral_local_m) * _headsail_pressure_center_clew_follow
+	var headsail_chord := headsail_clew_local - _headsail_tack_local_m
+	var headsail_chord_xz := Vector2(headsail_chord.x, headsail_chord.z)
+	var headsail_apparent := AERO_MATH.calculate_apparent_wind(
+		true_wind_world,
+		linear_velocity,
+		angular_velocity,
+		body_basis * headsail_pressure_center_local - center_of_mass_world,
+		body_basis
+	)
+	var headsail_aero_start_usec := Time.get_ticks_usec()
+	var headsail_result: Dictionary = _empty_sail_result()
+	if _headsail_enabled:
+		headsail_result = AERO_MATH.calculate_sail_forces_for_chord(
+			headsail_apparent.get("apparent_velocity_local_mps", Vector3.ZERO),
+			headsail_chord_xz,
+			headsail_effective_area,
+			_air_density_kg_m3,
+			_headsail_maximum_lift_coefficient,
+			_headsail_stall_angle_rad,
+			_headsail_base_drag_coefficient,
+			_headsail_induced_drag_factor,
+			_headsail_flat_plate_drag_factor,
+			_headsail_no_sail_wind_from_angle_rad,
+			_headsail_full_lift_wind_from_angle_rad,
+			_headsail_wrong_side_lift_retention
+		)
+	var headsail_aero_calculation_usec := Time.get_ticks_usec() - headsail_aero_start_usec
 	aero_calculation_usec = Time.get_ticks_usec() - aero_start_usec
 	var sail_lift_local: Vector3 = sail_result.get("lift_force_local_n", Vector3.ZERO)
 	var sail_drag_local: Vector3 = sail_result.get("drag_force_local_n", Vector3.ZERO)
@@ -376,6 +504,15 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		# Offset is relative to the rigid-body origin; the engine solves torque
 		# about the actual centre of mass, including the profile's COM offset.
 		state.apply_force(sail_net_world, sail_center_offset_world)
+	var headsail_lift_local: Vector3 = headsail_result.get("lift_force_local_n", Vector3.ZERO)
+	var headsail_drag_local: Vector3 = headsail_result.get("drag_force_local_n", Vector3.ZERO)
+	var headsail_net_local: Vector3 = headsail_result.get("net_force_local_n", Vector3.ZERO)
+	var headsail_net_world := body_basis * headsail_net_local
+	var headsail_force_offset_world := body_basis * headsail_pressure_center_local
+	var headsail_torque_local := (headsail_pressure_center_local - center_of_mass).cross(headsail_net_local)
+	var headsail_yaw_torque := headsail_torque_local.y
+	if _headsail_enabled and headsail_net_world.length_squared() > 0.0:
+		state.apply_force(headsail_net_world, headsail_force_offset_world)
 	var local_velocity_through_water := body_basis.inverse() * (linear_velocity - _water_current_world_mps)
 	var hull_drag_start_usec := Time.get_ticks_usec()
 	var hull_drag_local := HYDRO_MATH.calculate_hull_resistance(
@@ -444,10 +581,11 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_last_rudder_relative_water_velocity_local_mps = rudder_velocity_local
 	_last_rudder_result = rudder_result
 	_last_sail_yaw_torque_nm = sail_yaw_torque
+	_last_headsail_yaw_torque_nm = headsail_yaw_torque
 	_last_keel_yaw_torque_nm = keel_yaw_torque
 	_last_rudder_yaw_torque_nm = rudder_yaw_torque
-	_last_total_horizontal_force_local_n = sail_net_local + hull_drag_local + keel_force_local + rudder_force_local
-	_last_total_external_yaw_torque_nm = sail_yaw_torque + keel_yaw_torque + rudder_yaw_torque
+	_last_total_horizontal_force_local_n = sail_net_local + headsail_net_local + hull_drag_local + keel_force_local + rudder_force_local
+	_last_total_external_yaw_torque_nm = sail_yaw_torque + headsail_yaw_torque + keel_yaw_torque + rudder_yaw_torque
 	_last_true_wind_world_mps = true_wind_world
 	_last_true_wind_from_degrees = true_wind_from_degrees
 	_last_apparent_wind_world_mps = apparent.get("apparent_velocity_world_mps", Vector3.ZERO)
@@ -455,6 +593,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_last_apparent_wind_speed_mps = float(apparent.get("apparent_speed_mps", 0.0))
 	_last_apparent_wind_from_angle_degrees = float(apparent.get("apparent_from_angle_degrees", 0.0))
 	_last_windward_side = str(apparent.get("windward_side", "无有效视风"))
+	_update_auto_sail_trim_from_cached_wind(body_basis)
 	_last_sail_angle_of_attack_rad = float(sail_result.get("angle_of_attack_rad", 0.0))
 	_last_sail_luffing_scale = float(sail_result.get("luffing_scale", 0.0))
 	_last_sail_cl = float(sail_result.get("cl", 0.0))
@@ -468,6 +607,20 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_last_sail_drag_force_local_n = sail_drag_local
 	_last_sail_net_force_local_n = sail_net_local
 	_last_sail_net_force_world_n = sail_net_world
+	_last_headsail_apparent_wind_local_mps = headsail_apparent.get("apparent_velocity_local_mps", Vector3.ZERO)
+	_last_headsail_apparent_wind_speed_mps = float(headsail_apparent.get("apparent_speed_mps", 0.0))
+	_last_headsail_angle_of_attack_rad = float(headsail_result.get("angle_of_attack_rad", 0.0))
+	_last_headsail_luffing_scale = float(headsail_result.get("luffing_scale", 0.0))
+	_last_headsail_wrong_side_lift_scale = float(headsail_result.get("wrong_side_lift_scale", 1.0))
+	_last_headsail_cl = float(headsail_result.get("cl", 0.0))
+	_last_headsail_cd = float(headsail_result.get("cd", 0.0))
+	_last_headsail_effective_area_m2 = headsail_effective_area if _headsail_enabled else 0.0
+	_last_headsail_pressure_center_local_m = headsail_pressure_center_local
+	_last_headsail_lift_force_local_n = headsail_lift_local
+	_last_headsail_drag_force_local_n = headsail_drag_local
+	_last_headsail_net_force_local_n = headsail_net_local
+	_last_headsail_net_force_world_n = headsail_net_world
+	_last_headsail_torque_local_nm = headsail_torque_local
 	for index in range(FLOAT_POINT_COUNT):
 		var world_offset: Vector3 = body_basis * _float_offsets[index]
 		var point_world := body_origin + world_offset
@@ -521,6 +674,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_last_wind_query_count = wind_query_count
 	_last_wind_sample_usec = wind_sample_usec
 	_last_aero_calculation_usec = aero_calculation_usec
+	_last_headsail_aero_calculation_usec = headsail_aero_calculation_usec
 	var local_rotation := body_basis.get_euler()
 	_last_pitch_rad = local_rotation.x
 	_last_roll_rad = local_rotation.z
@@ -529,6 +683,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		sample_usec,
 		wind_sample_usec,
 		aero_calculation_usec,
+		headsail_aero_calculation_usec,
 		keel_calculation_usec,
 		rudder_calculation_usec,
 		hull_drag_calculation_usec,
@@ -552,6 +707,7 @@ func get_debug_snapshot() -> Dictionary:
 	var wave_timing := _summarize_history(_wave_sample_usec_history)
 	var wind_timing := _summarize_history(_wind_sample_usec_history)
 	var aero_timing := _summarize_history(_aero_calculation_usec_history)
+	var headsail_aero_timing := _summarize_history(_headsail_aero_calculation_usec_history)
 	var keel_timing := _summarize_history(_keel_calculation_usec_history)
 	var rudder_timing := _summarize_history(_rudder_calculation_usec_history)
 	var hull_drag_timing := _summarize_history(_hull_drag_calculation_usec_history)
@@ -590,6 +746,9 @@ func get_debug_snapshot() -> Dictionary:
 		"aero_calculation_usec": _last_aero_calculation_usec,
 		"aero_calculation_average_usec": int(aero_timing.get("average_usec", 0)),
 		"aero_calculation_p95_usec": int(aero_timing.get("p95_usec", 0)),
+		"headsail_aero_calculation_usec": _last_headsail_aero_calculation_usec,
+		"headsail_aero_calculation_average_usec": int(headsail_aero_timing.get("average_usec", 0)),
+		"headsail_aero_calculation_p95_usec": int(headsail_aero_timing.get("p95_usec", 0)),
 		"keel_calculation_usec": _last_keel_calculation_usec,
 		"keel_calculation_average_usec": int(keel_timing.get("average_usec", 0)),
 		"keel_calculation_p95_usec": int(keel_timing.get("p95_usec", 0)),
@@ -630,6 +789,35 @@ func get_debug_snapshot() -> Dictionary:
 		"sail_net_force_local_n": _last_sail_net_force_local_n,
 		"sail_net_force_world_n": _last_sail_net_force_world_n,
 		"sail_yaw_torque_nm": _last_sail_yaw_torque_nm,
+		"headsail_enabled": _headsail_enabled,
+		"auto_sail_trim_enabled": auto_sail_trim_enabled,
+		"auto_sail_trim": get_auto_sail_trim_snapshot(),
+		"auto_trim_calculation_usec": _last_auto_trim_calculation_usec,
+		"headsail_area_m2": _headsail_area_m2,
+		"headsail_effective_area_m2": _last_headsail_effective_area_m2,
+		"target_headsail_angle_rad": target_headsail_angle_rad,
+		"actual_headsail_angle_rad": actual_headsail_angle_rad,
+		"min_headsail_angle_rad": _minimum_headsail_angle_rad,
+		"max_headsail_angle_rad": _maximum_headsail_angle_rad,
+		"headsail_rotation_speed_rad_s": _headsail_rotation_speed_rad_s,
+		"headsail_head_local_m": _headsail_head_local_m,
+		"headsail_tack_local_m": _headsail_tack_local_m,
+		"headsail_clew_local_m": AERO_MATH.headsail_clew_from_sheet(_headsail_tack_local_m, _headsail_clew_neutral_local_m, actual_headsail_angle_rad),
+		"headsail_pressure_center_local_m": _last_headsail_pressure_center_local_m,
+		"headsail_apparent_wind_local_mps": _last_headsail_apparent_wind_local_mps,
+		"headsail_apparent_wind_speed_mps": _last_headsail_apparent_wind_speed_mps,
+		"headsail_angle_of_attack_rad": _last_headsail_angle_of_attack_rad,
+		"headsail_luffing_scale": _last_headsail_luffing_scale,
+		"headsail_wrong_side_lift_scale": _last_headsail_wrong_side_lift_scale,
+		"headsail_cl": _last_headsail_cl,
+		"headsail_cd": _last_headsail_cd,
+		"headsail_lift_force_local_n": _last_headsail_lift_force_local_n,
+		"headsail_drag_force_local_n": _last_headsail_drag_force_local_n,
+		"headsail_net_force_local_n": _last_headsail_net_force_local_n,
+		"headsail_net_force_world_n": _last_headsail_net_force_world_n,
+		"headsail_torque_local_nm": _last_headsail_torque_local_nm,
+		"headsail_roll_torque_local_nm": _last_headsail_torque_local_nm.z,
+		"headsail_yaw_torque_nm": _last_headsail_yaw_torque_nm,
 		"hull_drag_force_local_n": _last_hull_drag_force_local_n,
 		"keel_center_local_m": _keel_center_local_m,
 		"keel_relative_water_velocity_local_mps": _last_keel_relative_water_velocity_local_mps,
@@ -688,6 +876,7 @@ func get_s1_c4_diagnostic_snapshot() -> Dictionary:
 	var explicit_yaw_damping := -local_angular_velocity.y * float(profile.get("yaw_damping_n_m_s_per_rad"))
 	var local_total_yaw := (
 		_last_sail_yaw_torque_nm
+		+ _last_headsail_yaw_torque_nm
 		+ _last_keel_yaw_torque_nm
 		+ _last_rudder_yaw_torque_nm
 		+ explicit_yaw_damping
@@ -712,6 +901,11 @@ func get_s1_c4_diagnostic_snapshot() -> Dictionary:
 		"sail_force_local_n": sail_force,
 		"sail_yaw_torque_local_nm": _last_sail_yaw_torque_nm,
 		"sail_yaw_torque_world_vertical_nm": (global_basis * Vector3(0.0, _last_sail_yaw_torque_nm, 0.0)).y,
+		"headsail_force_local_n": _last_headsail_net_force_local_n,
+		"headsail_torque_local_nm": _last_headsail_torque_local_nm,
+		"headsail_roll_torque_local_nm": _last_headsail_torque_local_nm.z,
+		"headsail_yaw_torque_local_nm": _last_headsail_yaw_torque_nm,
+		"headsail_yaw_torque_world_vertical_nm": (global_basis * Vector3(0.0, _last_headsail_yaw_torque_nm, 0.0)).y,
 		"keel_force_local_n": keel_force,
 		"keel_yaw_torque_local_nm": _last_keel_yaw_torque_nm,
 		"keel_yaw_torque_world_vertical_nm": (global_basis * Vector3(0.0, _last_keel_yaw_torque_nm, 0.0)).y,
@@ -726,6 +920,8 @@ func get_s1_c4_diagnostic_snapshot() -> Dictionary:
 		"summed_measured_yaw_torque_world_vertical_nm": world_total_yaw_vector.y,
 		"actual_sail_angle_rad": actual_sail_angle_rad,
 		"target_sail_angle_rad": target_sail_angle_rad,
+		"actual_headsail_angle_rad": actual_headsail_angle_rad,
+		"target_headsail_angle_rad": target_headsail_angle_rad,
 		"actual_rudder_angle_rad": actual_rudder_angle_rad,
 		"target_rudder_angle_rad": target_rudder_angle_rad,
 		"pose_command_pending": _test_transform_pending,
@@ -772,6 +968,16 @@ func get_navigation_snapshot() -> Dictionary:
 		"apparent_wind_from_relative_degrees": NAVIGATION_MATH.signed_relative_bearing_degrees(apparent_wind_from, heading_degrees) if apparent_wind_valid else 0.0,
 		"actual_sail_angle_rad": actual_sail_angle_rad,
 		"target_sail_angle_rad": target_sail_angle_rad,
+		"headsail_enabled": _headsail_enabled,
+		"auto_sail_trim_enabled": auto_sail_trim_enabled,
+		"auto_sail_trim": get_auto_sail_trim_snapshot(),
+		"actual_headsail_angle_rad": actual_headsail_angle_rad,
+		"target_headsail_angle_rad": target_headsail_angle_rad,
+		"headsail_apparent_wind_speed_mps": _last_headsail_apparent_wind_speed_mps,
+		"headsail_angle_of_attack_rad": _last_headsail_angle_of_attack_rad,
+		"headsail_luffing_scale": _last_headsail_luffing_scale,
+		"headsail_net_force_local_n": _last_headsail_net_force_local_n,
+		"headsail_yaw_torque_nm": _last_headsail_yaw_torque_nm,
 		"actual_rudder_angle_rad": actual_rudder_angle_rad,
 		"target_rudder_angle_rad": target_rudder_angle_rad,
 		"max_rudder_angle_rad": _maximum_rudder_angle_rad,
@@ -792,6 +998,7 @@ func _record_performance(
 	wave_usec: int,
 	wind_usec: int,
 	aero_usec: int,
+	headsail_aero_usec: int,
 	keel_usec: int,
 	rudder_usec: int,
 	hull_drag_usec: int,
@@ -800,6 +1007,7 @@ func _record_performance(
 	_wave_sample_usec_history[_perf_history_cursor] = wave_usec
 	_wind_sample_usec_history[_perf_history_cursor] = wind_usec
 	_aero_calculation_usec_history[_perf_history_cursor] = aero_usec
+	_headsail_aero_calculation_usec_history[_perf_history_cursor] = headsail_aero_usec
 	_keel_calculation_usec_history[_perf_history_cursor] = keel_usec
 	_rudder_calculation_usec_history[_perf_history_cursor] = rudder_usec
 	_hull_drag_calculation_usec_history[_perf_history_cursor] = hull_drag_usec
@@ -815,6 +1023,7 @@ func reset_performance_history() -> void:
 	_wave_sample_usec_history.fill(0)
 	_wind_sample_usec_history.fill(0)
 	_aero_calculation_usec_history.fill(0)
+	_headsail_aero_calculation_usec_history.fill(0)
 	_keel_calculation_usec_history.fill(0)
 	_rudder_calculation_usec_history.fill(0)
 	_hull_drag_calculation_usec_history.fill(0)
@@ -847,6 +1056,7 @@ func reset_to_neutral(heading_degrees: float = 0.0) -> void:
 	var offsets: PackedVector3Array = profile.get("float_point_offsets_m")
 	if offsets.size() != FLOAT_POINT_COUNT:
 		return
+	set_auto_sail_trim_enabled(false)
 	var mean_float_y := 0.0
 	for offset in offsets:
 		mean_float_y += offset.y
@@ -861,6 +1071,11 @@ func reset_to_neutral(heading_degrees: float = 0.0) -> void:
 	_queue_test_transform(neutral_transform, "已请求重置到静水漂浮 · 航向 %.0f°" % fposmod(heading_degrees, 360.0))
 	target_sail_angle_rad = 0.0
 	actual_sail_angle_rad = 0.0
+	target_headsail_angle_rad = 0.0
+	actual_headsail_angle_rad = 0.0
+	_auto_sail_trim.reset(0.0, 0.0)
+	_last_auto_trim_result = {}
+	_last_auto_trim_calculation_usec = 0
 	target_rudder_angle_rad = 0.0
 	actual_rudder_angle_rad = 0.0
 	_rudder_key_a_pressed = false
@@ -930,7 +1145,125 @@ func set_runtime_damping_ratio(value: float) -> void:
 func set_target_sail_angle(angle_rad: float) -> void:
 	if not is_finite(angle_rad):
 		return
+	if auto_sail_trim_enabled and not _auto_trim_applying_targets:
+		set_auto_sail_trim_enabled(false)
 	target_sail_angle_rad = clampf(angle_rad, _minimum_sail_angle_rad, _maximum_sail_angle_rad)
+
+
+func set_target_headsail_angle(angle_rad: float) -> void:
+	if not is_finite(angle_rad):
+		return
+	if auto_sail_trim_enabled and not _auto_trim_applying_targets:
+		set_auto_sail_trim_enabled(false)
+	target_headsail_angle_rad = clampf(angle_rad, _minimum_headsail_angle_rad, _maximum_headsail_angle_rad)
+
+
+func set_auto_sail_trim_enabled(enabled: bool) -> void:
+	if auto_sail_trim_enabled == enabled:
+		return
+	auto_sail_trim_enabled = enabled
+	_auto_sail_trim.reset(target_sail_angle_rad, target_headsail_angle_rad)
+	_last_auto_trim_result = _auto_sail_trim.update_from_snapshot({
+		"target_sail_angle_rad": target_sail_angle_rad,
+		"target_headsail_angle_rad": target_headsail_angle_rad,
+		"headsail_enabled": _headsail_enabled,
+	})
+	_last_auto_trim_calculation_usec = 0
+
+
+func get_auto_sail_trim_enabled() -> bool:
+	return auto_sail_trim_enabled
+
+
+func get_auto_sail_trim_snapshot() -> Dictionary:
+	var result := _last_auto_trim_result.duplicate(true)
+	result["enabled"] = auto_sail_trim_enabled
+	result["mode"] = "AUTO" if auto_sail_trim_enabled else "MANUAL"
+	result["main_target_angle_rad"] = target_sail_angle_rad
+	result["headsail_target_angle_rad"] = target_headsail_angle_rad
+	if not auto_sail_trim_enabled:
+		var awa := _last_apparent_wind_from_angle_degrees
+		var aws := _last_apparent_wind_speed_mps
+		result["selected_side"] = "右舷展开" if awa < -12.0 and absf(awa) < 150.0 else "左舷展开" if awa > 12.0 and absf(awa) < 150.0 else "保持当前舷侧"
+		result["no_go"] = aws >= 0.5 and absf(awa) <= AUTO_SAIL_TRIM_SCRIPT.NO_GO_ENTER_DEGREES
+		result["status"] = "手动操帆"
+	elif not result.has("status"):
+		result["status"] = "等待有效视风"
+	return result
+
+
+func _update_auto_sail_trim_from_cached_wind(body_basis: Basis) -> void:
+	_last_auto_trim_calculation_usec = 0
+	if not auto_sail_trim_enabled:
+		return
+	var heading_degrees := NAVIGATION_MATH.heading_degrees_from_forward(-body_basis.z)
+	var awa := _last_apparent_wind_from_angle_degrees
+	var aws := _last_apparent_wind_speed_mps
+	var twa := NAVIGATION_MATH.signed_relative_bearing_degrees(_last_true_wind_from_degrees, heading_degrees)
+	var true_wind_horizontal := Vector3(_last_true_wind_world_mps.x, 0.0, _last_true_wind_world_mps.z)
+	var local_velocity := body_basis.inverse() * linear_velocity
+	var auto_snapshot := {
+		"apparent_wind_from_relative_degrees": awa,
+		"apparent_wind_speed_mps": aws,
+		"true_wind_from_relative_degrees": twa,
+		"true_wind_speed_mps": true_wind_horizontal.length(),
+		"sog_mps": Vector2(linear_velocity.x, linear_velocity.z).length(),
+		"longitudinal_velocity_mps": -local_velocity.z,
+		"target_sail_angle_rad": target_sail_angle_rad,
+		"target_headsail_angle_rad": target_headsail_angle_rad,
+		"min_sail_angle_rad": _minimum_sail_angle_rad,
+		"max_sail_angle_rad": _maximum_sail_angle_rad,
+		"min_headsail_angle_rad": _minimum_headsail_angle_rad,
+		"max_headsail_angle_rad": _maximum_headsail_angle_rad,
+		"headsail_enabled": _headsail_enabled,
+	}
+	var start_usec := Time.get_ticks_usec()
+	_last_auto_trim_result = _auto_sail_trim.update_from_snapshot(auto_snapshot)
+	_last_auto_trim_calculation_usec = Time.get_ticks_usec() - start_usec
+	_auto_trim_applying_targets = true
+	set_target_sail_angle(float(_last_auto_trim_result.get("main_target_angle_rad", target_sail_angle_rad)))
+	if _headsail_enabled:
+		set_target_headsail_angle(float(_last_auto_trim_result.get("headsail_target_angle_rad", target_headsail_angle_rad)))
+	_auto_trim_applying_targets = false
+
+
+func get_target_headsail_angle() -> float:
+	return target_headsail_angle_rad
+
+
+func get_actual_headsail_angle() -> float:
+	return actual_headsail_angle_rad
+
+
+func set_headsail_enabled(enabled: bool) -> void:
+	if _headsail_enabled == enabled:
+		return
+	_headsail_enabled = enabled
+	if _headsail_visual != null:
+		_headsail_visual.visible = enabled
+	if not enabled:
+		_last_total_horizontal_force_local_n -= _last_headsail_net_force_local_n
+		_last_total_external_yaw_torque_nm -= _last_headsail_yaw_torque_nm
+		_last_headsail_aero_calculation_usec = 0
+		_last_headsail_effective_area_m2 = 0.0
+		_last_headsail_apparent_wind_local_mps = Vector3.ZERO
+		_last_headsail_apparent_wind_speed_mps = 0.0
+		_last_headsail_angle_of_attack_rad = 0.0
+		_last_headsail_luffing_scale = 0.0
+		_last_headsail_wrong_side_lift_scale = 1.0
+		_last_headsail_cl = 0.0
+		_last_headsail_cd = 0.0
+		_last_headsail_pressure_center_local_m = Vector3.ZERO
+		_last_headsail_lift_force_local_n = Vector3.ZERO
+		_last_headsail_drag_force_local_n = Vector3.ZERO
+		_last_headsail_net_force_local_n = Vector3.ZERO
+		_last_headsail_net_force_world_n = Vector3.ZERO
+		_last_headsail_torque_local_nm = Vector3.ZERO
+		_last_headsail_yaw_torque_nm = 0.0
+
+
+func is_headsail_enabled() -> bool:
+	return _headsail_enabled
 
 
 func set_target_rudder_angle(angle_rad: float) -> void:
@@ -966,6 +1299,25 @@ func _update_keyboard_rudder_target() -> void:
 	elif _rudder_keyboard_active:
 		_rudder_keyboard_active = false
 		target_rudder_angle_rad = 0.0
+
+
+func _empty_sail_result() -> Dictionary:
+	return {
+		"valid": false,
+		"apparent_speed_mps": 0.0,
+		"dynamic_pressure_pa": 0.0,
+		"angle_of_attack_rad": 0.0,
+		"apparent_wind_from_angle_rad": 0.0,
+		"luffing_scale": 0.0,
+		"windward_sheet_alignment": 0.0,
+		"wrong_side_lift_scale": 1.0,
+		"sheet_efficiency_scale": 1.0,
+		"cl": 0.0,
+		"cd": 0.0,
+		"lift_force_local_n": Vector3.ZERO,
+		"drag_force_local_n": Vector3.ZERO,
+		"net_force_local_n": Vector3.ZERO,
+	}
 
 
 func can_set_lab_test_wind() -> bool:

@@ -388,6 +388,12 @@ func _reset_runtime_parameters() -> void:
 	# adopts a different damping policy in S1-C5d.
 	_boat.linear_damp = 0.12
 	_boat.set("linear_damp_mode", 0)
+	# Preserve all published C5a-e mainsail-only experiment semantics after the
+	# production SailboatLab profile enables its independent Jib.
+	if _boat.has_method("set_headsail_enabled"):
+		_boat.call("set_headsail_enabled", false)
+		_boat.call("set_target_headsail_angle", 0.0)
+		_boat.set("actual_headsail_angle_rad", 0.0)
 	_boat.set("_sail_area_m2", float(PROFILE.get("main_sail_area_m2")))
 	_boat.set("_hull_longitudinal_drag_linear", float(PROFILE.get("hull_longitudinal_drag_linear_n_s_m")))
 	_boat.set("_hull_longitudinal_drag_quadratic", float(PROFILE.get("hull_longitudinal_drag_quadratic_n_s2_m2")))

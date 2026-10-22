@@ -65,6 +65,11 @@ func _test_lab_instrument_and_visuals() -> void:
 				and absf(instrument.position.y - 16.0) < 0.1,
 			"navigation panel follows the viewport's upper-right anchor"
 		)
+	var turn_diagnostics := debug_panel.find_child("TurnDiagnostics", true, false) as Label
+	_expect(turn_diagnostics != null, "the existing status page includes cached turn and measured yaw-torque diagnostics")
+	var camera_mode_status := debug_panel.find_child("CameraModeStatus", true, false) as Label
+	_expect(camera_mode_status != null, "the lab panel documents the camera toggle and full-scene reset shortcuts")
+	_expect(bool(lab.call("is_camera_follow_enabled")), "the test lab starts with smooth follow enabled")
 
 	var visual_root := boat.get_node("VisualRoot")
 	var hull := visual_root.get_node("Hull") as MeshInstance3D
@@ -127,6 +132,14 @@ func _test_lab_instrument_and_visuals() -> void:
 	_expect(int(after_snapshot["wind_query_count_per_tick"]) == before_wind_queries, "instrument refresh does not issue another WindField query")
 	_expect(int(after_snapshot["wave_query_count_per_tick"]) == before_wave_queries, "instrument refresh does not issue another WaveSampler query")
 	_expect(float(after_snapshot["actual_sail_angle_rad"]) == float(boat.get("actual_sail_angle_rad")), "instrument state comes from the body's actual sail angle")
+	var toggle_camera_event := InputEventKey.new()
+	toggle_camera_event.physical_keycode = KEY_C
+	toggle_camera_event.pressed = true
+	lab.call("_input", toggle_camera_event)
+	_expect(not bool(lab.call("is_camera_follow_enabled")), "C switches the lab to the fixed observation camera")
+	lab.call("_input", toggle_camera_event)
+	_expect(bool(lab.call("is_camera_follow_enabled")), "C switches the lab back to smooth camera follow")
+	_expect(boat.global_transform.is_equal_approx(before_transform) and boat.linear_velocity.is_equal_approx(before_velocity), "camera mode changes do not write boat transform or velocity")
 	lab.queue_free()
 	await process_frame
 

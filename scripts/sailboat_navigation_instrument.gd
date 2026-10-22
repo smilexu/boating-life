@@ -12,6 +12,7 @@ const COLOR_TRUE_WIND := Color(0.22, 0.81, 0.73, 1.0)
 const COLOR_APPARENT_WIND := Color(1.0, 0.62, 0.29, 1.0)
 const COLOR_COURSE := Color(0.36, 0.87, 0.53, 1.0)
 const COLOR_SAIL := Color(0.39, 0.75, 0.98, 1.0)
+const COLOR_HEADSAIL := Color(0.95, 0.77, 0.36, 1.0)
 const COLOR_RUDDER := Color(1.0, 0.82, 0.28, 1.0)
 
 var _boat: Node
@@ -99,6 +100,7 @@ func _draw() -> void:
 
 	_draw_hull_outline(center)
 	_draw_sail_and_boom(center)
+	_draw_headsail(center)
 	_draw_rudder(center)
 	draw_string(font, Vector2(center.x - 25.0, center.y - 50.0), "BOW", HORIZONTAL_ALIGNMENT_CENTER, 50.0, 10, COLOR_MUTED)
 	draw_string(font, Vector2(center.x - 29.0, center.y + 58.0), "STERN", HORIZONTAL_ALIGNMENT_CENTER, 58.0, 10, COLOR_MUTED)
@@ -107,16 +109,23 @@ func _draw() -> void:
 
 	var sail_angle := rad_to_deg(float(_snapshot.get("actual_sail_angle_rad", 0.0)))
 	var sail_target := rad_to_deg(float(_snapshot.get("target_sail_angle_rad", 0.0)))
+	var headsail_angle := rad_to_deg(float(_snapshot.get("actual_headsail_angle_rad", 0.0)))
+	var headsail_target := rad_to_deg(float(_snapshot.get("target_headsail_angle_rad", 0.0)))
 	var rudder_angle := rad_to_deg(float(_snapshot.get("actual_rudder_angle_rad", 0.0)))
 	var rudder_limit := rad_to_deg(float(_snapshot.get("max_rudder_angle_rad", 0.0)))
 	var rudder_side := "STARBOARD" if rudder_angle > 0.05 else "PORT" if rudder_angle < -0.05 else "CENTER"
 	draw_string(font, Vector2(12.0, 292.0), "SAIL %+.1f° / TARGET %+.1f°" % [sail_angle, sail_target], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 12, COLOR_SAIL)
-	draw_string(font, Vector2(12.0, 310.0), "RUDDER %+.1f° %s · LIMIT ±%.0f°" % [rudder_angle, rudder_side, rudder_limit], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 12, COLOR_RUDDER)
-	draw_string(font, Vector2(12.0, 332.0), _wind_summary("TRUE WIND", true_valid, true_speed, true_world_bearing, true_relative), HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 11, COLOR_TRUE_WIND)
-	draw_string(font, Vector2(12.0, 350.0), _wind_summary("APPARENT", apparent_valid, apparent_speed, apparent_world_bearing, apparent_relative), HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 11, COLOR_APPARENT_WIND)
+	draw_string(font, Vector2(12.0, 310.0), "JIB %s %+.1f° / TARGET %+.1f°" % ["ON" if bool(_snapshot.get("headsail_enabled", false)) else "OFF", headsail_angle, headsail_target], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 12, COLOR_HEADSAIL)
+	draw_string(font, Vector2(12.0, 328.0), "RUDDER %+.1f° %s · LIMIT ±%.0f°" % [rudder_angle, rudder_side, rudder_limit], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 12, COLOR_RUDDER)
+	draw_string(font, Vector2(12.0, 350.0), _wind_summary("TRUE WIND", true_valid, true_speed, true_world_bearing, true_relative), HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 11, COLOR_TRUE_WIND)
+	draw_string(font, Vector2(12.0, 368.0), _wind_summary("APPARENT", apparent_valid, apparent_speed, apparent_world_bearing, apparent_relative), HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 11, COLOR_APPARENT_WIND)
 	var keel_slip := rad_to_deg(float(_snapshot.get("keel_side_slip_angle_rad", 0.0)))
-	draw_string(font, Vector2(12.0, 371.0), "COG−HDG %+.1f° · 龙骨侧滑 β %+.1f°" % [cog_delta, keel_slip], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 11, COLOR_TEXT if cog_valid else COLOR_MUTED)
-	draw_string(font, Vector2(12.0, 391.0), "风箭头指向船体：T 真风 · A 视风 · 绿箭头 COG", HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 10, COLOR_MUTED)
+	draw_string(font, Vector2(12.0, 389.0), "COG−HDG %+.1f° · 龙骨侧滑 β %+.1f°" % [cog_delta, keel_slip], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 11, COLOR_TEXT if cog_valid else COLOR_MUTED)
+	var trim: Dictionary = _snapshot.get("auto_sail_trim", {})
+	var trim_mode := "AUTO" if bool(_snapshot.get("auto_sail_trim_enabled", false)) else "MANUAL"
+	var selected_side := str(trim.get("selected_side", "舷侧未选"))
+	var trim_status := "NO-GO" if bool(trim.get("no_go", false)) else selected_side
+	draw_string(font, Vector2(12.0, 410.0), "TRIM %s · %s · T/A 箭头指向来风 · 绿箭头 COG" % [trim_mode, trim_status], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 10, COLOR_APPARENT_WIND if bool(trim.get("no_go", false)) else COLOR_MUTED)
 
 
 func _draw_wind_arrow(font: Font, center: Vector2, valid: bool, relative_from_degrees: float, radius: float, color: Color, marker: String) -> void:
@@ -158,6 +167,19 @@ func _draw_sail_and_boom(center: Vector2) -> void:
 	draw_circle(endpoint, 2.5, COLOR_SAIL)
 
 
+func _draw_headsail(center: Vector2) -> void:
+	if not bool(_snapshot.get("headsail_enabled", false)):
+		return
+	var angle := float(_snapshot.get("actual_headsail_angle_rad", 0.0))
+	var head := center + Vector2(0.0, -10.0)
+	var tack := center + Vector2(0.0, -43.0)
+	var clew := center + Vector2(sin(angle) * 18.0, -14.0)
+	draw_colored_polygon(PackedVector2Array([head, tack, clew]), Color(COLOR_HEADSAIL.r, COLOR_HEADSAIL.g, COLOR_HEADSAIL.b, 0.22))
+	draw_line(head, tack, COLOR_HEADSAIL.darkened(0.15), 1.4, true)
+	draw_line(tack, clew, COLOR_HEADSAIL, 2.6, true)
+	draw_circle(clew, 2.2, COLOR_HEADSAIL)
+
+
 func _draw_rudder(center: Vector2) -> void:
 	var angle := float(_snapshot.get("actual_rudder_angle_rad", 0.0))
 	var direction := NAV_MATH.boom_direction_from_sail_angle(angle)
@@ -192,6 +214,6 @@ func _update_screen_position() -> void:
 		return
 	var viewport_size := get_viewport_rect().size
 	var panel_width := clampf(viewport_size.x * 0.235, 270.0, 320.0)
-	size = Vector2(panel_width, 408.0)
+	size = Vector2(panel_width, 430.0)
 	position = Vector2(viewport_size.x - panel_width - 16.0, 16.0)
 	queue_redraw()

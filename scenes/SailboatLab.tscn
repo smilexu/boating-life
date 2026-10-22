@@ -1,4 +1,4 @@
-[gd_scene load_steps=28 format=3]
+[gd_scene load_steps=30 format=3]
 
 [ext_resource type="Script" path="res://scripts/sailboat_lab.gd" id="1_lab"]
 [ext_resource type="Script" path="res://scripts/sailboat_lab_body.gd" id="2_body"]
@@ -12,6 +12,7 @@
 [ext_resource type="Script" path="res://scripts/wind_field.gd" id="10_wind_field"]
 [ext_resource type="Script" path="res://scripts/sail_triangle_visual.gd" id="11_sail_triangle"]
 [ext_resource type="Script" path="res://scripts/sailboat_lab_hull_visual.gd" id="12_hull_visual"]
+[ext_resource type="Script" path="res://scripts/headsail_triangle_visual.gd" id="13_headsail_visual"]
 
 [sub_resource type="BoxShape3D" id="BoxShape_hull"]
 size = Vector3(2.5, 1.2, 7.4)
@@ -61,6 +62,12 @@ roughness = 0.66
 albedo_color = Color(0.95, 0.93, 0.86, 1)
 cull_mode = 2
 roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Material_headsail"]
+shading_mode = 0
+albedo_color = Color(0.88, 0.93, 0.91, 1)
+cull_mode = 2
+roughness = 0.92
 
 [sub_resource type="StandardMaterial3D" id="Material_water_static"]
 albedo_color = Color(0.14, 0.38, 0.54, 1)
@@ -121,6 +128,7 @@ wind_field_path = NodePath("../WindField")
 sail_visual_pivot_path = NodePath("VisualRoot/SailPivot")
 rudder_visual_pivot_path = NodePath("VisualRoot/RudderPivot")
 rudder_angle_marker_path = NodePath("VisualRoot/RudderAngleMarker")
+headsail_visual_path = NodePath("VisualRoot/HeadsailVisual")
 dynamic_waves_enabled = true
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="SailboatBody"]
@@ -177,6 +185,11 @@ material_override = SubResource("Material_mast")
 [node name="MainSailMesh" type="MeshInstance3D" parent="SailboatBody/VisualRoot/SailPivot"]
 script = ExtResource("11_sail_triangle")
 material_override = SubResource("Material_sail")
+
+[node name="HeadsailVisual" type="MeshInstance3D" parent="SailboatBody/VisualRoot"]
+script = ExtResource("13_headsail_visual")
+material_override = SubResource("Material_headsail")
+cast_shadow = 0
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 rotation_degrees = Vector3(-48, -28, 0)

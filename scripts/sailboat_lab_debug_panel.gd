@@ -9,9 +9,12 @@ const FLOAT_POINT_NAMES := ["前左 FL", "前右 FR", "后左 RL", "后右 RR"]
 @export var boat_path: NodePath = ^"../SailboatBody"
 
 var _boat: Node
+var _lab_root: Node
 var _wave_sampler: WaveSampler
 var _refresh_elapsed := 0.0
 var _metrics_label: Label
+var _camera_mode_label: Label
+var _turn_diagnostics_label: Label
 var _attitude_feedback_label: Label
 var _wave_mode_toggle: CheckButton
 var _wave_status_label: Label
@@ -32,6 +35,12 @@ var _damping_slider: HSlider
 var _sail_metrics_label: Label
 var _sail_target_slider: HSlider
 var _sail_target_value_label: Label
+var _auto_trim_toggle: CheckButton
+var _auto_trim_status_label: Label
+var _headsail_toggle: CheckButton
+var _headsail_target_slider: HSlider
+var _headsail_target_value_label: Label
+var _headsail_metrics_label: Label
 var _rudder_target_slider: HSlider
 var _rudder_target_value_label: Label
 var _hydrodynamics_metrics_label: Label
@@ -41,6 +50,7 @@ var _wind_test_buttons: Array[Button] = []
 
 func _ready() -> void:
 	_boat = get_node_or_null(boat_path)
+	_lab_root = get_parent()
 	_wave_sampler = get_node_or_null(^"../WaveSampler") as WaveSampler
 	_build_panel()
 	if _boat == null:
@@ -80,9 +90,12 @@ func _build_panel() -> void:
 	title.add_theme_font_size_override("font_size", 22)
 	outer.add_child(title)
 	var subtitle := Label.new()
-	subtitle.text = "8 m 原型调参艇 · 四点刚体浮力 · 共用动态海浪"
+	subtitle.text = "8 m 原型调参艇 · 四点刚体浮力 · 共用动态海浪 · C 跟随视角 / Delete 全场景重置"
 	subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	outer.add_child(subtitle)
+	_camera_mode_label = _make_note("摄像机模式读取中。")
+	_camera_mode_label.name = "CameraModeStatus"
+	outer.add_child(_camera_mode_label)
 
 	var tabs := TabContainer.new()
 	tabs.name = "SailboatDebugTabs"
@@ -97,6 +110,11 @@ func _build_panel() -> void:
 	_metrics_label.add_theme_font_size_override("font_size", 16)
 	status_page.add_child(_section_title("物理状态 · 约 6.7 Hz 刷新"))
 	status_page.add_child(_metrics_label)
+	status_page.add_child(_section_title("航向与已测偏航力矩"))
+	_turn_diagnostics_label = _make_note("等待转向诊断快照。")
+	_turn_diagnostics_label.name = "TurnDiagnostics"
+	status_page.add_child(_turn_diagnostics_label)
+	status_page.add_child(_make_note("符号约定：局部 +Y 偏航角速度/力矩为左转趋势，HDG 随之下降；HDG 角速度 = -局部偏航角速度。力矩合计仅包含缓存的帆、Jib、龙骨、舵与显式偏航阻尼分项，不包含 Godot 内部角阻尼、浮力不对称及求解器接触等全部项。"))
 	status_page.add_child(_make_button("重置到水平静水漂浮", _reset_neutral))
 	status_page.add_child(_make_note("这里只显示浮力计算代码段耗时，不代表整个 Godot 物理服务器耗时。"))
 
@@ -198,6 +216,17 @@ func _build_panel() -> void:
 	waves_page.add_child(_wave_performance_label)
 
 	var sail_page := _new_scroll_page(tabs, "风与主帆")
+	sail_page.add_child(_section_title("操帆模式"))
+	_auto_trim_toggle = CheckButton.new()
+	_auto_trim_toggle.name = "AutoSailTrimToggle"
+	_auto_trim_toggle.text = "自动操帆（AUTO）"
+	_auto_trim_toggle.button_pressed = bool(_boat.call("get_auto_sail_trim_enabled")) if _boat != null and _boat.has_method("get_auto_sail_trim_enabled") else false
+	_auto_trim_toggle.toggled.connect(_on_auto_trim_toggled)
+	sail_page.add_child(_auto_trim_toggle)
+	_auto_trim_status_label = _make_note("MANUAL · 自动操帆关闭")
+	_auto_trim_status_label.name = "AutoSailTrimStatus"
+	sail_page.add_child(_auto_trim_status_label)
+	sail_page.add_child(_make_note("AUTO 按实际 AWA 连续调节两张帆的目标角；不会改变航向或舵角。手动拖动任一帆角滑块，或按 J/L，会自动切回 MANUAL。迎风禁航区只显示提示，不注入推进力。"))
 	sail_page.add_child(_section_title("手动操帆 · 只改变目标帆角"))
 	_sail_target_value_label = _make_note("目标角 0° · 实际角 0°")
 	sail_page.add_child(_sail_target_value_label)
@@ -205,7 +234,23 @@ func _build_panel() -> void:
 	_sail_target_slider.name = "SailTargetAngle"
 	_sail_target_slider.value_changed.connect(_on_sail_target_changed)
 	sail_page.add_child(_sail_target_slider)
-	sail_page.add_child(_make_note("正角：主帆向右舷放出；负角：向左舷放出。8 m/s 横风可先试 ±30°，随后按视风角继续调帆；这只是本测试船的调参起点。实际帆角按机械转速限值追随。"))
+	sail_page.add_child(_make_note("角度约定：负 TWA/AWA = 左舷来风，正 = 右舷来风；正帆角使 Boom/Clew 向右舷，负角向左舷。AUTO 将帆放到相对风的背风侧。实际帆角按资源限速追随。"))
+	sail_page.add_child(_section_title("独立前帆 Jib · J / L 每次改变目标角 10°"))
+	_headsail_toggle = CheckButton.new()
+	_headsail_toggle.text = "启用前帆气动力与视觉"
+	_headsail_toggle.button_pressed = bool(_boat.call("is_headsail_enabled")) if _boat != null and _boat.has_method("is_headsail_enabled") else true
+	_headsail_toggle.toggled.connect(_on_headsail_toggled)
+	sail_page.add_child(_headsail_toggle)
+	_headsail_target_value_label = _make_note("JIB 目标 0° · 实际 0°")
+	sail_page.add_child(_headsail_target_value_label)
+	_headsail_target_slider = _make_wave_slider(-70.0, 70.0, 1.0, 0.0)
+	_headsail_target_slider.name = "HeadsailTargetAngle"
+	_headsail_target_slider.value_changed.connect(_on_headsail_target_changed)
+	sail_page.add_child(_headsail_target_slider)
+	sail_page.add_child(_make_note("正角：前帆 Clew 向右舷移动；负角：向左舷移动。前帆 Head/Tack 固定，Clew 随实际角度移动；J/L 仅改变目标角，实际角按资源中的转帆限速追随。"))
+	_headsail_metrics_label = _make_note("等待前帆物理快照。")
+	_headsail_metrics_label.name = "HeadsailAerodynamicsDiagnostics"
+	sail_page.add_child(_headsail_metrics_label)
 	sail_page.add_child(_section_title("本地风向测试 · 不修改正式天气"))
 	_wind_test_status_label = _make_note("风场状态读取中。")
 	sail_page.add_child(_wind_test_status_label)
@@ -312,7 +357,13 @@ func _refresh_metrics() -> void:
 		_attitude_feedback_label.text = action_text
 	_refresh_wave_metrics(data)
 	_refresh_sail_metrics(data)
+	_refresh_auto_trim_controls(data)
+	_refresh_headsail_metrics(data)
 	_refresh_hydrodynamics_metrics(data)
+	_refresh_turn_diagnostics(data)
+	if _camera_mode_label != null:
+		var follow_enabled := bool(_lab_root.call("is_camera_follow_enabled")) if _lab_root != null and _lab_root.has_method("is_camera_follow_enabled") else false
+		_camera_mode_label.text = "摄像机：%s · C 切换，Delete/Backspace 重载整个 SailboatLab" % ("平滑跟随" if follow_enabled else "固定观察")
 	var velocity: Vector3 = data.get("linear_velocity_mps", Vector3.ZERO)
 	var angular_velocity: Vector3 = data.get("angular_velocity_rad_s", Vector3.ZERO)
 	_metrics_label.text = (
@@ -340,6 +391,52 @@ func _refresh_metrics() -> void:
 		float(data.get("physics_delta_s", 0.0)),
 		float(data.get("buoyancy_strength", 1.0)),
 		float(data.get("damping_ratio", 0.0)),
+	]
+
+
+func _refresh_turn_diagnostics(data: Dictionary) -> void:
+	if _turn_diagnostics_label == null or _boat == null or not _boat.has_method("get_s1_c4_diagnostic_snapshot"):
+		return
+	var physics: Dictionary = _boat.call("get_s1_c4_diagnostic_snapshot")
+	var navigation: Dictionary = _boat.call("get_navigation_snapshot")
+	var heading := float(physics.get("heading_degrees", 0.0))
+	var sog_knots := float(navigation.get("sog_knots", 0.0))
+	var v_long := float(physics.get("longitudinal_velocity_mps", 0.0))
+	var v_lateral := float(physics.get("lateral_velocity_mps", 0.0))
+	var yaw_rate_local_deg_s := rad_to_deg(float(physics.get("yaw_rate_rad_s", 0.0)))
+	var hdg_rate_deg_s := -yaw_rate_local_deg_s
+	var target_rudder_deg := rad_to_deg(float(physics.get("target_rudder_angle_rad", 0.0)))
+	var actual_rudder_deg := rad_to_deg(float(physics.get("actual_rudder_angle_rad", 0.0)))
+	var max_rudder_deg := rad_to_deg(float(navigation.get("max_rudder_angle_rad", 0.0)))
+	var at_limit := absf(actual_rudder_deg) >= maxf(max_rudder_deg - 0.5, 0.0)
+	var limit_side := "左限位" if actual_rudder_deg < 0.0 else "右限位" if actual_rudder_deg > 0.0 else "未到限位"
+	if not at_limit:
+		limit_side = "未到限位"
+	var twa := float(navigation.get("true_wind_from_relative_degrees", 0.0))
+	var awa := float(navigation.get("apparent_wind_from_relative_degrees", 0.0))
+	var rudder_water_speed := float(data.get("rudder_water_speed_mps", 0.0))
+	var rudder_aoa_deg := rad_to_deg(float(data.get("rudder_angle_of_attack_rad", 0.0)))
+	_turn_diagnostics_label.text = (
+		"HDG %.1f° · SOG %.2f kn · TWA/AWA %+.1f° / %+.1f°\n"
+		+ "船体 Vlong %+.3f m/s · Vlat %+.3f m/s\n"
+		+ "局部 +Y 偏航角速度 %+.2f°/s · HDG 变化率 %+.2f°/s（正值=右转）\n"
+		+ "舵目标/实际 %+.1f° / %+.1f° · ±%.1f° · %s\n"
+		+ "舵处相对水速 %.3f m/s · 水动力攻角 %+.1f°\n"
+		+ "局部 +Y 已测力矩 N·m：主帆 %+.0f · Jib %+.0f\n"
+		+ "龙骨 %+.0f · 舵 %+.0f · 显式偏航阻尼 %+.0f\n"
+		+ "已测分项合计 %+.0f N·m"
+	) % [
+		heading, sog_knots, twa, awa,
+		v_long, v_lateral,
+		yaw_rate_local_deg_s, hdg_rate_deg_s,
+		target_rudder_deg, actual_rudder_deg, max_rudder_deg, limit_side,
+		rudder_water_speed, rudder_aoa_deg,
+		float(physics.get("sail_yaw_torque_local_nm", 0.0)),
+		float(physics.get("headsail_yaw_torque_local_nm", 0.0)),
+		float(physics.get("keel_yaw_torque_local_nm", 0.0)),
+		float(physics.get("rudder_yaw_torque_local_nm", 0.0)),
+		float(physics.get("explicit_yaw_damping_torque_local_nm", 0.0)),
+		float(physics.get("summed_measured_yaw_torque_local_nm", 0.0)),
 	]
 
 
@@ -411,6 +508,63 @@ func _refresh_sail_metrics(data: Dictionary) -> void:
 		int(data.get("force_calculation_usec", 0)),
 		int(data.get("total_physics_calculation_average_usec", 0)),
 		int(data.get("total_physics_calculation_p95_usec", 0)),
+	]
+
+
+func _refresh_auto_trim_controls(data: Dictionary) -> void:
+	if _auto_trim_toggle == null or _boat == null or not _boat.has_method("get_auto_sail_trim_snapshot"):
+		return
+	var enabled := bool(data.get("auto_sail_trim_enabled", false))
+	_auto_trim_toggle.set_pressed_no_signal(enabled)
+	var trim: Dictionary = _boat.call("get_auto_sail_trim_snapshot")
+	var selected_side := str(trim.get("selected_side", "未选舷侧"))
+	var status := str(trim.get("status", "自动操帆已关闭"))
+	var awa := float(data.get("apparent_wind_from_angle_degrees", 0.0))
+	var aws := float(data.get("apparent_wind_speed_mps", 0.0))
+	var status_text := "NO-GO" if bool(trim.get("no_go", false)) else status
+	_auto_trim_status_label.text = "%s · AWA %+.1f° / AWS %.2f m/s · %s · %s · 控制计算 %d μs" % [
+		"AUTO" if enabled else "MANUAL", awa, aws, selected_side, status_text,
+		int(data.get("auto_trim_calculation_usec", 0)),
+	]
+
+
+func _refresh_headsail_metrics(data: Dictionary) -> void:
+	if _headsail_target_slider == null:
+		return
+	var target_degrees := rad_to_deg(float(data.get("target_headsail_angle_rad", 0.0)))
+	var actual_degrees := rad_to_deg(float(data.get("actual_headsail_angle_rad", 0.0)))
+	_headsail_toggle.set_pressed_no_signal(bool(data.get("headsail_enabled", false)))
+	_headsail_target_slider.set_value_no_signal(target_degrees)
+	_headsail_target_value_label.text = "JIB TARGET %+.0f° · 实际 %+.1f° · 限速 %.1f°/s" % [
+		target_degrees,
+		actual_degrees,
+		rad_to_deg(float(data.get("headsail_rotation_speed_rad_s", 0.0))),
+	]
+	var apparent: Vector3 = data.get("headsail_apparent_wind_local_mps", Vector3.ZERO)
+	var lift: Vector3 = data.get("headsail_lift_force_local_n", Vector3.ZERO)
+	var drag: Vector3 = data.get("headsail_drag_force_local_n", Vector3.ZERO)
+	var force: Vector3 = data.get("headsail_net_force_local_n", Vector3.ZERO)
+	var center: Vector3 = data.get("headsail_pressure_center_local_m", Vector3.ZERO)
+	_headsail_metrics_label.text = (
+		"状态：%s · 名义/当前面积 %.2f / %.2f m² · CP (%.2f, %.2f, %.2f) m\n"
+		+ "视风 %.2f m/s · 攻角 %+.1f° · CL %.3f · CD %.3f · 失风 %.2f · 反吹保留 %.2f\n"
+		+ "Jib 升力 %.0f N · 阻力 %.0f N · 合力 (%.0f, %.0f, %.0f) N · 横倾矩 %+.0f / 偏航矩 %+.0f N·m\n"
+		+ "帆计算 Jib 当前/均值/P95 %d/%d/%d μs · WindField/物理步 %d · WaveSampler/物理步 %d"
+	) % [
+		"启用" if bool(data.get("headsail_enabled", false)) else "禁用",
+		float(data.get("headsail_area_m2", 0.0)), float(data.get("headsail_effective_area_m2", 0.0)),
+		center.x, center.y, center.z,
+		float(data.get("headsail_apparent_wind_speed_mps", 0.0)),
+		rad_to_deg(float(data.get("headsail_angle_of_attack_rad", 0.0))),
+		float(data.get("headsail_cl", 0.0)), float(data.get("headsail_cd", 0.0)),
+		float(data.get("headsail_luffing_scale", 0.0)), float(data.get("headsail_wrong_side_lift_scale", 1.0)),
+		lift.length(), drag.length(), force.x, force.y, force.z,
+		float(data.get("headsail_roll_torque_local_nm", 0.0)),
+		float(data.get("headsail_yaw_torque_nm", 0.0)),
+		int(data.get("headsail_aero_calculation_usec", 0)),
+		int(data.get("headsail_aero_calculation_average_usec", 0)),
+		int(data.get("headsail_aero_calculation_p95_usec", 0)),
+		int(data.get("wind_query_count_per_tick", 0)), int(data.get("wave_query_count_per_tick", 0)),
 	]
 
 
@@ -539,6 +693,23 @@ func _on_damping_changed(value: float) -> void:
 func _on_sail_target_changed(value_degrees: float) -> void:
 	if _boat != null and _boat.has_method("set_target_sail_angle"):
 		_boat.call("set_target_sail_angle", deg_to_rad(value_degrees))
+
+
+func _on_auto_trim_toggled(enabled: bool) -> void:
+	if _boat != null and _boat.has_method("set_auto_sail_trim_enabled"):
+		_boat.call("set_auto_sail_trim_enabled", enabled)
+	_refresh_metrics()
+
+
+func _on_headsail_target_changed(value_degrees: float) -> void:
+	if _boat != null and _boat.has_method("set_target_headsail_angle"):
+		_boat.call("set_target_headsail_angle", deg_to_rad(value_degrees))
+
+
+func _on_headsail_toggled(enabled: bool) -> void:
+	if _boat != null and _boat.has_method("set_headsail_enabled"):
+		_boat.call("set_headsail_enabled", enabled)
+	_refresh_metrics()
 
 
 func _on_rudder_target_changed(value_degrees: float) -> void:

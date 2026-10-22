@@ -1,0 +1,2 @@
+candidate_id,usage,area_m2,head_x_m,head_y_m,head_z_m,tack_x_m,tack_y_m,tack_z_m,clew_x_m,clew_y_m,clew_z_m,pressure_center_x_m,pressure_center_y_m,pressure_center_z_m,trim_control,implementation_status
+8m_cruising_jib_candidate_v1,prototype_candidate_only,5.196000,0.000000,4.950000,-0.750000,0.000000,0.620000,-3.550000,0.000000,0.620000,-1.150000,0.000000,2.063333,-1.816667,independent_from_main_sail,profile_resource_candidate_not_implemented

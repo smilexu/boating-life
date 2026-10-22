@@ -35,6 +35,18 @@ extends Resource
 @export_range(-1.396, 0.0, 0.01745, "radians_as_degrees") var min_sail_angle_rad := -1.396
 @export_range(0.0, 1.396, 0.01745, "radians_as_degrees") var max_sail_angle_rad := 1.396
 @export_range(0.05, 1.0, 0.01, "radians_as_degrees") var sail_rotation_speed_rad_s := 0.35
+## C7b-calibrated AUTO curve: x is absolute apparent-wind angle in degrees,
+## y is sheet magnitude in degrees. Sign is selected from wind side by AutoSailTrim.
+@export var auto_main_trim_curve_points_degrees := PackedVector2Array([
+	Vector2(0.0, 10.0), Vector2(30.0, 10.0), Vector2(45.0, 20.0),
+	Vector2(60.0, 30.0), Vector2(80.2, 60.0), Vector2(108.1, 79.9),
+	Vector2(143.1, 79.9), Vector2(180.0, 79.9),
+])
+@export var auto_headsail_trim_curve_points_degrees := PackedVector2Array([
+	Vector2(0.0, 10.0), Vector2(30.0, 10.0), Vector2(45.0, 15.0),
+	Vector2(60.0, 25.0), Vector2(80.2, 55.0), Vector2(108.1, 70.0),
+	Vector2(143.1, 70.0), Vector2(180.0, 70.0),
+])
 @export_range(0.5, 2.0, 0.01) var air_density_kg_m3 := 1.225
 @export_range(0.1, 2.5, 0.05) var sail_max_lift_coefficient := 1.25
 @export_range(5.0, 45.0, 1.0, "radians_as_degrees") var sail_stall_angle_rad := 0.384
@@ -46,6 +58,30 @@ extends Resource
 ## Lift retention when the boom is geometrically on the windward/backed side.
 ## Drag remains active; this is a bounded game-level backing model.
 @export_range(0.0, 1.0, 0.01) var sail_wrong_side_lift_retention := 0.20
+
+## Independent prototype jib. Geometry and force data are both hull-local and
+## remain separate from the visual GLB/mesh and from the mainsail.
+@export var headsail_enabled := true
+@export_range(1.0, 16.0, 0.01) var headsail_area_m2 := 5.16
+@export var headsail_head_local_m := Vector3(0.0, 4.95, -0.75)
+@export var headsail_tack_local_m := Vector3(0.0, 0.65, -3.55)
+@export var headsail_clew_neutral_local_m := Vector3(0.0, 0.65, -1.15)
+## The pressure centre starts at the triangle centroid and follows one third
+## of the Clew displacement. This is a tunable prototype distribution, not
+## measured sail data.
+@export var headsail_pressure_center_offset_from_centroid_m := Vector3.ZERO
+@export_range(0.0, 1.0, 0.01) var headsail_pressure_center_clew_follow := 0.333333
+@export_range(-1.396, 0.0, 0.01745, "radians_as_degrees") var min_headsail_angle_rad := -1.222
+@export_range(0.0, 1.396, 0.01745, "radians_as_degrees") var max_headsail_angle_rad := 1.222
+@export_range(0.05, 1.0, 0.01, "radians_as_degrees") var headsail_rotation_speed_rad_s := 0.52
+@export_range(0.1, 2.5, 0.05) var headsail_max_lift_coefficient := 1.25
+@export_range(5.0, 45.0, 1.0, "radians_as_degrees") var headsail_stall_angle_rad := 0.384
+@export_range(15.0, 60.0, 1.0, "radians_as_degrees") var headsail_no_sail_wind_from_angle_rad := 0.611
+@export_range(25.0, 75.0, 1.0, "radians_as_degrees") var headsail_full_lift_wind_from_angle_rad := 0.873
+@export_range(0.0, 0.5, 0.01) var headsail_base_drag_coefficient := 0.08
+@export_range(0.0, 1.5, 0.01) var headsail_induced_drag_factor := 0.55
+@export_range(0.0, 2.0, 0.01) var headsail_flat_plate_drag_factor := 0.90
+@export_range(0.0, 1.0, 0.01) var headsail_wrong_side_lift_retention := 0.20
 
 ## Prototype/tuning hydrodynamics. No measured hull data is implied.
 @export_range(500.0, 1200.0, 5.0) var water_density_kg_m3 := 1025.0

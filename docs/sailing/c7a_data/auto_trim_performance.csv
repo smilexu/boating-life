@@ -1,0 +1,8 @@
+case,mode,duration_s,auto_calculation_average_usec,auto_calculation_p95_usec,wind_queries_per_tick,wave_queries_per_tick,total_physics_average_usec,total_physics_p95_usec
+auto_00ms,auto,30.000000,4.000000,6.000000,1.000000,0.000000,57,85
+auto_03ms,auto,30.000000,7.000000,10.000000,1.000000,0.000000,75,106
+auto_08ms,auto,120.000000,7.000000,11.000000,1.000000,0.000000,78,117
+auto_12ms,auto,30.000000,7.000000,10.000000,1.000000,0.000000,77,105
+manual_positive_60_45,manual,120.000000,0.000000,0.000000,1.000000,0.000000,71,89
+manual_negative_60_45,manual,120.000000,0.000000,0.000000,1.000000,0.000000,69,87
+auto_8ms_left_rudder,auto,80.000000,8.000000,10.000000,1.000000,0.000000,93,147
