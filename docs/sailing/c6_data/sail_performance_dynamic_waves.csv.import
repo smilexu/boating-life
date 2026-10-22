@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://c7k6msn7sn1n"
+
+[deps]
+
+files=["res://docs/sailing/c6_data/sail_performance_dynamic_waves.tws.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.target.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.configuration.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.duration.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.mean.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.mean.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.mean.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.mean.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.mean.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.total.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.total.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.aero.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.aero.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.jib.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.jib.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.wind.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.wave.translation"]
+
+source_file="res://docs/sailing/c6_data/sail_performance_dynamic_waves.csv"
+dest_files=["res://docs/sailing/c6_data/sail_performance_dynamic_waves.tws.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.target.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.configuration.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.duration.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.mean.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.mean.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.mean.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.mean.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.mean.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.total.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.total.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.aero.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.aero.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.jib.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.jib.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.wind.translation", "res://docs/sailing/c6_data/sail_performance_dynamic_waves.wave.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

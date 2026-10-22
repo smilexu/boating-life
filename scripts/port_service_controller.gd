@@ -130,6 +130,9 @@ func return_to_main_menu() -> void:
 func open_service(service_id: String) -> bool:
 	if not is_menu_open() or not _config.available_services.has(service_id):
 		return false
+	if _boat != null and _boat.has_method("supports_cargo") and not bool(_boat.call("supports_cargo")):
+		_status_label.text = "当前帆船原型暂未接入港口服务与货运任务。"
+		return false
 	_current_service_id = service_id
 	_populate_service_page(service_id)
 	return true
@@ -263,6 +266,13 @@ func _populate_main_page() -> void:
 	_status_label.text = "%s  ·  %s" % [arrival_state, _get_vessel_display_name()]
 	_clear_children(_body)
 	var intro := Label.new()
+	if _boat != null and _boat.has_method("supports_cargo") and not bool(_boat.call("supports_cargo")):
+		intro.text = "当前帆船原型暂未接入港口服务与货运任务。帆船仍可继续使用本海域风场和海浪航行。"
+		intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		intro.add_theme_color_override("font_color", Color(0.78, 0.85, 0.83))
+		_body.add_child(intro)
+		_build_footer(true)
+		return
 	intro.text = "选择一项港口服务。港口与海面仍在当前世界中持续运行。"
 	intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	intro.add_theme_color_override("font_color", Color(0.78, 0.85, 0.83))
@@ -508,6 +518,8 @@ func _add_disabled_action(label_text: String) -> void:
 
 
 func _get_vessel_display_name() -> String:
+	if _boat != null and _boat.has_method("supports_sail_trim") and bool(_boat.call("supports_sail_trim")):
+		return "8 m 双帆帆船（原型）"
 	if _boat != null and _boat.draft_profile != null:
 		return _boat.draft_profile.vessel_display_name
 	return "测试船"

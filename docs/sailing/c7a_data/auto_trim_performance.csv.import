@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://n37xubq78xfd"
+
+[deps]
+
+files=["res://docs/sailing/c7a_data/auto_trim_performance.mode.translation", "res://docs/sailing/c7a_data/auto_trim_performance.duration.translation", "res://docs/sailing/c7a_data/auto_trim_performance.auto.translation", "res://docs/sailing/c7a_data/auto_trim_performance.auto.translation", "res://docs/sailing/c7a_data/auto_trim_performance.wind.translation", "res://docs/sailing/c7a_data/auto_trim_performance.wave.translation", "res://docs/sailing/c7a_data/auto_trim_performance.total.translation", "res://docs/sailing/c7a_data/auto_trim_performance.total.translation"]
+
+source_file="res://docs/sailing/c7a_data/auto_trim_performance.csv"
+dest_files=["res://docs/sailing/c7a_data/auto_trim_performance.mode.translation", "res://docs/sailing/c7a_data/auto_trim_performance.duration.translation", "res://docs/sailing/c7a_data/auto_trim_performance.auto.translation", "res://docs/sailing/c7a_data/auto_trim_performance.auto.translation", "res://docs/sailing/c7a_data/auto_trim_performance.wind.translation", "res://docs/sailing/c7a_data/auto_trim_performance.wave.translation", "res://docs/sailing/c7a_data/auto_trim_performance.total.translation", "res://docs/sailing/c7a_data/auto_trim_performance.total.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

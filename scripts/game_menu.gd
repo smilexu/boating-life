@@ -8,6 +8,7 @@ extends CanvasLayer
 @export_node_path("Node") var music_manager_path := NodePath("../../MusicManager")
 @export_node_path("Node") var environment_audio_manager_path := NodePath("../EnvironmentAudioManager")
 @export_node_path("Node") var boat_audio_controller_path := NodePath("../BoatAudioController")
+@export_node_path("Node") var quality_manager_path := NodePath("../QualityManager")
 @export_node_path("Node") var fish_map_path := NodePath("../FishResourceMap")
 @export_node_path("Node") var malmo_port_services_path := NodePath("../MalmoHarbor/PortServiceController")
 @export_node_path("Node") var copenhagen_port_services_path := NodePath("../CopenhagenHarbor/PortServiceController")
@@ -19,6 +20,7 @@ var _camera_rig: Node3D
 var _music_manager: Node
 var _environment_audio_manager: Node
 var _boat_audio_controller: Node
+var _quality_manager: Node
 var _fish_map: Node
 var _port_services: Array[Node] = []
 var _background: ColorRect
@@ -26,6 +28,8 @@ var _panel: PanelContainer
 var _main_page: VBoxContainer
 var _settings_page: VBoxContainer
 var _music_toggle: CheckButton
+var _ui_scale_option: OptionButton
+var _navigation_detail_option: OptionButton
 var _mix_sliders: Dictionary = {}
 var _menu_open := false
 var _settings_open := false
@@ -38,6 +42,7 @@ func _ready() -> void:
 	_music_manager = get_node_or_null(music_manager_path)
 	_environment_audio_manager = get_node_or_null(environment_audio_manager_path)
 	_boat_audio_controller = get_node_or_null(boat_audio_controller_path)
+	_quality_manager = get_node_or_null(quality_manager_path)
 	_fish_map = get_node_or_null(fish_map_path)
 	var malmo_services := get_node_or_null(malmo_port_services_path)
 	var copenhagen_services := get_node_or_null(copenhagen_port_services_path)
@@ -46,6 +51,10 @@ func _ready() -> void:
 	if copenhagen_services != null:
 		_port_services.append(copenhagen_services)
 	_build_ui()
+	get_viewport().size_changed.connect(_update_panel_layout)
+	if _quality_manager != null and _quality_manager.has_signal("settings_changed"):
+		_quality_manager.connect("settings_changed", _sync_interface_settings)
+	_update_panel_layout()
 	visible = false
 
 
@@ -113,6 +122,7 @@ func _show_settings_page() -> void:
 	if _music_manager != null and _music_manager.has_method("is_music_enabled"):
 		_music_toggle.set_pressed_no_signal(bool(_music_manager.call("is_music_enabled")))
 	_refresh_mix_sliders()
+	_sync_interface_settings()
 	_music_toggle.grab_focus()
 
 
@@ -127,7 +137,10 @@ func _has_existing_overlay_open() -> bool:
 
 func _set_manual_input_enabled(enabled: bool) -> void:
 	if is_instance_valid(_boat):
-		_boat.set("manual_input_enabled", enabled)
+		if _boat.has_method("set_sailing_manual_controls_enabled"):
+			_boat.call("set_sailing_manual_controls_enabled", enabled)
+		else:
+			_boat.set("manual_input_enabled", enabled)
 
 
 func _on_music_toggled(enabled: bool) -> void:
@@ -194,29 +207,42 @@ func _build_ui() -> void:
 	_settings_page.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_settings_page.visible = false
 	pages.add_child(_settings_page)
-	_add_page_spacer(_settings_page)
 	var settings_title := Label.new()
 	settings_title.text = "设置"
 	settings_title.add_theme_font_size_override("font_size", 24)
 	settings_title.add_theme_color_override("font_color", Color("#e5efea"))
 	_settings_page.add_child(settings_title)
+	var settings_scroll := ScrollContainer.new()
+	settings_scroll.name = "SettingsScroll"
+	settings_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	settings_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_settings_page.add_child(settings_scroll)
+	var settings_controls := VBoxContainer.new()
+	settings_controls.name = "SettingsControls"
+	settings_controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_controls.add_theme_constant_override("separation", 10)
+	settings_scroll.add_child(settings_controls)
 	_music_toggle = CheckButton.new()
 	_music_toggle.name = "MusicEnabledToggle"
 	_music_toggle.text = "背景音乐"
 	_music_toggle.add_theme_font_size_override("font_size", 19)
 	_music_toggle.toggled.connect(_on_music_toggled)
-	_settings_page.add_child(_music_toggle)
+	settings_controls.add_child(_music_toggle)
 	var playlist_hint := Label.new()
 	playlist_hint.text = "bgm1 与 bgm2 按顺序播放"
 	playlist_hint.add_theme_font_size_override("font_size", 14)
 	playlist_hint.add_theme_color_override("font_color", Color("#9db9b8"))
-	_settings_page.add_child(playlist_hint)
-	_add_volume_slider(_settings_page, "天气音效", "weather", 68.0)
-	_add_volume_slider(_settings_page, "海浪与船体音效", "ocean", 72.0)
-	_add_volume_slider(_settings_page, "发动机音量", "engine", 62.0)
-	_add_page_spacer(_settings_page)
+	settings_controls.add_child(playlist_hint)
+	_ui_scale_option = _add_settings_option_row(settings_controls, "界面大小", ["小 · 90%", "标准 · 100%", "大 · 125%", "特大 · 150%", "超大 · 175%"])
+	_ui_scale_option.name = "UIScaleOption"
+	_ui_scale_option.item_selected.connect(_on_ui_scale_selected)
+	_navigation_detail_option = _add_settings_option_row(settings_controls, "航行信息", ["简洁", "详细"])
+	_navigation_detail_option.name = "NavigationDetailOption"
+	_navigation_detail_option.item_selected.connect(_on_navigation_detail_selected)
+	_add_volume_slider(settings_controls, "天气音效", "weather", 68.0)
+	_add_volume_slider(settings_controls, "海浪与船体音效", "ocean", 72.0)
+	_add_volume_slider(settings_controls, "发动机音量", "engine", 62.0)
 	_add_button(_settings_page, "返回", "BackButton", _show_main_page)
-	_add_page_spacer(_settings_page)
 
 
 func _add_page_spacer(parent: VBoxContainer) -> void:
@@ -235,6 +261,62 @@ func _add_button(parent: VBoxContainer, label: String, node_name: String, callba
 	button.pressed.connect(callback)
 	parent.add_child(button)
 	return button
+
+
+func _add_settings_option_row(parent: VBoxContainer, label_text: String, options: Array[String]) -> OptionButton:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 10)
+	var label := Label.new()
+	label.text = label_text
+	label.custom_minimum_size.x = 130.0
+	label.add_theme_font_size_override("font_size", 16)
+	row.add_child(label)
+	var option := OptionButton.new()
+	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	option.custom_minimum_size.y = 42.0
+	for item in options:
+		option.add_item(item)
+	row.add_child(option)
+	parent.add_child(row)
+	return option
+
+
+func _sync_interface_settings() -> void:
+	if _quality_manager == null:
+		if _ui_scale_option != null:
+			_ui_scale_option.disabled = true
+		if _navigation_detail_option != null:
+			_navigation_detail_option.disabled = true
+		return
+	if _ui_scale_option != null and _quality_manager.has_method("get_ui_scale_index"):
+		_ui_scale_option.select(int(_quality_manager.call("get_ui_scale_index")))
+	if _navigation_detail_option != null and _quality_manager.has_method("get_navigation_detail_enabled"):
+		_navigation_detail_option.select(1 if bool(_quality_manager.call("get_navigation_detail_enabled")) else 0)
+	_update_panel_layout()
+
+
+func _update_panel_layout() -> void:
+	if _panel == null or not is_inside_tree():
+		return
+	var viewport_size := get_viewport().get_visible_rect().size
+	var ui_scale := float(_quality_manager.call("get_ui_scale_factor")) if _quality_manager != null and _quality_manager.has_method("get_ui_scale_factor") else 1.0
+	var width := minf(520.0, maxf(300.0, (viewport_size.x - 32.0) / ui_scale))
+	var height := minf(680.0, maxf(360.0, (viewport_size.y - 32.0) / ui_scale))
+	_panel.custom_minimum_size = Vector2(width, height)
+	_panel.offset_left = -width * 0.5
+	_panel.offset_right = width * 0.5
+	_panel.offset_top = -height * 0.5
+	_panel.offset_bottom = height * 0.5
+
+
+func _on_ui_scale_selected(index: int) -> void:
+	if _quality_manager != null and _quality_manager.has_method("set_ui_scale_index"):
+		_quality_manager.call("set_ui_scale_index", index)
+
+
+func _on_navigation_detail_selected(index: int) -> void:
+	if _quality_manager != null and _quality_manager.has_method("set_navigation_detail_enabled"):
+		_quality_manager.call("set_navigation_detail_enabled", index == 1)
 
 
 func _add_volume_slider(parent: VBoxContainer, label_text: String, channel: String, initial_value: float) -> void:

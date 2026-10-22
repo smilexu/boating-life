@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://d2ww6jropst0k"
+
+[deps]
+
+files=["res://docs/sailing/c5d_data/damping_comparison.mode.translation", "res://docs/sailing/c5d_data/damping_comparison.mode.translation", "res://docs/sailing/c5d_data/damping_comparison.body.translation", "res://docs/sailing/c5d_data/damping_comparison.project.translation", "res://docs/sailing/c5d_data/damping_comparison.effective.translation", "res://docs/sailing/c5d_data/damping_comparison.sim.translation", "res://docs/sailing/c5d_data/damping_comparison.heading.translation", "res://docs/sailing/c5d_data/damping_comparison.sog.translation", "res://docs/sailing/c5d_data/damping_comparison.longitudinal.translation", "res://docs/sailing/c5d_data/damping_comparison.lateral.translation", "res://docs/sailing/c5d_data/damping_comparison.sideslip.translation", "res://docs/sailing/c5d_data/damping_comparison.heel.translation", "res://docs/sailing/c5d_data/damping_comparison.yaw.translation", "res://docs/sailing/c5d_data/damping_comparison.forward.translation", "res://docs/sailing/c5d_data/damping_comparison.sail.translation", "res://docs/sailing/c5d_data/damping_comparison.hull.translation", "res://docs/sailing/c5d_data/damping_comparison.keel.translation", "res://docs/sailing/c5d_data/damping_comparison.rudder.translation", "res://docs/sailing/c5d_data/damping_comparison.explicit.translation", "res://docs/sailing/c5d_data/damping_comparison.rigidbody.translation", "res://docs/sailing/c5d_data/damping_comparison.known.translation", "res://docs/sailing/c5d_data/damping_comparison.longitudinal.translation", "res://docs/sailing/c5d_data/damping_comparison.max.translation", "res://docs/sailing/c5d_data/damping_comparison.physics.translation", "res://docs/sailing/c5d_data/damping_comparison.physics.translation"]
+
+source_file="res://docs/sailing/c5d_data/damping_comparison.csv"
+dest_files=["res://docs/sailing/c5d_data/damping_comparison.mode.translation", "res://docs/sailing/c5d_data/damping_comparison.mode.translation", "res://docs/sailing/c5d_data/damping_comparison.body.translation", "res://docs/sailing/c5d_data/damping_comparison.project.translation", "res://docs/sailing/c5d_data/damping_comparison.effective.translation", "res://docs/sailing/c5d_data/damping_comparison.sim.translation", "res://docs/sailing/c5d_data/damping_comparison.heading.translation", "res://docs/sailing/c5d_data/damping_comparison.sog.translation", "res://docs/sailing/c5d_data/damping_comparison.longitudinal.translation", "res://docs/sailing/c5d_data/damping_comparison.lateral.translation", "res://docs/sailing/c5d_data/damping_comparison.sideslip.translation", "res://docs/sailing/c5d_data/damping_comparison.heel.translation", "res://docs/sailing/c5d_data/damping_comparison.yaw.translation", "res://docs/sailing/c5d_data/damping_comparison.forward.translation", "res://docs/sailing/c5d_data/damping_comparison.sail.translation", "res://docs/sailing/c5d_data/damping_comparison.hull.translation", "res://docs/sailing/c5d_data/damping_comparison.keel.translation", "res://docs/sailing/c5d_data/damping_comparison.rudder.translation", "res://docs/sailing/c5d_data/damping_comparison.explicit.translation", "res://docs/sailing/c5d_data/damping_comparison.rigidbody.translation", "res://docs/sailing/c5d_data/damping_comparison.known.translation", "res://docs/sailing/c5d_data/damping_comparison.longitudinal.translation", "res://docs/sailing/c5d_data/damping_comparison.max.translation", "res://docs/sailing/c5d_data/damping_comparison.physics.translation", "res://docs/sailing/c5d_data/damping_comparison.physics.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cohle71p6ulos"
+
+[deps]
+
+files=["res://docs/sailing/c6_2_data/rudder_case_summary.precondition.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.precondition.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.precondition.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.precondition.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.control.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.control.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.end.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.end.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.end.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.end.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.end.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.min.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.max.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.mean.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.mean.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.mean.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.physics.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.physics.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.wind.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.wave.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.rudder.translation"]
+
+source_file="res://docs/sailing/c6_2_data/rudder_case_summary.csv"
+dest_files=["res://docs/sailing/c6_2_data/rudder_case_summary.precondition.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.precondition.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.precondition.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.precondition.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.control.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.control.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.end.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.end.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.end.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.end.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.end.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.min.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.max.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.mean.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.mean.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.mean.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.physics.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.physics.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.wind.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.wave.translation", "res://docs/sailing/c6_2_data/rudder_case_summary.rudder.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

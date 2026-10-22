@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bvocyfminv6c3"
+
+[deps]
+
+files=["res://docs/sailing/c6_data/sail_performance_comparison.tws.translation", "res://docs/sailing/c6_data/sail_performance_comparison.target.translation", "res://docs/sailing/c6_data/sail_performance_comparison.configuration.translation", "res://docs/sailing/c6_data/sail_performance_comparison.duration.translation", "res://docs/sailing/c6_data/sail_performance_comparison.total.translation", "res://docs/sailing/c6_data/sail_performance_comparison.total.translation", "res://docs/sailing/c6_data/sail_performance_comparison.aero.translation", "res://docs/sailing/c6_data/sail_performance_comparison.aero.translation", "res://docs/sailing/c6_data/sail_performance_comparison.jib.translation", "res://docs/sailing/c6_data/sail_performance_comparison.jib.translation", "res://docs/sailing/c6_data/sail_performance_comparison.wind.translation", "res://docs/sailing/c6_data/sail_performance_comparison.wave.translation"]
+
+source_file="res://docs/sailing/c6_data/sail_performance_comparison.csv"
+dest_files=["res://docs/sailing/c6_data/sail_performance_comparison.tws.translation", "res://docs/sailing/c6_data/sail_performance_comparison.target.translation", "res://docs/sailing/c6_data/sail_performance_comparison.configuration.translation", "res://docs/sailing/c6_data/sail_performance_comparison.duration.translation", "res://docs/sailing/c6_data/sail_performance_comparison.total.translation", "res://docs/sailing/c6_data/sail_performance_comparison.total.translation", "res://docs/sailing/c6_data/sail_performance_comparison.aero.translation", "res://docs/sailing/c6_data/sail_performance_comparison.aero.translation", "res://docs/sailing/c6_data/sail_performance_comparison.jib.translation", "res://docs/sailing/c6_data/sail_performance_comparison.jib.translation", "res://docs/sailing/c6_data/sail_performance_comparison.wind.translation", "res://docs/sailing/c6_data/sail_performance_comparison.wave.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

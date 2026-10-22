@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bh8vx5bcx7n06"
+
+[deps]
+
+files=["res://docs/sailing/c6_2_data/yaw_torque_decomposition.steering.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.main.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.jib.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.keel.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.rudder.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.explicit.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.measured.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.measured.translation"]
+
+source_file="res://docs/sailing/c6_2_data/yaw_torque_decomposition.csv"
+dest_files=["res://docs/sailing/c6_2_data/yaw_torque_decomposition.steering.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.main.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.jib.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.keel.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.rudder.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.explicit.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.measured.translation", "res://docs/sailing/c6_2_data/yaw_torque_decomposition.measured.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

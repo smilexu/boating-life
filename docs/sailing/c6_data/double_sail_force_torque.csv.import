@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://d331vx4ydusw1"
+
+[deps]
+
+files=["res://docs/sailing/c6_data/double_sail_force_torque.target.translation", "res://docs/sailing/c6_data/double_sail_force_torque.configuration.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.status.translation"]
+
+source_file="res://docs/sailing/c6_data/double_sail_force_torque.csv"
+dest_files=["res://docs/sailing/c6_data/double_sail_force_torque.target.translation", "res://docs/sailing/c6_data/double_sail_force_torque.configuration.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.mean.translation", "res://docs/sailing/c6_data/double_sail_force_torque.status.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

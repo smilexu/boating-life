@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cnoekqv636phd"
+
+[deps]
+
+files=["res://docs/sailing/c7b_data/trim_candidate_screening.target.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.main.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.jib.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.screen.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.screen.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.rudder.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation"]
+
+source_file="res://docs/sailing/c7b_data/trim_candidate_screening.csv"
+dest_files=["res://docs/sailing/c7b_data/trim_candidate_screening.target.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.main.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.jib.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.screen.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.screen.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.rudder.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation", "res://docs/sailing/c7b_data/trim_candidate_screening.mean.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

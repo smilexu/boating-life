@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://cyjlpxbbsou63"
+
+[deps]
+
+files=["res://docs/sailing/c5e_data/wrong_side_trim_controls.target.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.screen.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.wrong.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation"]
+
+source_file="res://docs/sailing/c5e_data/wrong_side_trim_controls.csv"
+dest_files=["res://docs/sailing/c5e_data/wrong_side_trim_controls.target.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.screen.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.wrong.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation", "res://docs/sailing/c5e_data/wrong_side_trim_controls.mean.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bd7wigi74rld1"
+
+[deps]
+
+files=["res://docs/sailing/c7b_data/yaw_balance_comparison.tws.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.target.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.main.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.jib.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.main.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.jib.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.keel.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.rudder.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.mean.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.rudder.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.mean.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.mean.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.status.translation"]
+
+source_file="res://docs/sailing/c7b_data/yaw_balance_comparison.csv"
+dest_files=["res://docs/sailing/c7b_data/yaw_balance_comparison.tws.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.target.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.main.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.jib.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.main.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.jib.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.keel.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.rudder.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.mean.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.rudder.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.mean.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.mean.translation", "res://docs/sailing/c7b_data/yaw_balance_comparison.status.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://dml2bpq4qgfsk"
+
+[deps]
+
+files=["res://docs/sailing/c5d_data/natural_deceleration.initial.translation", "res://docs/sailing/c5d_data/natural_deceleration.sim.translation", "res://docs/sailing/c5d_data/natural_deceleration.sog.translation", "res://docs/sailing/c5d_data/natural_deceleration.longitudinal.translation", "res://docs/sailing/c5d_data/natural_deceleration.lateral.translation", "res://docs/sailing/c5d_data/natural_deceleration.yaw.translation", "res://docs/sailing/c5d_data/natural_deceleration.hydrodynamic.translation", "res://docs/sailing/c5d_data/natural_deceleration.max.translation", "res://docs/sailing/c5d_data/natural_deceleration.heel.translation", "res://docs/sailing/c5d_data/natural_deceleration.pitch.translation", "res://docs/sailing/c5d_data/natural_deceleration.total.translation"]
+
+source_file="res://docs/sailing/c5d_data/natural_deceleration.csv"
+dest_files=["res://docs/sailing/c5d_data/natural_deceleration.initial.translation", "res://docs/sailing/c5d_data/natural_deceleration.sim.translation", "res://docs/sailing/c5d_data/natural_deceleration.sog.translation", "res://docs/sailing/c5d_data/natural_deceleration.longitudinal.translation", "res://docs/sailing/c5d_data/natural_deceleration.lateral.translation", "res://docs/sailing/c5d_data/natural_deceleration.yaw.translation", "res://docs/sailing/c5d_data/natural_deceleration.hydrodynamic.translation", "res://docs/sailing/c5d_data/natural_deceleration.max.translation", "res://docs/sailing/c5d_data/natural_deceleration.heel.translation", "res://docs/sailing/c5d_data/natural_deceleration.pitch.translation", "res://docs/sailing/c5d_data/natural_deceleration.total.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

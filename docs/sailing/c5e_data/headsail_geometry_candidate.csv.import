@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://5h380lit2005"
+
+[deps]
+
+files=["res://docs/sailing/c5e_data/headsail_geometry_candidate.usage.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.area.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.head.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.head.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.head.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.tack.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.tack.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.tack.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.clew.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.clew.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.clew.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.pressure.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.pressure.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.pressure.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.trim.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.implementation.translation"]
+
+source_file="res://docs/sailing/c5e_data/headsail_geometry_candidate.csv"
+dest_files=["res://docs/sailing/c5e_data/headsail_geometry_candidate.usage.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.area.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.head.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.head.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.head.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.tack.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.tack.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.tack.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.clew.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.clew.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.clew.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.pressure.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.pressure.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.pressure.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.trim.translation", "res://docs/sailing/c5e_data/headsail_geometry_candidate.implementation.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

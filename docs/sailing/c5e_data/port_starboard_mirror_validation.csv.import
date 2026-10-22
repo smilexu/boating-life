@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bmuk7mj4cb10t"
+
+[deps]
+
+files=["res://docs/sailing/c5e_data/port_starboard_mirror_validation.signed.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.wind.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.initial.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.sail.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation"]
+
+source_file="res://docs/sailing/c5e_data/port_starboard_mirror_validation.csv"
+dest_files=["res://docs/sailing/c5e_data/port_starboard_mirror_validation.signed.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.wind.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.initial.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.sail.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation", "res://docs/sailing/c5e_data/port_starboard_mirror_validation.mean.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

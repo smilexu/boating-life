@@ -125,6 +125,8 @@ func get_completed_contracts() -> Array[Dictionary]:
 
 
 func accept_contract(contract_id: String, harbor: Node = null) -> Dictionary:
+	if not _current_vessel_supports_cargo():
+		return _result(false, "unsupported_vessel", "当前帆船原型暂未接入港口货运")
 	var definition := get_contract_definition(contract_id)
 	if definition == null:
 		return _result(false, "unknown_contract", "找不到这份合同")
@@ -406,6 +408,8 @@ func _complete_delivery(contract_id: String, port_id: String, at_port: bool, suc
 
 
 func _validate_delivery(contract_id: String, port_id: String, at_port: bool) -> Dictionary:
+	if not _current_vessel_supports_cargo():
+		return {"valid": false, "code": "unsupported_vessel", "reason": "当前帆船原型暂未接入港口货运"}
 	var definition := get_contract_definition(contract_id)
 	if definition == null:
 		return {"valid": false, "code": "unknown_contract", "reason": "找不到这份合同"}
@@ -536,6 +540,10 @@ func _get_current_vessel_id() -> String:
 	if _boat != null and _boat.draft_profile != null and not str(_boat.draft_profile.vessel_id).is_empty():
 		return str(_boat.draft_profile.vessel_id)
 	return "unknown_vessel"
+
+
+func _current_vessel_supports_cargo() -> bool:
+	return _boat != null and (not _boat.has_method("supports_cargo") or bool(_boat.call("supports_cargo")))
 
 
 func _next_cargo_instance_id(contract_id: String) -> String:

@@ -68,6 +68,10 @@ func _ready() -> void:
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
+	if _boat != null and _boat.has_method("supports_autopilot") and not bool(_boat.call("supports_autopilot")):
+		if _boat.is_autopilot or route != null:
+			cancel_autopilot("当前船型不支持自动巡航")
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		if _boat != null and _boat.is_autopilot and _is_debug_build() and not (_map != null and _map.is_map_open()):
 			var adjustment := _cruise_adjustment_for_key(event as InputEventKey)
@@ -88,6 +92,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 func _process(delta: float) -> void:
 	if _boat == null or _route_manager == null:
+		return
+	if _boat.has_method("supports_autopilot") and not bool(_boat.call("supports_autopilot")):
+		if _boat.is_autopilot or route != null:
+			cancel_autopilot("当前船型不支持自动巡航")
 		return
 	if _boat.is_port_docked:
 		if route != null or _boat.is_autopilot:

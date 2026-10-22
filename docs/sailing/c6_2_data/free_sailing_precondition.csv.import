@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://lmidr2701epw"
+
+[deps]
+
+files=["res://docs/sailing/c6_2_data/free_sailing_precondition.heading.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.sog.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.v.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.v.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.local.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.twa.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.awa.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.main.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.jib.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.keel.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.rudder.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.measured.translation"]
+
+source_file="res://docs/sailing/c6_2_data/free_sailing_precondition.csv"
+dest_files=["res://docs/sailing/c6_2_data/free_sailing_precondition.heading.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.sog.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.v.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.v.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.local.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.twa.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.awa.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.main.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.jib.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.keel.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.rudder.translation", "res://docs/sailing/c6_2_data/free_sailing_precondition.measured.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

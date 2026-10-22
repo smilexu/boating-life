@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://pfjwtngf0gki"
+
+[deps]
+
+files=["res://docs/sailing/c5e_data/heading_control_and_torque.target.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.selected.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.heading.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.max.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.rudder.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.max.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.status.translation"]
+
+source_file="res://docs/sailing/c5e_data/heading_control_and_torque.csv"
+dest_files=["res://docs/sailing/c5e_data/heading_control_and_torque.target.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.selected.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.heading.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.max.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.rudder.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.mean.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.max.translation", "res://docs/sailing/c5e_data/heading_control_and_torque.status.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

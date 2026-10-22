@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bftvod46njkur"
+
+[deps]
+
+files=["res://docs/sailing/c7b_data/candidate_long_validation.target.translation", "res://docs/sailing/c7b_data/candidate_long_validation.main.translation", "res://docs/sailing/c7b_data/candidate_long_validation.jib.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.rudder.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.max.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.status.translation", "res://docs/sailing/c7b_data/candidate_long_validation.final.translation", "res://docs/sailing/c7b_data/candidate_long_validation.final.translation"]
+
+source_file="res://docs/sailing/c7b_data/candidate_long_validation.csv"
+dest_files=["res://docs/sailing/c7b_data/candidate_long_validation.target.translation", "res://docs/sailing/c7b_data/candidate_long_validation.main.translation", "res://docs/sailing/c7b_data/candidate_long_validation.jib.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.rudder.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.max.translation", "res://docs/sailing/c7b_data/candidate_long_validation.mean.translation", "res://docs/sailing/c7b_data/candidate_long_validation.status.translation", "res://docs/sailing/c7b_data/candidate_long_validation.final.translation", "res://docs/sailing/c7b_data/candidate_long_validation.final.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

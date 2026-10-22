@@ -15,6 +15,8 @@ const SHADOW_SIZE_SETTING := "rendering/lights_and_shadows/directional_shadow/si
 const QUALITY_NAMES := ["画质优先", "平衡", "性能优先"]
 const RESOLUTION_SCALES := [1.0, 0.75, 0.67]
 const FRAME_LIMIT_NAMES := ["30 FPS", "60 FPS", "Unlimited"]
+const UI_SCALE_NAMES := ["小 · 90%", "标准 · 100%", "大 · 125%", "特大 · 150%", "超大 · 175%"]
+const UI_SCALE_FACTORS := [0.9, 1.0, 1.25, 1.5, 1.75]
 
 # Keep the approved surface-normal contrast in every profile; increasing this
 # scalar had reintroduced broad mottling without a meaningful performance gain.
@@ -83,6 +85,8 @@ const QUALITY_PROFILES := [
 
 var current_quality_index := Quality.HIGH
 var current_frame_limit_index := FrameLimit.FPS_60
+var ui_scale_index := 2
+var navigation_detail_enabled := false
 var _is_fullscreen := false
 var _quality_user_selected := false
 var _ocean: Ocean
@@ -92,6 +96,8 @@ var _environment: Environment
 
 
 func _ready() -> void:
+	_load_interface_settings()
+	_apply_ui_scale()
 	_ocean = get_node_or_null(ocean_path) as Ocean
 	_sunlight = get_node_or_null(sunlight_path) as DirectionalLight3D
 	_world_environment = get_node_or_null(world_environment_path) as WorldEnvironment
@@ -110,6 +116,9 @@ func _ready() -> void:
 		current_frame_limit_index = clampi(int(config.get_value("graphics", "frame_limit", FrameLimit.FPS_60)), FrameLimit.FPS_30, FrameLimit.UNLIMITED)
 		_is_fullscreen = bool(config.get_value("display", "fullscreen", false))
 		_quality_user_selected = bool(config.get_value("graphics", "quality_user_selected", has_saved_quality))
+		ui_scale_index = clampi(int(config.get_value("interface", "ui_scale_index", ui_scale_index)), 0, UI_SCALE_FACTORS.size() - 1)
+		navigation_detail_enabled = bool(config.get_value("interface", "navigation_detail", navigation_detail_enabled))
+		_apply_ui_scale()
 	if not has_saved_quality:
 		current_quality_index = _recommend_initial_quality()
 		_quality_user_selected = false
@@ -162,6 +171,57 @@ func get_resolution_scale() -> float:
 	return RESOLUTION_SCALES[current_quality_index]
 
 
+func get_ui_scale_index() -> int:
+	return ui_scale_index
+
+
+func get_ui_scale_factor() -> float:
+	return UI_SCALE_FACTORS[ui_scale_index]
+
+
+func get_ui_scale_name() -> String:
+	return UI_SCALE_NAMES[ui_scale_index]
+
+
+func set_ui_scale_index(index: int, persist: bool = true) -> void:
+	if index < 0 or index >= UI_SCALE_FACTORS.size():
+		return
+	if ui_scale_index == index:
+		return
+	ui_scale_index = index
+	_apply_ui_scale()
+	if persist:
+		_save_settings()
+	settings_changed.emit()
+
+
+func get_navigation_detail_enabled() -> bool:
+	return navigation_detail_enabled
+
+
+func set_navigation_detail_enabled(enabled: bool, persist: bool = true) -> void:
+	if navigation_detail_enabled == enabled:
+		return
+	navigation_detail_enabled = enabled
+	if persist:
+		_save_settings()
+	settings_changed.emit()
+
+
+func _load_interface_settings() -> void:
+	var config := ConfigFile.new()
+	if config.load(SETTINGS_PATH) != OK:
+		return
+	ui_scale_index = clampi(int(config.get_value("interface", "ui_scale_index", ui_scale_index)), 0, UI_SCALE_FACTORS.size() - 1)
+	navigation_detail_enabled = bool(config.get_value("interface", "navigation_detail", navigation_detail_enabled))
+
+
+func _apply_ui_scale() -> void:
+	var window := get_window()
+	if window != null:
+		window.content_scale_factor = UI_SCALE_FACTORS[ui_scale_index]
+
+
 func get_render_metrics() -> Dictionary:
 	var window_size := DisplayServer.window_get_size()
 	if window_size.x <= 0 or window_size.y <= 0:
@@ -173,6 +233,7 @@ func get_render_metrics() -> Dictionary:
 	var screen_scale := DisplayServer.screen_get_scale(DisplayServer.SCREEN_OF_MAIN_WINDOW)
 	var viewport := get_viewport()
 	var scale := viewport.scaling_3d_scale
+	var window := get_window()
 	var internal_size := Vector2i(
 		maxi(1, roundi(float(window_size.x) * scale)),
 		maxi(1, roundi(float(window_size.y) * scale))
@@ -186,6 +247,10 @@ func get_render_metrics() -> Dictionary:
 		"screen_px": screen_size,
 		"screens": _get_screen_metrics(),
 		"screen_scale": screen_scale,
+		"ui_scale_factor": get_ui_scale_factor(),
+		"window_content_scale_factor": window.content_scale_factor if window != null else 1.0,
+		"content_scale_mode": str(ProjectSettings.get_setting("display/window/stretch/mode", "disabled")),
+		"content_scale_aspect": str(ProjectSettings.get_setting("display/window/stretch/aspect", "ignore")),
 		"screen_count": DisplayServer.get_screen_count(),
 		"hidpi_enabled": bool(ProjectSettings.get_setting("display/window/dpi/allow_hidpi", true)),
 		"viewport_px": Vector2i(roundi(viewport.get_visible_rect().size.x), roundi(viewport.get_visible_rect().size.y)),
@@ -193,14 +258,30 @@ func get_render_metrics() -> Dictionary:
 		"internal_3d_px_estimate": internal_size,
 		"resolution_scale": scale,
 		"upscaler": "FSR2" if scale < 0.999 else "原生",
+		"platform": OS.get_name(),
 		"vsync": DisplayServer.window_get_vsync_mode(),
 		"refresh_hz": DisplayServer.screen_get_refresh_rate(DisplayServer.SCREEN_OF_MAIN_WINDOW),
 		"max_fps": Engine.max_fps,
 		"adapter": RenderingServer.get_video_adapter_name(),
 		"processor": OS.get_processor_name(),
 		"fullscreen": DisplayServer.window_get_mode() != DisplayServer.WINDOW_MODE_WINDOWED,
+		"window_mode": _get_window_mode_label(),
 		"supersampling": scale > 1.001,
 	}
+
+
+func _get_window_mode_label() -> String:
+	match DisplayServer.window_get_mode():
+		DisplayServer.WINDOW_MODE_WINDOWED:
+			return "窗口"
+		DisplayServer.WINDOW_MODE_FULLSCREEN:
+			return "全屏"
+		DisplayServer.WINDOW_MODE_EXCLUSIVE_FULLSCREEN:
+			return "独占全屏"
+		DisplayServer.WINDOW_MODE_MAXIMIZED:
+			return "最大化窗口"
+		_:
+			return "未知"
 
 
 func _get_screen_metrics() -> Array[Dictionary]:
@@ -365,6 +446,8 @@ func _save_settings() -> void:
 	config.set_value("graphics", "quality_user_selected", _quality_user_selected)
 	config.set_value("graphics", "frame_limit", current_frame_limit_index)
 	config.set_value("display", "fullscreen", _is_fullscreen)
+	config.set_value("interface", "ui_scale_index", ui_scale_index)
+	config.set_value("interface", "navigation_detail", navigation_detail_enabled)
 	var error := config.save(SETTINGS_PATH)
 	if error != OK:
 		push_warning("Could not save graphics settings: %s" % error_string(error))

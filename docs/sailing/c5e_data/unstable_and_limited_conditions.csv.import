@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://wccf141kwm71"
+
+[deps]
+
+files=["res://docs/sailing/c5e_data/unstable_and_limited_conditions.target.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.selected.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.status.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.mean.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.mean.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.mean.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.heading.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.rudder.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.mean.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.mean.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.sog.translation"]
+
+source_file="res://docs/sailing/c5e_data/unstable_and_limited_conditions.csv"
+dest_files=["res://docs/sailing/c5e_data/unstable_and_limited_conditions.target.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.selected.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.status.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.mean.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.mean.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.mean.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.heading.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.rudder.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.mean.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.mean.translation", "res://docs/sailing/c5e_data/unstable_and_limited_conditions.sog.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

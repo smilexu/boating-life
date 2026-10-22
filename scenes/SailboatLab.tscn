@@ -1,96 +1,31 @@
-[gd_scene load_steps=30 format=3]
+[gd_scene load_steps=12 format=3]
 
 [ext_resource type="Script" path="res://scripts/sailboat_lab.gd" id="1_lab"]
-[ext_resource type="Script" path="res://scripts/sailboat_lab_body.gd" id="2_body"]
-[ext_resource type="Resource" path="res://resources/sailing/sailboat_lab_profile.tres" id="3_profile"]
-[ext_resource type="Script" path="res://scripts/sailboat_lab_debug_panel.gd" id="4_debug"]
-[ext_resource type="ShaderMaterial" path="res://materials/sea_water_material.tres" id="5_water_material"]
-[ext_resource type="Resource" path="res://resources/sea_waves.tres" id="6_waves"]
-[ext_resource type="Script" path="res://scripts/wave_sampler.gd" id="7_wave_sampler"]
-[ext_resource type="Script" path="res://scripts/bathymetry_manager.gd" id="8_bathymetry"]
-[ext_resource type="Resource" path="res://resources/oresund_georeference.tres" id="9_georeference"]
-[ext_resource type="Script" path="res://scripts/wind_field.gd" id="10_wind_field"]
-[ext_resource type="Script" path="res://scripts/sail_triangle_visual.gd" id="11_sail_triangle"]
-[ext_resource type="Script" path="res://scripts/sailboat_lab_hull_visual.gd" id="12_hull_visual"]
-[ext_resource type="Script" path="res://scripts/headsail_triangle_visual.gd" id="13_headsail_visual"]
-
-[sub_resource type="BoxShape3D" id="BoxShape_hull"]
-size = Vector3(2.5, 1.2, 7.4)
-
-[sub_resource type="BoxMesh" id="BoxMesh_hull"]
-size = Vector3(2.5, 1.05, 7.8)
-
-[sub_resource type="BoxMesh" id="BoxMesh_deck"]
-size = Vector3(2.35, 0.12, 7.45)
-
-[sub_resource type="BoxMesh" id="BoxMesh_keel"]
-size = Vector3(0.14, 1.15, 1.9)
-
-[sub_resource type="BoxMesh" id="BoxMesh_rudder"]
-size = Vector3(0.12, 0.74, 0.72)
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_mast"]
-top_radius = 0.045
-bottom_radius = 0.075
-height = 4.65
-radial_segments = 8
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_boom"]
-top_radius = 0.045
-bottom_radius = 0.06
-height = 4.65
-radial_segments = 8
+[ext_resource type="Script" path="res://scripts/sailboat_lab_debug_panel.gd" id="2_debug"]
+[ext_resource type="ShaderMaterial" path="res://materials/sea_water_material.tres" id="3_water_material"]
+[ext_resource type="Resource" path="res://resources/sea_waves.tres" id="4_waves"]
+[ext_resource type="Script" path="res://scripts/wave_sampler.gd" id="5_wave_sampler"]
+[ext_resource type="Script" path="res://scripts/bathymetry_manager.gd" id="6_bathymetry"]
+[ext_resource type="Resource" path="res://resources/oresund_georeference.tres" id="7_georeference"]
+[ext_resource type="Script" path="res://scripts/wind_field.gd" id="8_wind_field"]
+[ext_resource type="PackedScene" path="res://scenes/boats/SailingBoat8m.tscn" id="9_sailing_boat"]
 
 [sub_resource type="PlaneMesh" id="PlaneMesh_water"]
 size = Vector2(320, 320)
 subdivide_width = 180
 subdivide_depth = 180
 
-[sub_resource type="StandardMaterial3D" id="Material_hull"]
-albedo_color = Color(0.08, 0.24, 0.31, 1)
-roughness = 0.42
-
-[sub_resource type="StandardMaterial3D" id="Material_deck"]
-albedo_color = Color(0.72, 0.62, 0.42, 1)
-roughness = 0.72
-
-[sub_resource type="StandardMaterial3D" id="Material_mast"]
-albedo_color = Color(0.28, 0.18, 0.1, 1)
-roughness = 0.66
-
-[sub_resource type="StandardMaterial3D" id="Material_sail"]
-albedo_color = Color(0.95, 0.93, 0.86, 1)
-cull_mode = 2
-roughness = 0.9
-
-[sub_resource type="StandardMaterial3D" id="Material_headsail"]
-shading_mode = 0
-albedo_color = Color(0.88, 0.93, 0.91, 1)
-cull_mode = 2
-roughness = 0.92
-
 [sub_resource type="StandardMaterial3D" id="Material_water_static"]
 albedo_color = Color(0.14, 0.38, 0.54, 1)
 roughness = 0.18
 metallic = 0.04
 
-[sub_resource type="StandardMaterial3D" id="Material_rudder_marker"]
-albedo_color = Color(1, 0.78, 0.18, 1)
-emission_enabled = true
-emission = Color(0.72, 0.36, 0.04, 1)
-emission_energy_multiplier = 0.35
-roughness = 0.48
-
-[sub_resource type="BoxMesh" id="BoxMesh_rudder_marker"]
-size = Vector3(0.10, 0.07, 0.82)
-
 [node name="SailboatLab" type="Node3D"]
 script = ExtResource("1_lab")
 
 [node name="WaterSurface" type="MeshInstance3D" parent="."]
-position = Vector3(0, 0, 0)
 mesh = SubResource("PlaneMesh_water")
-material_override = ExtResource("5_water_material")
+material_override = ExtResource("3_water_material")
 
 [node name="WaterSurfaceStatic" type="MeshInstance3D" parent="."]
 visible = false
@@ -98,98 +33,30 @@ mesh = SubResource("PlaneMesh_water")
 material_override = SubResource("Material_water_static")
 
 [node name="WaveSampler" type="Node" parent="."]
-script = ExtResource("7_wave_sampler")
-wave_settings = ExtResource("6_waves")
-water_material = ExtResource("5_water_material")
+script = ExtResource("5_wave_sampler")
+wave_settings = ExtResource("4_waves")
+water_material = ExtResource("3_water_material")
 wave_strength = 1.05
 ocean_path = NodePath("")
 phase_anchor_path = NodePath("../SailboatBody")
 bathymetry_manager_path = NodePath("../BathymetryManager")
 
 [node name="BathymetryManager" type="Node" parent="."]
-script = ExtResource("8_bathymetry")
-georeference = ExtResource("9_georeference")
-water_material = ExtResource("5_water_material")
+script = ExtResource("6_bathymetry")
+georeference = ExtResource("7_georeference")
+water_material = ExtResource("3_water_material")
 
 [node name="WindField" type="Node" parent="."]
-script = ExtResource("10_wind_field")
+script = ExtResource("8_wind_field")
 mean_wind_speed_mps = 0.0
 mean_wind_from_degrees = 240.0
 gust_strength_mps = 0.0
 gust_direction_variation_degrees = 0.0
 
-[node name="SailboatBody" type="RigidBody3D" parent="."]
-collision_layer = 1
-collision_mask = 1
-script = ExtResource("2_body")
-profile = ExtResource("3_profile")
+[node name="SailboatBody" parent="." instance=ExtResource("9_sailing_boat")]
 wave_sampler_path = NodePath("../WaveSampler")
 wind_field_path = NodePath("../WindField")
-sail_visual_pivot_path = NodePath("VisualRoot/SailPivot")
-rudder_visual_pivot_path = NodePath("VisualRoot/RudderPivot")
-rudder_angle_marker_path = NodePath("VisualRoot/RudderAngleMarker")
-headsail_visual_path = NodePath("VisualRoot/HeadsailVisual")
-dynamic_waves_enabled = true
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="SailboatBody"]
-position = Vector3(0, 0.03, 0)
-shape = SubResource("BoxShape_hull")
-
-[node name="VisualRoot" type="Node3D" parent="SailboatBody"]
-script = ExtResource("12_hull_visual")
-
-[node name="Hull" type="MeshInstance3D" parent="SailboatBody/VisualRoot"]
-mesh = SubResource("BoxMesh_hull")
-material_override = SubResource("Material_hull")
-
-[node name="Deck" type="MeshInstance3D" parent="SailboatBody/VisualRoot"]
-position = Vector3(0, 0.57, 0)
-mesh = SubResource("BoxMesh_deck")
-material_override = SubResource("Material_deck")
-
-[node name="KeelPlaceholder" type="MeshInstance3D" parent="SailboatBody/VisualRoot"]
-position = Vector3(0, -0.93, 0.15)
-mesh = SubResource("BoxMesh_keel")
-material_override = SubResource("Material_hull")
-
-[node name="RudderPivot" type="Node3D" parent="SailboatBody/VisualRoot"]
-position = Vector3(0, -0.62, 3.18)
-
-[node name="RudderBlade" type="MeshInstance3D" parent="SailboatBody/VisualRoot/RudderPivot"]
-position = Vector3(0, -0.20, 0.20)
-mesh = SubResource("BoxMesh_rudder")
-material_override = SubResource("Material_hull")
-
-[node name="RudderAngleMarker" type="Node3D" parent="SailboatBody/VisualRoot"]
-position = Vector3(0, 0.73, 3.08)
-
-[node name="BladeDirection" type="MeshInstance3D" parent="SailboatBody/VisualRoot/RudderAngleMarker"]
-position = Vector3(0, 0, 0.22)
-mesh = SubResource("BoxMesh_rudder_marker")
-material_override = SubResource("Material_rudder_marker")
-
-[node name="Mast" type="MeshInstance3D" parent="SailboatBody/VisualRoot"]
-position = Vector3(0, 2.955, -0.75)
-mesh = SubResource("CylinderMesh_mast")
-material_override = SubResource("Material_mast")
-
-[node name="SailPivot" type="Node3D" parent="SailboatBody/VisualRoot"]
-position = Vector3(0, 0.65, -0.75)
-
-[node name="Boom" type="MeshInstance3D" parent="SailboatBody/VisualRoot/SailPivot"]
-position = Vector3(0, 0.08, 2.325)
-rotation = Vector3(1.5707964, 0, 0)
-mesh = SubResource("CylinderMesh_boom")
-material_override = SubResource("Material_mast")
-
-[node name="MainSailMesh" type="MeshInstance3D" parent="SailboatBody/VisualRoot/SailPivot"]
-script = ExtResource("11_sail_triangle")
-material_override = SubResource("Material_sail")
-
-[node name="HeadsailVisual" type="MeshInstance3D" parent="SailboatBody/VisualRoot"]
-script = ExtResource("13_headsail_visual")
-material_override = SubResource("Material_headsail")
-cast_shadow = 0
+auto_reset_on_ready = true
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 rotation_degrees = Vector3(-48, -28, 0)
@@ -203,4 +70,4 @@ fov = 48.0
 far = 1200.0
 
 [node name="DebugPanel" type="CanvasLayer" parent="."]
-script = ExtResource("4_debug")
+script = ExtResource("2_debug")

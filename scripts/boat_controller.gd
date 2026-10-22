@@ -2,6 +2,7 @@ class_name BoatController
 extends Node3D
 
 signal manual_takeover_requested
+signal vessel_mode_changed(sailboat_active: bool)
 
 ## Navigation transform for the player boat.
 ## One Godot unit represents one meter. The motion origin sits on the calm-water
@@ -35,6 +36,8 @@ enum PropulsionType {
 @export_category("Vessel audio")
 @export var propulsion_type: PropulsionType = PropulsionType.POWERBOAT
 @export var engine_audio_profile: EngineAudioProfileScript
+@export_node_path("RigidBody3D") var sailboat_body_path := NodePath("../SailingBoat8m")
+@export_node_path("Node3D") var sailboat_spawn_point_path := NodePath("../../SailboatSpawn")
 
 var speed_mps := 0.0
 var is_autopilot := false
@@ -45,9 +48,29 @@ var manual_input_enabled := true
 var _autopilot_steering_input := 0.0
 var _autopilot_target_speed_mps := 0.0
 var _autopilot_speed_cap_mps := 0.0
+var _sailboat_body: RigidBody3D
+var _sailboat_spawn_point: Node3D
+var _sailboat_active := false
+
+
+func _ready() -> void:
+	_sailboat_body = get_node_or_null(sailboat_body_path) as RigidBody3D
+	_sailboat_spawn_point = get_node_or_null(sailboat_spawn_point_path) as Node3D
+	if _sailboat_body == null:
+		return
+	_sailboat_body.set_as_top_level(true)
+	_sailboat_body.freeze = true
+	_sailboat_body.visible = false
+	if _sailboat_body.has_method("set_vessel_active"):
+		_sailboat_body.call("set_vessel_active", false)
+	if _sailboat_body.has_method("set_keyboard_controls_enabled"):
+		_sailboat_body.call("set_keyboard_controls_enabled", false)
 
 
 func get_current_draft_m() -> float:
+	if _sailboat_active and _sailboat_body != null:
+		var sail_profile: Resource = _sailboat_body.get("profile") as Resource
+		return float(sail_profile.get("draft_m")) if sail_profile != null else 0.9
 	if draft_profile == null:
 		return -1.0
 	return draft_profile.draft_for_cargo_weight(current_cargo_weight_kg)
@@ -83,7 +106,68 @@ func get_engine_audio_state() -> Dictionary:
 
 
 func has_engine() -> bool:
-	return propulsion_type == PropulsionType.POWERBOAT
+	return not _sailboat_active and propulsion_type == PropulsionType.POWERBOAT
+
+
+func supports_sail_trim() -> bool:
+	return _sailboat_active and _sailboat_body != null
+
+
+func supports_engine_throttle() -> bool:
+	return has_engine()
+
+
+func supports_autopilot() -> bool:
+	return not _sailboat_active
+
+
+func supports_cargo() -> bool:
+	return not _sailboat_active
+
+
+func get_sailing_body() -> Node:
+	return _sailboat_body if _sailboat_active else null
+
+
+func is_sailing_active() -> bool:
+	return _sailboat_active
+
+
+func set_sailing_enabled(enabled: bool) -> bool:
+	if enabled == _sailboat_active:
+		return true
+	if enabled and _sailboat_body == null:
+		push_warning("BoatController cannot select sailboat: SailingBoat8m scene is not attached.")
+		return false
+	if enabled:
+		disengage_autopilot()
+		is_motion_paused = false
+		_sailboat_body.set_as_top_level(true)
+		if _sailboat_body.has_method("prepare_for_main_spawn"):
+			var spawn_transform := global_transform
+			if is_instance_valid(_sailboat_spawn_point):
+				spawn_transform = _sailboat_spawn_point.global_transform
+			_sailboat_body.call("prepare_for_main_spawn", spawn_transform)
+		_sailboat_active = true
+		_sailboat_body.call("set_vessel_active", true)
+		_sailboat_body.call("set_keyboard_controls_enabled", manual_input_enabled)
+		_set_powerboat_visuals_active(false)
+		speed_mps = 0.0
+	else:
+		_sync_sailing_proxy()
+		_sailboat_body.call("set_vessel_active", false)
+		_sailboat_active = false
+		is_motion_paused = false
+		_set_powerboat_visuals_active(true)
+		speed_mps = 0.0
+	vessel_mode_changed.emit(_sailboat_active)
+	return true
+
+
+func set_sailing_manual_controls_enabled(enabled: bool) -> void:
+	manual_input_enabled = enabled
+	if _sailboat_body != null and _sailboat_active and _sailboat_body.has_method("set_keyboard_controls_enabled"):
+		_sailboat_body.call("set_keyboard_controls_enabled", enabled)
 
 
 func get_engine_audio_profile() -> EngineAudioProfileScript:
@@ -98,24 +182,47 @@ func set_autopilot_speed_cap_mps(speed_cap_mps: float) -> void:
 
 
 func get_vessel_length_m() -> float:
+	if _sailboat_active and _sailboat_body != null:
+		var sail_profile: Resource = _sailboat_body.get("profile") as Resource
+		if sail_profile != null:
+			return float(sail_profile.get("vessel_length_m"))
 	if draft_profile != null and draft_profile.vessel_length_m > 0.0:
 		return draft_profile.vessel_length_m
 	return DEFAULT_VESSEL_LENGTH_M
 
 
 func get_vessel_beam_m() -> float:
+	if _sailboat_active and _sailboat_body != null:
+		var sail_profile: Resource = _sailboat_body.get("profile") as Resource
+		if sail_profile != null:
+			return float(sail_profile.get("vessel_beam_m"))
 	if draft_profile != null and draft_profile.vessel_beam_m > 0.0:
 		return draft_profile.vessel_beam_m
 	return DEFAULT_VESSEL_BEAM_M
 
 
 func get_vessel_dimensions_m() -> Vector3:
+	if _sailboat_active and _sailboat_body != null:
+		return Vector3(get_vessel_length_m(), get_vessel_beam_m(), 4.95)
 	if draft_profile == null:
 		return Vector3(DEFAULT_VESSEL_LENGTH_M, 0.0, DEFAULT_VESSEL_BEAM_M)
 	return Vector3(draft_profile.vessel_length_m, draft_profile.vessel_beam_m, draft_profile.vessel_height_m)
 
 
 func get_cargo_debug_snapshot() -> Dictionary:
+	if _sailboat_active:
+		return {
+			"vessel_name": "8 m 帆船",
+			"model_dimensions_m": get_vessel_dimensions_m(),
+			"container_count": 0,
+			"used_space_units": 0,
+			"space_capacity_units": 0,
+			"cargo_weight_kg": 0.0,
+			"max_cargo_weight_kg": 0.0,
+			"current_draft_m": get_current_draft_m(),
+			"visual_cargo_sink_m": 0.0,
+			"supports_cargo": false,
+		}
 	var cargo_loadout := get_node_or_null("CargoLoadout") as CargoLoadoutController
 	if cargo_loadout != null:
 		return cargo_loadout.get_debug_snapshot()
@@ -142,6 +249,17 @@ func set_port_docked(docked: bool) -> void:
 
 
 func _process(delta: float) -> void:
+	if _sailboat_active and _sailboat_body != null:
+		if manual_input_enabled and Input.is_action_just_pressed("boat_pause"):
+			is_motion_paused = not is_motion_paused
+		if _sailboat_body.freeze != is_motion_paused:
+			_sailboat_body.freeze = is_motion_paused
+			if not is_motion_paused:
+				_sailboat_body.sleeping = false
+		if _sailboat_body.has_method("set_keyboard_controls_enabled"):
+			_sailboat_body.call("set_keyboard_controls_enabled", manual_input_enabled)
+		_sync_sailing_proxy()
+		return
 	if is_port_docked:
 		speed_mps = 0.0
 		is_motion_paused = true
@@ -193,6 +311,8 @@ func _update_manual_controls(delta: float) -> void:
 
 
 func submit_autopilot_command(steering_input: float, target_speed_mps: float) -> void:
+	if not supports_autopilot():
+		return
 	_autopilot_steering_input = clampf(steering_input, -1.0, 1.0)
 	_autopilot_target_speed_mps = clampf(target_speed_mps, 0.0, get_autopilot_speed_cap_mps())
 	is_autopilot = true
@@ -220,4 +340,39 @@ func _has_manual_drive_input() -> bool:
 	return Input.get_axis("boat_brake", "boat_accelerate") != 0.0 \
 		or Input.is_action_pressed("boat_turn_left") \
 		or Input.is_action_pressed("boat_turn_right")
+
+
+func _sync_sailing_proxy() -> void:
+	if _sailboat_body == null:
+		return
+	var body_transform := _sailboat_body.get_global_transform_interpolated()
+	var forward := -body_transform.basis.z
+	forward.y = 0.0
+	if forward.length_squared() < 0.0001:
+		return
+	forward = forward.normalized()
+	var yaw := atan2(-forward.x, -forward.z)
+	global_transform = Transform3D(
+		Basis(Vector3.UP, yaw),
+		Vector3(body_transform.origin.x, 0.0, body_transform.origin.z)
+	)
+	var local_velocity := _sailboat_body.global_basis.inverse() * _sailboat_body.linear_velocity
+	speed_mps = -local_velocity.z
+
+
+func _set_powerboat_visuals_active(active: bool) -> void:
+	var visual_root := get_node_or_null("VisualRoot") as Node3D
+	if visual_root == null:
+		return
+	var wake := visual_root.get_node_or_null("WakeSystem")
+	var exhaust := visual_root.get_node_or_null("ExhaustSmokeSystem")
+	if not active:
+		if wake != null and wake.has_method("set_wake_enabled"):
+			wake.call("set_wake_enabled", false)
+		if exhaust != null and exhaust.has_method("_stop_and_clear_smoke"):
+			exhaust.call("_stop_and_clear_smoke")
+	visual_root.visible = active
+	visual_root.process_mode = Node.PROCESS_MODE_INHERIT if active else Node.PROCESS_MODE_DISABLED
+	if active and wake != null and wake.has_method("set_wake_enabled"):
+		wake.call("set_wake_enabled", true)
 

@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://n67fygy1o1v6"
+
+[deps]
+
+files=["res://docs/sailing/c6_data/double_sail_trim_scan.target.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mainsail.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.jib.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.total.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.status.translation"]
+
+source_file="res://docs/sailing/c6_data/double_sail_trim_scan.csv"
+dest_files=["res://docs/sailing/c6_data/double_sail_trim_scan.target.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mainsail.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.jib.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.mean.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.total.translation", "res://docs/sailing/c6_data/double_sail_trim_scan.status.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

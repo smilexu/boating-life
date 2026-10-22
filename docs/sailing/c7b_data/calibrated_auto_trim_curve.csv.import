@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://yinn4mniu2ye"
+
+[deps]
+
+files=["res://docs/sailing/c7b_data/calibrated_auto_trim_curve.point.translation", "res://docs/sailing/c7b_data/calibrated_auto_trim_curve.awa.translation", "res://docs/sailing/c7b_data/calibrated_auto_trim_curve.sheet.translation", "res://docs/sailing/c7b_data/calibrated_auto_trim_curve.source.translation"]
+
+source_file="res://docs/sailing/c7b_data/calibrated_auto_trim_curve.csv"
+dest_files=["res://docs/sailing/c7b_data/calibrated_auto_trim_curve.point.translation", "res://docs/sailing/c7b_data/calibrated_auto_trim_curve.awa.translation", "res://docs/sailing/c7b_data/calibrated_auto_trim_curve.sheet.translation", "res://docs/sailing/c7b_data/calibrated_auto_trim_curve.source.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

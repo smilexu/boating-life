@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://o8vxofvd6er1"
+
+[deps]
+
+files=["res://docs/sailing/c6_2_data/rudder_time_series.steering.translation", "res://docs/sailing/c6_2_data/rudder_time_series.heading.translation", "res://docs/sailing/c6_2_data/rudder_time_series.heading.translation", "res://docs/sailing/c6_2_data/rudder_time_series.sog.translation", "res://docs/sailing/c6_2_data/rudder_time_series.v.translation", "res://docs/sailing/c6_2_data/rudder_time_series.v.translation", "res://docs/sailing/c6_2_data/rudder_time_series.twa.translation", "res://docs/sailing/c6_2_data/rudder_time_series.awa.translation", "res://docs/sailing/c6_2_data/rudder_time_series.rudder.translation", "res://docs/sailing/c6_2_data/rudder_time_series.rudder.translation", "res://docs/sailing/c6_2_data/rudder_time_series.rudder.translation", "res://docs/sailing/c6_2_data/rudder_time_series.limit.translation", "res://docs/sailing/c6_2_data/rudder_time_series.local.translation", "res://docs/sailing/c6_2_data/rudder_time_series.hdg.translation", "res://docs/sailing/c6_2_data/rudder_time_series.rudder.translation", "res://docs/sailing/c6_2_data/rudder_time_series.rudder.translation"]
+
+source_file="res://docs/sailing/c6_2_data/rudder_time_series.csv"
+dest_files=["res://docs/sailing/c6_2_data/rudder_time_series.steering.translation", "res://docs/sailing/c6_2_data/rudder_time_series.heading.translation", "res://docs/sailing/c6_2_data/rudder_time_series.heading.translation", "res://docs/sailing/c6_2_data/rudder_time_series.sog.translation", "res://docs/sailing/c6_2_data/rudder_time_series.v.translation", "res://docs/sailing/c6_2_data/rudder_time_series.v.translation", "res://docs/sailing/c6_2_data/rudder_time_series.twa.translation", "res://docs/sailing/c6_2_data/rudder_time_series.awa.translation", "res://docs/sailing/c6_2_data/rudder_time_series.rudder.translation", "res://docs/sailing/c6_2_data/rudder_time_series.rudder.translation", "res://docs/sailing/c6_2_data/rudder_time_series.rudder.translation", "res://docs/sailing/c6_2_data/rudder_time_series.limit.translation", "res://docs/sailing/c6_2_data/rudder_time_series.local.translation", "res://docs/sailing/c6_2_data/rudder_time_series.hdg.translation", "res://docs/sailing/c6_2_data/rudder_time_series.rudder.translation", "res://docs/sailing/c6_2_data/rudder_time_series.rudder.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

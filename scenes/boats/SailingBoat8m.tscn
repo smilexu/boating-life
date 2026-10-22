@@ -1,0 +1,140 @@
+[gd_scene load_steps=20 format=3]
+
+[ext_resource type="Script" path="res://scripts/sailboat_lab_body.gd" id="1_body"]
+[ext_resource type="Resource" path="res://resources/sailing/sailboat_lab_profile.tres" id="2_profile"]
+[ext_resource type="Script" path="res://scripts/sail_triangle_visual.gd" id="3_sail_triangle"]
+[ext_resource type="Script" path="res://scripts/sailboat_lab_hull_visual.gd" id="4_hull_visual"]
+[ext_resource type="Script" path="res://scripts/headsail_triangle_visual.gd" id="5_headsail_visual"]
+
+[sub_resource type="BoxShape3D" id="BoxShape_hull"]
+size = Vector3(2.5, 1.2, 7.4)
+
+[sub_resource type="BoxMesh" id="BoxMesh_hull"]
+size = Vector3(2.5, 1.05, 7.8)
+
+[sub_resource type="BoxMesh" id="BoxMesh_deck"]
+size = Vector3(2.35, 0.12, 7.45)
+
+[sub_resource type="BoxMesh" id="BoxMesh_keel"]
+size = Vector3(0.14, 1.15, 1.9)
+
+[sub_resource type="BoxMesh" id="BoxMesh_rudder"]
+size = Vector3(0.12, 0.74, 0.72)
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_mast"]
+top_radius = 0.045
+bottom_radius = 0.075
+height = 4.65
+radial_segments = 8
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_boom"]
+top_radius = 0.045
+bottom_radius = 0.06
+height = 4.65
+radial_segments = 8
+
+[sub_resource type="StandardMaterial3D" id="Material_hull"]
+albedo_color = Color(0.08, 0.24, 0.31, 1)
+roughness = 0.42
+
+[sub_resource type="StandardMaterial3D" id="Material_deck"]
+albedo_color = Color(0.72, 0.62, 0.42, 1)
+roughness = 0.72
+
+[sub_resource type="StandardMaterial3D" id="Material_mast"]
+albedo_color = Color(0.28, 0.18, 0.1, 1)
+roughness = 0.66
+
+[sub_resource type="StandardMaterial3D" id="Material_sail"]
+albedo_color = Color(0.95, 0.93, 0.86, 1)
+cull_mode = 2
+roughness = 0.9
+
+[sub_resource type="StandardMaterial3D" id="Material_headsail"]
+shading_mode = 0
+albedo_color = Color(0.88, 0.93, 0.91, 1)
+cull_mode = 2
+roughness = 0.92
+
+[sub_resource type="StandardMaterial3D" id="Material_rudder_marker"]
+albedo_color = Color(1, 0.78, 0.18, 1)
+emission_enabled = true
+emission = Color(0.72, 0.36, 0.04, 1)
+emission_energy_multiplier = 0.35
+roughness = 0.48
+
+[sub_resource type="BoxMesh" id="BoxMesh_rudder_marker"]
+size = Vector3(0.10, 0.07, 0.82)
+
+[node name="SailingBoat8m" type="RigidBody3D"]
+collision_layer = 1
+collision_mask = 1
+script = ExtResource("1_body")
+profile = ExtResource("2_profile")
+wave_sampler_path = NodePath("../WaveSampler")
+wind_field_path = NodePath("../WindField")
+sail_visual_pivot_path = NodePath("VisualRoot/SailPivot")
+rudder_visual_pivot_path = NodePath("VisualRoot/RudderPivot")
+rudder_angle_marker_path = NodePath("VisualRoot/RudderAngleMarker")
+headsail_visual_path = NodePath("VisualRoot/HeadsailVisual")
+dynamic_waves_enabled = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+position = Vector3(0, 0.03, 0)
+shape = SubResource("BoxShape_hull")
+
+[node name="VisualRoot" type="Node3D" parent="."]
+script = ExtResource("4_hull_visual")
+
+[node name="Hull" type="MeshInstance3D" parent="VisualRoot"]
+mesh = SubResource("BoxMesh_hull")
+material_override = SubResource("Material_hull")
+
+[node name="Deck" type="MeshInstance3D" parent="VisualRoot"]
+position = Vector3(0, 0.57, 0)
+mesh = SubResource("BoxMesh_deck")
+material_override = SubResource("Material_deck")
+
+[node name="KeelPlaceholder" type="MeshInstance3D" parent="VisualRoot"]
+position = Vector3(0, -0.93, 0.15)
+mesh = SubResource("BoxMesh_keel")
+material_override = SubResource("Material_hull")
+
+[node name="RudderPivot" type="Node3D" parent="VisualRoot"]
+position = Vector3(0, -0.62, 3.18)
+
+[node name="RudderBlade" type="MeshInstance3D" parent="VisualRoot/RudderPivot"]
+position = Vector3(0, -0.20, 0.20)
+mesh = SubResource("BoxMesh_rudder")
+material_override = SubResource("Material_hull")
+
+[node name="RudderAngleMarker" type="Node3D" parent="VisualRoot"]
+position = Vector3(0, 0.73, 3.08)
+
+[node name="BladeDirection" type="MeshInstance3D" parent="VisualRoot/RudderAngleMarker"]
+position = Vector3(0, 0, 0.22)
+mesh = SubResource("BoxMesh_rudder_marker")
+material_override = SubResource("Material_rudder_marker")
+
+[node name="Mast" type="MeshInstance3D" parent="VisualRoot"]
+position = Vector3(0, 2.955, -0.75)
+mesh = SubResource("CylinderMesh_mast")
+material_override = SubResource("Material_mast")
+
+[node name="SailPivot" type="Node3D" parent="VisualRoot"]
+position = Vector3(0, 0.65, -0.75)
+
+[node name="Boom" type="MeshInstance3D" parent="VisualRoot/SailPivot"]
+position = Vector3(0, 0.08, 2.325)
+rotation = Vector3(1.5707964, 0, 0)
+mesh = SubResource("CylinderMesh_boom")
+material_override = SubResource("Material_mast")
+
+[node name="MainSailMesh" type="MeshInstance3D" parent="VisualRoot/SailPivot"]
+script = ExtResource("3_sail_triangle")
+material_override = SubResource("Material_sail")
+
+[node name="HeadsailVisual" type="MeshInstance3D" parent="VisualRoot"]
+script = ExtResource("5_headsail_visual")
+material_override = SubResource("Material_headsail")
+cast_shadow = 0

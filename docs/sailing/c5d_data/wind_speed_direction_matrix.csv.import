@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bvicbj5htww14"
+
+[deps]
+
+files=["res://docs/sailing/c5d_data/wind_speed_direction_matrix.relative.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.absolute.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.representative.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.sim.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.heading.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.unwrapped.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.sog.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.longitudinal.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.lateral.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.sideslip.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.heel.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.yaw.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.max.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.forward.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.apparent.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.luffing.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.actual.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.sog.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.heading.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.steady.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.physics.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.physics.translation"]
+
+source_file="res://docs/sailing/c5d_data/wind_speed_direction_matrix.csv"
+dest_files=["res://docs/sailing/c5d_data/wind_speed_direction_matrix.relative.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.absolute.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.representative.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.sim.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.heading.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.unwrapped.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.sog.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.longitudinal.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.lateral.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.sideslip.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.heel.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.yaw.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.max.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.forward.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.apparent.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.luffing.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.actual.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.sog.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.heading.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.steady.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.physics.translation", "res://docs/sailing/c5d_data/wind_speed_direction_matrix.physics.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

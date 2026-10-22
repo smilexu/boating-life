@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bj1viedbathdg"
+
+[deps]
+
+files=["res://docs/sailing/c6_data/headsail_geometry_and_force.profile.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.visual.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.head.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.head.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.head.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.tack.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.tack.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.tack.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.clew.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.clew.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.clew.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.centroid.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.centroid.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.centroid.translation"]
+
+source_file="res://docs/sailing/c6_data/headsail_geometry_and_force.csv"
+dest_files=["res://docs/sailing/c6_data/headsail_geometry_and_force.profile.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.visual.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.head.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.head.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.head.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.tack.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.tack.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.tack.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.clew.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.clew.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.clew.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.centroid.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.centroid.translation", "res://docs/sailing/c6_data/headsail_geometry_and_force.centroid.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://ltj8mq5xljae"
+
+[deps]
+
+files=["res://docs/sailing/c7b_data/auto_rudder_regression.time.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.heading.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.sog.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.awa.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.main.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.jib.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.rudder.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.main.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.jib.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.keel.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.rudder.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.notes.translation"]
+
+source_file="res://docs/sailing/c7b_data/auto_rudder_regression.csv"
+dest_files=["res://docs/sailing/c7b_data/auto_rudder_regression.time.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.heading.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.sog.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.awa.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.main.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.jib.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.rudder.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.main.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.jib.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.keel.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.rudder.translation", "res://docs/sailing/c7b_data/auto_rudder_regression.notes.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

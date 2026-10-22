@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://b7mmm6on0x2pk"
+
+[deps]
+
+files=["res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.interpretation.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.area.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.sim.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.longitudinal.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.sog.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.heading.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.forward.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.lateral.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.heel.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.max.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.sail.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.sail.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.keel.translation"]
+
+source_file="res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.csv"
+dest_files=["res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.interpretation.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.area.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.sim.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.longitudinal.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.sog.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.heading.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.forward.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.lateral.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.heel.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.max.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.sail.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.sail.translation", "res://docs/sailing/c5c_data/s1_c5c_sail_area_sensitivity.keel.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

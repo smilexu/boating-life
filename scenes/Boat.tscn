@@ -1,4 +1,4 @@
-[gd_scene format=3 uid="uid://ci27qf2ne77u4"]
+[gd_scene load_steps=14 format=3 uid="uid://ci27qf2ne77u4"]
 
 [ext_resource type="Script" uid="uid://cg2hukghay3us" path="res://scripts/boat_controller.gd" id="1_controller"]
 [ext_resource type="Script" uid="uid://bex2jb3h7jqub" path="res://scripts/boat_follow_camera.gd" id="2_follow_camera"]
@@ -12,6 +12,7 @@
 [ext_resource type="PackedScene" path="res://scenes/BoatExhaustSmokeSystem.tscn" id="11_exhaust_smoke"]
 [ext_resource type="Script" uid="uid://d1ip4einbvys1" path="res://scripts/exhaust_socket_editor_gizmo.gd" id="12_exhaust_socket_gizmo"]
 [ext_resource type="Resource" path="res://resources/audio/powerboat_default_engine.tres" id="13_engine_audio_profile"]
+[ext_resource type="PackedScene" path="res://scenes/boats/SailingBoat8m.tscn" id="14_sailing_boat"]
 
 [node name="Boat" type="Node3D" unique_id=1227113286]
 
@@ -20,6 +21,8 @@ script = ExtResource("1_controller")
 draft_profile = ExtResource("7_draft_profile")
 propulsion_type = 1
 engine_audio_profile = ExtResource("13_engine_audio_profile")
+sailboat_body_path = NodePath("../SailingBoat8m")
+sailboat_spawn_point_path = NodePath("../../SailingBoatSpawn")
 
 [node name="VisualRoot" type="Node3D" parent="MotionRoot" unique_id=86996725]
 script = ExtResource("5_buoyancy")
@@ -62,6 +65,17 @@ omni_attenuation = 0.9
 script = ExtResource("8_cargo_loadout")
 slot_paths = Array[NodePath]([NodePath("../VisualRoot/CargoSlots/CargoSlot_01"), NodePath("../VisualRoot/CargoSlots/CargoSlot_02")])
 container_scene = ExtResource("9_container_scene")
+
+[node name="SailingBoat8m" parent="." instance=ExtResource("14_sailing_boat")]
+visible = false
+freeze = true
+wave_sampler_path = NodePath("../../WaveSampler")
+wind_field_path = NodePath("../../WindField")
+auto_reset_on_ready = false
+keyboard_controls_enabled = false
+
+[node name="CollisionShape3D" parent="SailingBoat8m" index="0"]
+disabled = true
 
 [node name="FollowCameraRig" type="Node3D" parent="." unique_id=2028145011]
 script = ExtResource("2_follow_camera")

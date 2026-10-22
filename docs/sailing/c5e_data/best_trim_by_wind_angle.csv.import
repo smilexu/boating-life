@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://dmbip4rj0p48q"
+
+[deps]
+
+files=["res://docs/sailing/c5e_data/best_trim_by_wind_angle.target.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.selected.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.mean.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.mean.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.target.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.status.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.mean.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.mean.translation"]
+
+source_file="res://docs/sailing/c5e_data/best_trim_by_wind_angle.csv"
+dest_files=["res://docs/sailing/c5e_data/best_trim_by_wind_angle.target.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.selected.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.mean.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.mean.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.target.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.status.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.mean.translation", "res://docs/sailing/c5e_data/best_trim_by_wind_angle.mean.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://d0rvh6xl7mhmt"
+
+[deps]
+
+files=["res://docs/sailing/c5d_data/damping_stability_checks.duration.translation", "res://docs/sailing/c5d_data/damping_stability_checks.heave.translation", "res://docs/sailing/c5d_data/damping_stability_checks.roll.translation", "res://docs/sailing/c5d_data/damping_stability_checks.pitch.translation", "res://docs/sailing/c5d_data/damping_stability_checks.buoyancy.translation", "res://docs/sailing/c5d_data/damping_stability_checks.heading.translation", "res://docs/sailing/c5d_data/damping_stability_checks.physics.translation", "res://docs/sailing/c5d_data/damping_stability_checks.physics.translation", "res://docs/sailing/c5d_data/damping_stability_checks.sog.translation", "res://docs/sailing/c5d_data/damping_stability_checks.longitudinal.translation", "res://docs/sailing/c5d_data/damping_stability_checks.lateral.translation", "res://docs/sailing/c5d_data/damping_stability_checks.max.translation", "res://docs/sailing/c5d_data/damping_stability_checks.max.translation", "res://docs/sailing/c5d_data/damping_stability_checks.max.translation", "res://docs/sailing/c5d_data/damping_stability_checks.wave.translation", "res://docs/sailing/c5d_data/damping_stability_checks.wind.translation", "res://docs/sailing/c5d_data/damping_stability_checks.wave.translation", "res://docs/sailing/c5d_data/damping_stability_checks.wave.translation"]
+
+source_file="res://docs/sailing/c5d_data/damping_stability_checks.csv"
+dest_files=["res://docs/sailing/c5d_data/damping_stability_checks.duration.translation", "res://docs/sailing/c5d_data/damping_stability_checks.heave.translation", "res://docs/sailing/c5d_data/damping_stability_checks.roll.translation", "res://docs/sailing/c5d_data/damping_stability_checks.pitch.translation", "res://docs/sailing/c5d_data/damping_stability_checks.buoyancy.translation", "res://docs/sailing/c5d_data/damping_stability_checks.heading.translation", "res://docs/sailing/c5d_data/damping_stability_checks.physics.translation", "res://docs/sailing/c5d_data/damping_stability_checks.physics.translation", "res://docs/sailing/c5d_data/damping_stability_checks.sog.translation", "res://docs/sailing/c5d_data/damping_stability_checks.longitudinal.translation", "res://docs/sailing/c5d_data/damping_stability_checks.lateral.translation", "res://docs/sailing/c5d_data/damping_stability_checks.max.translation", "res://docs/sailing/c5d_data/damping_stability_checks.max.translation", "res://docs/sailing/c5d_data/damping_stability_checks.max.translation", "res://docs/sailing/c5d_data/damping_stability_checks.wave.translation", "res://docs/sailing/c5d_data/damping_stability_checks.wind.translation", "res://docs/sailing/c5d_data/damping_stability_checks.wave.translation", "res://docs/sailing/c5d_data/damping_stability_checks.wave.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

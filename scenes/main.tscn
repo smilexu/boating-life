@@ -261,6 +261,12 @@ game_surface_above_lat_m = 0.0
 position = Vector3(13424.56, 0, 10459.39)
 rotation_degrees = Vector3(0, 90, 0)
 
+; The 8 m sailboat starts 900 m west of the motorboat berth, in the local open-water lane.
+; EMODnet DTM 2024 reports 5.56 m LAT here; this chart source is coarse and not navigation-grade.
+[node name="SailingBoatSpawn" type="Marker3D" parent="."]
+position = Vector3(12524.56, 0, 10459.39)
+rotation_degrees = Vector3(0, 90, 0)
+
 [node name="MalmoHarbor" parent="." instance=ExtResource("24_malmo_harbor")]
 
 [node name="CopenhagenHarbor" parent="." instance=ExtResource("28_copenhagen_harbor")]
@@ -325,12 +331,13 @@ manager_path = NodePath("../FishResourceManager")
 bathymetry_path = NodePath("../BathymetryManager")
 boat_path = NodePath("../PlayerBoat/MotionRoot")
 
-[node name="GameMenu" type="CanvasLayer" parent="." node_paths=PackedStringArray("boat_controller_path", "camera_rig_path", "environment_audio_manager_path", "boat_audio_controller_path", "fish_map_path", "malmo_port_services_path", "copenhagen_port_services_path")]
+[node name="GameMenu" type="CanvasLayer" parent="." node_paths=PackedStringArray("boat_controller_path", "camera_rig_path", "environment_audio_manager_path", "boat_audio_controller_path", "quality_manager_path", "fish_map_path", "malmo_port_services_path", "copenhagen_port_services_path")]
 script = ExtResource("51_game_menu")
 boat_controller_path = NodePath("../PlayerBoat/MotionRoot")
 camera_rig_path = NodePath("../PlayerBoat/FollowCameraRig")
 environment_audio_manager_path = NodePath("../EnvironmentAudioManager")
 boat_audio_controller_path = NodePath("../BoatAudioController")
+quality_manager_path = NodePath("../QualityManager")
 fish_map_path = NodePath("../FishResourceMap")
 malmo_port_services_path = NodePath("../MalmoHarbor/PortServiceController")
 copenhagen_port_services_path = NodePath("../CopenhagenHarbor/PortServiceController")

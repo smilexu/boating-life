@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bdmxs4wwncfji"
+
+[deps]
+
+files=["res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.overridden.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.override.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.sim.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.longitudinal.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.sog.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.heading.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.forward.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.lateral.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.approx.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.keel.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.heel.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.max.translation"]
+
+source_file="res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.csv"
+dest_files=["res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.overridden.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.override.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.sim.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.longitudinal.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.sog.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.heading.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.forward.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.lateral.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.approx.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.keel.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.heel.translation", "res://docs/sailing/c5c_data/s1_c5c_drag_sensitivity.max.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

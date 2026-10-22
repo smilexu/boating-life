@@ -8,6 +8,45 @@ const NAVIGATION_MATH := preload("res://scripts/sailboat_navigation_math.gd")
 const AUTO_SAIL_TRIM_SCRIPT := preload("res://scripts/sailboat_auto_sail_trim.gd")
 const FLOAT_POINT_COUNT := 4
 const PERF_WINDOW_SIZE := 600
+const ANOMALY_SAMPLE_CAPACITY := 600
+const ANOMALY_FLOAT_WATER_FIELDS := ["float_1_water_height_m", "float_2_water_height_m", "float_3_water_height_m", "float_4_water_height_m"]
+const ANOMALY_FLOAT_SUBMERGENCE_FIELDS := ["float_1_submergence_m", "float_2_submergence_m", "float_3_submergence_m", "float_4_submergence_m"]
+const ANOMALY_FIELDS := [
+	"physics_frame", "sim_time_s", "step_s",
+	"position_x_m", "position_y_m", "position_z_m",
+	"basis_x_x", "basis_x_y", "basis_x_z",
+	"basis_y_x", "basis_y_y", "basis_y_z",
+	"basis_z_x", "basis_z_y", "basis_z_z",
+	"linear_velocity_x_mps", "linear_velocity_y_mps", "linear_velocity_z_mps",
+	"angular_velocity_x_rad_s", "angular_velocity_y_rad_s", "angular_velocity_z_rad_s",
+	"linear_acceleration_x_mps2", "linear_acceleration_y_mps2", "linear_acceleration_z_mps2",
+	"angular_acceleration_x_rad_s2", "angular_acceleration_y_rad_s2", "angular_acceleration_z_rad_s2",
+	"speed_mps", "angular_speed_rad_s", "tilt_from_world_up_deg",
+	"local_longitudinal_speed_mps", "local_lateral_speed_mps", "local_yaw_rate_rad_s",
+	"true_wind_x_mps", "true_wind_y_mps", "true_wind_z_mps", "true_wind_from_deg",
+	"apparent_wind_local_x_mps", "apparent_wind_local_y_mps", "apparent_wind_local_z_mps",
+	"apparent_wind_speed_mps", "apparent_wind_from_angle_deg",
+	"main_sail_actual_rad", "main_sail_target_rad", "main_sail_aoa_rad", "main_sail_dynamic_pressure_pa",
+	"headsail_enabled", "headsail_actual_rad", "headsail_target_rad", "headsail_aoa_rad", "headsail_dynamic_pressure_pa",
+	"rudder_actual_rad", "rudder_target_rad",
+	"main_force_local_x_n", "main_force_local_y_n", "main_force_local_z_n",
+	"headsail_force_local_x_n", "headsail_force_local_y_n", "headsail_force_local_z_n",
+	"hull_drag_local_x_n", "hull_drag_local_y_n", "hull_drag_local_z_n",
+	"keel_force_local_x_n", "keel_force_local_y_n", "keel_force_local_z_n",
+	"rudder_force_local_x_n", "rudder_force_local_y_n", "rudder_force_local_z_n",
+	"main_yaw_torque_nm", "headsail_yaw_torque_nm", "keel_yaw_torque_nm", "rudder_yaw_torque_nm",
+	"total_explicit_yaw_torque_nm", "total_horizontal_force_local_x_n", "total_horizontal_force_local_y_n", "total_horizontal_force_local_z_n",
+	"total_buoyancy_n", "wave_time_s", "wave_query_count", "wind_query_count",
+	"float_1_water_height_m", "float_2_water_height_m", "float_3_water_height_m", "float_4_water_height_m",
+	"float_1_submergence_m", "float_2_submergence_m", "float_3_submergence_m", "float_4_submergence_m"
+]
+
+
+static func world_arm_from_local_point(point_local: Vector3, center_of_mass_local: Vector3, body_basis: Basis) -> Vector3:
+	## Converts a rigid-body local point to a world-space arm measured from its
+	## effective local centre of mass. This is for angular point velocity only;
+	## apply_force() positions remain body-origin offsets.
+	return body_basis * (point_local - center_of_mass_local)
 
 @export var profile: Resource
 @export_node_path("Node") var wave_sampler_path: NodePath = ^"../WaveSampler"
@@ -17,9 +56,12 @@ const PERF_WINDOW_SIZE := 600
 @export_node_path("Node3D") var rudder_angle_marker_path: NodePath = ^"VisualRoot/RudderAngleMarker"
 @export_node_path("MeshInstance3D") var headsail_visual_path: NodePath = ^"VisualRoot/HeadsailVisual"
 @export var dynamic_waves_enabled := true
+@export var auto_reset_on_ready := true
+@export var keyboard_controls_enabled := true
 @export_range(-5.0, 5.0, 0.01, "or_greater", "or_less") var water_height_m := 0.0
 @export_range(0.0, 2.0, 0.01) var runtime_buoyancy_strength := 1.0
 @export_range(0.0, 2.0, 0.01) var runtime_damping_ratio := 0.55
+@export var enable_debug_anomaly_capture := true
 
 var _float_offsets := PackedVector3Array()
 var _wave_sampler: WaveSampler
@@ -144,6 +186,7 @@ var _last_sail_net_force_local_n := Vector3.ZERO
 var _last_sail_net_force_world_n := Vector3.ZERO
 var _last_headsail_apparent_wind_local_mps := Vector3.ZERO
 var _last_headsail_apparent_wind_speed_mps := 0.0
+var _last_headsail_arm_from_com_world_m := Vector3.ZERO
 var _last_headsail_angle_of_attack_rad := 0.0
 var _last_headsail_luffing_scale := 0.0
 var _last_headsail_wrong_side_lift_scale := 1.0
@@ -188,6 +231,13 @@ var _hull_drag_calculation_usec_history := PackedInt64Array()
 var _physics_calculation_usec_history := PackedInt64Array()
 var _perf_history_count := 0
 var _perf_history_cursor := 0
+var _anomaly_samples := PackedFloat64Array()
+var _anomaly_field_indices: Dictionary = {}
+var _anomaly_sample_count := 0
+var _anomaly_write_cursor := 0
+var _anomaly_elapsed_seconds := 0.0
+var _anomaly_frame_count := 0
+var _anomaly_capture_armed := false
 
 
 func _ready() -> void:
@@ -301,8 +351,13 @@ func _ready() -> void:
 	_rudder_calculation_usec_history.resize(PERF_WINDOW_SIZE)
 	_hull_drag_calculation_usec_history.resize(PERF_WINDOW_SIZE)
 	_physics_calculation_usec_history.resize(PERF_WINDOW_SIZE)
+	_anomaly_samples.resize(ANOMALY_SAMPLE_CAPACITY * ANOMALY_FIELDS.size())
+	for field_index in range(ANOMALY_FIELDS.size()):
+		_anomaly_field_indices[ANOMALY_FIELDS[field_index]] = field_index
+	_arm_anomaly_capture()
 	_gravity_mps2 = float(ProjectSettings.get_setting("physics/3d/default_gravity", 9.8))
-	reset_to_neutral()
+	if auto_reset_on_ready:
+		reset_to_neutral()
 
 
 func _process(_delta: float) -> void:
@@ -320,21 +375,40 @@ func _process(_delta: float) -> void:
 
 
 func _input(event: InputEvent) -> void:
-	if not event is InputEventKey:
+	if not keyboard_controls_enabled or not event is InputEventKey:
 		return
 	var key_event := event as InputEventKey
 	if key_event.echo:
 		return
-	if key_event.keycode == KEY_A:
+	var turn_left := _event_matches_action(key_event, "boat_turn_left")
+	var turn_right := _event_matches_action(key_event, "boat_turn_right")
+	var trim_main_in := _event_matches_action(key_event, "sailboat_main_trim_ease")
+	var trim_main_out := _event_matches_action(key_event, "sailboat_main_trim_out")
+	var trim_headsail_in := _event_matches_action(key_event, "sailboat_headsail_trim_ease")
+	var trim_headsail_out := _event_matches_action(key_event, "sailboat_headsail_trim_out")
+	var toggle_auto := _event_matches_action(key_event, "sailboat_toggle_auto_trim")
+	if turn_left:
 		_rudder_key_a_pressed = key_event.pressed
 		_update_keyboard_rudder_target()
-	elif key_event.keycode == KEY_D:
+	elif turn_right:
 		_rudder_key_d_pressed = key_event.pressed
 		_update_keyboard_rudder_target()
-	elif key_event.pressed and key_event.keycode == KEY_J:
+	elif key_event.pressed and trim_headsail_in:
 		set_target_headsail_angle(target_headsail_angle_rad - deg_to_rad(10.0))
-	elif key_event.pressed and key_event.keycode == KEY_L:
+	elif key_event.pressed and trim_headsail_out:
 		set_target_headsail_angle(target_headsail_angle_rad + deg_to_rad(10.0))
+	elif key_event.pressed and trim_main_in:
+		set_target_sail_angle(target_sail_angle_rad - deg_to_rad(10.0))
+	elif key_event.pressed and trim_main_out:
+		set_target_sail_angle(target_sail_angle_rad + deg_to_rad(10.0))
+	elif key_event.pressed and toggle_auto:
+		set_auto_sail_trim_enabled(not auto_sail_trim_enabled)
+	if key_event.pressed and (turn_left or turn_right or trim_headsail_in or trim_headsail_out or trim_main_in or trim_main_out or toggle_auto):
+		get_viewport().set_input_as_handled()
+
+
+func _event_matches_action(event: InputEvent, action_name: StringName) -> bool:
+	return InputMap.has_action(action_name) and InputMap.event_is_action(event, action_name)
 
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
@@ -347,6 +421,10 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		state.linear_velocity = state.transform.basis * _test_initial_linear_velocity_local_mps
 		_last_test_initial_linear_velocity_local_mps = _test_initial_linear_velocity_local_mps
 		_test_initial_velocity_pending = false
+	# Sample the solver state before calculating this tick's forces. If the last
+	# solver step produced runaway motion, capture it before resistance/aero math
+	# can emit secondary normalization errors.
+	_record_anomaly_sample(state)
 
 	var start_usec := Time.get_ticks_usec()
 	var sample_usec := 0
@@ -409,7 +487,6 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	var submerged_count := 0
 	var body_origin := state.transform.origin
 	var body_basis := state.transform.basis
-	var center_of_mass_world := body_origin + body_basis * center_of_mass
 	var angular_velocity := state.angular_velocity
 	var linear_velocity := state.linear_velocity
 	var local_velocity := body_basis.inverse() * linear_velocity
@@ -423,6 +500,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	)
 	var sail_center_offset_world := body_basis * sail_pressure_center_local
 	var sail_center_world := body_origin + sail_center_offset_world
+	var sail_arm_from_com_world := world_arm_from_local_point(sail_pressure_center_local, center_of_mass, body_basis)
 	var true_wind_world := Vector3.ZERO
 	var true_wind_from_degrees := 0.0
 	if _wind_field != null:
@@ -436,7 +514,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		true_wind_world,
 		linear_velocity,
 		angular_velocity,
-		sail_center_world - center_of_mass_world,
+		sail_arm_from_com_world,
 		body_basis
 	)
 	var aero_start_usec := Time.get_ticks_usec()
@@ -469,11 +547,12 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	headsail_pressure_center_local += (headsail_clew_local - _headsail_clew_neutral_local_m) * _headsail_pressure_center_clew_follow
 	var headsail_chord := headsail_clew_local - _headsail_tack_local_m
 	var headsail_chord_xz := Vector2(headsail_chord.x, headsail_chord.z)
+	var headsail_arm_from_com_world := world_arm_from_local_point(headsail_pressure_center_local, center_of_mass, body_basis)
 	var headsail_apparent := AERO_MATH.calculate_apparent_wind(
 		true_wind_world,
 		linear_velocity,
 		angular_velocity,
-		body_basis * headsail_pressure_center_local - center_of_mass_world,
+		headsail_arm_from_com_world,
 		body_basis
 	)
 	var headsail_aero_start_usec := Time.get_ticks_usec()
@@ -528,8 +607,8 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		state.apply_central_force(body_basis * hull_drag_local)
 
 	var keel_offset_world := body_basis * _keel_center_local_m
-	var keel_position_world := body_origin + keel_offset_world
-	var keel_point_velocity_world := linear_velocity + angular_velocity.cross(keel_position_world - center_of_mass_world)
+	var keel_arm_from_com_world := world_arm_from_local_point(_keel_center_local_m, center_of_mass, body_basis)
+	var keel_point_velocity_world := linear_velocity + angular_velocity.cross(keel_arm_from_com_world)
 	var keel_velocity_local := body_basis.inverse() * (keel_point_velocity_world - _water_current_world_mps)
 	var keel_start_usec := Time.get_ticks_usec()
 	var keel_result := HYDRO_MATH.calculate_foil_forces(
@@ -552,8 +631,8 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		state.apply_force(body_basis * keel_force_local, keel_offset_world)
 
 	var rudder_offset_world := body_basis * _rudder_center_local_m
-	var rudder_position_world := body_origin + rudder_offset_world
-	var rudder_point_velocity_world := linear_velocity + angular_velocity.cross(rudder_position_world - center_of_mass_world)
+	var rudder_arm_from_com_world := world_arm_from_local_point(_rudder_center_local_m, center_of_mass, body_basis)
+	var rudder_point_velocity_world := linear_velocity + angular_velocity.cross(rudder_arm_from_com_world)
 	var rudder_velocity_local := body_basis.inverse() * (rudder_point_velocity_world - _water_current_world_mps)
 	var rudder_start_usec := Time.get_ticks_usec()
 	var rudder_result := HYDRO_MATH.calculate_foil_forces(
@@ -609,6 +688,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_last_sail_net_force_world_n = sail_net_world
 	_last_headsail_apparent_wind_local_mps = headsail_apparent.get("apparent_velocity_local_mps", Vector3.ZERO)
 	_last_headsail_apparent_wind_speed_mps = float(headsail_apparent.get("apparent_speed_mps", 0.0))
+	_last_headsail_arm_from_com_world_m = headsail_arm_from_com_world
 	_last_headsail_angle_of_attack_rad = float(headsail_result.get("angle_of_attack_rad", 0.0))
 	_last_headsail_luffing_scale = float(headsail_result.get("luffing_scale", 0.0))
 	_last_headsail_wrong_side_lift_scale = float(headsail_result.get("wrong_side_lift_scale", 1.0))
@@ -646,7 +726,8 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		if submergence <= 0.0:
 			continue
 		submerged_count += 1
-		var point_velocity := linear_velocity + angular_velocity.cross(point_world - center_of_mass_world)
+		var float_arm_from_com_world := world_arm_from_local_point(_float_offsets[index], center_of_mass, body_basis)
+		var point_velocity := linear_velocity + angular_velocity.cross(float_arm_from_com_world)
 		# Damping acts on the hull's vertical velocity relative to the moving
 		# water surface. The sampler's value is the fixed-source phase derivative.
 		var relative_vertical_velocity := point_velocity.y - surface_vertical_velocity
@@ -806,6 +887,7 @@ func get_debug_snapshot() -> Dictionary:
 		"headsail_pressure_center_local_m": _last_headsail_pressure_center_local_m,
 		"headsail_apparent_wind_local_mps": _last_headsail_apparent_wind_local_mps,
 		"headsail_apparent_wind_speed_mps": _last_headsail_apparent_wind_speed_mps,
+		"headsail_arm_from_com_world_m": _last_headsail_arm_from_com_world_m,
 		"headsail_angle_of_attack_rad": _last_headsail_angle_of_attack_rad,
 		"headsail_luffing_scale": _last_headsail_luffing_scale,
 		"headsail_wrong_side_lift_scale": _last_headsail_wrong_side_lift_scale,
@@ -974,6 +1056,7 @@ func get_navigation_snapshot() -> Dictionary:
 		"actual_headsail_angle_rad": actual_headsail_angle_rad,
 		"target_headsail_angle_rad": target_headsail_angle_rad,
 		"headsail_apparent_wind_speed_mps": _last_headsail_apparent_wind_speed_mps,
+		"headsail_arm_from_com_world_m": _last_headsail_arm_from_com_world_m,
 		"headsail_angle_of_attack_rad": _last_headsail_angle_of_attack_rad,
 		"headsail_luffing_scale": _last_headsail_luffing_scale,
 		"headsail_net_force_local_n": _last_headsail_net_force_local_n,
@@ -985,6 +1068,91 @@ func get_navigation_snapshot() -> Dictionary:
 		"wind_query_count_per_tick": _last_wind_query_count,
 		"wave_query_count_per_tick": _last_wave_query_count,
 	}
+
+
+func prepare_for_main_spawn(reference_transform: Transform3D) -> void:
+	## One-time vessel-selection placement. Normal sailing remains solver-driven.
+	if profile == null:
+		return
+	var forward := -reference_transform.basis.z
+	forward.y = 0.0
+	if forward.length_squared() < 0.0001:
+		forward = Vector3.FORWARD
+	else:
+		forward = forward.normalized()
+	var yaw := atan2(-forward.x, -forward.z)
+	var mean_float_y := 0.0
+	for offset in _float_offsets:
+		mean_float_y += offset.y
+	mean_float_y /= float(maxi(_float_offsets.size(), 1))
+	var water_height := water_height_m
+	if _wave_sampler != null:
+		var sample := _wave_sampler.sample_physics_surface(
+			Vector3(reference_transform.origin.x, water_height_m, reference_transform.origin.z),
+			_wave_sampler.get_effective_wave_time_seconds()
+		)
+		water_height = float(sample.get("height", water_height_m))
+	var spawn_origin := Vector3(
+		reference_transform.origin.x,
+		water_height - float(profile.get("rest_submergence_m")) - mean_float_y,
+		reference_transform.origin.z
+	)
+	global_transform = Transform3D(Basis(Vector3.UP, yaw), spawn_origin)
+	linear_velocity = Vector3.ZERO
+	angular_velocity = Vector3.ZERO
+	sleeping = false
+	_reset_controls_for_main_spawn()
+	_arm_anomaly_capture()
+
+
+func set_vessel_active(active: bool) -> void:
+	visible = active
+	freeze = not active
+	var collision_shape := get_node_or_null("CollisionShape3D") as CollisionShape3D
+	if collision_shape != null:
+		collision_shape.disabled = not active
+	if active:
+		sleeping = false
+		_arm_anomaly_capture()
+	else:
+		keyboard_controls_enabled = false
+		clear_rudder_input()
+
+
+func set_keyboard_controls_enabled(enabled: bool) -> void:
+	keyboard_controls_enabled = enabled
+	if not enabled:
+		_rudder_key_a_pressed = false
+		_rudder_key_d_pressed = false
+		clear_rudder_input()
+
+
+func get_audio_motion_state() -> Dictionary:
+	var local_angular_velocity := global_basis.inverse() * angular_velocity
+	return {
+		"heave_speed_mps": absf(linear_velocity.y),
+		"pitch_rate_rad_s": absf(local_angular_velocity.x),
+		"roll_rate_rad_s": absf(local_angular_velocity.z),
+		"available": true,
+	}
+
+
+func _reset_controls_for_main_spawn() -> void:
+	target_sail_angle_rad = 0.0
+	actual_sail_angle_rad = 0.0
+	target_headsail_angle_rad = 0.0
+	actual_headsail_angle_rad = 0.0
+	_headsail_enabled = bool(profile.get("headsail_enabled"))
+	set_auto_sail_trim_enabled(false)
+	_auto_sail_trim.reset(0.0, 0.0)
+	_last_auto_trim_result.clear()
+	target_rudder_angle_rad = 0.0
+	actual_rudder_angle_rad = 0.0
+	_rudder_key_a_pressed = false
+	_rudder_key_d_pressed = false
+	_rudder_keyboard_active = false
+	if _headsail_visual != null:
+		_headsail_visual.visible = _headsail_enabled
 
 
 func set_dynamic_waves_enabled(enabled: bool) -> void:
@@ -1017,6 +1185,268 @@ func _record_performance(
 	_last_hull_drag_calculation_usec = hull_drag_usec
 	_perf_history_cursor = (_perf_history_cursor + 1) % PERF_WINDOW_SIZE
 	_perf_history_count = mini(_perf_history_count + 1, PERF_WINDOW_SIZE)
+
+
+func _arm_anomaly_capture() -> void:
+	_anomaly_sample_count = 0
+	_anomaly_write_cursor = 0
+	_anomaly_elapsed_seconds = 0.0
+	_anomaly_frame_count = 0
+	_anomaly_capture_armed = OS.is_debug_build() and enable_debug_anomaly_capture
+	if not _anomaly_samples.is_empty():
+		_anomaly_samples.fill(0.0)
+
+
+func _record_anomaly_sample(state: PhysicsDirectBodyState3D) -> void:
+	if not _anomaly_capture_armed:
+		return
+	var transform_snapshot := state.transform
+	var body_basis := transform_snapshot.basis
+	var position := transform_snapshot.origin
+	var linear := state.linear_velocity
+	var angular := state.angular_velocity
+	_anomaly_elapsed_seconds += state.step if is_finite(state.step) and state.step > 0.0 else 0.0
+	var row_base := _anomaly_write_cursor * ANOMALY_FIELDS.size()
+	var linear_speed := _safe_vector_length(linear)
+	var angular_speed := _safe_vector_length(angular)
+	var tilt_degrees := _tilt_from_up_degrees(body_basis.y)
+	var linear_acceleration := Vector3.ZERO
+	var angular_acceleration := Vector3.ZERO
+	if _anomaly_sample_count > 0 and is_finite(state.step) and state.step > 0.0:
+		var previous_slot := _anomaly_write_cursor - 1
+		if previous_slot < 0:
+			previous_slot += ANOMALY_SAMPLE_CAPACITY
+		var previous_base := previous_slot * ANOMALY_FIELDS.size()
+		var velocity_index := int(_anomaly_field_indices["linear_velocity_x_mps"])
+		var angular_velocity_index := int(_anomaly_field_indices["angular_velocity_x_rad_s"])
+		var previous_linear := Vector3(
+			_anomaly_samples[previous_base + velocity_index],
+			_anomaly_samples[previous_base + velocity_index + 1],
+			_anomaly_samples[previous_base + velocity_index + 2]
+		)
+		var previous_angular := Vector3(
+			_anomaly_samples[previous_base + angular_velocity_index],
+			_anomaly_samples[previous_base + angular_velocity_index + 1],
+			_anomaly_samples[previous_base + angular_velocity_index + 2]
+		)
+		linear_acceleration = (linear - previous_linear) / state.step
+		angular_acceleration = (angular - previous_angular) / state.step
+	var keel_force: Vector3 = _last_keel_result.get("net_force_local_n", Vector3.ZERO)
+	var rudder_force: Vector3 = _last_rudder_result.get("net_force_local_n", Vector3.ZERO)
+	_anomaly_frame_count += 1
+	_anomaly_set(row_base, "physics_frame", float(_anomaly_frame_count))
+	_anomaly_set(row_base, "sim_time_s", _anomaly_elapsed_seconds)
+	_anomaly_set(row_base, "step_s", state.step)
+	_anomaly_set_vector(row_base, "position_x_m", position)
+	_anomaly_set_vector(row_base, "basis_x_x", body_basis.x)
+	_anomaly_set_vector(row_base, "basis_y_x", body_basis.y)
+	_anomaly_set_vector(row_base, "basis_z_x", body_basis.z)
+	_anomaly_set_vector(row_base, "linear_velocity_x_mps", linear)
+	_anomaly_set_vector(row_base, "angular_velocity_x_rad_s", angular)
+	_anomaly_set_vector(row_base, "linear_acceleration_x_mps2", linear_acceleration)
+	_anomaly_set_vector(row_base, "angular_acceleration_x_rad_s2", angular_acceleration)
+	_anomaly_set(row_base, "speed_mps", linear_speed)
+	_anomaly_set(row_base, "angular_speed_rad_s", angular_speed)
+	_anomaly_set(row_base, "tilt_from_world_up_deg", tilt_degrees)
+	_anomaly_set(row_base, "local_longitudinal_speed_mps", _last_longitudinal_velocity_mps)
+	_anomaly_set(row_base, "local_lateral_speed_mps", _last_lateral_velocity_mps)
+	_anomaly_set(row_base, "local_yaw_rate_rad_s", _last_yaw_rate_rad_s)
+	_anomaly_set_vector(row_base, "true_wind_x_mps", _last_true_wind_world_mps)
+	_anomaly_set(row_base, "true_wind_from_deg", _last_true_wind_from_degrees)
+	_anomaly_set_vector(row_base, "apparent_wind_local_x_mps", _last_apparent_wind_local_mps)
+	_anomaly_set(row_base, "apparent_wind_speed_mps", _last_apparent_wind_speed_mps)
+	_anomaly_set(row_base, "apparent_wind_from_angle_deg", _last_apparent_wind_from_angle_degrees)
+	_anomaly_set(row_base, "main_sail_actual_rad", actual_sail_angle_rad)
+	_anomaly_set(row_base, "main_sail_target_rad", target_sail_angle_rad)
+	_anomaly_set(row_base, "main_sail_aoa_rad", _last_sail_angle_of_attack_rad)
+	_anomaly_set(row_base, "main_sail_dynamic_pressure_pa", _last_sail_dynamic_pressure_pa)
+	_anomaly_set(row_base, "headsail_enabled", 1.0 if _headsail_enabled else 0.0)
+	_anomaly_set(row_base, "headsail_actual_rad", actual_headsail_angle_rad)
+	_anomaly_set(row_base, "headsail_target_rad", target_headsail_angle_rad)
+	_anomaly_set(row_base, "headsail_aoa_rad", _last_headsail_angle_of_attack_rad)
+	_anomaly_set(row_base, "headsail_dynamic_pressure_pa", _last_headsail_apparent_wind_speed_mps * _last_headsail_apparent_wind_speed_mps * 0.5 * _air_density_kg_m3)
+	_anomaly_set(row_base, "rudder_actual_rad", actual_rudder_angle_rad)
+	_anomaly_set(row_base, "rudder_target_rad", target_rudder_angle_rad)
+	_anomaly_set_vector(row_base, "main_force_local_x_n", _last_sail_net_force_local_n)
+	_anomaly_set_vector(row_base, "headsail_force_local_x_n", _last_headsail_net_force_local_n)
+	_anomaly_set_vector(row_base, "hull_drag_local_x_n", _last_hull_drag_force_local_n)
+	_anomaly_set_vector(row_base, "keel_force_local_x_n", keel_force)
+	_anomaly_set_vector(row_base, "rudder_force_local_x_n", rudder_force)
+	_anomaly_set(row_base, "main_yaw_torque_nm", _last_sail_yaw_torque_nm)
+	_anomaly_set(row_base, "headsail_yaw_torque_nm", _last_headsail_yaw_torque_nm)
+	_anomaly_set(row_base, "keel_yaw_torque_nm", _last_keel_yaw_torque_nm)
+	_anomaly_set(row_base, "rudder_yaw_torque_nm", _last_rudder_yaw_torque_nm)
+	_anomaly_set(row_base, "total_explicit_yaw_torque_nm", _last_total_external_yaw_torque_nm)
+	_anomaly_set_vector(row_base, "total_horizontal_force_local_x_n", _last_total_horizontal_force_local_n)
+	_anomaly_set(row_base, "total_buoyancy_n", _last_total_buoyancy_n)
+	_anomaly_set(row_base, "wave_time_s", _last_wave_time_seconds)
+	_anomaly_set(row_base, "wave_query_count", float(_last_wave_query_count))
+	_anomaly_set(row_base, "wind_query_count", float(_last_wind_query_count))
+	for point_index in range(FLOAT_POINT_COUNT):
+		_anomaly_set(row_base, ANOMALY_FLOAT_WATER_FIELDS[point_index], _point_water_heights_m[point_index])
+		_anomaly_set(row_base, ANOMALY_FLOAT_SUBMERGENCE_FIELDS[point_index], _point_submergences_m[point_index])
+	_anomaly_write_cursor = (_anomaly_write_cursor + 1) % ANOMALY_SAMPLE_CAPACITY
+	_anomaly_sample_count = mini(_anomaly_sample_count + 1, ANOMALY_SAMPLE_CAPACITY)
+	var trigger_reason := _get_anomaly_trigger_reason(
+		state, body_basis, position, linear, angular, linear_speed, angular_speed, tilt_degrees
+	)
+	if not trigger_reason.is_empty():
+		_anomaly_capture_armed = false
+		call_deferred("_write_anomaly_capture", trigger_reason)
+
+
+func _anomaly_set(row_base: int, field_name: String, value: float) -> void:
+	var field_index := int(_anomaly_field_indices.get(field_name, -1))
+	if field_index >= 0:
+		_anomaly_samples[row_base + field_index] = value
+
+
+func _anomaly_set_vector(row_base: int, first_field_name: String, value: Vector3) -> void:
+	var field_index := int(_anomaly_field_indices.get(first_field_name, -1))
+	if field_index < 0:
+		return
+	_anomaly_samples[row_base + field_index] = value.x
+	_anomaly_samples[row_base + field_index + 1] = value.y
+	_anomaly_samples[row_base + field_index + 2] = value.z
+
+
+func _get_anomaly_trigger_reason(
+	state: PhysicsDirectBodyState3D,
+	body_basis: Basis,
+	position: Vector3,
+	linear: Vector3,
+	angular: Vector3,
+	linear_speed: float,
+	angular_speed: float,
+	tilt_degrees: float
+) -> String:
+	if not is_finite(state.step) or state.step <= 0.0:
+		return "invalid_physics_step"
+	if not _vector_is_finite(position):
+		return "non_finite_position"
+	if not _vector_is_finite(linear):
+		return "non_finite_linear_velocity"
+	if not _vector_is_finite(angular):
+		return "non_finite_angular_velocity"
+	if not _vector_is_finite(body_basis.x) or not _vector_is_finite(body_basis.y) or not _vector_is_finite(body_basis.z):
+		return "non_finite_orientation_basis"
+	if not _basis_axis_lengths_valid(body_basis):
+		return "degenerate_orientation_basis"
+	var basis_determinant := body_basis.determinant()
+	if not is_finite(basis_determinant) or absf(basis_determinant) < 0.25:
+		return "singular_orientation_basis"
+	if not is_finite(linear_speed) or not is_finite(angular_speed) or tilt_degrees < 0.0 or not is_finite(tilt_degrees):
+		return "non_finite_derived_state"
+	if not is_finite(actual_sail_angle_rad) or not is_finite(target_sail_angle_rad) or not is_finite(actual_headsail_angle_rad) or not is_finite(target_headsail_angle_rad) or not is_finite(actual_rudder_angle_rad) or not is_finite(target_rudder_angle_rad):
+		return "non_finite_control_state"
+	if not _vector_is_finite(_last_true_wind_world_mps) or not _vector_is_finite(_last_apparent_wind_local_mps) or not _vector_is_finite(_last_headsail_apparent_wind_local_mps):
+		return "non_finite_wind_state"
+	if not is_finite(_last_sail_dynamic_pressure_pa) or not is_finite(_last_apparent_wind_speed_mps) or not is_finite(_last_headsail_angle_of_attack_rad):
+		return "non_finite_sail_state"
+	var headsail_dynamic_pressure := 0.5 * _air_density_kg_m3 * _last_headsail_apparent_wind_speed_mps * _last_headsail_apparent_wind_speed_mps
+	if not is_finite(headsail_dynamic_pressure) or not is_finite(_last_sail_angle_of_attack_rad):
+		return "non_finite_sail_state"
+	var keel_force: Vector3 = _last_keel_result.get("net_force_local_n", Vector3.ZERO)
+	var rudder_force: Vector3 = _last_rudder_result.get("net_force_local_n", Vector3.ZERO)
+	var largest_force_component := 0.0
+	if not _vector_is_finite(_last_sail_net_force_local_n) or not _vector_is_finite(_last_headsail_net_force_local_n) or not _vector_is_finite(_last_hull_drag_force_local_n) or not _vector_is_finite(keel_force) or not _vector_is_finite(rudder_force) or not _vector_is_finite(_last_total_horizontal_force_local_n):
+		return "non_finite_applied_force"
+	largest_force_component = maxf(largest_force_component, _vector_max_abs_component(_last_sail_net_force_local_n))
+	largest_force_component = maxf(largest_force_component, _vector_max_abs_component(_last_headsail_net_force_local_n))
+	largest_force_component = maxf(largest_force_component, _vector_max_abs_component(_last_hull_drag_force_local_n))
+	largest_force_component = maxf(largest_force_component, _vector_max_abs_component(keel_force))
+	largest_force_component = maxf(largest_force_component, _vector_max_abs_component(rudder_force))
+	largest_force_component = maxf(largest_force_component, _vector_max_abs_component(_last_total_horizontal_force_local_n))
+	if not is_finite(_last_total_external_yaw_torque_nm):
+		return "non_finite_yaw_torque"
+	if not is_finite(_last_total_buoyancy_n) or not is_finite(_last_apparent_wind_speed_mps) or not is_finite(_last_headsail_apparent_wind_speed_mps):
+		return "non_finite_environment_or_buoyancy_state"
+	for point_index in range(FLOAT_POINT_COUNT):
+		if not is_finite(_point_water_heights_m[point_index]) or not is_finite(_point_submergences_m[point_index]):
+			return "non_finite_buoyancy_sample"
+	if linear_speed >= 25.0:
+		return "linear_speed_over_25_mps"
+	if angular_speed >= 4.0:
+		return "angular_speed_over_4_rad_s"
+	if tilt_degrees >= 65.0:
+		return "hull_tilt_over_65_deg"
+	if _vector_max_abs_component(position) >= 1.0e12:
+		return "position_over_1e12_m"
+	if largest_force_component >= 250000.0:
+		return "force_component_over_250_kn"
+	if _last_apparent_wind_speed_mps >= 100.0:
+		return "apparent_wind_over_100_mps"
+	return ""
+
+
+func _write_anomaly_capture(trigger_reason: String) -> void:
+	var unix_stamp := int(Time.get_unix_time_from_system())
+	var tick_stamp := Time.get_ticks_usec()
+	var output_path := "user://sailboat_anomaly_%d_%d.csv" % [unix_stamp, tick_stamp]
+	var file := FileAccess.open(output_path, FileAccess.WRITE)
+	if file == null:
+		push_error("Sailboat anomaly capture could not write CSV; FileAccess error %d." % FileAccess.get_open_error())
+		return
+	var scene_path := "unknown"
+	if get_tree() != null and get_tree().current_scene != null:
+		scene_path = get_tree().current_scene.scene_file_path
+	file.store_line("# trigger_reason=%s" % trigger_reason)
+	file.store_line("# scene=%s" % scene_path)
+	file.store_line("# profile=%s" % (profile.resource_path if profile != null else "none"))
+	file.store_line("# captured_samples=%d; ring_capacity=%d; nominal_history_seconds=%.1f" % [_anomaly_sample_count, ANOMALY_SAMPLE_CAPACITY, float(ANOMALY_SAMPLE_CAPACITY) / 60.0])
+	file.store_line("# diagnostic_thresholds: tilt>=65deg, linear_speed>=25m/s, angular_speed>=4rad/s, force_component>=250000N, apparent_wind>=100m/s, position_component>=1e12m, or invalid numeric state")
+	file.store_line("# physics_frame is a sample counter since the most recent reset/rearm; accelerations are finite-difference diagnostics, not solver-reported values")
+	var header := PackedStringArray()
+	for field_name in ANOMALY_FIELDS:
+		header.append(str(field_name))
+	file.store_line(",".join(header))
+	var oldest_sample := _anomaly_write_cursor - _anomaly_sample_count
+	if oldest_sample < 0:
+		oldest_sample += ANOMALY_SAMPLE_CAPACITY
+	var row_parts := PackedStringArray()
+	row_parts.resize(ANOMALY_FIELDS.size())
+	for sample_offset in range(_anomaly_sample_count):
+		var sample_slot := (oldest_sample + sample_offset) % ANOMALY_SAMPLE_CAPACITY
+		var row_base := sample_slot * ANOMALY_FIELDS.size()
+		for column_index in range(ANOMALY_FIELDS.size()):
+			row_parts[column_index] = str(_anomaly_samples[row_base + column_index])
+		file.store_line(",".join(row_parts))
+	file.close()
+	var absolute_path := ProjectSettings.globalize_path(output_path)
+	push_warning("Sailboat first-anomaly snapshot saved (%s): %s" % [trigger_reason, absolute_path])
+
+
+func _vector_is_finite(value: Vector3) -> bool:
+	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
+
+
+func _vector_max_abs_component(value: Vector3) -> float:
+	return maxf(absf(value.x), maxf(absf(value.y), absf(value.z)))
+
+
+func _safe_vector_length(value: Vector3) -> float:
+	if not _vector_is_finite(value):
+		return INF
+	var largest_component := _vector_max_abs_component(value)
+	if largest_component <= 0.0:
+		return 0.0
+	return (value / largest_component).length() * largest_component
+
+
+func _basis_axis_lengths_valid(body_basis: Basis) -> bool:
+	return _basis_axis_length_valid(body_basis.x) and _basis_axis_length_valid(body_basis.y) and _basis_axis_length_valid(body_basis.z)
+
+
+func _basis_axis_length_valid(axis: Vector3) -> bool:
+	var axis_length := _safe_vector_length(axis)
+	return is_finite(axis_length) and axis_length >= 0.5 and axis_length <= 1.5
+
+
+func _tilt_from_up_degrees(body_up: Vector3) -> float:
+	var up_length := _safe_vector_length(body_up)
+	if not is_finite(up_length) or up_length < 0.5:
+		return -1.0
+	return rad_to_deg(acos(clampf(body_up.y / up_length, -1.0, 1.0)))
 
 
 func reset_performance_history() -> void:
@@ -1109,6 +1539,7 @@ func _queue_test_transform(target: Transform3D, action: String) -> void:
 	_test_transform_pending = true
 	_last_test_action = action
 	sleeping = false
+	_arm_anomaly_capture()
 
 
 func _apply_pending_test_transform(state: PhysicsDirectBodyState3D) -> void:
@@ -1248,6 +1679,7 @@ func set_headsail_enabled(enabled: bool) -> void:
 		_last_headsail_effective_area_m2 = 0.0
 		_last_headsail_apparent_wind_local_mps = Vector3.ZERO
 		_last_headsail_apparent_wind_speed_mps = 0.0
+		_last_headsail_arm_from_com_world_m = Vector3.ZERO
 		_last_headsail_angle_of_attack_rad = 0.0
 		_last_headsail_luffing_scale = 0.0
 		_last_headsail_wrong_side_lift_scale = 1.0
