@@ -55,7 +55,7 @@ func _test_lab_instrument_and_visuals() -> void:
 	_expect(instrument != null, "the live instrument is added to the existing SailboatLab debug canvas")
 	_expect(instrument != null and instrument.mouse_filter == Control.MOUSE_FILTER_IGNORE, "the instrument does not intercept existing debug controls")
 	var tabs := debug_panel.find_child("SailboatDebugTabs", true, false) as TabContainer
-	_expect(tabs != null and tabs.get_tab_count() == 7, "underwater inspection tab coexists with the existing debug pages and instrument")
+	_expect(tabs != null and tabs.get_tab_count() == 8, "underwater inspection and engine tabs coexist with the existing debug pages and instrument")
 	_expect(instrument != null and tabs != null and not tabs.is_ancestor_of(instrument), "navigation instrument is a separate panel rather than a tab")
 	if instrument != null:
 		var viewport_width := instrument.get_viewport().get_visible_rect().size.x

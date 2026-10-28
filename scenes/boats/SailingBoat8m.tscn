@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=25 format=3]
 
 [ext_resource type="Script" path="res://scripts/sailboat_lab_body.gd" id="1_body"]
 [ext_resource type="Resource" path="res://resources/sailing/sailboat_lab_profile.tres" id="2_profile"]
@@ -11,6 +11,10 @@
 [ext_resource type="Script" path="res://scripts/nordic28_rudder_visual.gd" id="10_rudder_visual"]
 [ext_resource type="Script" path="res://scripts/nordic28_sail_visuals.gd" id="11_sail_visuals"]
 [ext_resource type="Script" path="res://scripts/nordic28_helm_visual.gd" id="12_helm_visual"]
+[ext_resource type="Script" path="res://scripts/fuel_tank_component.gd" id="13_fuel_tank"]
+[ext_resource type="Resource" path="res://resources/propulsion/nordic28_diesel_tank.tres" id="14_diesel_tank_profile"]
+[ext_resource type="Script" path="res://scripts/auxiliary_marine_engine.gd" id="15_aux_engine"]
+[ext_resource type="Resource" path="res://resources/propulsion/nordic28_auxiliary_diesel.tres" id="16_aux_engine_profile"]
 
 [sub_resource type="BoxShape3D" id="BoxShape_hull"]
 size = Vector3(2.5, 1.2, 7.4)
@@ -70,7 +74,17 @@ sail_visual_pivot_path = NodePath("VisualRoot/VisualBoomPivot")
 rudder_visual_pivot_path = NodePath("VisualRoot/RudderPivot")
 rudder_angle_marker_path = NodePath("VisualRoot/RudderAngleMarker")
 headsail_visual_path = NodePath("VisualRoot/HeadsailVisual")
+auxiliary_engine_path = NodePath("AuxiliaryMarineEngine")
 dynamic_waves_enabled = true
+
+[node name="FuelTank" type="Node" parent="."]
+script = ExtResource("13_fuel_tank")
+profile = ExtResource("14_diesel_tank_profile")
+
+[node name="AuxiliaryMarineEngine" type="Node" parent="."]
+script = ExtResource("15_aux_engine")
+profile = ExtResource("16_aux_engine_profile")
+fuel_tank_path = NodePath("../FuelTank")
 
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 position = Vector3(0, 0.03, 0)

@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="AuxiliaryMarineEngineProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/auxiliary_marine_engine_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+engine_display_name = "15 hp 辅助柴油机"
+rated_power_hp = 15.0
+propulsive_efficiency = 0.3
+maximum_bollard_thrust_n = 2100.0
+minimum_power_speed_mps = 0.7
+throttle_power_exponent = 1.2
+reverse_thrust_ratio = 0.68
+throttle_response_per_second = 0.65
+startup_duration_s = 1.5
+shutdown_duration_s = 0.6
+maximum_shift_throttle = 0.1
+idle_consumption_lph = 0.3
+low_throttle_consumption_lph = 0.6
+medium_throttle_consumption_lph = 1.1
+high_throttle_consumption_lph = 2.0
+neutral_throttle_load_scale = 0.75
+reverse_consumption_scale = 0.9
+reference_cruise_speed_knots = 5.0
+thrust_application_point_local_m = Vector3(0, -0.65, 2.65)

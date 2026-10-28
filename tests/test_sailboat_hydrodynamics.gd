@@ -102,7 +102,7 @@ func _test_lab_zero_wind_and_stationary_rudder() -> void:
 	var boat: RigidBody3D = lab.get_node("SailboatBody")
 	var debug_panel: CanvasLayer = lab.get_node("DebugPanel")
 	var tabs := debug_panel.find_child("SailboatDebugTabs", true, false) as TabContainer
-	_expect(tabs != null and tabs.get_tab_count() == 7, "underwater inspection is added alongside the existing hydrodynamics tabs")
+	_expect(tabs != null and tabs.get_tab_count() == 8, "underwater inspection and engine diagnostics are added alongside the existing hydrodynamics tabs")
 	_expect(lab.get_node_or_null("SailboatBody/VisualRoot/RudderPivot/RudderBlade") != null, "low-poly visual rudder is attached to the boat model")
 	boat.call("set_dynamic_waves_enabled", false)
 	boat.call("reset_to_neutral")

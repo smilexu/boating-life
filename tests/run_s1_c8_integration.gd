@@ -123,6 +123,22 @@ func _run() -> void:
 	var sailing_panel := vessel_hud.find_child("SailingControlsPanel", true, false) as Control if vessel_hud != null else null
 	var depth_chart_panel := main.find_child("DepthChartPanel", true, false) as Control
 	_check(sailing_panel != null and sailing_panel.visible, "the combined sailing navigation and controls panel appears for the sailboat")
+	var engine_snapshot: Dictionary = sailboat.call("get_auxiliary_engine_snapshot")
+	_check(bool(engine_snapshot.get("available", false)), "Nordic 28 exposes its configured auxiliary diesel and fuel tank")
+	_check(str(engine_snapshot.get("state_name", "")) == "关闭" and is_equal_approx(float(engine_snapshot.get("tank", {}).get("remaining_l", 0.0)), 40.0), "auxiliary diesel starts off with the vessel's 40 L tank full")
+	_check(controller.supports_auxiliary_engine() and controller.supports_fuel_system(), "active sailboat advertises auxiliary engine and fuel capabilities")
+	var engine_panel := sailing_panel.find_child("AuxiliaryEnginePanel", true, false) as Control if sailing_panel != null else null
+	_check(engine_panel != null and engine_panel.visible, "Main sailing HUD displays engine and fuel controls for Nordic 28")
+	var engine_fuel_label := sailing_panel.find_child("AuxiliaryEngineFuel", true, false) as Label if sailing_panel != null else null
+	var fuel_tank := sailboat.get_node_or_null("FuelTank") as FuelTankComponent
+	_check(engine_fuel_label != null and engine_fuel_label.text.contains("柴油"), "Main HUD displays the current diesel quantity and consumption estimate")
+	if fuel_tank != null and vessel_hud != null:
+		fuel_tank.set_fuel_remaining_l(7.9)
+		vessel_hud.call("_update_sailing_panel")
+		_check(engine_fuel_label != null and engine_fuel_label.text.contains("燃油偏低"), "Main HUD shows a steady low-fuel warning below the vessel profile threshold")
+		fuel_tank.set_fuel_remaining_l(40.0)
+		vessel_hud.call("_update_sailing_panel")
+	_check(InputMap.has_action("sailboat_engine_toggle") and InputMap.has_action("sailboat_engine_gear_cycle"), "engine hotkeys are registered without replacing powerboat throttle actions")
 	if sailing_panel != null and depth_chart_panel != null:
 		_check(not sailing_panel.get_global_rect().intersects(depth_chart_panel.get_global_rect()), "the lower-right sailing panel does not overlap the lower-left chart")
 	var speed_label := vessel_hud.find_child("SailingSpeed", true, false) as Label if vessel_hud != null else null
@@ -177,6 +193,18 @@ func _run() -> void:
 	_check(bool(sailboat.call("get_navigation_snapshot").get("headsail_enabled", false)), "Both-sail profile is active")
 	sailboat.call("set_auto_sail_trim_enabled", true)
 	_check(bool(sailboat.call("get_auto_sail_trim_enabled")), "AUTO can be enabled through the shared sailing entity")
+	if fuel_tank != null:
+		fuel_tank.set_fuel_remaining_l(17.5)
+		sailboat.call("start_auxiliary_engine")
+		_check(str(sailboat.call("get_auxiliary_engine_snapshot").get("state_name", "")) == "启动中", "Main start control begins the auxiliary engine start sequence")
+		_check(controller.set_sailing_enabled(false), "Main can switch away while the auxiliary diesel is starting")
+		await physics_frame
+		var switched_engine: Dictionary = sailboat.call("get_auxiliary_engine_snapshot")
+		_check(is_equal_approx(fuel_tank.fuel_remaining_l, 17.5), "switching away preserves Nordic 28's tank instead of refilling it")
+		_check(str(switched_engine.get("state_name", "")) == "关闭", "switching away stops the diesel without affecting its stored fuel")
+		_check(controller.set_sailing_enabled(true), "Nordic 28 can be reselected after checking its engine state")
+		await physics_frame
+		_check(is_equal_approx(fuel_tank.fuel_remaining_l, 17.5), "reselecting Nordic 28 retains the same fuel quantity")
 
 	if vessel_hud != null:
 		vessel_hud.call("_open_vessel_picker")
@@ -189,6 +217,10 @@ func _run() -> void:
 	await physics_frame
 	_check(not controller.is_sailing_active(), "Motorboat is selected again")
 	_check(sailboat.freeze and not sailboat.visible, "Deselected sailboat is frozen and hidden")
+	if fuel_tank != null:
+		var engine_after_switch: Dictionary = sailboat.call("get_auxiliary_engine_snapshot")
+		_check(is_equal_approx(fuel_tank.fuel_remaining_l, 17.5), "switching back to the powerboat preserves the last sailboat fuel amount")
+		_check(str(engine_after_switch.get("state_name", "")) == "关闭", "the hidden sailboat diesel remains stopped after switching vessels")
 	_check(sailing_panel != null and not sailing_panel.visible, "sailing-only navigation controls hide for the powerboat")
 	var compass_widget := vessel_hud.find_child("CompassHUD", true, false) as Control if vessel_hud != null else null
 	_check(compass_widget != null and compass_widget.visible, "the shared heading ribbon returns when the powerboat is active")

@@ -166,7 +166,7 @@ func _test_lab_physics_and_visuals() -> void:
 	var tabs := debug_panel.find_child("SailboatDebugTabs", true, false) as TabContainer
 	_expect(visual != null and visual.mesh is ArrayMesh, "Jib is a lightweight ArrayMesh component under the boat visual root")
 	_expect(visual != null and visual.get_script().resource_path.ends_with("headsail_triangle_visual.gd"), "Jib visual has its independent low-cost triangle controller")
-	_expect(jib_controls != null and tabs != null and tabs.get_tab_count() == 7, "headsail controls stay in the sail tab alongside underwater inspection")
+	_expect(jib_controls != null and tabs != null and tabs.get_tab_count() == 8, "headsail controls stay in the sail tab alongside underwater inspection and engine diagnostics")
 	_expect(absf(float(profile.get("headsail_area_m2")) - 5.16) < 0.001, "Jib nominal area comes from the vessel Resource")
 	var jib_key := InputEventKey.new()
 	jib_key.physical_keycode = KEY_J

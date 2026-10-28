@@ -43,6 +43,13 @@ var _headsail_target_value_label: Label
 var _headsail_metrics_label: Label
 var _rudder_target_slider: HSlider
 var _rudder_target_value_label: Label
+var _engine_debug_label: Label
+var _engine_button: Button
+var _engine_gear_option: OptionButton
+var _engine_throttle_slider: HSlider
+var _engine_fuel_spin: SpinBox
+var _engine_sail_force_toggle: CheckButton
+var _engine_feedback_label: Label
 var _hydrodynamics_metrics_label: Label
 var _wind_test_status_label: Label
 var _wind_test_buttons: Array[Button] = []
@@ -308,6 +315,43 @@ func _build_panel() -> void:
 	sail_page.add_child(_hydrodynamics_metrics_label)
 
 	var underwater_page := _new_scroll_page(tabs, "水下结构检查")
+	var engine_page := _new_scroll_page(tabs, "辅助发动机")
+	engine_page.add_child(_section_title("Nordic 28 · 15 hp 船内柴油机测试"))
+	_engine_debug_label = _make_note("发动机状态读取中。")
+	_engine_debug_label.name = "AuxiliaryEngineDiagnostics"
+	engine_page.add_child(_engine_debug_label)
+	_engine_button = _make_button("启动 / 关闭发动机", _toggle_lab_engine)
+	engine_page.add_child(_engine_button)
+	engine_page.add_child(_section_title("变速箱 · 仅低油门可换档"))
+	_engine_gear_option = OptionButton.new()
+	_engine_gear_option.add_item("倒车", AuxiliaryMarineEngine.Gear.REVERSE)
+	_engine_gear_option.add_item("空挡", AuxiliaryMarineEngine.Gear.NEUTRAL)
+	_engine_gear_option.add_item("前进", AuxiliaryMarineEngine.Gear.FORWARD)
+	_engine_gear_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_engine_gear_option.item_selected.connect(_on_lab_engine_gear_selected)
+	engine_page.add_child(_engine_gear_option)
+	engine_page.add_child(_section_title("连续油门 · 目标 0–100%"))
+	_engine_throttle_slider = _make_wave_slider(0.0, 1.0, 0.01, 0.0)
+	_engine_throttle_slider.name = "AuxiliaryEngineThrottle"
+	_engine_throttle_slider.value_changed.connect(_on_lab_engine_throttle_changed)
+	engine_page.add_child(_engine_throttle_slider)
+	engine_page.add_child(_section_title("测试燃油量 · 仅实验室，不是正式加油入口"))
+	_engine_fuel_spin = SpinBox.new()
+	_engine_fuel_spin.min_value = 0.0
+	_engine_fuel_spin.max_value = 40.0
+	_engine_fuel_spin.step = 0.5
+	_engine_fuel_spin.value = 40.0
+	_engine_fuel_spin.value_changed.connect(_on_lab_engine_fuel_changed)
+	engine_page.add_child(_engine_fuel_spin)
+	_engine_sail_force_toggle = CheckButton.new()
+	_engine_sail_force_toggle.name = "LabSailForcesEnabled"
+	_engine_sail_force_toggle.text = "同时施加风帆气动力"
+	_engine_sail_force_toggle.button_pressed = true
+	_engine_sail_force_toggle.toggled.connect(_on_lab_engine_sail_force_toggled)
+	engine_page.add_child(_engine_sail_force_toggle)
+	_engine_feedback_label = _make_note("W/S 缓慢调整油门；Y 启动/关闭；U 换档。可用“无风”测试环境对比纯机动。测试燃油量不影响 Main 船舶实例。")
+	engine_page.add_child(_engine_feedback_label)
+	engine_page.add_child(_make_note("推力以额定功率 × 推进效率 ÷ 相对船速估算，并受系数配置的系柱推力上限约束。引擎关闭时无主动推力；风帆仍由原物理模块处理。"))
 	underwater_page.add_child(_section_title("海面显示 · 仅控制可见水面 Mesh"))
 	_water_display_option = OptionButton.new()
 	_water_display_option.add_item("正常海面")
@@ -447,6 +491,7 @@ func _refresh_metrics() -> void:
 	_refresh_headsail_metrics(data)
 	_refresh_hydrodynamics_metrics(data)
 	_refresh_turn_diagnostics(data)
+	_refresh_auxiliary_engine_metrics(data)
 	if _camera_mode_label != null:
 		var camera_label := str(_lab_root.call("get_camera_mode_label")) if _lab_root != null and _lab_root.has_method("get_camera_mode_label") else "未知"
 		_camera_mode_label.text = "摄像机：%s · C 循环切换，Delete/Backspace 重载整个 SailboatLab" % camera_label
@@ -736,6 +781,83 @@ func _refresh_headsail_metrics(data: Dictionary) -> void:
 		int(data.get("headsail_aero_calculation_p95_usec", 0)),
 		int(data.get("wind_query_count_per_tick", 0)), int(data.get("wave_query_count_per_tick", 0)),
 	]
+
+
+func _refresh_auxiliary_engine_metrics(data: Dictionary) -> void:
+	if _engine_debug_label == null:
+		return
+	var engine: Dictionary = data.get("auxiliary_engine", {})
+	if not bool(engine.get("available", false)):
+		_engine_debug_label.text = "本场景未配置辅助发动机。"
+		return
+	var tank: Dictionary = engine.get("tank", {})
+	var runtime_text := "%.1f h（按当前油耗不变估算）" % float(engine.get("remaining_runtime_h", 0.0)) if bool(engine.get("runtime_estimate_valid", false)) else "—（发动机未耗油）"
+	var local_force: Vector3 = data.get("engine_force_local_n", Vector3.ZERO)
+	var main_force: Vector3 = data.get("sail_net_force_local_n", Vector3.ZERO)
+	var jib_force: Vector3 = data.get("headsail_net_force_local_n", Vector3.ZERO)
+	_engine_debug_label.text = (
+		"状态：%s · 档位：%s · 油门目标/实际 %.0f%% / %.0f%% · 额定 %.0f hp\n"
+		+ "发动机纵向推力：%+.0f N · 本步发动机计算 %d μs\n"
+		+ "%s：%.1f / %.1f L（%.0f%%）· 当前油耗 %.2f L/h\n"
+		+ "剩余运行时间：%s\n"
+		+ "船速 %.2f kn · 纵向 %.2f m/s · 主帆/Jib 计算纵向力 %.0f / %.0f N · 帆力实际%s"
+	) % [
+		str(engine.get("state_name", "关闭")), str(engine.get("gear_name", "空挡")),
+		float(engine.get("target_throttle", 0.0)) * 100.0, float(engine.get("actual_throttle", 0.0)) * 100.0,
+		float(engine.get("rated_power_hp", 0.0)), float(engine.get("thrust_forward_axis_n", 0.0)),
+		int(data.get("engine_calculation_usec", 0)), str(tank.get("fuel_type", "柴油")),
+		float(tank.get("remaining_l", 0.0)), float(tank.get("capacity_l", 0.0)),
+		float(tank.get("fraction", 0.0)) * 100.0, float(engine.get("consumption_lph", 0.0)), runtime_text,
+		float(data.get("linear_speed_mps", 0.0)) * 1.9438444924406,
+		float(data.get("longitudinal_velocity_mps", 0.0)), -main_force.z, -jib_force.z,
+		"开启" if bool(data.get("effective_sail_forces_enabled", true)) else "关闭",
+	]
+	if _engine_button != null:
+		_engine_button.text = "关闭发动机" if bool(engine.get("running", false)) else "启动发动机"
+	if _engine_throttle_slider != null:
+		_engine_throttle_slider.set_value_no_signal(float(engine.get("target_throttle", 0.0)))
+	if _engine_fuel_spin != null:
+		_engine_fuel_spin.max_value = float(tank.get("capacity_l", 40.0))
+		_engine_fuel_spin.set_value_no_signal(float(tank.get("remaining_l", 0.0)))
+	if _engine_gear_option != null:
+		for index in range(_engine_gear_option.item_count):
+			if _engine_gear_option.get_item_id(index) == int(engine.get("gear", AuxiliaryMarineEngine.Gear.NEUTRAL)):
+				_engine_gear_option.select(index)
+				break
+	if _engine_sail_force_toggle != null:
+		_engine_sail_force_toggle.set_pressed_no_signal(bool(data.get("effective_sail_forces_enabled", true)))
+
+
+func _toggle_lab_engine() -> void:
+	if _boat != null and _boat.has_method("toggle_auxiliary_engine"):
+		_boat.call("toggle_auxiliary_engine")
+	_refresh_metrics()
+
+
+func _on_lab_engine_gear_selected(index: int) -> void:
+	if _boat == null or not _boat.has_method("set_auxiliary_engine_gear"):
+		return
+	var selected_gear := _engine_gear_option.get_item_id(index)
+	if not bool(_boat.call("set_auxiliary_engine_gear", selected_gear)) and _engine_feedback_label != null:
+		_engine_feedback_label.text = "换档被拒绝：先将油门降到 10% 以下，再选择前进/空挡/倒车。"
+	_refresh_metrics()
+
+
+func _on_lab_engine_throttle_changed(value: float) -> void:
+	if _boat != null and _boat.has_method("set_auxiliary_engine_target_throttle"):
+		_boat.call("set_auxiliary_engine_target_throttle", value)
+
+
+func _on_lab_engine_fuel_changed(value: float) -> void:
+	if _boat != null and _boat.has_method("set_auxiliary_fuel_for_lab_test"):
+		_boat.call("set_auxiliary_fuel_for_lab_test", value)
+	_refresh_metrics()
+
+
+func _on_lab_engine_sail_force_toggled(enabled: bool) -> void:
+	if _boat != null and _boat.has_method("set_sail_forces_enabled_for_lab_test"):
+		_boat.call("set_sail_forces_enabled_for_lab_test", enabled)
+	_refresh_metrics()
 
 
 func _refresh_hydrodynamics_metrics(data: Dictionary) -> void:

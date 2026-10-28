@@ -135,6 +135,13 @@ var _sailing_detail_label: Label
 var _sailing_control_hint_label: Label
 var _sailing_auto_toggle: CheckButton
 var _headsail_toggle: CheckButton
+var _aux_engine_status_label: Label
+var _aux_engine_fuel_label: Label
+var _aux_engine_panel: VBoxContainer
+var _aux_engine_toggle_button: Button
+var _aux_engine_gear_option: OptionButton
+var _aux_engine_throttle_slider: HSlider
+var _aux_engine_feedback_label: Label
 var _sailing_navigation_instrument: Control
 var _compass_widget: Control
 var _sailing_refresh_elapsed := 0.0
@@ -364,6 +371,53 @@ func _build_sailing_panel() -> void:
 	_headsail_toggle.custom_minimum_size.y = 40.0
 	_headsail_toggle.toggled.connect(_on_headsail_toggled)
 	layout.add_child(_headsail_toggle)
+	_aux_engine_panel = VBoxContainer.new()
+	_aux_engine_panel.name = "AuxiliaryEnginePanel"
+	_aux_engine_panel.add_theme_constant_override("separation", 5)
+	_aux_engine_panel.add_child(HSeparator.new())
+	var engine_title := _make_sailing_label("辅助柴油机", 15, Color(0.91, 0.96, 0.92))
+	_aux_engine_panel.add_child(engine_title)
+	_aux_engine_status_label = _make_sailing_label("发动机：关闭 · 空挡 · 油门 0%", 14, Color(0.86, 0.92, 0.89))
+	_aux_engine_status_label.name = "AuxiliaryEngineStatus"
+	_aux_engine_panel.add_child(_aux_engine_status_label)
+	_aux_engine_fuel_label = _make_sailing_label("柴油：40 / 40 L · 当前油耗 0.00 L/h", 13, Color(0.72, 0.84, 0.81))
+	_aux_engine_fuel_label.name = "AuxiliaryEngineFuel"
+	_aux_engine_panel.add_child(_aux_engine_fuel_label)
+	var engine_controls := HBoxContainer.new()
+	engine_controls.add_theme_constant_override("separation", 8)
+	_aux_engine_toggle_button = Button.new()
+	_aux_engine_toggle_button.name = "AuxiliaryEngineToggle"
+	_aux_engine_toggle_button.text = "启动发动机"
+	_aux_engine_toggle_button.custom_minimum_size = Vector2(112.0, 38.0)
+	_aux_engine_toggle_button.pressed.connect(_on_aux_engine_toggle_pressed)
+	engine_controls.add_child(_aux_engine_toggle_button)
+	_aux_engine_gear_option = OptionButton.new()
+	_aux_engine_gear_option.name = "AuxiliaryEngineGear"
+	_aux_engine_gear_option.add_item("倒车", -1)
+	_aux_engine_gear_option.add_item("空挡", 0)
+	_aux_engine_gear_option.add_item("前进", 1)
+	_aux_engine_gear_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_aux_engine_gear_option.item_selected.connect(_on_aux_engine_gear_selected)
+	engine_controls.add_child(_aux_engine_gear_option)
+	_aux_engine_panel.add_child(engine_controls)
+	var throttle_row := HBoxContainer.new()
+	var throttle_label := _make_sailing_label("油门", 13, Color(0.76, 0.85, 0.82))
+	throttle_label.custom_minimum_size.x = 42.0
+	throttle_row.add_child(throttle_label)
+	_aux_engine_throttle_slider = HSlider.new()
+	_aux_engine_throttle_slider.name = "AuxiliaryEngineThrottle"
+	_aux_engine_throttle_slider.min_value = 0.0
+	_aux_engine_throttle_slider.max_value = 1.0
+	_aux_engine_throttle_slider.step = 0.01
+	_aux_engine_throttle_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_aux_engine_throttle_slider.value_changed.connect(_on_aux_engine_throttle_changed)
+	throttle_row.add_child(_aux_engine_throttle_slider)
+	_aux_engine_panel.add_child(throttle_row)
+	_aux_engine_feedback_label = _make_sailing_label("Y 启停 · U 换档 · W/S 调节油门；换档前先将油门降至 10% 以下。", 12, Color(0.65, 0.79, 0.78))
+	_aux_engine_feedback_label.name = "AuxiliaryEngineFeedback"
+	_aux_engine_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_aux_engine_panel.add_child(_aux_engine_feedback_label)
+	layout.add_child(_aux_engine_panel)
 	_sailing_control_hint_label = _make_sailing_label("", 12, Color(0.66, 0.79, 0.8))
 	_sailing_control_hint_label.name = "SailingControlHints"
 	_sailing_control_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -569,6 +623,30 @@ func _update_sailing_panel() -> void:
 	if body == null or not body.has_method("get_navigation_snapshot"):
 		return
 	var snapshot: Dictionary = body.call("get_navigation_snapshot")
+	var engine: Dictionary = snapshot.get("auxiliary_engine", {"available": false})
+	var engine_available := bool(engine.get("available", false))
+	if _aux_engine_panel != null:
+		_aux_engine_panel.visible = engine_available
+	if _aux_engine_status_label != null:
+		if engine_available:
+			_aux_engine_status_label.text = "发动机：%s · %s档 · 油门目标/实际 %.0f%% / %.0f%%" % [
+				str(engine.get("state_name", "关闭")), str(engine.get("gear_name", "空挡")),
+				float(engine.get("target_throttle", 0.0)) * 100.0,
+				float(engine.get("actual_throttle", 0.0)) * 100.0,
+			]
+			var tank: Dictionary = engine.get("tank", {})
+			var remaining := float(tank.get("remaining_l", 0.0))
+			var capacity := float(tank.get("capacity_l", 0.0))
+			var consumption := float(engine.get("consumption_lph", 0.0))
+			var runtime_text := " · 约 %.1f h" % float(engine.get("remaining_runtime_h", 0.0)) if bool(engine.get("runtime_estimate_valid", false)) else ""
+			var fuel_warning := " · 燃油偏低" if bool(tank.get("low_fuel_warning", false)) else " · 燃油耗尽" if bool(tank.get("fuel_depleted", false)) else ""
+			_aux_engine_fuel_label.text = "柴油 %.1f / %.1f L（%.0f%%）· %.2f L/h%s%s" % [remaining, capacity, float(tank.get("fraction", 0.0)) * 100.0, consumption, runtime_text, fuel_warning]
+			_aux_engine_toggle_button.text = "关闭发动机" if bool(engine.get("running", false)) else "启动发动机"
+			_aux_engine_throttle_slider.set_value_no_signal(float(engine.get("target_throttle", 0.0)))
+			for gear_index in range(_aux_engine_gear_option.item_count):
+				if _aux_engine_gear_option.get_item_id(gear_index) == int(engine.get("gear", 0)):
+					_aux_engine_gear_option.select(gear_index)
+					break
 	if _sailing_navigation_instrument != null:
 		_sailing_navigation_instrument.call("set_snapshot", snapshot)
 	var auto_enabled := bool(snapshot.get("auto_sail_trim_enabled", false))
@@ -584,6 +662,8 @@ func _update_sailing_panel() -> void:
 
 
 func _refresh_sailing_navigation_text(snapshot: Dictionary) -> void:
+	var engine_state: Dictionary = snapshot.get("auxiliary_engine", {"available": false})
+	var engine_available := bool(engine_state.get("available", false))
 	var heading := fposmod(float(snapshot.get("heading_degrees", 0.0)), 360.0)
 	var speed_knots := float(snapshot.get("sog_knots", 0.0))
 	_sailing_speed_label.text = "航速 %.1f 节" % speed_knots
@@ -645,7 +725,7 @@ func _refresh_sailing_navigation_text(snapshot: Dictionary) -> void:
 		NAVIGATION_HUD_FORMAT.action_key_hint("sailboat_headsail_trim_ease"),
 		NAVIGATION_HUD_FORMAT.action_key_hint("sailboat_headsail_trim_out"),
 	]
-	_sailing_control_hint_label.text = hint_text
+	_sailing_control_hint_label.text = hint_text + (" · 柴油机 Y 启停 / U 换档 / W-S 油门" if engine_available else "")
 
 func _on_vessel_mode_changed(sailboat_active: bool) -> void:
 	if _boat_audio_controller != null and _boat_audio_controller.has_method("bind_vessel"):
@@ -674,6 +754,30 @@ func _on_headsail_toggled(enabled: bool) -> void:
 	var body := _controller.get_sailing_body() if _controller != null else null
 	if body != null and body.has_method("set_headsail_enabled"):
 		body.call("set_headsail_enabled", enabled)
+
+
+func _on_aux_engine_toggle_pressed() -> void:
+	var body := _controller.get_sailing_body() if _controller != null else null
+	if body != null and body.has_method("toggle_auxiliary_engine"):
+		body.call("toggle_auxiliary_engine")
+	_update_sailing_panel()
+
+
+func _on_aux_engine_gear_selected(index: int) -> void:
+	var body := _controller.get_sailing_body() if _controller != null else null
+	if body == null or not body.has_method("set_auxiliary_engine_gear"):
+		return
+	var gear_value := _aux_engine_gear_option.get_item_id(index)
+	var accepted := bool(body.call("set_auxiliary_engine_gear", gear_value))
+	if _aux_engine_feedback_label != null:
+		_aux_engine_feedback_label.text = "档位已切换。" if accepted else "换档被拒绝：先将油门降至 10% 以下。"
+	_update_sailing_panel()
+
+
+func _on_aux_engine_throttle_changed(value: float) -> void:
+	var body := _controller.get_sailing_body() if _controller != null else null
+	if body != null and body.has_method("set_auxiliary_engine_target_throttle"):
+		body.call("set_auxiliary_engine_target_throttle", value)
 
 
 func _adjust_main_trim(direction: int) -> void:

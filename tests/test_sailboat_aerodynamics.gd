@@ -166,7 +166,7 @@ func _test_lab_integration() -> void:
 		_expect(absf(mast_mesh.height - 6.50) < 0.001, "Nordic 28 V2 mast is 6.50 m tall")
 	if boom != null and boom.mesh is CylinderMesh:
 		_expect(absf((boom.mesh as CylinderMesh).height - 3.30) < 0.001, "Nordic 28 V2 Boom is 3.30 m and stops before the stern helm position")
-	_expect(tabs != null and tabs.get_tab_count() == 7, "underwater inspection is added while sail telemetry stays in the shared debug panel")
+	_expect(tabs != null and tabs.get_tab_count() == 8, "underwater inspection and auxiliary engine diagnostics share the sailboat debug panel")
 	if boat == null or field == null:
 		lab.queue_free()
 		await process_frame

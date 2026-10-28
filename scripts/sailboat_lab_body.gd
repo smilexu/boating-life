@@ -55,6 +55,7 @@ static func world_arm_from_local_point(point_local: Vector3, center_of_mass_loca
 @export_node_path("Node3D") var rudder_visual_pivot_path: NodePath = ^"VisualRoot/RudderPivot"
 @export_node_path("Node3D") var rudder_angle_marker_path: NodePath = ^"VisualRoot/RudderAngleMarker"
 @export_node_path("MeshInstance3D") var headsail_visual_path: NodePath = ^"VisualRoot/HeadsailVisual"
+@export_node_path("Node") var auxiliary_engine_path: NodePath = ^"AuxiliaryMarineEngine"
 @export var dynamic_waves_enabled := true
 @export var auto_reset_on_ready := true
 @export var keyboard_controls_enabled := true
@@ -70,6 +71,7 @@ var _sail_visual_pivot: Node3D
 var _rudder_visual_pivot: Node3D
 var _rudder_angle_marker: Node3D
 var _headsail_visual: MeshInstance3D
+var _auxiliary_engine: AuxiliaryMarineEngine
 var _gravity_mps2 := 9.8
 var target_sail_angle_rad := 0.0
 var actual_sail_angle_rad := 0.0
@@ -81,6 +83,7 @@ var _auto_trim_applying_targets := false
 var _last_auto_trim_result: Dictionary = {}
 var _last_auto_trim_calculation_usec := 0
 var _headsail_enabled := true
+var _lab_sail_forces_enabled := true
 var target_rudder_angle_rad := 0.0
 var actual_rudder_angle_rad := 0.0
 var _rudder_key_a_pressed := false
@@ -210,6 +213,10 @@ var _last_keel_yaw_torque_nm := 0.0
 var _last_rudder_yaw_torque_nm := 0.0
 var _last_total_horizontal_force_local_n := Vector3.ZERO
 var _last_total_external_yaw_torque_nm := 0.0
+var _last_engine_force_local_n := Vector3.ZERO
+var _last_engine_thrust_forward_axis_n := 0.0
+var _last_engine_yaw_torque_nm := 0.0
+var _last_engine_calculation_usec := 0
 var _last_keel_calculation_usec := 0
 var _last_rudder_calculation_usec := 0
 var _last_hull_drag_calculation_usec := 0
@@ -276,6 +283,7 @@ func _ready() -> void:
 	_rudder_visual_pivot = get_node_or_null(rudder_visual_pivot_path) as Node3D
 	_rudder_angle_marker = get_node_or_null(rudder_angle_marker_path) as Node3D
 	_headsail_visual = get_node_or_null(headsail_visual_path) as MeshInstance3D
+	_auxiliary_engine = get_node_or_null(auxiliary_engine_path) as AuxiliaryMarineEngine
 	_sail_area_m2 = float(profile.get("main_sail_area_m2"))
 	_sail_pivot_local_m = profile.get("main_sail_pivot_local_m")
 	_sail_pressure_center_from_pivot_m = profile.get("main_sail_pressure_center_from_pivot_m")
@@ -360,6 +368,7 @@ func _ready() -> void:
 
 
 func _process(_delta: float) -> void:
+	_update_auxiliary_engine_keyboard_input(_delta)
 	if _sail_visual_pivot != null:
 		# The pivot only mirrors the physics-controlled angle; it does not drive it.
 		_sail_visual_pivot.rotation.y = actual_sail_angle_rad
@@ -386,6 +395,8 @@ func _input(event: InputEvent) -> void:
 	var trim_headsail_in := _event_matches_action(key_event, "sailboat_headsail_trim_ease")
 	var trim_headsail_out := _event_matches_action(key_event, "sailboat_headsail_trim_out")
 	var toggle_auto := _event_matches_action(key_event, "sailboat_toggle_auto_trim")
+	var toggle_engine := _event_matches_action(key_event, "sailboat_engine_toggle")
+	var cycle_engine_gear := _event_matches_action(key_event, "sailboat_engine_gear_cycle")
 	if turn_left:
 		_rudder_key_a_pressed = key_event.pressed
 		_update_keyboard_rudder_target()
@@ -402,12 +413,27 @@ func _input(event: InputEvent) -> void:
 		set_target_sail_angle(target_sail_angle_rad + deg_to_rad(10.0))
 	elif key_event.pressed and toggle_auto:
 		set_auto_sail_trim_enabled(not auto_sail_trim_enabled)
-	if key_event.pressed and (turn_left or turn_right or trim_headsail_in or trim_headsail_out or trim_main_in or trim_main_out or toggle_auto):
+	elif key_event.pressed and toggle_engine and _auxiliary_engine != null:
+		_auxiliary_engine.call("toggle_engine")
+	elif key_event.pressed and cycle_engine_gear and _auxiliary_engine != null:
+		_auxiliary_engine.call("cycle_gear")
+	if key_event.pressed and (turn_left or turn_right or trim_headsail_in or trim_headsail_out or trim_main_in or trim_main_out or toggle_auto or toggle_engine or cycle_engine_gear):
 		get_viewport().set_input_as_handled()
 
 
 func _event_matches_action(event: InputEvent, action_name: StringName) -> bool:
 	return InputMap.has_action(action_name) and InputMap.event_is_action(event, action_name)
+
+
+func _update_auxiliary_engine_keyboard_input(delta: float) -> void:
+	if not keyboard_controls_enabled or _auxiliary_engine == null:
+		return
+	var focused_control := get_viewport().gui_get_focus_owner()
+	if is_instance_valid(focused_control):
+		return
+	var throttle_axis := Input.get_axis("boat_brake", "boat_accelerate")
+	if absf(throttle_axis) > 0.001:
+		_auxiliary_engine.adjust_target_throttle(throttle_axis * maxf(delta, 0.0) * 0.35)
 
 
 func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
@@ -492,6 +518,26 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_last_longitudinal_velocity_mps = -local_velocity.z
 	_last_lateral_velocity_mps = local_velocity.x
 	_last_yaw_rate_rad_s = (body_basis.inverse() * angular_velocity).y
+	var engine_step_start_usec := Time.get_ticks_usec()
+	var engine_result: Dictionary = {}
+	var engine_force_local := Vector3.ZERO
+	var engine_thrust_forward_axis_n := 0.0
+	var engine_yaw_torque_nm := 0.0
+	if _auxiliary_engine != null:
+		engine_result = _auxiliary_engine.simulate_physics_step(state.step, _last_longitudinal_velocity_mps)
+		engine_force_local = engine_result.get("force_local_n", Vector3.ZERO)
+		engine_thrust_forward_axis_n = float(engine_result.get("thrust_forward_axis_n", 0.0))
+		var engine_point_local: Vector3 = engine_result.get("application_point_local_m", Vector3(0.0, center_of_mass.y, 2.65))
+		# Keep the propeller thrust line level with the body's effective COM to
+		# avoid adding an artificial pitch torque. The aft Z offset remains real.
+		engine_point_local.y = center_of_mass.y
+		engine_yaw_torque_nm = (engine_point_local - center_of_mass).cross(engine_force_local).y
+		if engine_force_local.length_squared() > 0.0:
+			state.apply_force(body_basis * engine_force_local, body_basis * engine_point_local)
+	_last_engine_calculation_usec = Time.get_ticks_usec() - engine_step_start_usec
+	_last_engine_force_local_n = engine_force_local
+	_last_engine_thrust_forward_axis_n = engine_thrust_forward_axis_n
+	_last_engine_yaw_torque_nm = engine_yaw_torque_nm
 	var sail_pivot_rotation := Basis(Vector3.UP, actual_sail_angle_rad)
 	var sail_pressure_center_local := (
 		_sail_pivot_local_m
@@ -578,7 +624,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	var sail_net_local: Vector3 = sail_result.get("net_force_local_n", Vector3.ZERO)
 	var sail_net_world := body_basis * sail_net_local
 	var sail_yaw_torque := (sail_pressure_center_local - center_of_mass).cross(sail_net_local).y
-	if sail_net_world.length_squared() > 0.0:
+	if _lab_sail_forces_enabled and sail_net_world.length_squared() > 0.0:
 		# Offset is relative to the rigid-body origin; the engine solves torque
 		# about the actual centre of mass, including the profile's COM offset.
 		state.apply_force(sail_net_world, sail_center_offset_world)
@@ -589,7 +635,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	var headsail_force_offset_world := body_basis * headsail_pressure_center_local
 	var headsail_torque_local := (headsail_pressure_center_local - center_of_mass).cross(headsail_net_local)
 	var headsail_yaw_torque := headsail_torque_local.y
-	if _headsail_enabled and headsail_net_world.length_squared() > 0.0:
+	if _lab_sail_forces_enabled and _headsail_enabled and headsail_net_world.length_squared() > 0.0:
 		state.apply_force(headsail_net_world, headsail_force_offset_world)
 	var local_velocity_through_water := body_basis.inverse() * (linear_velocity - _water_current_world_mps)
 	var hull_drag_start_usec := Time.get_ticks_usec()
@@ -662,8 +708,12 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_last_headsail_yaw_torque_nm = headsail_yaw_torque
 	_last_keel_yaw_torque_nm = keel_yaw_torque
 	_last_rudder_yaw_torque_nm = rudder_yaw_torque
-	_last_total_horizontal_force_local_n = sail_net_local + headsail_net_local + hull_drag_local + keel_force_local + rudder_force_local
-	_last_total_external_yaw_torque_nm = sail_yaw_torque + headsail_yaw_torque + keel_yaw_torque + rudder_yaw_torque
+	var applied_sail_force_local := sail_net_local if _lab_sail_forces_enabled else Vector3.ZERO
+	var applied_headsail_force_local := headsail_net_local if _lab_sail_forces_enabled and _headsail_enabled else Vector3.ZERO
+	var applied_sail_yaw_torque := sail_yaw_torque if _lab_sail_forces_enabled else 0.0
+	var applied_headsail_yaw_torque := headsail_yaw_torque if _lab_sail_forces_enabled and _headsail_enabled else 0.0
+	_last_total_horizontal_force_local_n = applied_sail_force_local + applied_headsail_force_local + hull_drag_local + keel_force_local + rudder_force_local + engine_force_local
+	_last_total_external_yaw_torque_nm = applied_sail_yaw_torque + applied_headsail_yaw_torque + keel_yaw_torque + rudder_yaw_torque + engine_yaw_torque_nm
 	_last_true_wind_world_mps = true_wind_world
 	_last_true_wind_from_degrees = true_wind_from_degrees
 	_last_apparent_wind_world_mps = apparent.get("apparent_velocity_world_mps", Vector3.ZERO)
@@ -798,6 +848,12 @@ func get_debug_snapshot() -> Dictionary:
 		wind_override_state = str(_wind_field.get_debug_override_state())
 	return {
 		"mass_kg": mass,
+		"auxiliary_engine": get_auxiliary_engine_snapshot(),
+		"engine_force_local_n": _last_engine_force_local_n,
+		"engine_thrust_forward_axis_n": _last_engine_thrust_forward_axis_n,
+		"engine_yaw_torque_nm": _last_engine_yaw_torque_nm,
+		"engine_calculation_usec": _last_engine_calculation_usec,
+		"effective_sail_forces_enabled": _lab_sail_forces_enabled,
 		"linear_velocity_mps": linear_velocity,
 		"linear_speed_mps": linear_velocity.length(),
 		"angular_velocity_rad_s": angular_velocity,
@@ -1067,6 +1123,7 @@ func get_navigation_snapshot() -> Dictionary:
 		"keel_side_slip_angle_rad": float(_last_keel_result.get("side_slip_angle_rad", 0.0)),
 		"wind_query_count_per_tick": _last_wind_query_count,
 		"wave_query_count_per_tick": _last_wave_query_count,
+		"auxiliary_engine": get_auxiliary_engine_snapshot(),
 	}
 
 
@@ -1117,6 +1174,8 @@ func set_vessel_active(active: bool) -> void:
 	else:
 		keyboard_controls_enabled = false
 		clear_rudder_input()
+		if _auxiliary_engine != null:
+			_auxiliary_engine.stop_for_vessel_switch()
 
 
 func set_keyboard_controls_enabled(enabled: bool) -> void:
@@ -1125,6 +1184,53 @@ func set_keyboard_controls_enabled(enabled: bool) -> void:
 		_rudder_key_a_pressed = false
 		_rudder_key_d_pressed = false
 		clear_rudder_input()
+
+
+func has_auxiliary_engine() -> bool:
+	return _auxiliary_engine != null and _auxiliary_engine.profile != null
+
+
+func get_auxiliary_engine_snapshot() -> Dictionary:
+	if _auxiliary_engine == null:
+		return {"available": false}
+	return _auxiliary_engine.get_snapshot(_last_longitudinal_velocity_mps)
+
+
+func toggle_auxiliary_engine() -> bool:
+	return bool(_auxiliary_engine.call("toggle_engine")) if _auxiliary_engine != null else false
+
+
+func start_auxiliary_engine() -> bool:
+	return bool(_auxiliary_engine.call("start_engine")) if _auxiliary_engine != null else false
+
+
+func stop_auxiliary_engine() -> void:
+	if _auxiliary_engine != null:
+		_auxiliary_engine.call("stop_engine")
+
+
+func set_auxiliary_engine_gear(gear_value: int) -> bool:
+	return bool(_auxiliary_engine.call("set_gear", gear_value)) if _auxiliary_engine != null else false
+
+
+func set_auxiliary_engine_target_throttle(throttle: float) -> void:
+	if _auxiliary_engine != null:
+		_auxiliary_engine.call("set_target_throttle", throttle)
+
+
+func set_sail_forces_enabled_for_lab_test(enabled: bool) -> void:
+	## Test-panel override only; normal Main instances keep this enabled.
+	_lab_sail_forces_enabled = enabled
+
+
+func reset_auxiliary_engine_for_lab_test(fuel_remaining_l: float = -1.0) -> void:
+	if _auxiliary_engine != null:
+		_auxiliary_engine.reset_for_lab_test(fuel_remaining_l)
+
+
+func set_auxiliary_fuel_for_lab_test(fuel_remaining_l: float) -> void:
+	if _auxiliary_engine != null:
+		_auxiliary_engine.set_fuel_for_lab_test(fuel_remaining_l)
 
 
 func get_audio_motion_state() -> Dictionary:
@@ -1151,6 +1257,8 @@ func _reset_controls_for_main_spawn() -> void:
 	_rudder_key_a_pressed = false
 	_rudder_key_d_pressed = false
 	_rudder_keyboard_active = false
+	if _auxiliary_engine != null:
+		_auxiliary_engine.stop_for_vessel_switch()
 	if _headsail_visual != null:
 		_headsail_visual.visible = _headsail_enabled
 

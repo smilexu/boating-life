@@ -130,7 +130,7 @@ func _test_lab_integration() -> void:
 	var panel := lab.get_node("DebugPanel")
 	var toggle := panel.find_child("AutoSailTrimToggle", true, false) as CheckButton
 	var tabs := panel.find_child("SailboatDebugTabs", true, false) as TabContainer
-	_expect(toggle != null and tabs != null and tabs.get_tab_count() == 7, "AUTO stays in the sail tab alongside the new underwater inspection tab")
+	_expect(toggle != null and tabs != null and tabs.get_tab_count() == 8, "AUTO stays in the sail tab alongside underwater inspection and engine diagnostics")
 	if boat.has_method("set_auto_sail_trim_enabled"):
 		boat.call("set_dynamic_waves_enabled", false)
 		boat.call("set_lab_test_wind", 8.0, 270.0)

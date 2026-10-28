@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="FuelTankProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/fuel_tank_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+fuel_type = 0
+capacity_l = 40.0
+initial_fuel_l = 40.0
+low_fuel_warning_fraction = 0.2

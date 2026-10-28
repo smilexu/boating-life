@@ -118,7 +118,17 @@ func supports_sail_trim() -> bool:
 
 
 func supports_engine_throttle() -> bool:
-	return has_engine()
+	return has_engine() or supports_auxiliary_engine()
+
+
+func supports_auxiliary_engine() -> bool:
+	return _sailboat_active and _sailboat_body != null \
+		and _sailboat_body.has_method("has_auxiliary_engine") \
+		and bool(_sailboat_body.call("has_auxiliary_engine"))
+
+
+func supports_fuel_system() -> bool:
+	return supports_auxiliary_engine()
 
 
 func supports_autopilot() -> bool:
