@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="PolarP22ExperimentProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/polar_p22_experiment_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+boat_scene_path = "res://scenes/boats/SailingBoat8m.tscn"
+base_main_sail_area_m2 = 10.16025
+base_headsail_area_m2 = 5.16
+total_sail_area_candidates_m2 = PackedFloat32Array(15.32025, 28.0, 30.0, 32.0)
+area_test_wind_speeds_kn = PackedFloat32Array(8.0, 12.0)
+area_test_twa_degrees = PackedFloat32Array(50.0, 70.0, 90.0, 120.0)
+trim_test_wind_speed_kn = 12.0
+trim_test_twa_degrees = PackedFloat32Array(70.0, 90.0, 120.0)
+trim_offsets_degrees = PackedFloat32Array(-10.0, -5.0, 5.0, 10.0)
+fixed_wind_seed = 481516
+fixed_wind_from_degrees = 180.0
+physics_step_seconds = 0.0166666667
+physics_warmup_seconds = 60.0
+stability_window_seconds = 30.0
+stable_sample_seconds = 30.0
+case_timeout_seconds = 300.0

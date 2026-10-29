@@ -1,0 +1,32 @@
+{
+	"errors": [],
+	"runs": [
+		{
+			"artifact_directory": "res://docs/sailing/polar_p22/p22_2026-10-28_17-22-54_476334/runs/smoke/BASE_telemetry_off/polar_2026-10-28_16-22-54_607425",
+			"case_count": 1,
+			"config_hash": "6ec97388fa6a0919e20bf7a2ed156587d09e60630da2e608246d21202231034e",
+			"label": "BASE_telemetry_off",
+			"phase": "smoke",
+			"run_id": "polar_2026-10-28_16-22-54_607425",
+			"status": "批次完成"
+		},
+		{
+			"artifact_directory": "res://docs/sailing/polar_p22/p22_2026-10-28_17-22-54_476334/runs/smoke/BASE_telemetry_on/polar_2026-10-28_16-23-26_835782",
+			"case_count": 1,
+			"config_hash": "d8791b3eb85d5e4b88b02a08151b8dd130a0660973d82ea22b3bf896f5ff3cd1",
+			"label": "BASE_telemetry_on",
+			"phase": "smoke",
+			"run_id": "polar_2026-10-28_16-23-26_835782",
+			"status": "批次完成"
+		},
+		{
+			"artifact_directory": "res://docs/sailing/polar_p22/p22_2026-10-28_17-22-54_476334/runs/smoke/SA30_smoke/polar_2026-10-28_16-23-57_012179",
+			"case_count": 3,
+			"config_hash": "a0cf030064c5a83fee6df9202171ca3e3dd4f8c14ce2d268b8811bdaab1ff373",
+			"label": "SA30_smoke",
+			"phase": "smoke",
+			"run_id": "polar_2026-10-28_16-23-57_012179",
+			"status": "批次完成"
+		}
+	]
+}

@@ -181,6 +181,13 @@ func get_effective_wave_time_seconds() -> float:
 	return _get_effective_wave_phase_time()
 
 
+## Test/lab scene replacement hook. Keeps the same shared phase origin attached
+## to the currently selected test boat without creating another sampler.
+func set_phase_anchor_node(anchor: Node3D) -> void:
+	_phase_anchor = anchor
+	phase_anchor_path = get_path_to(anchor) if is_instance_valid(anchor) else NodePath("")
+
+
 func set_shallow_wave_constraint_options(
 	enabled: bool,
 	full_depth_m: float,

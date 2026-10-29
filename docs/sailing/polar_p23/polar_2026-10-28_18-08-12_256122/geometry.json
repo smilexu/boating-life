@@ -1,0 +1,51 @@
+{
+  "boat_scene_file_path": "res://scenes/boats/SailingBoat8mP23.tscn",
+  "boom_length_m": 4.4,
+  "boom_pivot_local_m": "(0.0, 2.4111, -1.0)",
+  "jib_center_delta_m": 2.38418579101562e-07,
+  "jib_clew_neutral_local_m": "(0.0, 1.6686, 0.366524)",
+  "jib_head_local_m": "(0.0, 7.95, -1.0)",
+  "jib_physics_area_m2": 12.09994,
+  "jib_physics_center_body_local_m": "(0.0, 3.56, -1.394425)",
+  "jib_tack_local_m": "(0.0, 1.9614, -3.5498)",
+  "jib_visual_area_m2": 12.0999393463135,
+  "jib_visual_center_body_local_m": "(0.0, 3.56, -1.394425)",
+  "main_center_delta_m": 0.0,
+  "main_clew_neutral_local_m": "(0.0, 2.4111, 3.4)",
+  "main_head_local_m": "(0.0, 9.6384, -1.0)",
+  "main_physics_area_m2": 15.90006,
+  "main_physics_center_body_local_m": "(0.0, 4.5202, 0.466667)",
+  "main_tack_local_m": "(0.0, 2.4111, -1.0)",
+  "main_visual_area_m2": 15.9000606536865,
+  "main_visual_center_body_local_m": "(0.0, 4.5202, 0.466667)",
+  "mast_base_local_m": "(0.0, 1.3184, -1.0)",
+  "mast_length_m": 8.5,
+  "mast_top_local_m": "(0.0, 9.8184, -1.0)",
+  "physics_profile_path": "res://resources/sailing/nordic28_p23_physics_profile.tres",
+  "total_sail_area_m2": 28.0,
+  "valid": true,
+  "visual_assembly_offset_local_m": "(0.0, -0.3, 0.0)",
+  "visual_profile_path": "res://resources/sailing/nordic28_p23_visual_rig_profile.tres",
+  "visual_alignment_inspection": {
+    "cabin_roof_y_m": 1.51107597351074,
+    "mast_step_embed_measured_m": 0.0299503331405184,
+    "boom_roof_clearance_m": 0.900023937225342,
+    "main_boom_clearance_at_trim_angles_m": {
+      "0": 0.745381060987711,
+      "30": 0.83982652798295,
+      "-30": 0.92202777042985,
+      "60": 0.83982652798295,
+      "-60": 0.91067260876298,
+      "80": 0.83982652798295,
+      "-80": 0.92790288105607
+    },
+    "jib_clew_clearance_at_trim_angles_m": {
+      "0": 0.156882166862488,
+      "45": null,
+      "-45": null,
+      "70": 0.181602001190186,
+      "-70": 0.17662525177002
+    },
+    "jib_null_clearances_meaning": "No hull mesh samples within the visual probe radius at ±45°; this is not evidence of zero clearance or collision."
+  }
+}

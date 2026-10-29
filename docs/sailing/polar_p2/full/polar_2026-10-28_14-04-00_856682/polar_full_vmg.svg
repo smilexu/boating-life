@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="24.0" y="30.0" text-anchor="start" font-family="Arial,sans-serif" font-size="20" fill="#14283a">Nordic 28 · Wind-axis VMG</text>
+<text x="24.0" y="52.0" text-anchor="start" font-family="Arial,sans-serif" font-size="12" fill="#586a79">VMG is projected from mean world velocity onto the true wind-from (upwind) and wind-to (downwind) axes. Gaps remain where no stable result exists.</text>
+<line x1="80.0" y1="90.0" x2="80.0" y2="480.0" stroke="#e7ecef"/>
+<line x1="80.0" y1="480.0" x2="860.0" y2="480.0" stroke="#e7ecef"/>
+<text x="80.0" y="500.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#526474">0</text>
+<text x="68.0" y="484.0" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#526474">-0.6</text>
+<line x1="236.0" y1="90.0" x2="236.0" y2="480.0" stroke="#e7ecef"/>
+<line x1="80.0" y1="402.0" x2="860.0" y2="402.0" stroke="#e7ecef"/>
+<text x="236.0" y="500.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#526474">36</text>
+<text x="68.0" y="406.0" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#526474">0.2</text>
+<line x1="392.0" y1="90.0" x2="392.0" y2="480.0" stroke="#e7ecef"/>
+<line x1="80.0" y1="324.0" x2="860.0" y2="324.0" stroke="#e7ecef"/>
+<text x="392.0" y="500.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#526474">72</text>
+<text x="68.0" y="328.0" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#526474">1.0</text>
+<line x1="548.0" y1="90.0" x2="548.0" y2="480.0" stroke="#e7ecef"/>
+<line x1="80.0" y1="246.0" x2="860.0" y2="246.0" stroke="#e7ecef"/>
+<text x="548.0" y="500.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#526474">108</text>
+<text x="68.0" y="250.0" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#526474">1.9</text>
+<line x1="704.0" y1="90.0" x2="704.0" y2="480.0" stroke="#e7ecef"/>
+<line x1="80.0" y1="168.0" x2="860.0" y2="168.0" stroke="#e7ecef"/>
+<text x="704.0" y="500.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#526474">144</text>
+<text x="68.0" y="172.0" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#526474">2.7</text>
+<line x1="860.0" y1="90.0" x2="860.0" y2="480.0" stroke="#e7ecef"/>
+<line x1="80.0" y1="90.0" x2="860.0" y2="90.0" stroke="#e7ecef"/>
+<text x="860.0" y="500.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#526474">180</text>
+<text x="68.0" y="94.0" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#526474">3.5</text>
+<line x1="80.0" y1="480.0" x2="860.0" y2="480.0" stroke="#364c5c"/>
+<line x1="80.0" y1="90.0" x2="80.0" y2="480.0" stroke="#364c5c"/>
+<text x="470.0" y="536.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" fill="#283d4d">Absolute target TWA (degrees)</text>
+<text transform="translate(20 285.0) rotate(-90)" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" fill="#283d4d">VMG (kn)</text>
+<circle cx="470.0" cy="430.2" r="3.6" fill="#1769aa"/>
+<line x1="88.0" y1="72.0" x2="103.0" y2="72.0" stroke="#1769aa" stroke-width="2"/>
+<text x="107.0" y="76.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">4 kn Upwind</text>
+<polyline points="470.0,413.0 513.3,409.1 556.7,404.6 600.0,400.3 643.3,397.3 686.7,396.2 730.0,396.5 773.3,397.2 816.7,397.0 860.0,395.1" fill="none" stroke="#1769aa" stroke-width="2"/>
+<circle cx="470.0" cy="413.0" r="3.6" fill="#1769aa"/>
+<circle cx="513.3" cy="409.1" r="3.6" fill="#1769aa"/>
+<circle cx="556.7" cy="404.6" r="3.6" fill="#1769aa"/>
+<circle cx="600.0" cy="400.3" r="3.6" fill="#1769aa"/>
+<circle cx="643.3" cy="397.3" r="3.6" fill="#1769aa"/>
+<circle cx="686.7" cy="396.2" r="3.6" fill="#1769aa"/>
+<circle cx="730.0" cy="396.5" r="3.6" fill="#1769aa"/>
+<circle cx="773.3" cy="397.2" r="3.6" fill="#1769aa"/>
+<circle cx="816.7" cy="397.0" r="3.6" fill="#1769aa"/>
+<circle cx="860.0" cy="395.1" r="3.6" fill="#1769aa"/>
+<line x1="244.0" y1="72.0" x2="259.0" y2="72.0" stroke="#1769aa" stroke-width="2"/>
+<text x="263.0" y="76.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">4 kn Downwind</text>
+<polyline points="426.7,426.3 470.0,437.8" fill="none" stroke="#d1495b" stroke-width="2" stroke-dasharray="6 4"/>
+<circle cx="426.7" cy="426.3" r="3.6" fill="#d1495b"/>
+<circle cx="470.0" cy="437.8" r="3.6" fill="#d1495b"/>
+<line x1="400.0" y1="72.0" x2="415.0" y2="72.0" stroke="#d1495b" stroke-width="2"/>
+<text x="419.0" y="76.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">8 kn Upwind</text>
+<polyline points="470.0,405.5 513.3,389.8 556.7,372.6 600.0,356.4 643.3,344.5 686.7,339.1 730.0,339.4 773.3,342.1 816.7,342.4 860.0,337.6" fill="none" stroke="#d1495b" stroke-width="2"/>
+<circle cx="470.0" cy="405.5" r="3.6" fill="#d1495b"/>
+<circle cx="513.3" cy="389.8" r="3.6" fill="#d1495b"/>
+<circle cx="556.7" cy="372.6" r="3.6" fill="#d1495b"/>
+<circle cx="600.0" cy="356.4" r="3.6" fill="#d1495b"/>
+<circle cx="643.3" cy="344.5" r="3.6" fill="#d1495b"/>
+<circle cx="686.7" cy="339.1" r="3.6" fill="#d1495b"/>
+<circle cx="730.0" cy="339.4" r="3.6" fill="#d1495b"/>
+<circle cx="773.3" cy="342.1" r="3.6" fill="#d1495b"/>
+<circle cx="816.7" cy="342.4" r="3.6" fill="#d1495b"/>
+<circle cx="860.0" cy="337.6" r="3.6" fill="#d1495b"/>
+<line x1="556.0" y1="72.0" x2="571.0" y2="72.0" stroke="#d1495b" stroke-width="2"/>
+<text x="575.0" y="76.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">8 kn Downwind</text>
+<polyline points="383.3,409.8 426.7,420.9 470.0,443.7" fill="none" stroke="#2a9d8f" stroke-width="2" stroke-dasharray="6 4"/>
+<circle cx="383.3" cy="409.8" r="3.6" fill="#2a9d8f"/>
+<circle cx="426.7" cy="420.9" r="3.6" fill="#2a9d8f"/>
+<circle cx="470.0" cy="443.7" r="3.6" fill="#2a9d8f"/>
+<line x1="712.0" y1="72.0" x2="727.0" y2="72.0" stroke="#2a9d8f" stroke-width="2"/>
+<text x="731.0" y="76.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">12 kn Upwind</text>
+<polyline points="470.0,399.6 513.3,369.0 556.7,336.4 600.0,305.7 643.3,282.6 686.7,271.1 730.0,270.6 773.3,275.2 816.7,276.1 860.0,268.3" fill="none" stroke="#2a9d8f" stroke-width="2"/>
+<circle cx="470.0" cy="399.6" r="3.6" fill="#2a9d8f"/>
+<circle cx="513.3" cy="369.0" r="3.6" fill="#2a9d8f"/>
+<circle cx="556.7" cy="336.4" r="3.6" fill="#2a9d8f"/>
+<circle cx="600.0" cy="305.7" r="3.6" fill="#2a9d8f"/>
+<circle cx="643.3" cy="282.6" r="3.6" fill="#2a9d8f"/>
+<circle cx="686.7" cy="271.1" r="3.6" fill="#2a9d8f"/>
+<circle cx="730.0" cy="270.6" r="3.6" fill="#2a9d8f"/>
+<circle cx="773.3" cy="275.2" r="3.6" fill="#2a9d8f"/>
+<circle cx="816.7" cy="276.1" r="3.6" fill="#2a9d8f"/>
+<circle cx="860.0" cy="268.3" r="3.6" fill="#2a9d8f"/>
+<line x1="88.0" y1="88.0" x2="103.0" y2="88.0" stroke="#2a9d8f" stroke-width="2"/>
+<text x="107.0" y="92.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">12 kn Downwind</text>
+<polyline points="383.3,395.2 426.7,413.5 470.0,448.7" fill="none" stroke="#8a5fbf" stroke-width="2" stroke-dasharray="6 4"/>
+<circle cx="383.3" cy="395.2" r="3.6" fill="#8a5fbf"/>
+<circle cx="426.7" cy="413.5" r="3.6" fill="#8a5fbf"/>
+<circle cx="470.0" cy="448.7" r="3.6" fill="#8a5fbf"/>
+<line x1="244.0" y1="88.0" x2="259.0" y2="88.0" stroke="#8a5fbf" stroke-width="2"/>
+<text x="263.0" y="92.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">16 kn Upwind</text>
+<polyline points="470.0,394.6 513.3,348.1 556.7,298.9 600.0,252.6 643.3,217.2 686.7,198.8 730.0,196.9 773.3,203.2 816.7,204.7 860.0,193.9" fill="none" stroke="#8a5fbf" stroke-width="2"/>
+<circle cx="470.0" cy="394.6" r="3.6" fill="#8a5fbf"/>
+<circle cx="513.3" cy="348.1" r="3.6" fill="#8a5fbf"/>
+<circle cx="556.7" cy="298.9" r="3.6" fill="#8a5fbf"/>
+<circle cx="600.0" cy="252.6" r="3.6" fill="#8a5fbf"/>
+<circle cx="643.3" cy="217.2" r="3.6" fill="#8a5fbf"/>
+<circle cx="686.7" cy="198.8" r="3.6" fill="#8a5fbf"/>
+<circle cx="730.0" cy="196.9" r="3.6" fill="#8a5fbf"/>
+<circle cx="773.3" cy="203.2" r="3.6" fill="#8a5fbf"/>
+<circle cx="816.7" cy="204.7" r="3.6" fill="#8a5fbf"/>
+<circle cx="860.0" cy="193.9" r="3.6" fill="#8a5fbf"/>
+<line x1="400.0" y1="88.0" x2="415.0" y2="88.0" stroke="#8a5fbf" stroke-width="2"/>
+<text x="419.0" y="92.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">16 kn Downwind</text>
+<polyline points="383.3,379.6 426.7,405.0 470.0,453.1" fill="none" stroke="#e08e0b" stroke-width="2" stroke-dasharray="6 4"/>
+<circle cx="383.3" cy="379.6" r="3.6" fill="#e08e0b"/>
+<circle cx="426.7" cy="405.0" r="3.6" fill="#e08e0b"/>
+<circle cx="470.0" cy="453.1" r="3.6" fill="#e08e0b"/>
+<line x1="556.0" y1="88.0" x2="571.0" y2="88.0" stroke="#e08e0b" stroke-width="2"/>
+<text x="575.0" y="92.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">20 kn Upwind</text>
+<polyline points="470.0,390.2 513.3,327.6 556.7,261.3 600.0,198.9 643.3,150.4 686.7,124.4 730.0,120.7 773.3,128.5 816.7,130.7 860.0,116.9" fill="none" stroke="#e08e0b" stroke-width="2"/>
+<circle cx="470.0" cy="390.2" r="3.6" fill="#e08e0b"/>
+<circle cx="513.3" cy="327.6" r="3.6" fill="#e08e0b"/>
+<circle cx="556.7" cy="261.3" r="3.6" fill="#e08e0b"/>
+<circle cx="600.0" cy="198.9" r="3.6" fill="#e08e0b"/>
+<circle cx="643.3" cy="150.4" r="3.6" fill="#e08e0b"/>
+<circle cx="686.7" cy="124.4" r="3.6" fill="#e08e0b"/>
+<circle cx="730.0" cy="120.7" r="3.6" fill="#e08e0b"/>
+<circle cx="773.3" cy="128.5" r="3.6" fill="#e08e0b"/>
+<circle cx="816.7" cy="130.7" r="3.6" fill="#e08e0b"/>
+<circle cx="860.0" cy="116.9" r="3.6" fill="#e08e0b"/>
+<line x1="712.0" y1="88.0" x2="727.0" y2="88.0" stroke="#e08e0b" stroke-width="2"/>
+<text x="731.0" y="92.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">20 kn Downwind</text>
+</svg>

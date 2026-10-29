@@ -1,0 +1,11 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/boats/SailingBoat8mP23c.tscn" id="1_base"]
+[ext_resource type="Resource" path="res://resources/sailing/nordic28_p216_physics_profile.tres" id="2_physics_profile"]
+[ext_resource type="Resource" path="res://resources/sailing/nordic28_p216_visual_rig_profile.tres" id="3_visual_profile"]
+
+[node name="SailingBoat8mP216" instance=ExtResource("1_base")]
+profile = ExtResource("2_physics_profile")
+
+[node name="VisualRigAnchors" parent="VisualRoot" index="0"]
+visual_profile = ExtResource("3_visual_profile")

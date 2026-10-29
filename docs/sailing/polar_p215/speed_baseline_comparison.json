@@ -1,0 +1,850 @@
+{
+  "experiment": "Nordic 28 P2.15 speed baseline comparison",
+  "units": {
+    "speed": "kn",
+    "angles": "degrees absolute magnitude in aggregate fields",
+    "heel": "degrees absolute magnitude",
+    "rudder": "degrees absolute magnitude"
+  },
+  "aggregation": "Only STABLE rows are eligible. P2 and P2.2 SA28 values are port/starboard means. P2.3c rows combine P2.4 (12 kn) and P2.15 (8/16 kn); both mirrored tacks are required. No interpolation.",
+  "p2_run_id": "polar_2026-10-28_14-04-00_856682",
+  "p2_fingerprint": "61793a477e4da06a0e274cf22dfdac144ae4302a40e51fdcd8eb83753f034068",
+  "p22_sa28_run_id": "polar_2026-10-28_17-25-57_489434",
+  "p22_sa28_fingerprint": "1f87304da234f1c2ef93126eea931a4653cc4e7dde51f7cc18a16f196ccef69d",
+  "p23c_runs": [
+    {
+      "run_id": "polar_2026-10-28_19-06-59_469219",
+      "configuration_fingerprint": "076608298ca0ae23bfba51107c283695057ecd19dfe47692f291b662fd883c1a",
+      "scope": "12 kn / 90°, 120° (reused P2.4 stable rows)"
+    },
+    {
+      "run_id": "polar_2026-10-29_00-01-51_126626",
+      "configuration_fingerprint": "3a76a605d2fa06f1e73f99604791854fcdcd922b902d44713be99f05ed61e557",
+      "scope": "8 kn and 16 kn / 90°, 120° (new P2.15 cases)"
+    }
+  ],
+  "comparisons": [
+    {
+      "target_tws_kn": 8.0,
+      "target_twa_deg": 90.0,
+      "p2": {
+        "status": "STABLE",
+        "sog_kn": 1.17454420734945,
+        "actual_twa_abs_deg": 92.25305279226146,
+        "heel_abs_deg": 1.16564397376055,
+        "rudder_abs_deg": 11.263561610320949,
+        "port_starboard_sog_abs_difference_kn": 1.969656799882813e-07,
+        "source_run_ids": [
+          "polar_2026-10-28_14-04-00_856682"
+        ],
+        "case_ids": [
+          "tws_08.00_twa_-90.00_port",
+          "tws_08.00_twa_+90.00_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "tws_08.00_twa_-90.00_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 8.0,
+            "target_twa_deg": -90.0,
+            "measured_twa_deg": -92.253048686123,
+            "mean_sog_kn": 1.17454430583229,
+            "mean_vmg_kn": 1.16182694682292,
+            "mean_heel_deg": -1.16564423167134,
+            "mean_rudder_deg": -11.2635414610599,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 62.574255825949,
+            "headsail_deg": 56.9403936898708,
+            "sample_count": 90
+          },
+          {
+            "case_id": "tws_08.00_twa_+90.00_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 8.0,
+            "target_twa_deg": 90.0,
+            "measured_twa_deg": 92.2530568983999,
+            "mean_sog_kn": 1.17454410886661,
+            "mean_vmg_kn": 1.16182678075382,
+            "mean_heel_deg": 1.16564371584976,
+            "mean_rudder_deg": 11.263581759582,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -62.5742626670314,
+            "headsail_deg": -56.9403988464652,
+            "sample_count": 90
+          }
+        ]
+      },
+      "p22_sa28": {
+        "status": "STABLE",
+        "sog_kn": 1.76283043416993,
+        "actual_twa_abs_deg": 92.08702183439794,
+        "heel_abs_deg": 2.2916460845312203,
+        "rudder_abs_deg": 10.43350933076405,
+        "port_starboard_sog_abs_difference_kn": 5.831728799865488e-07,
+        "source_run_ids": [
+          "polar_2026-10-28_16-35-40_812243"
+        ],
+        "case_ids": [
+          "sa28_8_90_port",
+          "sa28_8_90_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "sa28_8_90_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 8.0,
+            "target_twa_deg": -90.0,
+            "measured_twa_deg": -92.0870250848748,
+            "mean_sog_kn": 1.76283014258349,
+            "mean_vmg_kn": 1.74651184941986,
+            "mean_heel_deg": -2.29164464378819,
+            "mean_rudder_deg": -10.4335221950564,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 58.8058745391606,
+            "headsail_deg": 53.8058745391606,
+            "sample_count": 90.0
+          },
+          {
+            "case_id": "sa28_8_90_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 8.0,
+            "target_twa_deg": 90.0,
+            "measured_twa_deg": 92.0870185839211,
+            "mean_sog_kn": 1.76283072575637,
+            "mean_vmg_kn": 1.74651249052381,
+            "mean_heel_deg": 2.29164752527425,
+            "mean_rudder_deg": 10.4334964664717,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -58.8058630955185,
+            "headsail_deg": -53.8058630955185,
+            "sample_count": 90.0
+          }
+        ]
+      },
+      "p23c": {
+        "status": "STABLE",
+        "sog_kn": 1.5363178133449602,
+        "actual_twa_abs_deg": 90.8973549037445,
+        "heel_abs_deg": 2.5838453907466548,
+        "rudder_abs_deg": 4.485670986646805,
+        "port_starboard_sog_abs_difference_kn": 2.1241395997684265e-07,
+        "source_run_ids": [
+          "polar_2026-10-29_00-01-51_126626"
+        ],
+        "case_ids": [
+          "p215_08kn_090twa_port",
+          "p215_08kn_090twa_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "p215_08kn_090twa_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 8.0,
+            "target_twa_deg": -90.0,
+            "measured_twa_deg": -90.8973538170904,
+            "mean_sog_kn": 1.53631791955194,
+            "mean_vmg_kn": 1.52799697725613,
+            "mean_heel_deg": -2.58384718011392,
+            "mean_rudder_deg": -4.48566760758369,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 59.4938758993672,
+            "headsail_deg": 54.4938758993672,
+            "sample_count": 90
+          },
+          {
+            "case_id": "p215_08kn_090twa_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 8.0,
+            "target_twa_deg": 90.0,
+            "measured_twa_deg": 90.8973559903986,
+            "mean_sog_kn": 1.53631770713798,
+            "mean_vmg_kn": 1.52799677642838,
+            "mean_heel_deg": 2.58384360137939,
+            "mean_rudder_deg": 4.48567436570992,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -59.4938791865395,
+            "headsail_deg": -54.4938791865395,
+            "sample_count": 90
+          }
+        ]
+      },
+      "p23c_vs_p2_sog_change_pct": 30.80119111156412,
+      "p23c_vs_p22_sa28_sog_change_pct": -12.849370900022416
+    },
+    {
+      "target_tws_kn": 8.0,
+      "target_twa_deg": 120.0,
+      "p2": {
+        "status": "STABLE",
+        "sog_kn": 1.3322283285740348,
+        "actual_twa_abs_deg": 119.8744474395545,
+        "heel_abs_deg": 0.542145649941259,
+        "rudder_abs_deg": 0.626064682849459,
+        "port_starboard_sog_abs_difference_kn": 5.020692994683884e-08,
+        "source_run_ids": [
+          "polar_2026-10-28_14-04-00_856682"
+        ],
+        "case_ids": [
+          "tws_08.00_twa_-120.00_port",
+          "tws_08.00_twa_+120.00_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "tws_08.00_twa_-120.00_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 8.0,
+            "target_twa_deg": -120.0,
+            "measured_twa_deg": -119.874446461401,
+            "mean_sog_kn": 1.3322283536775,
+            "mean_vmg_kn": 1.33174261315595,
+            "mean_heel_deg": -0.542145329776142,
+            "mean_rudder_deg": 0.62607010654864,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 79.9000015258789,
+            "headsail_deg": 70.0,
+            "sample_count": 90
+          },
+          {
+            "case_id": "tws_08.00_twa_+120.00_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 8.0,
+            "target_twa_deg": 120.0,
+            "measured_twa_deg": 119.874448417708,
+            "mean_sog_kn": 1.33222830347057,
+            "mean_vmg_kn": 1.33174258225937,
+            "mean_heel_deg": 0.542145970106376,
+            "mean_rudder_deg": -0.626059259150278,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -79.9000015258789,
+            "headsail_deg": -70.0,
+            "sample_count": 90
+          }
+        ]
+      },
+      "p22_sa28": {
+        "status": "STABLE",
+        "sog_kn": 1.9738986618317949,
+        "actual_twa_abs_deg": 120.097567789669,
+        "heel_abs_deg": 1.07200318125194,
+        "rudder_abs_deg": 0.48934934771522953,
+        "port_starboard_sog_abs_difference_kn": 7.724149986287898e-09,
+        "source_run_ids": [
+          "polar_2026-10-28_16-35-40_812243"
+        ],
+        "case_ids": [
+          "sa28_8_120_port",
+          "sa28_8_120_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "sa28_8_120_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 8.0,
+            "target_twa_deg": -120.0,
+            "measured_twa_deg": -120.097567662637,
+            "mean_sog_kn": 1.97389866569387,
+            "mean_vmg_kn": 1.97292031016257,
+            "mean_heel_deg": -1.0720030140546,
+            "mean_rudder_deg": -0.489348419954877,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 78.7937363169294,
+            "headsail_deg": 69.1661318159868,
+            "sample_count": 90.0
+          },
+          {
+            "case_id": "sa28_8_120_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 8.0,
+            "target_twa_deg": 120.0,
+            "measured_twa_deg": 120.097567916701,
+            "mean_sog_kn": 1.97389865796972,
+            "mean_vmg_kn": 1.97292031016257,
+            "mean_heel_deg": 1.07200334844928,
+            "mean_rudder_deg": 0.489350275475582,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -78.7937328159208,
+            "headsail_deg": -69.1661291770359,
+            "sample_count": 90.0
+          }
+        ]
+      },
+      "p23c": {
+        "status": "STABLE",
+        "sog_kn": 1.713154492316435,
+        "actual_twa_abs_deg": 119.0940313442205,
+        "heel_abs_deg": 1.219082904251225,
+        "rudder_abs_deg": 4.52814294762802,
+        "port_starboard_sog_abs_difference_kn": 2.548967499294008e-07,
+        "source_run_ids": [
+          "polar_2026-10-29_00-01-51_126626"
+        ],
+        "case_ids": [
+          "p215_08kn_120twa_port",
+          "p215_08kn_120twa_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "p215_08kn_120twa_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 8.0,
+            "target_twa_deg": -120.0,
+            "measured_twa_deg": -119.094032574406,
+            "mean_sog_kn": 1.71315461976481,
+            "mean_vmg_kn": 1.71314374030794,
+            "mean_heel_deg": -1.21908360683579,
+            "mean_rudder_deg": 4.52813829267977,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 79.3866913970085,
+            "headsail_deg": 69.6130828471022,
+            "sample_count": 90
+          },
+          {
+            "case_id": "p215_08kn_120twa_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 8.0,
+            "target_twa_deg": 120.0,
+            "measured_twa_deg": 119.094030114035,
+            "mean_sog_kn": 1.71315436486806,
+            "mean_vmg_kn": 1.71314347382498,
+            "mean_heel_deg": 1.21908220166666,
+            "mean_rudder_deg": -4.52814760257627,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -79.386696216085,
+            "headsail_deg": -69.6130864795716,
+            "sample_count": 90
+          }
+        ]
+      },
+      "p23c_vs_p2_sog_change_pct": 28.593158963233336,
+      "p23c_vs_p22_sa28_sog_change_pct": -13.209602628403783
+    },
+    {
+      "target_tws_kn": 12.0,
+      "target_twa_deg": 90.0,
+      "p2": {
+        "status": "STABLE",
+        "sog_kn": 2.12528042221687,
+        "actual_twa_abs_deg": 91.62860918215699,
+        "heel_abs_deg": 2.750252715262425,
+        "rudder_abs_deg": 8.141391597693008,
+        "port_starboard_sog_abs_difference_kn": 8.496558034920554e-08,
+        "source_run_ids": [
+          "polar_2026-10-28_14-04-00_856682"
+        ],
+        "case_ids": [
+          "tws_12.00_twa_-90.00_port",
+          "tws_12.00_twa_+90.00_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "tws_12.00_twa_-90.00_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 12.0,
+            "target_twa_deg": -90.0,
+            "measured_twa_deg": -91.6286083945094,
+            "mean_sog_kn": 2.12528046469966,
+            "mean_vmg_kn": 2.11218288083828,
+            "mean_heel_deg": -2.75025322041183,
+            "mean_rudder_deg": -8.14138754593145,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 60.8848808009248,
+            "headsail_deg": 55.6669955274431,
+            "sample_count": 90
+          },
+          {
+            "case_id": "tws_12.00_twa_+90.00_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 12.0,
+            "target_twa_deg": 90.0,
+            "measured_twa_deg": 91.6286099698046,
+            "mean_sog_kn": 2.12528037973408,
+            "mean_vmg_kn": 2.11218278814855,
+            "mean_heel_deg": 2.75025221011302,
+            "mean_rudder_deg": 8.14139564945457,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -60.8848812491126,
+            "headsail_deg": -55.6669958652731,
+            "sample_count": 90
+          }
+        ]
+      },
+      "p22_sa28": {
+        "status": "STABLE",
+        "sog_kn": 3.06201340312833,
+        "actual_twa_abs_deg": 91.5373288923863,
+        "heel_abs_deg": 5.53763115143143,
+        "rudder_abs_deg": 7.68553039402023,
+        "port_starboard_sog_abs_difference_kn": 2.3172432017659617e-07,
+        "source_run_ids": [
+          "polar_2026-10-28_16-35-40_812243"
+        ],
+        "case_ids": [
+          "sa28_12_90_port",
+          "sa28_12_90_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "sa28_12_90_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 12.0,
+            "target_twa_deg": -90.0,
+            "measured_twa_deg": -91.5373288923863,
+            "mean_sog_kn": 3.06201328726617,
+            "mean_vmg_kn": 3.04396636542697,
+            "mean_heel_deg": -5.53763093798802,
+            "mean_rudder_deg": -7.68553077383453,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 55.0370025886939,
+            "headsail_deg": 50.0370025886939,
+            "sample_count": 90.0
+          },
+          {
+            "case_id": "sa28_12_90_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 12.0,
+            "target_twa_deg": 90.0,
+            "measured_twa_deg": 91.5373288923863,
+            "mean_sog_kn": 3.06201351899049,
+            "mean_vmg_kn": 3.04396659715128,
+            "mean_heel_deg": 5.53763136487484,
+            "mean_rudder_deg": 7.68553001420593,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -55.03700109513,
+            "headsail_deg": -50.03700109513,
+            "sample_count": 90.0
+          }
+        ]
+      },
+      "p23c": {
+        "status": "STABLE",
+        "sog_kn": 2.693576251456335,
+        "actual_twa_abs_deg": 90.44592961229364,
+        "heel_abs_deg": 6.20307321693392,
+        "rudder_abs_deg": 2.22952308338216,
+        "port_starboard_sog_abs_difference_kn": 4.6344865012315495e-07,
+        "source_run_ids": [
+          "polar_2026-10-28_19-06-59_469219"
+        ],
+        "case_ids": [
+          "p24_12kn_090twa_port",
+          "p24_12kn_090twa_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "p24_12kn_090twa_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 12.0,
+            "target_twa_deg": -90.0,
+            "measured_twa_deg": -90.4459295856135,
+            "mean_sog_kn": 2.69357648318066,
+            "mean_vmg_kn": 2.6855057568066,
+            "mean_heel_deg": -6.20307321693392,
+            "mean_rudder_deg": -2.22952305753738,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 56.0601669914101,
+            "headsail_deg": 51.0601669914101,
+            "sample_count": 90
+          },
+          {
+            "case_id": "p24_12kn_090twa_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 12.0,
+            "target_twa_deg": 90.0,
+            "measured_twa_deg": 90.4459296389738,
+            "mean_sog_kn": 2.69357601973201,
+            "mean_vmg_kn": 2.68550529335796,
+            "mean_heel_deg": 6.20307321693392,
+            "mean_rudder_deg": 2.22952310922694,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -56.0601713225243,
+            "headsail_deg": -51.0601713225243,
+            "sample_count": 90
+          }
+        ]
+      },
+      "p23c_vs_p2_sog_change_pct": 26.739804465270446,
+      "p23c_vs_p22_sa28_sog_change_pct": -12.032512702118758
+    },
+    {
+      "target_tws_kn": 12.0,
+      "target_twa_deg": 120.0,
+      "p2": {
+        "status": "STABLE",
+        "sog_kn": 2.3868409796873298,
+        "actual_twa_abs_deg": 119.9487953826715,
+        "heel_abs_deg": 1.2636098377080751,
+        "rudder_abs_deg": 0.25443108904761,
+        "port_starboard_sog_abs_difference_kn": 8.496557990511633e-08,
+        "source_run_ids": [
+          "polar_2026-10-28_14-04-00_856682"
+        ],
+        "case_ids": [
+          "tws_12.00_twa_-120.00_port",
+          "tws_12.00_twa_+120.00_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "tws_12.00_twa_-120.00_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 12.0,
+            "target_twa_deg": -120.0,
+            "measured_twa_deg": -119.948795686094,
+            "mean_sog_kn": 2.38684093720454,
+            "mean_vmg_kn": 2.38626673206139,
+            "mean_heel_deg": -1.26360940726386,
+            "mean_rudder_deg": 0.254430142583116,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 79.9000015258789,
+            "headsail_deg": 70.0,
+            "sample_count": 90
+          },
+          {
+            "case_id": "tws_12.00_twa_+120.00_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 12.0,
+            "target_twa_deg": 120.0,
+            "measured_twa_deg": 119.948795079249,
+            "mean_sog_kn": 2.38684102217012,
+            "mean_vmg_kn": 2.38626681702698,
+            "mean_heel_deg": 1.26361026815229,
+            "mean_rudder_deg": -0.254432035512104,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -79.9000015258789,
+            "headsail_deg": -70.0,
+            "sample_count": 90
+          }
+        ]
+      },
+      "p22_sa28": {
+        "status": "STABLE",
+        "sog_kn": 3.39202301548572,
+        "actual_twa_abs_deg": 120.076518688055,
+        "heel_abs_deg": 2.5384542124655196,
+        "rudder_abs_deg": 0.38340613280271796,
+        "port_starboard_sog_abs_difference_kn": 0.0,
+        "source_run_ids": [
+          "polar_2026-10-28_16-35-40_812243"
+        ],
+        "case_ids": [
+          "sa28_12_120_port",
+          "sa28_12_120_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "sa28_12_120_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 12.0,
+            "target_twa_deg": -120.0,
+            "measured_twa_deg": -120.076518688055,
+            "mean_sog_kn": 3.39202301548572,
+            "mean_vmg_kn": 3.39085790560003,
+            "mean_heel_deg": -2.53845453263064,
+            "mean_rudder_deg": -0.383406412594202,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 77.1904453497076,
+            "headsail_deg": 67.9576211293393,
+            "sample_count": 90.0
+          },
+          {
+            "case_id": "sa28_12_120_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 12.0,
+            "target_twa_deg": 120.0,
+            "measured_twa_deg": 120.076518688055,
+            "mean_sog_kn": 3.39202301548572,
+            "mean_vmg_kn": 3.39085813732435,
+            "mean_heel_deg": 2.5384538923004,
+            "mean_rudder_deg": 0.383405853011234,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -77.1904468811361,
+            "headsail_deg": -67.9576222836824,
+            "sample_count": 90.0
+          }
+        ]
+      },
+      "p23c": {
+        "status": "STABLE",
+        "sog_kn": 2.985816653294895,
+        "actual_twa_abs_deg": 119.264408379764,
+        "heel_abs_deg": 2.85243128514354,
+        "rudder_abs_deg": 3.676343616947455,
+        "port_starboard_sog_abs_difference_kn": 6.951729698556619e-07,
+        "source_run_ids": [
+          "polar_2026-10-28_19-06-59_469219"
+        ],
+        "case_ids": [
+          "p24_12kn_120twa_port",
+          "p24_12kn_120twa_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "p24_12kn_120twa_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 12.0,
+            "target_twa_deg": -120.0,
+            "measured_twa_deg": -119.264408379764,
+            "mean_sog_kn": 2.98581700088138,
+            "mean_vmg_kn": 2.9858072684599,
+            "mean_heel_deg": -2.85243149858695,
+            "mean_rudder_deg": 3.67634277089661,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 78.0237561846498,
+            "headsail_deg": 68.5857448261078,
+            "sample_count": 90
+          },
+          {
+            "case_id": "p24_12kn_120twa_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 12.0,
+            "target_twa_deg": 120.0,
+            "measured_twa_deg": 119.264408379764,
+            "mean_sog_kn": 2.98581630570841,
+            "mean_vmg_kn": 2.98580680501126,
+            "mean_heel_deg": 2.85243107170013,
+            "mean_rudder_deg": -3.6763444629983,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -78.0237614360451,
+            "headsail_deg": -68.5857487844457,
+            "sample_count": 90
+          }
+        ]
+      },
+      "p23c_vs_p2_sog_change_pct": 25.09491326422715,
+      "p23c_vs_p22_sa28_sog_change_pct": -11.975342158244718
+    },
+    {
+      "target_tws_kn": 16.0,
+      "target_twa_deg": 90.0,
+      "p2": {
+        "status": "STABLE",
+        "sog_kn": 3.13400030136108,
+        "actual_twa_abs_deg": 91.26540698067085,
+        "heel_abs_deg": 5.026003238490345,
+        "rudder_abs_deg": 6.3258895632369345,
+        "port_starboard_sog_abs_difference_kn": 4.6344864035319233e-07,
+        "source_run_ids": [
+          "polar_2026-10-28_14-04-00_856682"
+        ],
+        "case_ids": [
+          "tws_16.00_twa_-90.00_port",
+          "tws_16.00_twa_+90.00_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "tws_16.00_twa_-90.00_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 16.0,
+            "target_twa_deg": -90.0,
+            "measured_twa_deg": -91.2654038864483,
+            "mean_sog_kn": 3.1340005330854,
+            "mean_vmg_kn": 3.1206400039129,
+            "mean_heel_deg": -5.02600665358493,
+            "mean_rudder_deg": -6.32588164248298,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 59.6944505189288,
+            "headsail_deg": 54.6944505189288,
+            "sample_count": 90
+          },
+          {
+            "case_id": "tws_16.00_twa_+90.00_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 16.0,
+            "target_twa_deg": 90.0,
+            "measured_twa_deg": 91.2654100748934,
+            "mean_sog_kn": 3.13400006963676,
+            "mean_vmg_kn": 3.12063954046426,
+            "mean_heel_deg": 5.02599982339576,
+            "mean_rudder_deg": 6.32589748399089,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -59.69446340227,
+            "headsail_deg": -54.69446340227,
+            "sample_count": 90
+          }
+        ]
+      },
+      "p22_sa28": null,
+      "p23c": {
+        "status": "STABLE",
+        "sog_kn": 3.8312306285676803,
+        "actual_twa_abs_deg": 89.98679808602225,
+        "heel_abs_deg": 11.3339467530538,
+        "rudder_abs_deg": 0.06573202573727405,
+        "port_starboard_sog_abs_difference_kn": 2.3172432017659617e-07,
+        "source_run_ids": [
+          "polar_2026-10-29_00-01-51_126626"
+        ],
+        "case_ids": [
+          "p215_16kn_090twa_port",
+          "p215_16kn_090twa_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "p215_16kn_090twa_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 16.0,
+            "target_twa_deg": -90.0,
+            "measured_twa_deg": -89.9867980660107,
+            "mean_sog_kn": 3.83123051270552,
+            "mean_vmg_kn": 3.82432628656308,
+            "mean_heel_deg": -11.3339467530538,
+            "mean_rudder_deg": 0.0657320757574185,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 53.9144780656081,
+            "headsail_deg": 48.9144780656081,
+            "sample_count": 90
+          },
+          {
+            "case_id": "p215_16kn_090twa_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 16.0,
+            "target_twa_deg": 90.0,
+            "measured_twa_deg": 89.9867981060338,
+            "mean_sog_kn": 3.83123074442984,
+            "mean_vmg_kn": 3.8243265182874,
+            "mean_heel_deg": 11.3339467530538,
+            "mean_rudder_deg": -0.0657319757171296,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -53.9144760997331,
+            "headsail_deg": -48.9144760997331,
+            "sample_count": 90
+          }
+        ]
+      },
+      "p23c_vs_p2_sog_change_pct": 22.247296112377413,
+      "p23c_vs_p22_sa28_sog_change_pct": null
+    },
+    {
+      "target_tws_kn": 16.0,
+      "target_twa_deg": 120.0,
+      "p2": {
+        "status": "STABLE",
+        "sog_kn": 3.498869130214905,
+        "actual_twa_abs_deg": 119.935109153949,
+        "heel_abs_deg": 2.295044092971125,
+        "rudder_abs_deg": 0.323251950731208,
+        "port_starboard_sog_abs_difference_kn": 6.951729698556619e-07,
+        "source_run_ids": [
+          "polar_2026-10-28_14-04-00_856682"
+        ],
+        "case_ids": [
+          "tws_16.00_twa_-120.00_port",
+          "tws_16.00_twa_+120.00_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "tws_16.00_twa_-120.00_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 16.0,
+            "target_twa_deg": -120.0,
+            "measured_twa_deg": -119.935107561943,
+            "mean_sog_kn": 3.49886878262842,
+            "mean_vmg_kn": 3.49827047043175,
+            "mean_heel_deg": -2.29504195853701,
+            "mean_rudder_deg": 0.323254365007197,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 79.8479124080752,
+            "headsail_deg": 69.9607368488872,
+            "sample_count": 90
+          },
+          {
+            "case_id": "tws_16.00_twa_+120.00_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 16.0,
+            "target_twa_deg": 120.0,
+            "measured_twa_deg": 119.935110745955,
+            "mean_sog_kn": 3.49886947780139,
+            "mean_vmg_kn": 3.49827116560472,
+            "mean_heel_deg": 2.29504622740524,
+            "mean_rudder_deg": -0.323249536455219,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -79.8479100360201,
+            "headsail_deg": -69.9607350609062,
+            "sample_count": 90
+          }
+        ]
+      },
+      "p22_sa28": null,
+      "p23c": {
+        "status": "STABLE",
+        "sog_kn": 4.29274935444281,
+        "actual_twa_abs_deg": 119.20794621765,
+        "heel_abs_deg": 5.191432341178755,
+        "rudder_abs_deg": 3.958815590199785,
+        "port_starboard_sog_abs_difference_kn": 4.634486394650139e-07,
+        "source_run_ids": [
+          "polar_2026-10-29_00-01-51_126626"
+        ],
+        "case_ids": [
+          "p215_16kn_120twa_port",
+          "p215_16kn_120twa_starboard"
+        ],
+        "sides": [
+          {
+            "case_id": "p215_16kn_120twa_port",
+            "tack": "PORT",
+            "status": "STABLE",
+            "target_tws_kn": 16.0,
+            "target_twa_deg": -120.0,
+            "measured_twa_deg": -119.20794621765,
+            "mean_sog_kn": 4.29274912271849,
+            "mean_vmg_kn": 4.29274680547528,
+            "mean_heel_deg": -5.19143255462217,
+            "mean_rudder_deg": 3.95881547412164,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": 77.1476250956041,
+            "headsail_deg": 67.9253445583695,
+            "sample_count": 90
+          },
+          {
+            "case_id": "p215_16kn_120twa_starboard",
+            "tack": "STARBOARD",
+            "status": "STABLE",
+            "target_tws_kn": 16.0,
+            "target_twa_deg": 120.0,
+            "measured_twa_deg": 119.20794621765,
+            "mean_sog_kn": 4.29274958616713,
+            "mean_vmg_kn": 4.29274726892392,
+            "mean_heel_deg": 5.19143212773534,
+            "mean_rudder_deg": -3.95881570627793,
+            "rudder_saturation_fraction": 0.0,
+            "main_sail_deg": -77.1476231684218,
+            "headsail_deg": -67.9253431057195,
+            "sample_count": 90
+          }
+        ]
+      },
+      "p23c_vs_p2_sog_change_pct": 22.689623266336454,
+      "p23c_vs_p22_sa28_sog_change_pct": null
+    }
+  ]
+}

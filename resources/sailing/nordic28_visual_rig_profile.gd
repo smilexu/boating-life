@@ -5,17 +5,17 @@ extends Resource
 ## Approved Nordic 28 V2 visual-only rig anchors. The physics profile is not
 ## read or modified by this resource.
 @export var mast_base_local_m := Vector3(0.0, 1.3184, -1.0)
-@export_range(5.0, 8.0, 0.05) var mast_length_m := 6.50
+@export_range(5.0, 10.5, 0.05) var mast_length_m := 6.50
 @export var visual_assembly_offset_local_m := Vector3(0.0, -0.30, 0.0)
 @export var boom_pivot_local_m := Vector3(0.0, 1.9111, -1.0)
-@export_range(2.5, 4.0, 0.05) var boom_length_m := 3.30
+@export_range(2.5, 4.5, 0.05) var boom_length_m := 3.30
 @export var main_head_local_m := Vector3(0.0, 7.6384, -1.0)
 @export var jib_head_local_m := Vector3(0.0, 5.9500, -1.0)
 @export var jib_tack_local_m := Vector3(0.0, 1.9614, -3.5498)
 @export var jib_clew_local_m := Vector3(0.0, 1.6686, -1.1498)
 
 @export_range(0.0, 0.15, 0.005) var mast_step_embed_m := 0.03
-@export_range(0.20, 0.60, 0.01) var boom_clearance_over_roof_m := 0.40
+@export_range(0.20, 1.20, 0.01) var boom_clearance_over_roof_m := 0.40
 @export_range(0.15, 0.35, 0.01) var minimum_boom_lower_edge_clearance_m := 0.20
 @export_range(0.15, 0.60, 0.01) var roof_sample_half_width_m := 0.35
 @export_range(0.10, 0.40, 0.01) var roof_sample_half_length_m := 0.22

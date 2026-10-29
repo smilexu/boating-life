@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://drax3bsts6md"
+
+[deps]
+
+files=["res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/status_counts.count.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/status_counts.status.translation"]
+
+source_file="res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/status_counts.csv"
+dest_files=["res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/status_counts.count.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/status_counts.status.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

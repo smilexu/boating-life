@@ -1,0 +1,164 @@
+{
+	"boat_config_hash": "076608298ca0ae23bfba51107c283695057ecd19dfe47692f291b662fd883c1a",
+	"boat_scene_path": "res://scenes/boats/SailingBoat8mP23c.tscn",
+	"boat_scene_sha256": "2ebd14290c72562ac970ff2d0c08ed73932baf5cd67c378ec93e3c7f7f713624",
+	"conditions": [
+		{
+			"twa_deg": -50.0,
+			"tws_kn": 12.0
+		},
+		{
+			"twa_deg": 50.0,
+			"tws_kn": 12.0
+		},
+		{
+			"twa_deg": -90.0,
+			"tws_kn": 12.0
+		},
+		{
+			"twa_deg": 90.0,
+			"tws_kn": 12.0
+		},
+		{
+			"twa_deg": -120.0,
+			"tws_kn": 12.0
+		},
+		{
+			"twa_deg": 120.0,
+			"tws_kn": 12.0
+		}
+	],
+	"engine_state_expected": "OFF",
+	"execution_acceleration": {
+		"effective_simulated_steps_per_second": 60.0,
+		"engine_physics_ticks_per_second": 480,
+		"time_scale": 8.0
+	},
+	"fixed_wind_from_degrees": 180.0,
+	"fixed_wind_seed": 481516,
+	"geometry": {
+		"boat_scene_file_path": "res://scenes/boats/SailingBoat8mP23c.tscn",
+		"boom_length_m": 4.4,
+		"jib_center_delta_m": 0.000000238418579101562,
+		"jib_physics_area_m2": 6.59991,
+		"jib_physics_center_body_local_m": "(0.0, 3.693333, -1.949933)",
+		"jib_visual_area_m2": 6.59990692138672,
+		"jib_visual_center_body_local_m": "(0.0, 3.693333, -1.949933)",
+		"main_center_delta_m": 0.0,
+		"main_physics_area_m2": 15.90006,
+		"main_physics_center_body_local_m": "(0.0, 4.5202, 0.466667)",
+		"main_visual_area_m2": 15.9000606536865,
+		"main_visual_center_body_local_m": "(0.0, 4.5202, 0.466667)",
+		"mast_length_m": 8.5,
+		"physics_profile_path": "res://resources/sailing/nordic28_p23c_physics_profile.tres",
+		"total_physics_area_m2": 22.49997,
+		"valid": true,
+		"visual_assembly_offset_local_m": "(0.0, -0.3, 0.0)",
+		"visual_profile_path": "res://resources/sailing/nordic28_p23c_visual_rig_profile.tres"
+	},
+	"phase": "Nordic 28 P2.4 dynamics and control diagnostics",
+	"physics_profile_path": "res://resources/sailing/nordic28_p23c_physics_profile.tres",
+	"physics_profile_sha256": "9a50a679dd7abb550deeeb145f1badff813bd1eb50505eae608b44fac3ff8551",
+	"physics_step_seconds": 0.0166666666666667,
+	"polar_config_hash": "076608298ca0ae23bfba51107c283695057ecd19dfe47692f291b662fd883c1a",
+	"stability_parameters": {
+		"case_timeout_seconds": 180.0,
+		"engine_physics_ticks_per_second": 480.0,
+		"explicit_cases": [
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "p24_12kn_050twa_port",
+				"experiment_group": "P24_NORDIC28_P23C_DIAGNOSTICS",
+				"experiment_label": "P2.4 · 12 kn / 50° / PORT",
+				"experiment_variable": "signed_twa_and_tack",
+				"tack": "PORT",
+				"target_twa_deg": -50.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "p24_12kn_050twa_starboard",
+				"experiment_group": "P24_NORDIC28_P23C_DIAGNOSTICS",
+				"experiment_label": "P2.4 · 12 kn / 50° / STARBOARD",
+				"experiment_variable": "signed_twa_and_tack",
+				"tack": "STARBOARD",
+				"target_twa_deg": 50.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "p24_12kn_090twa_port",
+				"experiment_group": "P24_NORDIC28_P23C_DIAGNOSTICS",
+				"experiment_label": "P2.4 · 12 kn / 90° / PORT",
+				"experiment_variable": "signed_twa_and_tack",
+				"tack": "PORT",
+				"target_twa_deg": -90.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "p24_12kn_090twa_starboard",
+				"experiment_group": "P24_NORDIC28_P23C_DIAGNOSTICS",
+				"experiment_label": "P2.4 · 12 kn / 90° / STARBOARD",
+				"experiment_variable": "signed_twa_and_tack",
+				"tack": "STARBOARD",
+				"target_twa_deg": 90.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "p24_12kn_120twa_port",
+				"experiment_group": "P24_NORDIC28_P23C_DIAGNOSTICS",
+				"experiment_label": "P2.4 · 12 kn / 120° / PORT",
+				"experiment_variable": "signed_twa_and_tack",
+				"tack": "PORT",
+				"target_twa_deg": -120.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "p24_12kn_120twa_starboard",
+				"experiment_group": "P24_NORDIC28_P23C_DIAGNOSTICS",
+				"experiment_label": "P2.4 · 12 kn / 120° / STARBOARD",
+				"experiment_variable": "signed_twa_and_tack",
+				"tack": "STARBOARD",
+				"target_twa_deg": 120.0,
+				"target_tws_kn": 12.0
+			}
+		],
+		"fixed_wind_seed": 481516.0,
+		"include_extended_telemetry": true,
+		"include_port_tack": true,
+		"include_starboard_tack": true,
+		"maximum_heading_error_degrees": 5.0,
+		"maximum_mean_twa_error_degrees": 5.0,
+		"maximum_rudder_saturation_fraction": 0.2,
+		"maximum_speed_half_window_delta_mps": 0.12,
+		"maximum_speed_standard_deviation_mps": 0.2,
+		"minimum_warmup_seconds": 60.0,
+		"no_forward_progress_threshold_mps": 0.1,
+		"physics_step_seconds": 0.0166666666666667,
+		"rudder_d_gain": 3.0,
+		"rudder_limit_degrees": 35.0,
+		"rudder_p_gain": 5.0,
+		"sample_window_seconds": 30.0,
+		"stability_window_seconds": 30.0,
+		"time_scale": 8.0,
+		"twa_end_degrees": 180.0,
+		"twa_start_degrees": 0.0,
+		"twa_step_degrees": 10.0,
+		"tws_knots": [
+			4.0,
+			8.0,
+			12.0,
+			16.0,
+			20.0
+		],
+		"wave_mode": "zero_amplitude",
+		"wind_from_degrees": 180.0
+	},
+	"test_run_id": "polar_2026-10-28_19-06-59_469219",
+	"visual_profile_path": "res://resources/sailing/nordic28_p23c_visual_rig_profile.tres",
+	"visual_profile_sha256": "c7b2bdad425f8b5d8762fcd7dc451d1fdd282c97b34c5a9de1063c6bd9012938",
+	"wave_mode": "WaveSampler remains enabled; amplitude set to zero"
+}

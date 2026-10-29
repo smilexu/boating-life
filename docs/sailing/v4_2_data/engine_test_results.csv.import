@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bs2401xbktsed"
+
+[deps]
+
+files=["res://docs/sailing/v4_2_data/engine_test_results.time.translation", "res://docs/sailing/v4_2_data/engine_test_results.tws.translation", "res://docs/sailing/v4_2_data/engine_test_results.throttle.translation", "res://docs/sailing/v4_2_data/engine_test_results.gear.translation", "res://docs/sailing/v4_2_data/engine_test_results.hdg.translation", "res://docs/sailing/v4_2_data/engine_test_results.sog.translation", "res://docs/sailing/v4_2_data/engine_test_results.longitudinal.translation", "res://docs/sailing/v4_2_data/engine_test_results.lateral.translation", "res://docs/sailing/v4_2_data/engine_test_results.engine.translation", "res://docs/sailing/v4_2_data/engine_test_results.thrust.translation", "res://docs/sailing/v4_2_data/engine_test_results.fuel.translation", "res://docs/sailing/v4_2_data/engine_test_results.consumption.translation", "res://docs/sailing/v4_2_data/engine_test_results.sail.translation", "res://docs/sailing/v4_2_data/engine_test_results.sail.translation"]
+
+source_file="res://docs/sailing/v4_2_data/engine_test_results.csv"
+dest_files=["res://docs/sailing/v4_2_data/engine_test_results.time.translation", "res://docs/sailing/v4_2_data/engine_test_results.tws.translation", "res://docs/sailing/v4_2_data/engine_test_results.throttle.translation", "res://docs/sailing/v4_2_data/engine_test_results.gear.translation", "res://docs/sailing/v4_2_data/engine_test_results.hdg.translation", "res://docs/sailing/v4_2_data/engine_test_results.sog.translation", "res://docs/sailing/v4_2_data/engine_test_results.longitudinal.translation", "res://docs/sailing/v4_2_data/engine_test_results.lateral.translation", "res://docs/sailing/v4_2_data/engine_test_results.engine.translation", "res://docs/sailing/v4_2_data/engine_test_results.thrust.translation", "res://docs/sailing/v4_2_data/engine_test_results.fuel.translation", "res://docs/sailing/v4_2_data/engine_test_results.consumption.translation", "res://docs/sailing/v4_2_data/engine_test_results.sail.translation", "res://docs/sailing/v4_2_data/engine_test_results.sail.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

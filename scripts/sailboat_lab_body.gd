@@ -63,6 +63,9 @@ static func world_arm_from_local_point(point_local: Vector3, center_of_mass_loca
 @export_range(0.0, 2.0, 0.01) var runtime_buoyancy_strength := 1.0
 @export_range(0.0, 2.0, 0.01) var runtime_damping_ratio := 0.55
 @export var enable_debug_anomaly_capture := true
+## P2.2-only readout. When enabled this only accumulates cached force moments;
+## it does not alter any force, sampling or classification path.
+@export var p22_extended_telemetry_enabled := false
 
 var _float_offsets := PackedVector3Array()
 var _wave_sampler: WaveSampler
@@ -148,6 +151,10 @@ var _hull_longitudinal_drag_quadratic := 85.0
 var _hull_lateral_drag_linear := 500.0
 var _hull_lateral_drag_quadratic := 250.0
 var _hull_drag_max_force_weight_ratio := 2.0
+var _hull_lateral_center_from_com_local_m := Vector3.ZERO
+## P2.12-only diagnostic lever arm, measured from the effective COM along local Z.
+## Zero preserves the production central-force path exactly.
+var _test_hull_lateral_application_offset_z_m := 0.0
 var _last_total_buoyancy_n := 0.0
 var _last_calculation_usec := 0
 var _last_physics_delta := 0.0
@@ -203,6 +210,12 @@ var _last_headsail_net_force_local_n := Vector3.ZERO
 var _last_headsail_net_force_world_n := Vector3.ZERO
 var _last_headsail_torque_local_nm := Vector3.ZERO
 var _last_hull_drag_force_local_n := Vector3.ZERO
+var _last_hull_drag_applied_force_local_n := Vector3.ZERO
+var _last_hull_lateral_velocity_local_mps := Vector3.ZERO
+var _last_hull_lateral_center_from_com_local_m := Vector3.ZERO
+var _last_hull_lateral_application_point_local_m := Vector3.ZERO
+var _last_hull_lateral_torque_local_nm := Vector3.ZERO
+var _last_hull_lateral_yaw_torque_nm := 0.0
 var _last_keel_relative_water_velocity_local_mps := Vector3.ZERO
 var _last_keel_result: Dictionary = {}
 var _last_rudder_relative_water_velocity_local_mps := Vector3.ZERO
@@ -213,6 +226,8 @@ var _last_keel_yaw_torque_nm := 0.0
 var _last_rudder_yaw_torque_nm := 0.0
 var _last_total_horizontal_force_local_n := Vector3.ZERO
 var _last_total_external_yaw_torque_nm := 0.0
+var _last_axis_damping_torque_local_nm := Vector3.ZERO
+var _last_buoyancy_torque_local_nm := Vector3.ZERO
 var _last_engine_force_local_n := Vector3.ZERO
 var _last_engine_thrust_forward_axis_n := 0.0
 var _last_engine_yaw_torque_nm := 0.0
@@ -345,6 +360,8 @@ func _ready() -> void:
 	_hull_lateral_drag_linear = float(profile.get("hull_lateral_drag_linear_n_s_m"))
 	_hull_lateral_drag_quadratic = float(profile.get("hull_lateral_drag_quadratic_n_s2_m2"))
 	_hull_drag_max_force_weight_ratio = float(profile.get("hull_drag_max_force_weight_ratio"))
+	var hull_lateral_center_value: Variant = profile.get("hull_lateral_center_from_com_local_m")
+	_hull_lateral_center_from_com_local_m = hull_lateral_center_value if hull_lateral_center_value is Vector3 else Vector3.ZERO
 	_point_water_heights_m.resize(FLOAT_POINT_COUNT)
 	_point_submergences_m.resize(FLOAT_POINT_COUNT)
 	_point_shallow_scales.resize(FLOAT_POINT_COUNT)
@@ -509,6 +526,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		float(profile.get("maximum_point_force_ratio"))
 	)
 	var total_buoyancy := 0.0
+	var total_buoyancy_torque_local := Vector3.ZERO
 	var submerged_count := 0
 	var body_origin := state.transform.origin
 	var body_basis := state.transform.basis
@@ -638,9 +656,20 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	if _lab_sail_forces_enabled and _headsail_enabled and headsail_net_world.length_squared() > 0.0:
 		state.apply_force(headsail_net_world, headsail_force_offset_world)
 	var local_velocity_through_water := body_basis.inverse() * (linear_velocity - _water_current_world_mps)
+	var hull_lateral_center_from_com_local_m := _hull_lateral_center_from_com_local_m + Vector3(0.0, 0.0, _test_hull_lateral_application_offset_z_m)
+	var hull_lateral_velocity_local_mps := local_velocity_through_water
+	if not hull_lateral_center_from_com_local_m.is_zero_approx():
+		var hull_lateral_arm_from_com_world_m := body_basis * hull_lateral_center_from_com_local_m
+		var hull_lateral_point_velocity_world_mps := linear_velocity + angular_velocity.cross(hull_lateral_arm_from_com_world_m)
+		hull_lateral_velocity_local_mps = body_basis.inverse() * (hull_lateral_point_velocity_world_mps - _water_current_world_mps)
+	var hull_drag_velocity_local_mps := Vector3(
+		hull_lateral_velocity_local_mps.x,
+		local_velocity_through_water.y,
+		local_velocity_through_water.z
+	)
 	var hull_drag_start_usec := Time.get_ticks_usec()
 	var hull_drag_local := HYDRO_MATH.calculate_hull_resistance(
-		local_velocity_through_water,
+		hull_drag_velocity_local_mps,
 		_hull_longitudinal_drag_linear,
 		_hull_longitudinal_drag_quadratic,
 		_hull_lateral_drag_linear,
@@ -648,8 +677,29 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		mass * _gravity_mps2 * _hull_drag_max_force_weight_ratio
 	)
 	hull_drag_calculation_usec = Time.get_ticks_usec() - hull_drag_start_usec
-	if hull_drag_local.length_squared() > 0.0:
-		state.apply_central_force(body_basis * hull_drag_local)
+	var hull_lateral_yaw_torque_nm := 0.0
+	var hull_lateral_application_point_local_m := center_of_mass + hull_lateral_center_from_com_local_m
+	var hull_applied_force_local := hull_drag_local
+	var hull_lateral_torque_local_nm := Vector3.ZERO
+	if not hull_lateral_center_from_com_local_m.is_zero_approx():
+		# Apply the one computed lateral resultant at its COM-relative point.
+		# Longitudinal resistance remains based on COM flow and applied centrally.
+		# apply_force's position is a body-origin offset, so convert the complete
+		# COM-local point through the rigid body's basis.
+		var hull_central_force_local := Vector3(0.0, hull_drag_local.y, hull_drag_local.z)
+		var hull_lateral_force_local := Vector3(hull_drag_local.x, 0.0, 0.0)
+		hull_applied_force_local = hull_central_force_local + hull_lateral_force_local
+		if hull_central_force_local.length_squared() > 0.0:
+			state.apply_central_force(body_basis * hull_central_force_local)
+		if hull_lateral_force_local.length_squared() > 0.0:
+			state.apply_force(body_basis * hull_lateral_force_local, body_basis * hull_lateral_application_point_local_m)
+		hull_lateral_torque_local_nm = hull_lateral_center_from_com_local_m.cross(hull_lateral_force_local)
+		hull_lateral_yaw_torque_nm = hull_lateral_torque_local_nm.y
+	else:
+		# Keep the default path byte-for-byte equivalent in its force application.
+		if hull_drag_local.length_squared() > 0.0:
+			state.apply_central_force(body_basis * hull_drag_local)
+			hull_applied_force_local = hull_drag_local
 
 	var keel_offset_world := body_basis * _keel_center_local_m
 	var keel_arm_from_com_world := world_arm_from_local_point(_keel_center_local_m, center_of_mass, body_basis)
@@ -700,6 +750,12 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		state.apply_force(body_basis * rudder_force_local, rudder_offset_world)
 
 	_last_hull_drag_force_local_n = hull_drag_local
+	_last_hull_drag_applied_force_local_n = hull_applied_force_local
+	_last_hull_lateral_velocity_local_mps = hull_lateral_velocity_local_mps
+	_last_hull_lateral_center_from_com_local_m = hull_lateral_center_from_com_local_m
+	_last_hull_lateral_application_point_local_m = hull_lateral_application_point_local_m
+	_last_hull_lateral_torque_local_nm = hull_lateral_torque_local_nm
+	_last_hull_lateral_yaw_torque_nm = hull_lateral_yaw_torque_nm
 	_last_keel_relative_water_velocity_local_mps = keel_velocity_local
 	_last_keel_result = keel_result
 	_last_rudder_relative_water_velocity_local_mps = rudder_velocity_local
@@ -713,7 +769,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	var applied_sail_yaw_torque := sail_yaw_torque if _lab_sail_forces_enabled else 0.0
 	var applied_headsail_yaw_torque := headsail_yaw_torque if _lab_sail_forces_enabled and _headsail_enabled else 0.0
 	_last_total_horizontal_force_local_n = applied_sail_force_local + applied_headsail_force_local + hull_drag_local + keel_force_local + rudder_force_local + engine_force_local
-	_last_total_external_yaw_torque_nm = applied_sail_yaw_torque + applied_headsail_yaw_torque + keel_yaw_torque + rudder_yaw_torque + engine_yaw_torque_nm
+	_last_total_external_yaw_torque_nm = applied_sail_yaw_torque + applied_headsail_yaw_torque + hull_lateral_yaw_torque_nm + keel_yaw_torque + rudder_yaw_torque + engine_yaw_torque_nm
 	_last_true_wind_world_mps = true_wind_world
 	_last_true_wind_from_degrees = true_wind_from_degrees
 	_last_apparent_wind_world_mps = apparent.get("apparent_velocity_world_mps", Vector3.ZERO)
@@ -793,9 +849,16 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		# the rigid body's origin, not the absolute point_world coordinate.
 		state.apply_force(Vector3.UP * force_y, world_offset)
 		total_buoyancy += force_y
+		if p22_extended_telemetry_enabled:
+			# The applied force is world-up, while the reported arm is body-local.
+			# Rotate the force into the same local frame before calculating the
+			# read-only telemetry moment. This does not change the force applied above.
+			var buoyancy_force_local := body_basis.inverse() * (Vector3.UP * force_y)
+			total_buoyancy_torque_local += (_float_offsets[index] - center_of_mass).cross(buoyancy_force_local)
 
 	_apply_axis_damping(state, body_basis)
 	_last_total_buoyancy_n = total_buoyancy
+	_last_buoyancy_torque_local_nm = total_buoyancy_torque_local if p22_extended_telemetry_enabled else Vector3.ZERO
 	_last_submerged_count = submerged_count
 	_last_physics_delta = state.step
 	_last_wave_time_seconds = sample_wave_time
@@ -828,6 +891,7 @@ func _apply_axis_damping(state: PhysicsDirectBodyState3D, body_basis: Basis) -> 
 		-local_angular_velocity.y * float(profile.get("yaw_damping_n_m_s_per_rad")),
 		-local_angular_velocity.z * float(profile.get("roll_damping_n_m_s_per_rad"))
 	)
+	_last_axis_damping_torque_local_nm = local_damping_torque
 	if local_damping_torque.length_squared() <= 0.0:
 		return
 	state.apply_torque(body_basis * local_damping_torque)
@@ -848,6 +912,10 @@ func get_debug_snapshot() -> Dictionary:
 		wind_override_state = str(_wind_field.get_debug_override_state())
 	return {
 		"mass_kg": mass,
+		"center_of_mass_local_m": center_of_mass,
+		"p22_extended_telemetry_enabled": p22_extended_telemetry_enabled,
+		"p22_buoyancy_torque_local_nm": _last_buoyancy_torque_local_nm,
+		"p22_axis_damping_torque_local_nm": _last_axis_damping_torque_local_nm,
 		"auxiliary_engine": get_auxiliary_engine_snapshot(),
 		"engine_force_local_n": _last_engine_force_local_n,
 		"engine_thrust_forward_axis_n": _last_engine_thrust_forward_axis_n,
@@ -911,6 +979,8 @@ func get_debug_snapshot() -> Dictionary:
 		"max_sail_angle_rad": _maximum_sail_angle_rad,
 		"sail_rotation_speed_rad_s": _sail_rotation_speed_rad_s,
 		"sail_area_m2": _sail_area_m2,
+		"sail_apparent_wind_speed_mps": _last_apparent_wind_speed_mps,
+		"sail_apparent_wind_from_angle_degrees": _last_apparent_wind_from_angle_degrees,
 		"sail_pressure_center_local_m": _last_sail_pressure_center_local_m,
 		"sail_wrong_side_lift_retention": _sail_wrong_side_lift_retention,
 		"sail_wrong_side_lift_scale": _last_sail_wrong_side_lift_scale,
@@ -957,7 +1027,17 @@ func get_debug_snapshot() -> Dictionary:
 		"headsail_roll_torque_local_nm": _last_headsail_torque_local_nm.z,
 		"headsail_yaw_torque_nm": _last_headsail_yaw_torque_nm,
 		"hull_drag_force_local_n": _last_hull_drag_force_local_n,
+		"hull_drag_applied_force_local_n": _last_hull_drag_applied_force_local_n,
+		"hull_lateral_force_local_n": Vector3(_last_hull_drag_force_local_n.x, 0.0, 0.0),
+		"hull_lateral_velocity_local_mps": _last_hull_lateral_velocity_local_mps,
+		"hull_lateral_center_from_com_local_m": _last_hull_lateral_center_from_com_local_m,
+		"hull_lateral_application_point_local_m": _last_hull_lateral_application_point_local_m,
+		"hull_lateral_application_offset_z_m": _last_hull_lateral_center_from_com_local_m.z,
+		"hull_lateral_torque_local_nm": _last_hull_lateral_torque_local_nm,
+		"hull_lateral_yaw_torque_nm": _last_hull_lateral_yaw_torque_nm,
 		"keel_center_local_m": _keel_center_local_m,
+		"keel_area_m2": _keel_area_m2,
+		"keel_result": _last_keel_result.duplicate(true),
 		"keel_relative_water_velocity_local_mps": _last_keel_relative_water_velocity_local_mps,
 		"keel_water_speed_mps": float(_last_keel_result.get("water_speed_mps", 0.0)),
 		"keel_side_slip_angle_rad": float(_last_keel_result.get("side_slip_angle_rad", 0.0)),
@@ -965,6 +1045,8 @@ func get_debug_snapshot() -> Dictionary:
 		"keel_force_local_n": _last_keel_result.get("net_force_local_n", Vector3.ZERO),
 		"keel_yaw_torque_nm": _last_keel_yaw_torque_nm,
 		"rudder_center_local_m": _rudder_center_local_m,
+		"rudder_area_m2": _rudder_area_m2,
+		"rudder_result": _last_rudder_result.duplicate(true),
 		"target_rudder_angle_rad": target_rudder_angle_rad,
 		"actual_rudder_angle_rad": actual_rudder_angle_rad,
 		"max_rudder_angle_rad": _maximum_rudder_angle_rad,
@@ -1052,6 +1134,14 @@ func get_s1_c4_diagnostic_snapshot() -> Dictionary:
 		"rudder_yaw_torque_local_nm": _last_rudder_yaw_torque_nm,
 		"rudder_yaw_torque_world_vertical_nm": (global_basis * Vector3(0.0, _last_rudder_yaw_torque_nm, 0.0)).y,
 		"hull_drag_force_local_n": _last_hull_drag_force_local_n,
+		"hull_drag_applied_force_local_n": _last_hull_drag_applied_force_local_n,
+		"hull_lateral_force_local_n": Vector3(_last_hull_drag_force_local_n.x, 0.0, 0.0),
+		"hull_lateral_velocity_local_mps": _last_hull_lateral_velocity_local_mps,
+		"hull_lateral_center_from_com_local_m": _last_hull_lateral_center_from_com_local_m,
+		"hull_lateral_application_point_local_m": _last_hull_lateral_application_point_local_m,
+		"hull_lateral_application_offset_z_m": _last_hull_lateral_center_from_com_local_m.z,
+		"hull_lateral_torque_local_nm": _last_hull_lateral_torque_local_nm,
+		"hull_lateral_yaw_torque_local_nm": _last_hull_lateral_yaw_torque_nm,
 		"total_force_local_n": _last_total_horizontal_force_local_n,
 		"explicit_yaw_damping_torque_local_nm": explicit_yaw_damping,
 		"summed_measured_yaw_torque_local_nm": local_total_yaw,
@@ -1621,6 +1711,15 @@ func reset_to_neutral(heading_degrees: float = 0.0) -> void:
 	_rudder_keyboard_active = false
 	runtime_buoyancy_strength = 1.0
 	runtime_damping_ratio = float(profile.get("buoyancy_damping_ratio"))
+
+
+func set_test_hull_lateral_resistance_application_offset_z_m(offset_from_com_z_m: float) -> bool:
+	## P2.12 test-only override. Values are a COM-relative local-Z lever arm;
+	## zero is the unchanged central-resistance behavior.
+	if not is_finite(offset_from_com_z_m) or absf(offset_from_com_z_m) > 0.300001:
+		return false
+	_test_hull_lateral_application_offset_z_m = offset_from_com_z_m
+	return true
 
 
 func set_test_initial_linear_velocity_local(velocity_mps: Vector3) -> void:

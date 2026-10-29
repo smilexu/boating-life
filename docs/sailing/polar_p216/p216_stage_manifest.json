@@ -1,0 +1,79 @@
+{
+	"boat_configuration_fingerprint": "e010cc7ad52ebc68af6483e4b483b6e381eb60899f9bf997a1fee422a17735a6",
+	"phase": "Nordic 28 P2.16 28 m2 sail upgrade",
+	"remaining_fingerprint": "07735d7f01e7581d640ed6367de2bf60568198b3a6848ca4357e1e86d4565eb8",
+	"remaining_test_run_id": "polar_2026-10-29_00-21-29_109491",
+	"rig_geometry": {
+		"boat_scene_path": "res://scenes/boats/SailingBoat8mP216.tscn",
+		"boom_length_m": 4.4,
+		"boom_pivot_local_m": "(0.0, 2.4111, -1.0)",
+		"boom_roof_clearance_m": 0.900023937225342,
+		"dynamic_sail_separation_check": {
+			"jib_trim_steps_checked": 141,
+			"main_and_jib_separated_by_mast_plane": true,
+			"main_trim_steps_checked": 161,
+			"tested_jib_mirror_angles_degrees": [
+				30,
+				45,
+				60,
+				70
+			],
+			"valid": true
+		},
+		"jib_area_physics_m2": 10.323244,
+		"jib_area_visual_m2": 10.3232440948486,
+		"jib_centroid_delta_m": 0.0,
+		"jib_foot_clearance_by_angle_m": {
+			"-80.0": 0.181602001190186,
+			"-70.0": 0.181602001190186,
+			"-60.0": 0.181602001190186,
+			"-30.0": 0.181602001190186,
+			"0.0": 0.181602001190186,
+			"30.0": 0.181602001190186,
+			"60.0": 0.181602001190186,
+			"70.0": 0.181602001190186,
+			"80.0": 0.181602001190186
+		},
+		"jib_head_below_main_head_m": 0.108400344848633,
+		"jib_head_local_m": "(0.0, 10.33, -1.0)",
+		"jib_pressure_center_local_m": "(0.0, 4.486666, -1.8666)",
+		"jib_tack_local_m": "(0.0, 1.9614, -3.5498)",
+		"jib_tack_matches_p23c_accepted_position": true,
+		"main_centroid_delta_m": 0.0,
+		"main_head_local_m": "(0.0, 10.4384, -1.0)",
+		"main_pressure_center_local_m": "(0.0, 4.786867, 0.466667)",
+		"main_sail_area_physics_m2": 17.66006,
+		"main_sail_area_visual_m2": 17.6600608825684,
+		"mast_base_local_m": "(0.0, 1.3184, -1.0)",
+		"mast_length_m": 9.3,
+		"mast_top_local_m": "(0.0, 10.6184, -1.0)",
+		"minimum_sampled_boom_hull_clearance_m": 0.745381060987711,
+		"minimum_sampled_jib_foot_hull_clearance_m": 0.181602001190186,
+		"physics_profile_path": "res://resources/sailing/nordic28_p216_physics_profile.tres",
+		"protected_profile_check": {
+			"only_physical_changes": [
+				"main_sail_area_m2",
+				"main_sail_pressure_center_from_pivot_m",
+				"headsail_area_m2",
+				"headsail_head_local_m",
+				"headsail_tack_local_m",
+				"headsail_clew_neutral_local_m"
+			],
+			"only_visual_anchor_changes": [
+				"mast_length_m",
+				"main_head_local_m",
+				"jib_head_local_m",
+				"jib_tack_local_m",
+				"jib_clew_local_m"
+			],
+			"valid": true
+		},
+		"total_area_physics_m2": 27.983304,
+		"total_area_visual_m2": 27.983304977417,
+		"valid": true,
+		"visual_assembly_offset_local_m": "(0.0, -0.3, 0.0)",
+		"visual_profile_path": "res://resources/sailing/nordic28_p216_visual_rig_profile.tres"
+	},
+	"smoke_fingerprint": "e010cc7ad52ebc68af6483e4b483b6e381eb60899f9bf997a1fee422a17735a6",
+	"smoke_test_run_id": "polar_2026-10-29_00-20-26_458381"
+}

@@ -1,0 +1,30 @@
+{
+  "passed": true,
+  "complete": true,
+  "expected_case_count": 180,
+  "result_count": 180,
+  "expected_tws_kn": [
+    4.0,
+    8.0,
+    12.0,
+    16.0,
+    20.0
+  ],
+  "status_counts": {
+    "STABLE": 109,
+    "NO_FORWARD_PROGRESS": 10,
+    "HEADING_FAILED": 61
+  },
+  "timing": {
+    "engine_physics_ticks_per_second_setting": 480.0,
+    "time_scale": 8.0,
+    "expected_simulated_step_seconds": 0.0166666666666667,
+    "time_scale_divided_by_engine_ticks_seconds": 0.016666666666666666,
+    "effective_simulated_steps_per_second": 59.99999999999988,
+    "accelerated_execution_preserves_step": true
+  },
+  "errors": [],
+  "warnings": [
+    "physical/control failures are retained as measured statuses; they are not converted to zero-speed Polar points"
+  ]
+}

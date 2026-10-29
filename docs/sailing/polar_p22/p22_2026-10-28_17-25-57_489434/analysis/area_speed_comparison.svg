@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="640" viewBox="0 0 1160 640">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="580.0" y="38" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" font-weight="bold">P2.2 · Sail-area sensitivity (stable mirror pairs only)</text>
+<text transform="translate(26 282.5) rotate(-90)" text-anchor="middle" font-family="Arial,sans-serif" font-size="15">Mean SOG (kn)</text>
+<line x1="95" y1="485.0" x2="1130" y2="485.0" stroke="#e3e7eb"/>
+<text x="85" y="490.0" text-anchor="end" font-family="Arial,sans-serif" font-size="12" fill="#46515c">-0.44</text>
+<line x1="95" y1="404.0" x2="1130" y2="404.0" stroke="#e3e7eb"/>
+<text x="85" y="409.0" text-anchor="end" font-family="Arial,sans-serif" font-size="12" fill="#46515c">0.47</text>
+<line x1="95" y1="323.0" x2="1130" y2="323.0" stroke="#e3e7eb"/>
+<text x="85" y="328.0" text-anchor="end" font-family="Arial,sans-serif" font-size="12" fill="#46515c">1.37</text>
+<line x1="95" y1="242.0" x2="1130" y2="242.0" stroke="#e3e7eb"/>
+<text x="85" y="247.0" text-anchor="end" font-family="Arial,sans-serif" font-size="12" fill="#46515c">2.28</text>
+<line x1="95" y1="161.0" x2="1130" y2="161.0" stroke="#e3e7eb"/>
+<text x="85" y="166.0" text-anchor="end" font-family="Arial,sans-serif" font-size="12" fill="#46515c">3.18</text>
+<line x1="95" y1="80.0" x2="1130" y2="80.0" stroke="#e3e7eb"/>
+<text x="85" y="85.0" text-anchor="end" font-family="Arial,sans-serif" font-size="12" fill="#46515c">4.08</text>
+<line x1="95" y1="445.8" x2="1130" y2="445.8" stroke="#4b5560" stroke-width="1.4"/>
+<rect x="143.3" y="340.6" width="54.6" height="105.2" fill="#286c9c" rx="2"/>
+<text x="170.6" y="335.6" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#26313a">1.17</text>
+<rect x="205.4" y="287.9" width="54.6" height="157.9" fill="#e19732" rx="2"/>
+<text x="232.7" y="282.9" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#26313a">1.76</text>
+<rect x="267.5" y="280.9" width="54.6" height="165.0" fill="#4d9673" rx="2"/>
+<text x="294.8" y="275.9" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#26313a">1.84</text>
+<rect x="329.6" y="274.1" width="54.6" height="171.7" fill="#bd5b55" rx="2"/>
+<text x="356.9" y="269.1" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#26313a">1.92</text>
+<text x="267.5" y="513" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" fill="#26313a">8 kn · 90°</text>
+<rect x="488.3" y="255.5" width="54.6" height="190.3" fill="#286c9c" rx="2"/>
+<text x="515.6" y="250.5" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#26313a">2.13</text>
+<rect x="550.4" y="171.6" width="54.6" height="274.2" fill="#e19732" rx="2"/>
+<text x="577.7" y="166.6" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#26313a">3.06</text>
+<rect x="612.5" y="160.9" width="54.6" height="284.9" fill="#4d9673" rx="2"/>
+<text x="639.8" y="155.9" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#26313a">3.18</text>
+<rect x="674.6" y="150.7" width="54.6" height="295.1" fill="#bd5b55" rx="2"/>
+<text x="701.9" y="145.7" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#26313a">3.30</text>
+<text x="612.5" y="513" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" fill="#26313a">12 kn · 90°</text>
+<rect x="833.3" y="232.1" width="54.6" height="213.7" fill="#286c9c" rx="2"/>
+<text x="860.6" y="227.1" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#26313a">2.39</text>
+<rect x="895.4" y="142.0" width="54.6" height="303.8" fill="#e19732" rx="2"/>
+<text x="922.7" y="137.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#26313a">3.39</text>
+<rect x="957.5" y="130.4" width="54.6" height="315.4" fill="#4d9673" rx="2"/>
+<text x="984.8" y="125.4" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#26313a">3.52</text>
+<rect x="1019.6" y="119.2" width="54.6" height="326.6" fill="#bd5b55" rx="2"/>
+<text x="1046.9" y="114.2" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#26313a">3.65</text>
+<text x="957.5" y="513" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" fill="#26313a">12 kn · 120°</text>
+<rect x="420.0" y="585" width="14" height="14" fill="#286c9c"/>
+<text x="440.0" y="597" font-family="Arial,sans-serif" font-size="12">BASE</text>
+<rect x="500.0" y="585" width="14" height="14" fill="#e19732"/>
+<text x="520.0" y="597" font-family="Arial,sans-serif" font-size="12">SA28</text>
+<rect x="580.0" y="585" width="14" height="14" fill="#4d9673"/>
+<text x="600.0" y="597" font-family="Arial,sans-serif" font-size="12">SA30</text>
+<rect x="660.0" y="585" width="14" height="14" fill="#bd5b55"/>
+<text x="680.0" y="597" font-family="Arial,sans-serif" font-size="12">SA32</text>
+</svg>

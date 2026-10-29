@@ -1,0 +1,112 @@
+{
+  "boat_config_hash": "3624fa129819b7c3036ca83bd7c4ed6251f8f56f8b5a9182c395f282d79216e3",
+  "boat_scene_path": "res://scenes/boats/SailingBoat8mP23.tscn",
+  "conditions": [
+    [
+      8.0,
+      90.0
+    ],
+    [
+      12.0,
+      50.0
+    ],
+    [
+      12.0,
+      70.0
+    ],
+    [
+      12.0,
+      90.0
+    ],
+    [
+      12.0,
+      120.0
+    ]
+  ],
+  "execution_acceleration": {
+    "engine_physics_ticks_per_second": 480,
+    "time_scale": 8.0
+  },
+  "fixed_wind_from_degrees": 180.0,
+  "fixed_wind_seed": 481516,
+  "geometry": {
+    "boat_scene_file_path": "res://scenes/boats/SailingBoat8mP23.tscn",
+    "boom_length_m": 4.4,
+    "boom_pivot_local_m": "(0.0, 2.4111, -1.0)",
+    "jib_center_delta_m": 2.38418579101562e-07,
+    "jib_clew_neutral_local_m": "(0.0, 1.6686, 0.366524)",
+    "jib_head_local_m": "(0.0, 7.95, -1.0)",
+    "jib_physics_area_m2": 12.09994,
+    "jib_physics_center_body_local_m": "(0.0, 3.56, -1.394425)",
+    "jib_tack_local_m": "(0.0, 1.9614, -3.5498)",
+    "jib_visual_area_m2": 12.0999393463135,
+    "jib_visual_center_body_local_m": "(0.0, 3.56, -1.394425)",
+    "main_center_delta_m": 0.0,
+    "main_clew_neutral_local_m": "(0.0, 2.4111, 3.4)",
+    "main_head_local_m": "(0.0, 9.6384, -1.0)",
+    "main_physics_area_m2": 15.90006,
+    "main_physics_center_body_local_m": "(0.0, 4.5202, 0.466667)",
+    "main_tack_local_m": "(0.0, 2.4111, -1.0)",
+    "main_visual_area_m2": 15.9000606536865,
+    "main_visual_center_body_local_m": "(0.0, 4.5202, 0.466667)",
+    "mast_base_local_m": "(0.0, 1.3184, -1.0)",
+    "mast_length_m": 8.5,
+    "mast_top_local_m": "(0.0, 9.8184, -1.0)",
+    "physics_profile_path": "res://resources/sailing/nordic28_p23_physics_profile.tres",
+    "total_sail_area_m2": 28.0,
+    "valid": true,
+    "visual_assembly_offset_local_m": "(0.0, -0.3, 0.0)",
+    "visual_profile_path": "res://resources/sailing/nordic28_p23_visual_rig_profile.tres"
+  },
+  "phase": "Nordic 28 P2.3 geometric rig experiment",
+  "physics_profile_path": "res://resources/sailing/nordic28_p23_physics_profile.tres",
+  "physics_step_seconds": 0.0166666666666667,
+  "polar_config_hash": "3624fa129819b7c3036ca83bd7c4ed6251f8f56f8b5a9182c395f282d79216e3",
+  "stability_windows_seconds": {
+    "post_stability_sample": 30.0,
+    "timeout": 300.0,
+    "warmup_minimum": 60.0,
+    "window": 30.0
+  },
+  "tacks": [
+    "PORT",
+    "STARBOARD"
+  ],
+  "test_run_id": "polar_2026-10-28_18-08-12_256122",
+  "visual_profile_path": "res://resources/sailing/nordic28_p23_visual_rig_profile.tres",
+  "waves": "static zero amplitude; WaveSampler remains active",
+  "wind_speed_knots": [
+    8.0,
+    12.0
+  ],
+  "visual_alignment_inspection": {
+    "cabin_roof_y_m": 1.51107597351074,
+    "mast_step_embed_measured_m": 0.0299503331405184,
+    "boom_roof_clearance_m": 0.900023937225342,
+    "main_boom_clearance_at_trim_angles_m": {
+      "0": 0.745381060987711,
+      "30": 0.83982652798295,
+      "-30": 0.92202777042985,
+      "60": 0.83982652798295,
+      "-60": 0.91067260876298,
+      "80": 0.83982652798295,
+      "-80": 0.92790288105607
+    },
+    "jib_clew_clearance_at_trim_angles_m": {
+      "0": 0.156882166862488,
+      "45": null,
+      "-45": null,
+      "70": 0.181602001190186,
+      "-70": 0.17662525177002
+    },
+    "jib_null_clearances_meaning": "No hull mesh samples within the visual probe radius at ±45°; this is not evidence of zero clearance or collision."
+  },
+  "p23_runner_sha256": "861f428ae04894400df7e32412dbedcb3e8a482937d34901d6b4fe25725e9645",
+  "experiment_resource_sha256": {
+    "resources/sailing/nordic28_p23_physics_profile.tres": "68f1233326fe97ea56fd3077fa512bae21f7f14578c8cb45221ad2ccc2dfc569",
+    "resources/sailing/nordic28_p23_visual_rig_profile.tres": "30619fb39d89e866e4a03a6568cdb0aeb49ba1be124757334d85b526906f3b23",
+    "resources/sailing/nordic28_visual_rig_profile.gd": "48780e2a1c90ba82d1393d7e67f6f10d34cd23b72c82d90da657146e5e21bdcd",
+    "scenes/boats/SailingBoat8mP23.tscn": "cf651769b711c6b36db28dc2baa6724b16e4d498dd6a71c906b27c19a3f10bfd",
+    "scenes/SailboatLabP23.tscn": "990432613196252919826dcd19bfcc3da94c7214e8146795076e6b3a36852370"
+  }
+}

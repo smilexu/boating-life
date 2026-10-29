@@ -1,0 +1,182 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="24.0" y="30.0" text-anchor="start" font-family="Arial,sans-serif" font-size="20" fill="#14283a">Nordic 28 · Heel</text>
+<text x="24.0" y="52.0" text-anchor="start" font-family="Arial,sans-serif" font-size="12" fill="#586a79">Signed heel angle from the physical snapshot; signed TWA keeps Port and Starboard separate. Gaps remain where no stable result exists.</text>
+<line x1="80.0" y1="90.0" x2="80.0" y2="480.0" stroke="#e7ecef"/>
+<line x1="80.0" y1="480.0" x2="860.0" y2="480.0" stroke="#e7ecef"/>
+<text x="80.0" y="500.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#526474">-180</text>
+<text x="68.0" y="484.0" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#526474">-11.9</text>
+<line x1="236.0" y1="90.0" x2="236.0" y2="480.0" stroke="#e7ecef"/>
+<line x1="80.0" y1="402.0" x2="860.0" y2="402.0" stroke="#e7ecef"/>
+<text x="236.0" y="500.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#526474">-108</text>
+<text x="68.0" y="406.0" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#526474">-7.1</text>
+<line x1="392.0" y1="90.0" x2="392.0" y2="480.0" stroke="#e7ecef"/>
+<line x1="80.0" y1="324.0" x2="860.0" y2="324.0" stroke="#e7ecef"/>
+<text x="392.0" y="500.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#526474">-36</text>
+<text x="68.0" y="328.0" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#526474">-2.4</text>
+<line x1="548.0" y1="90.0" x2="548.0" y2="480.0" stroke="#e7ecef"/>
+<line x1="80.0" y1="246.0" x2="860.0" y2="246.0" stroke="#e7ecef"/>
+<text x="548.0" y="500.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#526474">36</text>
+<text x="68.0" y="250.0" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#526474">2.4</text>
+<line x1="704.0" y1="90.0" x2="704.0" y2="480.0" stroke="#e7ecef"/>
+<line x1="80.0" y1="168.0" x2="860.0" y2="168.0" stroke="#e7ecef"/>
+<text x="704.0" y="500.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#526474">108</text>
+<text x="68.0" y="172.0" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#526474">7.1</text>
+<line x1="860.0" y1="90.0" x2="860.0" y2="480.0" stroke="#e7ecef"/>
+<line x1="80.0" y1="90.0" x2="860.0" y2="90.0" stroke="#e7ecef"/>
+<text x="860.0" y="500.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#526474">180</text>
+<text x="68.0" y="94.0" text-anchor="end" font-family="Arial,sans-serif" font-size="10" fill="#526474">11.9</text>
+<line x1="80.0" y1="480.0" x2="860.0" y2="480.0" stroke="#364c5c"/>
+<line x1="80.0" y1="90.0" x2="80.0" y2="480.0" stroke="#364c5c"/>
+<text x="470.0" y="536.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" fill="#283d4d">Signed target TWA (degrees)</text>
+<text transform="translate(20 285.0) rotate(-90)" text-anchor="middle" font-family="Arial,sans-serif" font-size="12" fill="#283d4d">Mean heel (degrees)</text>
+<polyline points="101.7,285.7 123.3,285.4 145.0,285.4 166.7,285.8 188.3,286.4 210.0,287.1 231.7,287.9 253.3,288.6 275.0,289.3" fill="none" stroke="#1769aa" stroke-width="2" stroke-dasharray="6 4"/>
+<path d="M101.7,281.7 l4,8 h-8 z" fill="#1769aa"/>
+<path d="M123.3,281.4 l4,8 h-8 z" fill="#1769aa"/>
+<path d="M145.0,281.4 l4,8 h-8 z" fill="#1769aa"/>
+<path d="M166.7,281.8 l4,8 h-8 z" fill="#1769aa"/>
+<path d="M188.3,282.4 l4,8 h-8 z" fill="#1769aa"/>
+<path d="M210.0,283.1 l4,8 h-8 z" fill="#1769aa"/>
+<path d="M231.7,283.9 l4,8 h-8 z" fill="#1769aa"/>
+<path d="M253.3,284.6 l4,8 h-8 z" fill="#1769aa"/>
+<path d="M275.0,285.3 l4,8 h-8 z" fill="#1769aa"/>
+<line x1="88.0" y1="72.0" x2="103.0" y2="72.0" stroke="#1769aa" stroke-width="2"/>
+<text x="107.0" y="76.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">4 kn PORT</text>
+<polyline points="665.0,280.7 686.7,281.4 708.3,282.1 730.0,282.9 751.7,283.6 773.3,284.2 795.0,284.6 816.7,284.6 838.3,284.3" fill="none" stroke="#1769aa" stroke-width="2"/>
+<circle cx="665.0" cy="280.7" r="3.6" fill="#1769aa"/>
+<circle cx="686.7" cy="281.4" r="3.6" fill="#1769aa"/>
+<circle cx="708.3" cy="282.1" r="3.6" fill="#1769aa"/>
+<circle cx="730.0" cy="282.9" r="3.6" fill="#1769aa"/>
+<circle cx="751.7" cy="283.6" r="3.6" fill="#1769aa"/>
+<circle cx="773.3" cy="284.2" r="3.6" fill="#1769aa"/>
+<circle cx="795.0" cy="284.6" r="3.6" fill="#1769aa"/>
+<circle cx="816.7" cy="284.6" r="3.6" fill="#1769aa"/>
+<circle cx="838.3" cy="284.3" r="3.6" fill="#1769aa"/>
+<line x1="244.0" y1="72.0" x2="259.0" y2="72.0" stroke="#1769aa" stroke-width="2"/>
+<text x="263.0" y="76.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">4 kn STARBOARD</text>
+<circle cx="860.0" cy="283.8" r="3.6" fill="#1769aa"/>
+<line x1="400.0" y1="72.0" x2="415.0" y2="72.0" stroke="#1769aa" stroke-width="2"/>
+<text x="419.0" y="76.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">4 kn boundary</text>
+<polyline points="101.7,287.9 123.3,286.5 145.0,286.4 166.7,287.9 188.3,290.6 210.0,293.9 231.7,297.5 253.3,301.0 275.0,304.1 296.7,307.0" fill="none" stroke="#d1495b" stroke-width="2" stroke-dasharray="6 4"/>
+<path d="M101.7,283.9 l4,8 h-8 z" fill="#d1495b"/>
+<path d="M123.3,282.5 l4,8 h-8 z" fill="#d1495b"/>
+<path d="M145.0,282.4 l4,8 h-8 z" fill="#d1495b"/>
+<path d="M166.7,283.9 l4,8 h-8 z" fill="#d1495b"/>
+<path d="M188.3,286.6 l4,8 h-8 z" fill="#d1495b"/>
+<path d="M210.0,289.9 l4,8 h-8 z" fill="#d1495b"/>
+<path d="M231.7,293.5 l4,8 h-8 z" fill="#d1495b"/>
+<path d="M253.3,297.0 l4,8 h-8 z" fill="#d1495b"/>
+<path d="M275.0,300.1 l4,8 h-8 z" fill="#d1495b"/>
+<path d="M296.7,303.0 l4,8 h-8 z" fill="#d1495b"/>
+<line x1="556.0" y1="72.0" x2="571.0" y2="72.0" stroke="#d1495b" stroke-width="2"/>
+<text x="575.0" y="76.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">8 kn PORT</text>
+<polyline points="643.3,263.0 665.0,265.9 686.7,269.0 708.3,272.5 730.0,276.1 751.7,279.4 773.3,282.1 795.0,283.6 816.7,283.5 838.3,282.1" fill="none" stroke="#d1495b" stroke-width="2"/>
+<circle cx="643.3" cy="263.0" r="3.6" fill="#d1495b"/>
+<circle cx="665.0" cy="265.9" r="3.6" fill="#d1495b"/>
+<circle cx="686.7" cy="269.0" r="3.6" fill="#d1495b"/>
+<circle cx="708.3" cy="272.5" r="3.6" fill="#d1495b"/>
+<circle cx="730.0" cy="276.1" r="3.6" fill="#d1495b"/>
+<circle cx="751.7" cy="279.4" r="3.6" fill="#d1495b"/>
+<circle cx="773.3" cy="282.1" r="3.6" fill="#d1495b"/>
+<circle cx="795.0" cy="283.6" r="3.6" fill="#d1495b"/>
+<circle cx="816.7" cy="283.5" r="3.6" fill="#d1495b"/>
+<circle cx="838.3" cy="282.1" r="3.6" fill="#d1495b"/>
+<line x1="712.0" y1="72.0" x2="727.0" y2="72.0" stroke="#d1495b" stroke-width="2"/>
+<text x="731.0" y="76.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">8 kn STARBOARD</text>
+<circle cx="860.0" cy="280.4" r="3.6" fill="#d1495b"/>
+<line x1="88.0" y1="88.0" x2="103.0" y2="88.0" stroke="#d1495b" stroke-width="2"/>
+<text x="107.0" y="92.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">8 kn boundary</text>
+<polyline points="101.7,291.3 123.3,288.1 145.0,288.0 166.7,291.6 188.3,298.1 210.0,305.7 231.7,314.4 253.3,322.8 275.0,330.0 296.7,337.8 318.3,342.8" fill="none" stroke="#2a9d8f" stroke-width="2" stroke-dasharray="6 4"/>
+<path d="M101.7,287.3 l4,8 h-8 z" fill="#2a9d8f"/>
+<path d="M123.3,284.1 l4,8 h-8 z" fill="#2a9d8f"/>
+<path d="M145.0,284.0 l4,8 h-8 z" fill="#2a9d8f"/>
+<path d="M166.7,287.6 l4,8 h-8 z" fill="#2a9d8f"/>
+<path d="M188.3,294.1 l4,8 h-8 z" fill="#2a9d8f"/>
+<path d="M210.0,301.7 l4,8 h-8 z" fill="#2a9d8f"/>
+<path d="M231.7,310.4 l4,8 h-8 z" fill="#2a9d8f"/>
+<path d="M253.3,318.8 l4,8 h-8 z" fill="#2a9d8f"/>
+<path d="M275.0,326.0 l4,8 h-8 z" fill="#2a9d8f"/>
+<path d="M296.7,333.8 l4,8 h-8 z" fill="#2a9d8f"/>
+<path d="M318.3,338.8 l4,8 h-8 z" fill="#2a9d8f"/>
+<line x1="244.0" y1="88.0" x2="259.0" y2="88.0" stroke="#2a9d8f" stroke-width="2"/>
+<text x="263.0" y="92.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">12 kn PORT</text>
+<polyline points="621.7,227.2 643.3,232.2 665.0,240.0 686.7,247.2 708.3,255.6 730.0,264.3 751.7,271.9 773.3,278.4 795.0,282.0 816.7,281.9 838.3,278.7" fill="none" stroke="#2a9d8f" stroke-width="2"/>
+<circle cx="621.7" cy="227.2" r="3.6" fill="#2a9d8f"/>
+<circle cx="643.3" cy="232.2" r="3.6" fill="#2a9d8f"/>
+<circle cx="665.0" cy="240.0" r="3.6" fill="#2a9d8f"/>
+<circle cx="686.7" cy="247.2" r="3.6" fill="#2a9d8f"/>
+<circle cx="708.3" cy="255.6" r="3.6" fill="#2a9d8f"/>
+<circle cx="730.0" cy="264.3" r="3.6" fill="#2a9d8f"/>
+<circle cx="751.7" cy="271.9" r="3.6" fill="#2a9d8f"/>
+<circle cx="773.3" cy="278.4" r="3.6" fill="#2a9d8f"/>
+<circle cx="795.0" cy="282.0" r="3.6" fill="#2a9d8f"/>
+<circle cx="816.7" cy="281.9" r="3.6" fill="#2a9d8f"/>
+<circle cx="838.3" cy="278.7" r="3.6" fill="#2a9d8f"/>
+<line x1="400.0" y1="88.0" x2="415.0" y2="88.0" stroke="#2a9d8f" stroke-width="2"/>
+<text x="419.0" y="92.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">12 kn STARBOARD</text>
+<circle cx="860.0" cy="275.1" r="3.6" fill="#2a9d8f"/>
+<line x1="556.0" y1="88.0" x2="571.0" y2="88.0" stroke="#2a9d8f" stroke-width="2"/>
+<text x="575.0" y="92.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">12 kn boundary</text>
+<polyline points="101.7,295.7 123.3,290.3 145.0,290.2 166.7,296.9 188.3,308.8 210.0,322.6 231.7,338.7 253.3,354.1 275.0,367.2 296.7,382.4 318.3,391.4" fill="none" stroke="#8a5fbf" stroke-width="2" stroke-dasharray="6 4"/>
+<path d="M101.7,291.7 l4,8 h-8 z" fill="#8a5fbf"/>
+<path d="M123.3,286.3 l4,8 h-8 z" fill="#8a5fbf"/>
+<path d="M145.0,286.2 l4,8 h-8 z" fill="#8a5fbf"/>
+<path d="M166.7,292.9 l4,8 h-8 z" fill="#8a5fbf"/>
+<path d="M188.3,304.8 l4,8 h-8 z" fill="#8a5fbf"/>
+<path d="M210.0,318.6 l4,8 h-8 z" fill="#8a5fbf"/>
+<path d="M231.7,334.7 l4,8 h-8 z" fill="#8a5fbf"/>
+<path d="M253.3,350.1 l4,8 h-8 z" fill="#8a5fbf"/>
+<path d="M275.0,363.2 l4,8 h-8 z" fill="#8a5fbf"/>
+<path d="M296.7,378.4 l4,8 h-8 z" fill="#8a5fbf"/>
+<path d="M318.3,387.4 l4,8 h-8 z" fill="#8a5fbf"/>
+<line x1="712.0" y1="88.0" x2="727.0" y2="88.0" stroke="#8a5fbf" stroke-width="2"/>
+<text x="731.0" y="92.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">16 kn PORT</text>
+<polyline points="621.7,178.6 643.3,187.6 665.0,202.8 686.7,215.9 708.3,231.3 730.0,247.4 751.7,261.2 773.3,273.1 795.0,279.8 816.7,279.7 838.3,274.3" fill="none" stroke="#8a5fbf" stroke-width="2"/>
+<circle cx="621.7" cy="178.6" r="3.6" fill="#8a5fbf"/>
+<circle cx="643.3" cy="187.6" r="3.6" fill="#8a5fbf"/>
+<circle cx="665.0" cy="202.8" r="3.6" fill="#8a5fbf"/>
+<circle cx="686.7" cy="215.9" r="3.6" fill="#8a5fbf"/>
+<circle cx="708.3" cy="231.3" r="3.6" fill="#8a5fbf"/>
+<circle cx="730.0" cy="247.4" r="3.6" fill="#8a5fbf"/>
+<circle cx="751.7" cy="261.2" r="3.6" fill="#8a5fbf"/>
+<circle cx="773.3" cy="273.1" r="3.6" fill="#8a5fbf"/>
+<circle cx="795.0" cy="279.8" r="3.6" fill="#8a5fbf"/>
+<circle cx="816.7" cy="279.7" r="3.6" fill="#8a5fbf"/>
+<circle cx="838.3" cy="274.3" r="3.6" fill="#8a5fbf"/>
+<line x1="88.0" y1="104.0" x2="103.0" y2="104.0" stroke="#8a5fbf" stroke-width="2"/>
+<text x="107.0" y="108.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">16 kn STARBOARD</text>
+<circle cx="860.0" cy="268.0" r="3.6" fill="#8a5fbf"/>
+<line x1="244.0" y1="104.0" x2="259.0" y2="104.0" stroke="#8a5fbf" stroke-width="2"/>
+<text x="263.0" y="108.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">16 kn boundary</text>
+<polyline points="101.7,301.2 123.3,292.9 145.0,293.1 166.7,303.9 188.3,322.8 210.0,344.8 231.7,370.3 253.3,394.7 275.0,416.8 296.7,440.2 318.3,454.6" fill="none" stroke="#e08e0b" stroke-width="2" stroke-dasharray="6 4"/>
+<path d="M101.7,297.2 l4,8 h-8 z" fill="#e08e0b"/>
+<path d="M123.3,288.9 l4,8 h-8 z" fill="#e08e0b"/>
+<path d="M145.0,289.1 l4,8 h-8 z" fill="#e08e0b"/>
+<path d="M166.7,299.9 l4,8 h-8 z" fill="#e08e0b"/>
+<path d="M188.3,318.8 l4,8 h-8 z" fill="#e08e0b"/>
+<path d="M210.0,340.8 l4,8 h-8 z" fill="#e08e0b"/>
+<path d="M231.7,366.3 l4,8 h-8 z" fill="#e08e0b"/>
+<path d="M253.3,390.7 l4,8 h-8 z" fill="#e08e0b"/>
+<path d="M275.0,412.8 l4,8 h-8 z" fill="#e08e0b"/>
+<path d="M296.7,436.2 l4,8 h-8 z" fill="#e08e0b"/>
+<path d="M318.3,450.6 l4,8 h-8 z" fill="#e08e0b"/>
+<line x1="400.0" y1="104.0" x2="415.0" y2="104.0" stroke="#e08e0b" stroke-width="2"/>
+<text x="419.0" y="108.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">20 kn PORT</text>
+<polyline points="621.7,115.4 643.3,129.8 665.0,153.2 686.7,175.3 708.3,199.7 730.0,225.2 751.7,247.2 773.3,266.1 795.0,276.9 816.7,277.1 838.3,268.8" fill="none" stroke="#e08e0b" stroke-width="2"/>
+<circle cx="621.7" cy="115.4" r="3.6" fill="#e08e0b"/>
+<circle cx="643.3" cy="129.8" r="3.6" fill="#e08e0b"/>
+<circle cx="665.0" cy="153.2" r="3.6" fill="#e08e0b"/>
+<circle cx="686.7" cy="175.3" r="3.6" fill="#e08e0b"/>
+<circle cx="708.3" cy="199.7" r="3.6" fill="#e08e0b"/>
+<circle cx="730.0" cy="225.2" r="3.6" fill="#e08e0b"/>
+<circle cx="751.7" cy="247.2" r="3.6" fill="#e08e0b"/>
+<circle cx="773.3" cy="266.1" r="3.6" fill="#e08e0b"/>
+<circle cx="795.0" cy="276.9" r="3.6" fill="#e08e0b"/>
+<circle cx="816.7" cy="277.1" r="3.6" fill="#e08e0b"/>
+<circle cx="838.3" cy="268.8" r="3.6" fill="#e08e0b"/>
+<line x1="556.0" y1="104.0" x2="571.0" y2="104.0" stroke="#e08e0b" stroke-width="2"/>
+<text x="575.0" y="108.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">20 kn STARBOARD</text>
+<circle cx="860.0" cy="259.1" r="3.6" fill="#e08e0b"/>
+<line x1="712.0" y1="104.0" x2="727.0" y2="104.0" stroke="#e08e0b" stroke-width="2"/>
+<text x="731.0" y="108.0" text-anchor="start" font-family="Arial,sans-serif" font-size="9" fill="#354b5b">20 kn boundary</text>
+</svg>

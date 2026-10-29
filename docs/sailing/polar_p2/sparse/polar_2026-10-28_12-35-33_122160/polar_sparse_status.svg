@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="480" viewBox="0 0 900 480">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="24.0" y="30.0" text-anchor="start" font-family="Arial,sans-serif" font-size="20" fill="#14283a">Nordic 28 · Polar case status</text>
+<text x="24.0" y="52.0" text-anchor="start" font-family="Arial,sans-serif" font-size="12" fill="#586a79">Each bar is a TWS; each segment is a recorded status. Missing cases are listed separately in the summary.</text>
+<rect x="165.8" y="210.8" width="75.0" height="169.2" fill="#2f9e72"/>
+<text x="203.3" y="299.4" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#ffffff">7</text>
+<rect x="165.8" y="186.7" width="75.0" height="24.2" fill="#e3a33a"/>
+<text x="203.3" y="202.8" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#ffffff">1</text>
+<rect x="165.8" y="90.0" width="75.0" height="96.7" fill="#d25b53"/>
+<text x="203.3" y="142.3" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#ffffff">4</text>
+<text x="203.3" y="402.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" fill="#354b5b">6 kn</text>
+<text x="203.3" y="83.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#566978">n=12</text>
+<rect x="412.5" y="210.8" width="75.0" height="169.2" fill="#2f9e72"/>
+<text x="450.0" y="299.4" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#ffffff">7</text>
+<rect x="412.5" y="90.0" width="75.0" height="120.8" fill="#d25b53"/>
+<text x="450.0" y="154.4" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#ffffff">5</text>
+<text x="450.0" y="402.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" fill="#354b5b">12 kn</text>
+<text x="450.0" y="83.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#566978">n=12</text>
+<rect x="659.2" y="210.8" width="75.0" height="169.2" fill="#2f9e72"/>
+<text x="696.7" y="299.4" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#ffffff">7</text>
+<rect x="659.2" y="90.0" width="75.0" height="120.8" fill="#d25b53"/>
+<text x="696.7" y="154.4" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#ffffff">5</text>
+<text x="696.7" y="402.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="11" fill="#354b5b">20 kn</text>
+<text x="696.7" y="83.0" text-anchor="middle" font-family="Arial,sans-serif" font-size="10" fill="#566978">n=12</text>
+<rect x="90.0" y="410.0" width="12" height="12" fill="#2f9e72"/>
+<text x="108.0" y="421.0" text-anchor="start" font-family="Arial,sans-serif" font-size="10" fill="#3a4c5b">STABLE</text>
+<rect x="280.0" y="410.0" width="12" height="12" fill="#e3a33a"/>
+<text x="298.0" y="421.0" text-anchor="start" font-family="Arial,sans-serif" font-size="10" fill="#3a4c5b">NO_FORWARD_PROGRESS</text>
+<rect x="470.0" y="410.0" width="12" height="12" fill="#d25b53"/>
+<text x="488.0" y="421.0" text-anchor="start" font-family="Arial,sans-serif" font-size="10" fill="#3a4c5b">HEADING_FAILED</text>
+<rect x="660.0" y="410.0" width="12" height="12" fill="#9b72bd"/>
+<text x="678.0" y="421.0" text-anchor="start" font-family="Arial,sans-serif" font-size="10" fill="#3a4c5b">UNSTABLE</text>
+<rect x="90.0" y="434.0" width="12" height="12" fill="#657b91"/>
+<text x="108.0" y="445.0" text-anchor="start" font-family="Arial,sans-serif" font-size="10" fill="#3a4c5b">TIMEOUT</text>
+<rect x="280.0" y="434.0" width="12" height="12" fill="#262f38"/>
+<text x="298.0" y="445.0" text-anchor="start" font-family="Arial,sans-serif" font-size="10" fill="#3a4c5b">INVALID</text>
+<rect x="470.0" y="434.0" width="12" height="12" fill="#aab2b9"/>
+<text x="488.0" y="445.0" text-anchor="start" font-family="Arial,sans-serif" font-size="10" fill="#3a4c5b">INTERRUPTED</text>
+</svg>

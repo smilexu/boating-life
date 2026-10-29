@@ -1,0 +1,17 @@
+[gd_resource type="Resource" format=3]
+
+[ext_resource type="Script" path="res://resources/sailing/sailboat_lab_profile.gd" id="1_lyj2y"]
+
+[resource]
+script = ExtResource("1_lyj2y")
+float_point_offsets_m = PackedVector3Array(-0.65, -0.5, -2.4, 0.65, -0.5, -2.4, -0.65, -0.5, 2.4, 0.65, -0.5, 2.4)
+main_sail_area_m2 = 15.90006
+main_sail_pivot_local_m = Vector3(0, 2.1111, -1)
+main_sail_pressure_center_from_pivot_m = Vector3(0, 2.4091, 1.4666667)
+auto_main_trim_curve_points_degrees = PackedVector2Array(0, 10, 30, 10, 45, 20, 60, 30, 80.2, 60, 108.1, 79.9, 143.1, 79.9, 180, 79.9)
+auto_headsail_trim_curve_points_degrees = PackedVector2Array(0, 10, 30, 10, 45, 15, 60, 25, 80.2, 55, 108.1, 70, 143.1, 70, 180, 70)
+headsail_area_m2 = 6.59991
+headsail_head_local_m = Vector3(0, 7.65, -1)
+headsail_tack_local_m = Vector3(0, 1.6614, -3.5498)
+headsail_clew_neutral_local_m = Vector3(0, 1.7686, -1.3)
+keel_center_local_m = Vector3(0, -1.05, 0.45)

@@ -45,6 +45,10 @@ func _ready() -> void:
 	var snapshot: Dictionary = _boat.call("get_debug_snapshot")
 	_dynamic_water_selected = bool(snapshot.get("dynamic_waves_enabled", true))
 	_apply_water_display_mode()
+	var polar_runner := get_node_or_null("PolarTestRunner") as PolarTestRunner
+	if polar_runner != null:
+		polar_runner.boat_scene_change_requested.connect(_on_polar_boat_scene_change_requested)
+		polar_runner.set_boat_instance(_boat)
 
 
 func _process(delta: float) -> void:
@@ -229,6 +233,66 @@ func is_camera_follow_enabled() -> bool:
 
 func set_camera_follow_enabled(enabled: bool) -> void:
 	set_camera_mode(CameraMode.FOLLOW if enabled else CameraMode.FIXED)
+
+
+func _on_polar_boat_scene_change_requested(scene_path: String) -> void:
+	if not _replace_lab_boat(scene_path):
+		return
+	var polar_runner := get_node_or_null("PolarTestRunner") as PolarTestRunner
+	if polar_runner != null:
+		polar_runner.set_boat_instance(_boat)
+	var debug_panel := get_node_or_null("DebugPanel")
+	if debug_panel != null and debug_panel.has_method("set_boat_reference"):
+		debug_panel.call("set_boat_reference", _boat)
+	if _wave_sampler != null:
+		_wave_sampler.set_phase_anchor_node(_boat)
+
+
+func _replace_lab_boat(scene_path: String) -> bool:
+	var packed := load(scene_path) as PackedScene
+	if packed == null:
+		push_warning("Polar scene selection is not a PackedScene: %s" % scene_path)
+		return false
+	var replacement := packed.instantiate() as Node3D
+	if replacement == null:
+		push_warning("Polar scene must have a Node3D root: %s" % scene_path)
+		return false
+	for method_name in ["get_navigation_snapshot", "get_s1_c4_diagnostic_snapshot", "get_debug_snapshot", "set_lab_test_wind"]:
+		if not replacement.has_method(method_name):
+			push_warning("Polar scene is missing the sailboat test API '%s': %s" % [method_name, scene_path])
+			replacement.free()
+			return false
+	var previous := _boat
+	var previous_transform := previous.global_transform
+	previous.name = "RetiredSailboatBody"
+	if previous is RigidBody3D:
+		(previous as RigidBody3D).collision_layer = 0
+		(previous as RigidBody3D).collision_mask = 0
+		(previous as RigidBody3D).freeze = true
+		(previous as RigidBody3D).set_process(false)
+		(previous as RigidBody3D).set_physics_process(false)
+	replacement.name = "SailboatBody"
+	if _has_property(replacement, "wave_sampler_path"):
+		replacement.set("wave_sampler_path", ^"../WaveSampler")
+	if _has_property(replacement, "wind_field_path"):
+		replacement.set("wind_field_path", ^"../WindField")
+	if _has_property(replacement, "auto_reset_on_ready"):
+		replacement.set("auto_reset_on_ready", true)
+	if _has_property(replacement, "keyboard_controls_enabled"):
+		replacement.set("keyboard_controls_enabled", true)
+	add_child(replacement)
+	move_child(replacement, 0)
+	replacement.global_transform = previous_transform
+	_boat = replacement
+	previous.queue_free()
+	return true
+
+
+func _has_property(object: Object, property_name: String) -> bool:
+	for property in object.get_property_list():
+		if str(property.get("name", "")) == property_name:
+			return true
+	return false
 
 
 func set_dynamic_waves_enabled(enabled: bool) -> void:

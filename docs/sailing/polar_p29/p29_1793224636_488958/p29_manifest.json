@@ -1,0 +1,97 @@
+{
+	"base_physics_profile_path": "res://resources/sailing/nordic28_p23c_physics_profile.tres",
+	"base_physics_profile_sha256": "9a50a679dd7abb550deeeb145f1badff813bd1eb50505eae608b44fac3ff8551",
+	"baseline_configuration_hash": "fff7841f8afdb2ee2a742b05e606c51d9b530c052f815f59931bd47b7e7da18f",
+	"baseline_run_id": "polar_2026-10-28_19-27-37_907713",
+	"boat_scene_path": "res://scenes/boats/SailingBoat8mP23c.tscn",
+	"error": "",
+	"experiment_run_id": "p29_1793224636_488958",
+	"phase": "Nordic 28 P2.9 keel side-force sensitivity",
+	"profile_validation": {
+		"base_keel_area_m2": 2.2,
+		"base_keel_cl_max": 1.15,
+		"base_profile_path": "res://resources/sailing/nordic28_p23c_physics_profile.tres",
+		"boat_scene_path": "res://scenes/boats/SailingBoat8mP23c.tscn",
+		"single_variable_profile_check": "pass",
+		"valid": true,
+		"variants": [
+			{
+				"id": "K1",
+				"label": "area_plus_20_percent",
+				"property": "keel_area_m2",
+				"value": 2.64
+			},
+			{
+				"id": "K2",
+				"label": "area_plus_40_percent",
+				"property": "keel_area_m2",
+				"value": 3.08
+			},
+			{
+				"id": "K3",
+				"label": "cl_max_plus_20_percent",
+				"property": "keel_max_lift_coefficient",
+				"value": 1.38
+			}
+		],
+		"visual_profile_path": "res://resources/sailing/nordic28_p23c_visual_rig_profile.tres"
+	},
+	"runner_sha256": "4ebc7e9b0e496d6df204ffd2d4cacdcb65b57248dbff8a1d0b8bbeae19af8d0f",
+	"runs": [
+		{
+			"boat_config_hash": "9e4b56bc7d357596e462e78ee38bcf4245b72c2416b9455c61dc899fa603865a",
+			"config_hash": "9e4b56bc7d357596e462e78ee38bcf4245b72c2416b9455c61dc899fa603865a",
+			"profile_path": "res://docs/sailing/polar_p29/p29_1793224636_488958/profiles/k1_physics_profile.tres",
+			"profile_sha256": "a06ad380ef71b63f1781f2c144b69e3772fda51e83c811c7c837ad165a97b9bb",
+			"result_status": "HEADING_FAILED",
+			"run_id": "polar_2026-10-28_21-57-17_394991",
+			"runner_artifact_directory": "res://docs/sailing/polar_p29/p29_1793224636_488958/runner_runs/k1",
+			"runtime_keel_area_m2": 2.64,
+			"variant": {
+				"id": "K1",
+				"label": "area_plus_20_percent",
+				"property": "keel_area_m2",
+				"value": 2.64
+			}
+		},
+		{
+			"boat_config_hash": "434c29ca12178f83b3de944aeb65bf82079b4cb12ee607511cd4d0e1d13fc4fe",
+			"config_hash": "434c29ca12178f83b3de944aeb65bf82079b4cb12ee607511cd4d0e1d13fc4fe",
+			"profile_path": "res://docs/sailing/polar_p29/p29_1793224636_488958/profiles/k2_physics_profile.tres",
+			"profile_sha256": "f742062420e737adc67f38b5f6b01bf9319762bb69827ac13dfabdcc753c676f",
+			"result_status": "HEADING_FAILED",
+			"run_id": "polar_2026-10-28_21-57-48_693073",
+			"runner_artifact_directory": "res://docs/sailing/polar_p29/p29_1793224636_488958/runner_runs/k2",
+			"runtime_keel_area_m2": 3.08,
+			"variant": {
+				"id": "K2",
+				"label": "area_plus_40_percent",
+				"property": "keel_area_m2",
+				"value": 3.08
+			}
+		},
+		{
+			"boat_config_hash": "e60212fa65e91148fc87b0b9a9ac9128cb78d4629161c3a92220e1d126f2aecd",
+			"config_hash": "e60212fa65e91148fc87b0b9a9ac9128cb78d4629161c3a92220e1d126f2aecd",
+			"profile_path": "res://docs/sailing/polar_p29/p29_1793224636_488958/profiles/k3_physics_profile.tres",
+			"profile_sha256": "1f0d7514f673c89c628fb900db83b4d7e652e7af80f7028330213f26a46372f8",
+			"result_status": "HEADING_FAILED",
+			"run_id": "polar_2026-10-28_21-58-20_153766",
+			"runner_artifact_directory": "res://docs/sailing/polar_p29/p29_1793224636_488958/runner_runs/k3",
+			"runtime_keel_area_m2": 2.2,
+			"variant": {
+				"id": "K3",
+				"label": "cl_max_plus_20_percent",
+				"property": "keel_max_lift_coefficient",
+				"value": 1.38
+			}
+		}
+	],
+	"stop_after_current": false,
+	"test_script_sha256": "362724355a505fecd7bd8a3c5954de29708bf99b12c0e613cda79e72b914a8d5",
+	"timestamp": "2026-10-28T21:58:51",
+	"visual_profile_path": "res://resources/sailing/nordic28_p23c_visual_rig_profile.tres",
+	"visual_profile_sha256": "c7b2bdad425f8b5d8762fcd7dc451d1fdd282c97b34c5a9de1063c6bd9012938",
+	"post_measurement_archive_script_sha256": "d8a49bd60eaeab6548027ad3aabd81a5fd939edb854b4b2b10598f40eb40c505",
+	"archive_cleanup_note": "After physical runs, only aggregate archive formatting changed: omitted the duplicated P2.5 yaw series and pre-physics CL snapshot, and added forward-force/resistance columns. No simulation code, test case, or physics value changed; test_script_sha256 remains the execution-time script hash."
+}

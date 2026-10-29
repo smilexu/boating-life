@@ -1,0 +1,187 @@
+{
+	"boat_config_hash": "b39611aa4b4a213a52bb982ac7528d0fb8ebfc7c46a437d09f7412b0dbf3d205",
+	"boat_scene_path": "res://scenes/boats/SailingBoat8m.tscn",
+	"case_count": 14,
+	"config": {
+		"case_timeout_seconds": 300.0,
+		"engine_physics_ticks_per_second": 480.0,
+		"explicit_cases": [
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_8_70_port",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 8 kn / 70° · PORT",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "PORT",
+				"target_twa_deg": -70.0,
+				"target_tws_kn": 8.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_8_70_starboard",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 8 kn / 70° · STARBOARD",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "STARBOARD",
+				"target_twa_deg": 70.0,
+				"target_tws_kn": 8.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_8_90_port",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 8 kn / 90° · PORT",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "PORT",
+				"target_twa_deg": -90.0,
+				"target_tws_kn": 8.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_8_90_starboard",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 8 kn / 90° · STARBOARD",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "STARBOARD",
+				"target_twa_deg": 90.0,
+				"target_tws_kn": 8.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_8_120_port",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 8 kn / 120° · PORT",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "PORT",
+				"target_twa_deg": -120.0,
+				"target_tws_kn": 8.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_8_120_starboard",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 8 kn / 120° · STARBOARD",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "STARBOARD",
+				"target_twa_deg": 120.0,
+				"target_tws_kn": 8.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_12_50_port",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 12 kn / 50° · PORT",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "PORT",
+				"target_twa_deg": -50.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_12_50_starboard",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 12 kn / 50° · STARBOARD",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "STARBOARD",
+				"target_twa_deg": 50.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_12_70_port",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 12 kn / 70° · PORT",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "PORT",
+				"target_twa_deg": -70.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_12_70_starboard",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 12 kn / 70° · STARBOARD",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "STARBOARD",
+				"target_twa_deg": 70.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_12_90_port",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 12 kn / 90° · PORT",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "PORT",
+				"target_twa_deg": -90.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_12_90_starboard",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 12 kn / 90° · STARBOARD",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "STARBOARD",
+				"target_twa_deg": 90.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_12_120_port",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 12 kn / 120° · PORT",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "PORT",
+				"target_twa_deg": -120.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "base_12_120_starboard",
+				"experiment_group": "BASE",
+				"experiment_label": "BASE · 12 kn / 120° · STARBOARD",
+				"experiment_variable": "area_total_15.3202495574951_m2",
+				"tack": "STARBOARD",
+				"target_twa_deg": 120.0,
+				"target_tws_kn": 12.0
+			}
+		],
+		"fixed_wind_seed": 481516.0,
+		"include_extended_telemetry": true,
+		"include_port_tack": true,
+		"include_starboard_tack": true,
+		"maximum_heading_error_degrees": 5.0,
+		"maximum_mean_twa_error_degrees": 5.0,
+		"maximum_rudder_saturation_fraction": 0.2,
+		"maximum_speed_half_window_delta_mps": 0.12,
+		"maximum_speed_standard_deviation_mps": 0.2,
+		"minimum_warmup_seconds": 60.0,
+		"no_forward_progress_threshold_mps": 0.1,
+		"physics_step_seconds": 0.0166666666666667,
+		"rudder_d_gain": 3.0,
+		"rudder_limit_degrees": 35.0,
+		"rudder_p_gain": 5.0,
+		"sample_window_seconds": 30.0,
+		"stability_window_seconds": 30.0,
+		"time_scale": 8.0,
+		"twa_end_degrees": 180.0,
+		"twa_start_degrees": 0.0,
+		"twa_step_degrees": 10.0,
+		"tws_knots": [
+			4.0,
+			8.0,
+			12.0,
+			16.0,
+			20.0
+		],
+		"wave_mode": "zero_amplitude",
+		"wind_from_degrees": 180.0
+	},
+	"configured_headsail_area_m2": 5.15999985096032,
+	"configured_main_sail_area_m2": 10.1602497065348,
+	"configured_total_sail_area_m2": 15.3202495574951,
+	"group": "BASE",
+	"phase": "area",
+	"test_run_id": "polar_2026-10-28_16-28-33_182247"
+}

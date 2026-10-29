@@ -1,0 +1,34 @@
+{
+	"boat_config_hash": "076608298ca0ae23bfba51107c283695057ecd19dfe47692f291b662fd883c1a",
+	"boat_scene_path": "res://scenes/boats/SailingBoat8mP23c.tscn",
+	"experiment": "Nordic 28 P2.4 six-condition dynamics and control diagnostics",
+	"geometry": {
+		"boat_scene_file_path": "res://scenes/boats/SailingBoat8mP23c.tscn",
+		"boom_length_m": 4.4,
+		"jib_center_delta_m": 0.000000238418579101562,
+		"jib_physics_area_m2": 6.59991,
+		"jib_physics_center_body_local_m": "(0.0, 3.693333, -1.949933)",
+		"jib_visual_area_m2": 6.59990692138672,
+		"jib_visual_center_body_local_m": "(0.0, 3.693333, -1.949933)",
+		"main_center_delta_m": 0.0,
+		"main_physics_area_m2": 15.90006,
+		"main_physics_center_body_local_m": "(0.0, 4.5202, 0.466667)",
+		"main_visual_area_m2": 15.9000606536865,
+		"main_visual_center_body_local_m": "(0.0, 4.5202, 0.466667)",
+		"mast_length_m": 8.5,
+		"physics_profile_path": "res://resources/sailing/nordic28_p23c_physics_profile.tres",
+		"total_physics_area_m2": 22.49997,
+		"valid": true,
+		"visual_assembly_offset_local_m": "(0.0, -0.3, 0.0)",
+		"visual_profile_path": "res://resources/sailing/nordic28_p23c_visual_rig_profile.tres"
+	},
+	"physics_profile_path": "res://resources/sailing/nordic28_p23c_physics_profile.tres",
+	"polar_config_hash": "076608298ca0ae23bfba51107c283695057ecd19dfe47692f291b662fd883c1a",
+	"result_count": 6,
+	"status_counts": {
+		"HEADING_FAILED": 2,
+		"STABLE": 4
+	},
+	"test_run_id": "polar_2026-10-28_19-06-59_469219",
+	"visual_profile_path": "res://resources/sailing/nordic28_p23c_visual_rig_profile.tres"
+}

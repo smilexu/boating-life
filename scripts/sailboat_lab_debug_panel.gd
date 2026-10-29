@@ -64,11 +64,28 @@ var _sail_wireframe_toggle: CheckButton
 var _sail_logo_toggle: CheckButton
 var _sail_rigging_toggle: CheckButton
 var _sail_visual_metrics_label: Label
+var _polar_runner: PolarTestRunner
+var _polar_status_label: Label
+var _polar_scene_option: OptionButton
+var _polar_tws_edit: LineEdit
+var _polar_twa_start: SpinBox
+var _polar_twa_end: SpinBox
+var _polar_twa_step: SpinBox
+var _polar_port_toggle: CheckButton
+var _polar_starboard_toggle: CheckButton
+var _polar_start_button: Button
+var _polar_stop_button: Button
+var _polar_resume_button: Button
+var _polar_retry_button: Button
+var _polar_page: VBoxContainer
+var _debug_tabs: TabContainer
+var _navigation_instrument: Control
 
 
 func _ready() -> void:
 	_boat = get_node_or_null(boat_path)
 	_lab_root = get_parent()
+	_polar_runner = get_node_or_null(^"../PolarTestRunner") as PolarTestRunner
 	_wave_sampler = get_node_or_null(^"../WaveSampler") as WaveSampler
 	_sail_visual_controller = _boat.get_node_or_null("VisualRoot/SailVisuals") if _boat != null else null
 	_build_panel()
@@ -83,6 +100,7 @@ func _process(delta: float) -> void:
 		return
 	_refresh_elapsed = 0.0
 	_refresh_metrics()
+	_refresh_polar_status()
 
 
 func _build_panel() -> void:
@@ -122,6 +140,7 @@ func _build_panel() -> void:
 	tabs.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	outer.add_child(tabs)
+	_debug_tabs = tabs
 
 	var status_page := _new_scroll_page(tabs, "状态")
 	_metrics_label = Label.new()
@@ -352,6 +371,10 @@ func _build_panel() -> void:
 	_engine_feedback_label = _make_note("W/S 缓慢调整油门；Y 启动/关闭；U 换档。可用“无风”测试环境对比纯机动。测试燃油量不影响 Main 船舶实例。")
 	engine_page.add_child(_engine_feedback_label)
 	engine_page.add_child(_make_note("推力以额定功率 × 推进效率 ÷ 相对船速估算，并受系数配置的系柱推力上限约束。引擎关闭时无主动推力；风帆仍由原物理模块处理。"))
+
+	var polar_page := _new_scroll_page(tabs, "Polar 自动测试")
+	_polar_page = polar_page
+	_build_polar_page(polar_page)
 	underwater_page.add_child(_section_title("海面显示 · 仅控制可见水面 Mesh"))
 	_water_display_option = OptionButton.new()
 	_water_display_option.add_item("正常海面")
@@ -402,11 +425,26 @@ func _build_panel() -> void:
 	footer.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	outer.add_child(footer)
 
-	var navigation_instrument := Control.new()
-	navigation_instrument.name = "NavigationInstrument"
-	navigation_instrument.set_script(NAVIGATION_INSTRUMENT_SCRIPT)
-	root.add_child(navigation_instrument)
-	navigation_instrument.call("configure", _boat)
+	_navigation_instrument = Control.new()
+	_navigation_instrument.name = "NavigationInstrument"
+	_navigation_instrument.set_script(NAVIGATION_INSTRUMENT_SCRIPT)
+	root.add_child(_navigation_instrument)
+	_navigation_instrument.call("configure", _boat)
+	_refresh_metrics()
+	_refresh_polar_status()
+
+
+func set_boat_reference(boat: Node) -> void:
+	_boat = boat
+	_sail_visual_controller = _boat.get_node_or_null("VisualRoot/SailVisuals") if _boat != null else null
+	if _navigation_instrument != null:
+		_navigation_instrument.call("configure", _boat)
+	if _headsail_toggle != null:
+		_headsail_toggle.set_pressed_no_signal(bool(_boat.call("is_headsail_enabled")) if _boat != null and _boat.has_method("is_headsail_enabled") else true)
+	if _auto_trim_toggle != null:
+		_auto_trim_toggle.set_pressed_no_signal(bool(_boat.call("get_auto_sail_trim_enabled")) if _boat != null and _boat.has_method("get_auto_sail_trim_enabled") else false)
+	if _polar_runner != null:
+		_polar_runner.set_boat_instance(_boat)
 	_refresh_metrics()
 
 
@@ -421,6 +459,182 @@ func _new_scroll_page(parent: TabContainer, page_name: String) -> VBoxContainer:
 	content.add_theme_constant_override("separation", 9)
 	scroll.add_child(content)
 	return content
+
+
+func _build_polar_page(page: VBoxContainer) -> void:
+	page.add_child(_section_title("真实帆船物理 · 仅实验室使用"))
+	page.add_child(_make_note("固定 WindField 来向与静水 WaveSampler 振幅；使用实际船舵闭环保持目标 TWA，并使用现有 AUTO Trim。不会锁船首或写入船速。"))
+	_polar_scene_option = OptionButton.new()
+	_polar_scene_option.name = "PolarBoatScene"
+	_polar_scene_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if _polar_runner != null:
+		for scene_path in _polar_runner.get_available_boat_scene_paths():
+			_polar_scene_option.add_item(scene_path.get_file().get_basename())
+			_polar_scene_option.set_item_metadata(_polar_scene_option.item_count - 1, scene_path)
+			if scene_path == _polar_runner.get_selected_boat_scene_path():
+				_polar_scene_option.select(_polar_scene_option.item_count - 1)
+	_polar_scene_option.item_selected.connect(_on_polar_boat_selected)
+	page.add_child(_polar_scene_option)
+	var polar_profile: Resource = _polar_runner.profile if _polar_runner != null else null
+	page.add_child(_section_title("真风速 TWS 列表 · 节"))
+	_polar_tws_edit = LineEdit.new()
+	_polar_tws_edit.name = "PolarTwsKnots"
+	var default_tws_text := PackedStringArray()
+	if polar_profile != null:
+		for speed in polar_profile.get("target_tws_knots"):
+			default_tws_text.append("%.0f" % float(speed))
+	_polar_tws_edit.text = ", ".join(default_tws_text) if not default_tws_text.is_empty() else "4, 8, 12, 16, 20"
+	_polar_tws_edit.placeholder_text = "例如：4, 8, 12"
+	page.add_child(_polar_tws_edit)
+	page.add_child(_section_title("绝对 TWA 范围 · 度"))
+	_polar_twa_start = _make_polar_spin(0.0, 180.0, 10.0, float(polar_profile.get("twa_start_degrees")) if polar_profile != null else 0.0)
+	_polar_twa_start.name = "PolarTwaStart"
+	_polar_twa_end = _make_polar_spin(0.0, 180.0, 10.0, float(polar_profile.get("twa_end_degrees")) if polar_profile != null else 180.0)
+	_polar_twa_end.name = "PolarTwaEnd"
+	_polar_twa_step = _make_polar_spin(1.0, 45.0, 1.0, float(polar_profile.get("twa_step_degrees")) if polar_profile != null else 10.0)
+	_polar_twa_step.name = "PolarTwaStep"
+	page.add_child(_make_labeled_control("起始角", _polar_twa_start))
+	page.add_child(_make_labeled_control("结束角", _polar_twa_end))
+	page.add_child(_make_labeled_control("步长", _polar_twa_step))
+	_polar_port_toggle = CheckButton.new()
+	_polar_port_toggle.text = "左舷（负 TWA）"
+	_polar_port_toggle.button_pressed = bool(polar_profile.get("include_port_tack")) if polar_profile != null else true
+	page.add_child(_polar_port_toggle)
+	_polar_starboard_toggle = CheckButton.new()
+	_polar_starboard_toggle.text = "右舷（正 TWA）"
+	_polar_starboard_toggle.button_pressed = bool(polar_profile.get("include_starboard_tack")) if polar_profile != null else true
+	page.add_child(_polar_starboard_toggle)
+	page.add_child(_make_note("0° 和 180° 为对称边界，每个风速只运行一次。默认全部配置约 180 个工况；本轮验证请先缩小 TWS 列表和 TWA 范围，不要启动全量扫描。"))
+	var buttons := HBoxContainer.new()
+	_polar_start_button = _make_button("开始批量测试", _start_polar_batch)
+	_polar_stop_button = _make_button("安全中断", _stop_polar_batch)
+	_polar_resume_button = _make_button("恢复 checkpoint", _resume_polar_batch)
+	_polar_retry_button = _make_button("重跑失败工况", _retry_polar_batch)
+	buttons.add_child(_polar_start_button)
+	buttons.add_child(_polar_stop_button)
+	page.add_child(buttons)
+	page.add_child(_polar_resume_button)
+	page.add_child(_polar_retry_button)
+	_polar_status_label = _make_note("等待 Polar runner。")
+	_polar_status_label.name = "PolarTestStatus"
+	page.add_child(_polar_status_label)
+	page.add_child(_make_note("输出位于 user://polar_tests/<run_id>/：polar_results.csv、polar_results.json、polar_summary.json 与 polar_checkpoint.json。恢复要求船型、物理脚本和测试条件指纹完全一致。"))
+	if _polar_runner != null:
+		_polar_runner.progress_changed.connect(_on_polar_progress_changed)
+		_polar_runner.test_run_finished.connect(_on_polar_run_finished)
+	_polar_stop_button.disabled = true
+
+
+func _make_polar_spin(minimum: float, maximum: float, step: float, value: float) -> SpinBox:
+	var spin := SpinBox.new()
+	spin.min_value = minimum
+	spin.max_value = maximum
+	spin.step = step
+	spin.value = value
+	spin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return spin
+
+
+func _make_labeled_control(title: String, control: Control) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = title
+	label.custom_minimum_size.x = 76.0
+	row.add_child(label)
+	row.add_child(control)
+	return row
+
+
+func _collect_polar_ui_config() -> Dictionary:
+	var speeds: Array[float] = []
+	for token in _polar_tws_edit.text.replace(";", ",").split(",", false):
+		var value := str(token).strip_edges().to_float()
+		if value > 0.0 and value <= 40.0:
+			speeds.append(value)
+	return {
+		"tws_knots": speeds,
+		"twa_start_degrees": _polar_twa_start.value,
+		"twa_end_degrees": _polar_twa_end.value,
+		"twa_step_degrees": _polar_twa_step.value,
+		"include_port_tack": _polar_port_toggle.button_pressed,
+		"include_starboard_tack": _polar_starboard_toggle.button_pressed,
+	}
+
+
+func _start_polar_batch() -> void:
+	if _polar_runner != null:
+		_polar_runner.start_new_batch(_collect_polar_ui_config())
+
+
+func _stop_polar_batch() -> void:
+	if _polar_runner != null:
+		_polar_runner.request_stop()
+
+
+func _resume_polar_batch() -> void:
+	if _polar_runner != null:
+		_polar_runner.resume_latest(_collect_polar_ui_config())
+
+
+func _retry_polar_batch() -> void:
+	if _polar_runner != null:
+		_polar_runner.retry_failed_latest(_collect_polar_ui_config())
+
+
+func _on_polar_boat_selected(index: int) -> void:
+	if _polar_runner == null or index < 0:
+		return
+	var path := str(_polar_scene_option.get_item_metadata(index))
+	_polar_runner.select_boat_scene(path)
+
+
+func _on_polar_progress_changed(_snapshot: Dictionary) -> void:
+	_refresh_polar_status()
+
+
+func _on_polar_run_finished(_snapshot: Dictionary) -> void:
+	_refresh_polar_status()
+
+
+func _refresh_polar_status() -> void:
+	if _polar_runner == null or _polar_status_label == null:
+		return
+	var state := _polar_runner.get_status_snapshot()
+	var text := "状态：%s\n船型：%s\n" % [str(state.get("status", "就绪")), str(state.get("boat_scene_path", "未选择"))]
+	if bool(state.get("running", false)):
+		text += "工况：%d/%d · %s\n" % [int(state.get("current_case_index", 0)), int(state.get("case_count", 0)), str(state.get("current_case_id", ""))]
+		text += "已完成：%d · 模拟时间：%.0f s\n" % [int(state.get("completed_count", 0)), float(state.get("simulation_seconds", 0.0))]
+		text += "TWS %.1f kn · 目标 TWA %+.1f° · 当前 TWA %+.1f°\n" % [float(state.get("target_tws_kn", 0.0)), float(state.get("target_twa_deg", 0.0)), float(state.get("measured_twa_deg", 0.0))]
+		text += "SOG %.2f kn · 舵 %+.1f° · 主帆 %+.1f° · Jib %+.1f°\n" % [float(state.get("sog_kn", 0.0)), float(state.get("rudder_deg", 0.0)), float(state.get("main_sail_deg", 0.0)), float(state.get("headsail_deg", 0.0))]
+		text += "稳定性：%s\n" % str(state.get("stability_status", "采集中"))
+	text += "最近输出：%s" % str(state.get("output_path", "尚无文件"))
+	_polar_status_label.text = text
+	if _polar_start_button != null:
+		_polar_start_button.disabled = bool(state.get("running", false))
+		_polar_stop_button.disabled = not bool(state.get("running", false))
+		_polar_resume_button.disabled = bool(state.get("running", false))
+		_polar_retry_button.disabled = bool(state.get("running", false))
+	_set_other_tabs_enabled(not bool(state.get("running", false)))
+
+
+func _set_other_tabs_enabled(enabled: bool) -> void:
+	if _debug_tabs == null or _polar_page == null:
+		return
+	for page in _debug_tabs.get_children():
+		if page.get_child_count() > 0 and page.get_child(0) == _polar_page:
+			continue
+		_set_control_tree_enabled(page, enabled)
+
+
+func _set_control_tree_enabled(node: Node, enabled: bool) -> void:
+	if node is BaseButton:
+		(node as BaseButton).disabled = not enabled
+	elif node is Range:
+		(node as Range).editable = enabled
+	elif node is LineEdit:
+		(node as LineEdit).editable = enabled
+	for child in node.get_children():
+		_set_control_tree_enabled(child, enabled)
 
 
 func _section_title(text: String) -> Label:

@@ -1,0 +1,83 @@
+[gd_scene load_steps=15 format=3]
+
+[ext_resource type="Script" path="res://scripts/sailboat_lab.gd" id="1_lab"]
+[ext_resource type="Script" path="res://scripts/sailboat_lab_debug_panel.gd" id="2_debug"]
+[ext_resource type="ShaderMaterial" path="res://materials/sea_water_material.tres" id="3_water_material"]
+[ext_resource type="Resource" path="res://resources/sea_waves.tres" id="4_waves"]
+[ext_resource type="Script" path="res://scripts/wave_sampler.gd" id="5_wave_sampler"]
+[ext_resource type="Script" path="res://scripts/bathymetry_manager.gd" id="6_bathymetry"]
+[ext_resource type="Resource" path="res://resources/oresund_georeference.tres" id="7_georeference"]
+[ext_resource type="Script" path="res://scripts/wind_field.gd" id="8_wind_field"]
+[ext_resource type="PackedScene" path="res://scenes/boats/SailingBoat8mP23.tscn" id="9_sailing_boat"]
+[ext_resource type="Script" path="res://scripts/sailboat_underwater_debug_visuals.gd" id="10_underwater_visuals"]
+[ext_resource type="Script" path="res://scripts/polar_test_runner.gd" id="11_polar_runner"]
+[ext_resource type="Resource" path="res://resources/sailing/polar_test_profile.tres" id="12_polar_profile"]
+
+[sub_resource type="PlaneMesh" id="PlaneMesh_water"]
+size = Vector2(320, 320)
+subdivide_width = 180
+subdivide_depth = 180
+
+[sub_resource type="StandardMaterial3D" id="Material_water_static"]
+albedo_color = Color(0.14, 0.38, 0.54, 1)
+roughness = 0.18
+metallic = 0.04
+
+[node name="SailboatLab" type="Node3D"]
+script = ExtResource("1_lab")
+
+[node name="WaterSurface" type="MeshInstance3D" parent="."]
+mesh = SubResource("PlaneMesh_water")
+material_override = ExtResource("3_water_material")
+
+[node name="WaterSurfaceStatic" type="MeshInstance3D" parent="."]
+visible = false
+mesh = SubResource("PlaneMesh_water")
+material_override = SubResource("Material_water_static")
+
+[node name="WaveSampler" type="Node" parent="."]
+script = ExtResource("5_wave_sampler")
+wave_settings = ExtResource("4_waves")
+water_material = ExtResource("3_water_material")
+wave_strength = 1.05
+ocean_path = NodePath("")
+phase_anchor_path = NodePath("../SailboatBody")
+bathymetry_manager_path = NodePath("../BathymetryManager")
+
+[node name="BathymetryManager" type="Node" parent="."]
+script = ExtResource("6_bathymetry")
+georeference = ExtResource("7_georeference")
+water_material = ExtResource("3_water_material")
+
+[node name="WindField" type="Node" parent="."]
+script = ExtResource("8_wind_field")
+mean_wind_speed_mps = 0.0
+mean_wind_from_degrees = 240.0
+gust_strength_mps = 0.0
+gust_direction_variation_degrees = 0.0
+
+[node name="SailboatBody" parent="." instance=ExtResource("9_sailing_boat")]
+wave_sampler_path = NodePath("../WaveSampler")
+wind_field_path = NodePath("../WindField")
+auto_reset_on_ready = true
+
+[node name="UnderwaterDebugVisuals" type="Node3D" parent="SailboatBody"]
+script = ExtResource("10_underwater_visuals")
+
+[node name="PolarTestRunner" type="Node" parent="."]
+script = ExtResource("11_polar_runner")
+profile = ExtResource("12_polar_profile")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-48, -28, 0)
+light_energy = 1.05
+shadow_enabled = false
+
+[node name="Camera3D" type="Camera3D" parent="."]
+position = Vector3(13, 8.7, 14)
+current = true
+fov = 48.0
+far = 1200.0
+
+[node name="DebugPanel" type="CanvasLayer" parent="."]
+script = ExtResource("2_debug")

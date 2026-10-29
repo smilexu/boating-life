@@ -1,0 +1,71 @@
+{
+	"base_configuration_hash": "fff7841f8afdb2ee2a742b05e606c51d9b530c052f815f59931bd47b7e7da18f",
+	"base_physics_profile_path": "res://resources/sailing/nordic28_p23c_physics_profile.tres",
+	"base_physics_profile_sha256": "9a50a679dd7abb550deeeb145f1badff813bd1eb50505eae608b44fac3ff8551",
+	"base_run_id": "polar_2026-10-28_19-27-37_907713",
+	"boat_scene_path": "res://scenes/boats/SailingBoat8mP23c.tscn",
+	"error": "",
+	"experiment_run_id": "p210_1793225732_491625",
+	"phase": "Nordic 28 P2.10 keel position sensitivity",
+	"profile_validation": {
+		"base_keel_area_m2": 2.2,
+		"base_keel_center_local_m": "(0.0, -1.05, 0.15)",
+		"base_keel_max_lift_coefficient": 1.15,
+		"base_profile_path": "res://resources/sailing/nordic28_p23c_physics_profile.tres",
+		"boat_scene_path": "res://scenes/boats/SailingBoat8mP23c.tscn",
+		"single_variable_profile_check": "pass",
+		"valid": true,
+		"variants": [
+			{
+				"id": "F30",
+				"label": "keel_center_forward_0p30m",
+				"z_m": -0.15
+			},
+			{
+				"id": "A30",
+				"label": "keel_center_aft_0p30m",
+				"z_m": 0.45
+			}
+		],
+		"visual_profile_path": "res://resources/sailing/nordic28_p23c_visual_rig_profile.tres"
+	},
+	"runner_sha256": "4ebc7e9b0e496d6df204ffd2d4cacdcb65b57248dbff8a1d0b8bbeae19af8d0f",
+	"runs": [
+		{
+			"boat_config_hash": "cc93201688f929b32093a58cb8f53941586868174c3b8be7869e2ea5eb071fe0",
+			"config_hash": "cc93201688f929b32093a58cb8f53941586868174c3b8be7869e2ea5eb071fe0",
+			"profile_path": "res://docs/sailing/polar_p210/p210_1793225732_491625/profiles/f30_physics_profile.tres",
+			"profile_sha256": "773f5065602debc4489374d8ecc9c09137b46e6aa930594947f9e29e29a574e4",
+			"result_status": "HEADING_FAILED",
+			"run_id": "polar_2026-10-28_22-15-33_707840",
+			"runner_artifact_directory": "res://docs/sailing/polar_p210/p210_1793225732_491625/runner_runs/f30",
+			"runtime_keel_center_local_m": "(0.0, -1.05, -0.15)",
+			"variant": {
+				"id": "F30",
+				"label": "keel_center_forward_0p30m",
+				"z_m": -0.15
+			}
+		},
+		{
+			"boat_config_hash": "68fd7a6c79b7df7a9d1a50f9edcd268c9eee159d87c9637fced83e8cf09c0a5f",
+			"config_hash": "68fd7a6c79b7df7a9d1a50f9edcd268c9eee159d87c9637fced83e8cf09c0a5f",
+			"profile_path": "res://docs/sailing/polar_p210/p210_1793225732_491625/profiles/a30_physics_profile.tres",
+			"profile_sha256": "6d77b03a0585541a569e38649ac6b4fab07dda7d75783483b48dd84ded758907",
+			"result_status": "HEADING_FAILED",
+			"run_id": "polar_2026-10-28_22-16-05_159661",
+			"runner_artifact_directory": "res://docs/sailing/polar_p210/p210_1793225732_491625/runner_runs/a30",
+			"runtime_keel_center_local_m": "(0.0, -1.05, 0.45)",
+			"variant": {
+				"id": "A30",
+				"label": "keel_center_aft_0p30m",
+				"z_m": 0.45
+			}
+		}
+	],
+	"test_script_sha256": "81759db5683e1a53da6a161bad75fe505e48f8646e0fb960328e97600231d8a9",
+	"timestamp": "2026-10-28T22:16:36",
+	"visual_profile_path": "res://resources/sailing/nordic28_p23c_visual_rig_profile.tres",
+	"visual_profile_sha256": "c7b2bdad425f8b5d8762fcd7dc451d1fdd282c97b34c5a9de1063c6bd9012938",
+	"post_measurement_archive_script_sha256": "6bd5362d7d159c440d615311ba09a9c352358330d0f1e4974da4baa3432ba30b",
+	"archive_cleanup_note": "After the physical runs, the aggregate CSV/JSON were amended to expose keel center X/Y/Z from the already recorded application-point telemetry. No case, physics code, or measured value changed; test_script_sha256 remains the execution-time script hash."
+}

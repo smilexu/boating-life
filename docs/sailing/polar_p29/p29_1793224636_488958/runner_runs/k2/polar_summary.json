@@ -1,0 +1,12 @@
+{
+	"boat_config_hash": "434c29ca12178f83b3de944aeb65bf82079b4cb12ee607511cd4d0e1d13fc4fe",
+	"boat_id": "SailingBoat8mP23c",
+	"created_at": "2026-10-28T21:57:48",
+	"result_count": 1,
+	"results_file": "polar_results.csv",
+	"stable_mean_sog_kn": null,
+	"status_counts": {
+		"HEADING_FAILED": 1
+	},
+	"test_run_id": "polar_2026-10-28_21-57-48_693073"
+}

@@ -1,0 +1,77 @@
+{
+	"base_profile_sha256": "1ac30e47970d46eb1d1dd302a2760ea3782becd9f5606ed2b58d994be5e1b39f",
+	"boat_scene_path": "res://scenes/boats/SailingBoat8mP23c.tscn",
+	"boat_scene_sha256": "2ebd14290c72562ac970ff2d0c08ed73932baf5cd67c378ec93e3c7f7f713624",
+	"body_script_sha256": "9c493d689a55ce7bbfba7204f5af24678d101b444188db32ab2843b7dc927f28",
+	"configuration_fingerprint": "af2c2716ab17122109bc5dc8238de1e49523d8d3c498f2cd515fb75897805af4",
+	"error": "",
+	"experiment_run_id": "p214_1793231593_512287",
+	"godot_version": {
+		"build": "official",
+		"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+		"hex": 263938,
+		"major": 4,
+		"minor": 7,
+		"patch": 2,
+		"status": "stable",
+		"string": "4.7.2-stable (official)",
+		"timestamp": 0
+	},
+	"hgeo_profile_sha256": "ada037987d7cef8a5886063732943985ea907af7bf54a5b75fb1411cfa0909c0",
+	"hydrodynamics_script_sha256": "7136ad59898c0f27fdc1b82087bc2ff1b56851f0826147df3ab6333819981d92",
+	"p25_reference": {
+		"path": "res://docs/sailing/polar_p25/polar_2026-10-28_19-27-37_907713/polar_results.json",
+		"profile_hash": "fff7841f8afdb2ee2a742b05e606c51d9b530c052f815f59931bd47b7e7da18f",
+		"run_id": "polar_2026-10-28_19-27-37_907713"
+	},
+	"polar_runner_sha256": "4192453fb77b2ba20c85ff0c855f52d7bb659298e1b673d589621e27249e889f",
+	"profile_validation": {
+		"base_profile_path": "res://resources/sailing/nordic28_p214_base_physics_profile.tres",
+		"base_zero_offset": "(0.0, 0.0, 0.0)",
+		"boat_scene_path": "res://scenes/boats/SailingBoat8mP23c.tscn",
+		"com_body_local_m": "(0.0, -0.65, 0.0)",
+		"geometry_center_body_local_m": "(0.006664, -0.282765, -0.00438)",
+		"geometry_estimate_z_only_m": -0.00438,
+		"geometry_uncertainty_note": "Merged hull/keel mesh exclusion sensitivity moves the Z centroid by about 20–30 mm, larger than the 4.38 mm candidate arm.",
+		"hgeo_com_relative_offset_m": "(0.0, 0.0, -0.00438)",
+		"hgeo_profile_path": "res://resources/sailing/nordic28_p214_hgeo_physics_profile.tres",
+		"p25_reference_path": "res://docs/sailing/polar_p25/polar_2026-10-28_19-27-37_907713/polar_results.json",
+		"profile_single_variable_check": "pass; H-GEO changes only the new center vector, BASE only changes vessel_name",
+		"source_profile_path": "res://resources/sailing/nordic28_p23c_physics_profile.tres",
+		"valid": true
+	},
+	"runs": [
+		{
+			"artifact_directory": "res://docs/sailing/polar_p214/p214_1793231593_512287/runner_runs/p214_base_zero_m50_smoke",
+			"boat_config_hash": "c9f31b9b36bf11ea8e695452c4ab5c3c3e103dab6cca50ae82f3c630880fea7b",
+			"hull_lateral_center_from_com_local_m": "(0.0, 0.0, 0.0)",
+			"polar_config_hash": "c9f31b9b36bf11ea8e695452c4ab5c3c3e103dab6cca50ae82f3c630880fea7b",
+			"profile_path": "res://resources/sailing/nordic28_p214_base_physics_profile.tres",
+			"profile_sha256": "1ac30e47970d46eb1d1dd302a2760ea3782becd9f5606ed2b58d994be5e1b39f",
+			"run_id": "polar_2026-10-28_23-53-13_077722",
+			"status": "HEADING_FAILED",
+			"variant": "P214_BASE_ZERO_M50_SMOKE"
+		},
+		{
+			"artifact_directory": "res://docs/sailing/polar_p214/p214_1793231593_512287/runner_runs/p214_hgeo_path_m50_smoke",
+			"boat_config_hash": "e04ac6ccd6d1d8ed7c4e9b2496da3c94c2aa3ea87b23a057b22aafd9c7e73b31",
+			"hull_lateral_center_from_com_local_m": "(0.0, 0.0, -0.00438)",
+			"polar_config_hash": "e04ac6ccd6d1d8ed7c4e9b2496da3c94c2aa3ea87b23a057b22aafd9c7e73b31",
+			"profile_path": "res://resources/sailing/nordic28_p214_hgeo_physics_profile.tres",
+			"profile_sha256": "ada037987d7cef8a5886063732943985ea907af7bf54a5b75fb1411cfa0909c0",
+			"run_id": "polar_2026-10-28_23-53-45_251714",
+			"status": "HEADING_FAILED",
+			"variant": "P214_HGEO_PATH_M50_SMOKE"
+		}
+	],
+	"runtime_execution": {
+		"case_timeout_sim_seconds": 180.0,
+		"physics_step_seconds": 0.0166666666666667,
+		"ticks_per_second": 480,
+		"time_scale": 8.0
+	},
+	"source_profile_sha256": "9a50a679dd7abb550deeeb145f1badff813bd1eb50505eae608b44fac3ff8551",
+	"test_script_sha256": "abbec75baf0b3c95d7556bcbf313e47fe2281c3319fb92d71f4b60db835a12c0",
+	"timestamp": "2026-10-28T23:54:17",
+	"visual_profile_sha256": "c7b2bdad425f8b5d8762fcd7dc451d1fdd282c97b34c5a9de1063c6bd9012938"
+}

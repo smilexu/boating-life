@@ -1,0 +1,27 @@
+{
+	"boat_config_hash": "3a76a605d2fa06f1e73f99604791854fcdcd922b902d44713be99f05ed61e557",
+	"boat_scene_path": "res://scenes/boats/SailingBoat8mP23c.tscn",
+	"experiment": "Nordic 28 P2.15 missing 8/16 kn speed baseline cases",
+	"geometry": {
+		"boat_scene_path": "res://scenes/boats/SailingBoat8mP23c.tscn",
+		"jib_center_delta_m": 0.000000238418579101562,
+		"jib_physics_area_m2": 6.59991,
+		"jib_visual_area_m2": 6.59990692138672,
+		"main_center_delta_m": 0.0,
+		"main_physics_area_m2": 15.90006,
+		"main_visual_area_m2": 15.9000606536865,
+		"physics_profile_path": "res://resources/sailing/nordic28_p23c_physics_profile.tres",
+		"total_physics_area_m2": 22.49997,
+		"valid": true,
+		"visual_assembly_offset_local_m": "(0.0, -0.3, 0.0)",
+		"visual_profile_path": "res://resources/sailing/nordic28_p23c_visual_rig_profile.tres"
+	},
+	"physics_profile_path": "res://resources/sailing/nordic28_p23c_physics_profile.tres",
+	"polar_config_hash": "3a76a605d2fa06f1e73f99604791854fcdcd922b902d44713be99f05ed61e557",
+	"result_count": 8,
+	"status_counts": {
+		"STABLE": 8
+	},
+	"test_run_id": "polar_2026-10-29_00-01-51_126626",
+	"visual_profile_path": "res://resources/sailing/nordic28_p23c_visual_rig_profile.tres"
+}

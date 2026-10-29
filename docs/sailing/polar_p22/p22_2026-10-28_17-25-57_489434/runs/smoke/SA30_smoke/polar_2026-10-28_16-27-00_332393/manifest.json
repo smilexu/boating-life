@@ -1,0 +1,77 @@
+{
+	"boat_config_hash": "a0cf030064c5a83fee6df9202171ca3e3dd4f8c14ce2d268b8811bdaab1ff373",
+	"boat_scene_path": "res://scenes/boats/SailingBoat8m.tscn",
+	"case_count": 3,
+	"config": {
+		"case_timeout_seconds": 300.0,
+		"engine_physics_ticks_per_second": 480.0,
+		"explicit_cases": [
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "smoke_sa30_12_50_port",
+				"experiment_group": "smoke_sa30",
+				"experiment_label": "SA30 · 12 kn / 50° · Port",
+				"experiment_variable": "area_30",
+				"tack": "PORT",
+				"target_twa_deg": -50.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "smoke_sa30_12_70_port",
+				"experiment_group": "smoke_sa30",
+				"experiment_label": "SA30 · 12 kn / 70° · Port",
+				"experiment_variable": "area_30",
+				"tack": "PORT",
+				"target_twa_deg": -70.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "smoke_sa30_12_90_port",
+				"experiment_group": "smoke_sa30",
+				"experiment_label": "SA30 · 12 kn / 90° · Port",
+				"experiment_variable": "area_30",
+				"tack": "PORT",
+				"target_twa_deg": -90.0,
+				"target_tws_kn": 12.0
+			}
+		],
+		"fixed_wind_seed": 481516.0,
+		"include_extended_telemetry": true,
+		"include_port_tack": true,
+		"include_starboard_tack": true,
+		"maximum_heading_error_degrees": 5.0,
+		"maximum_mean_twa_error_degrees": 5.0,
+		"maximum_rudder_saturation_fraction": 0.2,
+		"maximum_speed_half_window_delta_mps": 0.12,
+		"maximum_speed_standard_deviation_mps": 0.2,
+		"minimum_warmup_seconds": 60.0,
+		"no_forward_progress_threshold_mps": 0.1,
+		"physics_step_seconds": 0.0166666666666667,
+		"rudder_d_gain": 3.0,
+		"rudder_limit_degrees": 35.0,
+		"rudder_p_gain": 5.0,
+		"sample_window_seconds": 30.0,
+		"stability_window_seconds": 30.0,
+		"time_scale": 8.0,
+		"twa_end_degrees": 180.0,
+		"twa_start_degrees": 0.0,
+		"twa_step_degrees": 10.0,
+		"tws_knots": [
+			4.0,
+			8.0,
+			12.0,
+			16.0,
+			20.0
+		],
+		"wave_mode": "zero_amplitude",
+		"wind_from_degrees": 180.0
+	},
+	"configured_headsail_area_m2": 10.1042737553238,
+	"configured_main_sail_area_m2": 19.8957262446762,
+	"configured_total_sail_area_m2": 30.0,
+	"group": "SA30_smoke",
+	"phase": "smoke",
+	"test_run_id": "polar_2026-10-28_16-27-00_332393"
+}

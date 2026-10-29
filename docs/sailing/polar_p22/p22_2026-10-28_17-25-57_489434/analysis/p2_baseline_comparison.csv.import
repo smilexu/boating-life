@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://du6c7pjj7qyrq"
+
+[deps]
+
+files=["res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p22.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p22.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p22.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p22.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p2.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p2.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p2.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p2.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p2.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.sog.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.tack.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.target.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.target.translation"]
+
+source_file="res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.csv"
+dest_files=["res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p22.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p22.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p22.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p22.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p2.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p2.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p2.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p2.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.p2.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.sog.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.tack.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.target.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/p2_baseline_comparison.target.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

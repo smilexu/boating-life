@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://d4nhcf3ssdxap"
+
+[deps]
+
+files=["res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.area.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.heel.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.leeway.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.port.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.sog.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.starboard.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.status.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.target.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.yaw.translation"]
+
+source_file="res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.csv"
+dest_files=["res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.area.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.heel.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.leeway.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.port.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.sog.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.starboard.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.status.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.target.translation", "res://docs/sailing/polar_p22/p22_2026-10-28_17-25-57_489434/analysis/mirror_comparison.yaw.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

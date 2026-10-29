@@ -112,6 +112,9 @@ extends Resource
 @export_range(0.0, 3000.0, 10.0) var hull_lateral_drag_linear_n_s_m := 500.0
 @export_range(0.0, 1000.0, 5.0) var hull_lateral_drag_quadratic_n_s2_m2 := 250.0
 @export_range(0.1, 5.0, 0.1) var hull_drag_max_force_weight_ratio := 2.0
+## COM-relative local position for the single resultant lateral hull force.
+## Zero preserves the legacy central-force behavior for existing vessel Profiles.
+@export var hull_lateral_center_from_com_local_m := Vector3.ZERO
 
 ## Reserved for a future, measured nonlinear GZ/righting-arm curve. The B1
 ## prototype intentionally relies on distributed buoyancy and a low CG only.

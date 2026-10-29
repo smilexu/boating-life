@@ -1,0 +1,639 @@
+{
+  "status_counts": {
+    "STABLE": 21,
+    "NO_FORWARD_PROGRESS": 1,
+    "HEADING_FAILED": 14
+  },
+  "stable_count": 21,
+  "valid_stable_fraction_of_results": 0.5833333333333334,
+  "stable_mean_sog_kn": 2.2781184794762237,
+  "stable_time_mean_sim_s": 60.00000312924391,
+  "case_completion_time_mean_sim_s": 90.0000046938658,
+  "mean_body_calculation_usec_across_cases": 247.2768518518518,
+  "maximum_case_body_calculation_p95_usec": 1791.0,
+  "by_tws_kn": {
+    "6": {
+      "stable_point_count": 7,
+      "maximum_stable_sog_kn": 0.850944680606313,
+      "maximum_speed_twa_deg_signed": 120.0,
+      "crosswind_stable_sog_kn": 0.746518468753821,
+      "best_upwind_vmg_kn": -0.1353138501778015,
+      "best_upwind_twa_deg_signed": 90.0,
+      "best_downwind_vmg_kn": 0.5670278801001414,
+      "best_downwind_twa_deg_signed": 180.0
+    },
+    "12": {
+      "stable_point_count": 7,
+      "maximum_stable_sog_kn": 2.38684102217012,
+      "maximum_speed_twa_deg_signed": 120.0,
+      "crosswind_stable_sog_kn": 2.12528042221687,
+      "best_upwind_vmg_kn": -0.23558549261118888,
+      "best_upwind_twa_deg_signed": -90.0,
+      "best_downwind_vmg_kn": 1.6377881767940272,
+      "best_downwind_twa_deg_signed": 180.0
+    },
+    "20": {
+      "stable_point_count": 7,
+      "maximum_stable_sog_kn": 4.6311185375403,
+      "maximum_speed_twa_deg_signed": -120.0,
+      "crosswind_stable_sog_kn": 4.15558871646163,
+      "best_upwind_vmg_kn": -0.33591762667855657,
+      "best_upwind_twa_deg_signed": 90.0,
+      "best_downwind_vmg_kn": 3.254162106606659,
+      "best_downwind_twa_deg_signed": 180.0
+    }
+  },
+  "wind_axis_vmg_candidates": {
+    "6": {
+      "upwind": [
+        {
+          "vmg_kn": -0.1353138607984997,
+          "twa_deg": -90.0,
+          "case_id": "tws_06.00_twa_-90.00_port",
+          "tack": "PORT"
+        },
+        {
+          "vmg_kn": -0.1353138501778015,
+          "twa_deg": 90.0,
+          "case_id": "tws_06.00_twa_+90.00_starboard",
+          "tack": "STARBOARD"
+        }
+      ],
+      "downwind": [
+        {
+          "vmg_kn": 0.1353138607984997,
+          "twa_deg": -90.0,
+          "case_id": "tws_06.00_twa_-90.00_port",
+          "tack": "PORT"
+        },
+        {
+          "vmg_kn": 0.1353138501778015,
+          "twa_deg": 90.0,
+          "case_id": "tws_06.00_twa_+90.00_starboard",
+          "tack": "STARBOARD"
+        },
+        {
+          "vmg_kn": 0.4479630394450519,
+          "twa_deg": -120.0,
+          "case_id": "tws_06.00_twa_-120.00_port",
+          "tack": "PORT"
+        },
+        {
+          "vmg_kn": 0.4479631273071902,
+          "twa_deg": 120.0,
+          "case_id": "tws_06.00_twa_+120.00_starboard",
+          "tack": "STARBOARD"
+        },
+        {
+          "vmg_kn": 0.5493988460392452,
+          "twa_deg": -150.0,
+          "case_id": "tws_06.00_twa_-150.00_port",
+          "tack": "PORT"
+        },
+        {
+          "vmg_kn": 0.5493987552805528,
+          "twa_deg": 150.0,
+          "case_id": "tws_06.00_twa_+150.00_starboard",
+          "tack": "STARBOARD"
+        },
+        {
+          "vmg_kn": 0.5670278801001414,
+          "twa_deg": 180.0,
+          "case_id": "tws_06.00_twa_+180.00_symmetric",
+          "tack": "SYMMETRIC"
+        }
+      ]
+    },
+    "12": {
+      "upwind": [
+        {
+          "vmg_kn": -0.23558549261118888,
+          "twa_deg": -90.0,
+          "case_id": "tws_12.00_twa_-90.00_port",
+          "tack": "PORT"
+        },
+        {
+          "vmg_kn": -0.23558560847334928,
+          "twa_deg": 90.0,
+          "case_id": "tws_12.00_twa_+90.00_starboard",
+          "tack": "STARBOARD"
+        }
+      ],
+      "downwind": [
+        {
+          "vmg_kn": 0.23558549261118888,
+          "twa_deg": -90.0,
+          "case_id": "tws_12.00_twa_-90.00_port",
+          "tack": "PORT"
+        },
+        {
+          "vmg_kn": 0.23558560847334928,
+          "twa_deg": 90.0,
+          "case_id": "tws_12.00_twa_+90.00_starboard",
+          "tack": "STARBOARD"
+        },
+        {
+          "vmg_kn": 1.238469399077329,
+          "twa_deg": -120.0,
+          "case_id": "tws_12.00_twa_-120.00_port",
+          "tack": "PORT"
+        },
+        {
+          "vmg_kn": 1.238469406801471,
+          "twa_deg": 120.0,
+          "case_id": "tws_12.00_twa_+120.00_starboard",
+          "tack": "STARBOARD"
+        },
+        {
+          "vmg_kn": 1.6126886634538258,
+          "twa_deg": -150.0,
+          "case_id": "tws_12.00_twa_-150.00_port",
+          "tack": "PORT"
+        },
+        {
+          "vmg_kn": 1.6126890303506674,
+          "twa_deg": 150.0,
+          "case_id": "tws_12.00_twa_+150.00_starboard",
+          "tack": "STARBOARD"
+        },
+        {
+          "vmg_kn": 1.6377881767940272,
+          "twa_deg": 180.0,
+          "case_id": "tws_12.00_twa_+180.00_symmetric",
+          "tack": "SYMMETRIC"
+        }
+      ]
+    },
+    "20": {
+      "upwind": [
+        {
+          "vmg_kn": -0.335917800471798,
+          "twa_deg": -90.0,
+          "case_id": "tws_20.00_twa_-90.00_port",
+          "tack": "PORT"
+        },
+        {
+          "vmg_kn": -0.33591762667855657,
+          "twa_deg": 90.0,
+          "case_id": "tws_20.00_twa_+90.00_starboard",
+          "tack": "STARBOARD"
+        }
+      ],
+      "downwind": [
+        {
+          "vmg_kn": 0.335917800471798,
+          "twa_deg": -90.0,
+          "case_id": "tws_20.00_twa_-90.00_port",
+          "tack": "PORT"
+        },
+        {
+          "vmg_kn": 0.33591762667855657,
+          "twa_deg": 90.0,
+          "case_id": "tws_20.00_twa_+90.00_starboard",
+          "tack": "STARBOARD"
+        },
+        {
+          "vmg_kn": 2.378947225039245,
+          "twa_deg": -120.0,
+          "case_id": "tws_20.00_twa_-120.00_port",
+          "tack": "PORT"
+        },
+        {
+          "vmg_kn": 2.3789469933149228,
+          "twa_deg": 120.0,
+          "case_id": "tws_20.00_twa_+120.00_starboard",
+          "tack": "STARBOARD"
+        },
+        {
+          "vmg_kn": 3.2134110675259686,
+          "twa_deg": -150.0,
+          "case_id": "tws_20.00_twa_-150.00_port",
+          "tack": "PORT"
+        },
+        {
+          "vmg_kn": 3.2134115309746116,
+          "twa_deg": 150.0,
+          "case_id": "tws_20.00_twa_+150.00_starboard",
+          "tack": "STARBOARD"
+        },
+        {
+          "vmg_kn": 3.254162106606659,
+          "twa_deg": 180.0,
+          "case_id": "tws_20.00_twa_+180.00_symmetric",
+          "tack": "SYMMETRIC"
+        }
+      ]
+    }
+  },
+  "port_starboard_comparison": [
+    {
+      "tws_kn": 6.0,
+      "absolute_twa_deg": 30.0,
+      "port_status": "HEADING_FAILED",
+      "starboard_status": "HEADING_FAILED",
+      "port_sog_kn": 0.583854800424101,
+      "starboard_sog_kn": 0.583855032148422,
+      "absolute_sog_difference_kn": 2.3172432106477459e-07,
+      "relative_sog_difference": 3.9688681999752344e-07,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 0.256335616240491,
+      "starboard_vmg_kn": 0.256335847964811,
+      "absolute_vmg_difference_kn": 2.317243200100627e-07,
+      "port_heel_deg": -0.770891648551017,
+      "starboard_heel_deg": 0.77089116830334,
+      "heel_mirror_residual_deg": 4.802476769594222e-07,
+      "port_leeway_deg": 14.933760434012,
+      "starboard_leeway_deg": -14.9337462425163,
+      "leeway_mirror_residual_deg": 1.4191495699478196e-05,
+      "port_rudder_deg": -35.0,
+      "starboard_rudder_deg": 35.0,
+      "rudder_mirror_residual_deg": 0.0,
+      "rudder_absolute_difference_deg": 0.0,
+      "status_match": true
+    },
+    {
+      "tws_kn": 6.0,
+      "absolute_twa_deg": 60.0,
+      "port_status": "HEADING_FAILED",
+      "starboard_status": "HEADING_FAILED",
+      "port_sog_kn": 0.583870557677925,
+      "starboard_sog_kn": 0.583870615609005,
+      "absolute_sog_difference_kn": 5.793108004414904e-08,
+      "relative_sog_difference": 9.921904163246384e-08,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 0.484287610064314,
+      "starboard_vmg_kn": 0.484287667995394,
+      "absolute_vmg_difference_kn": 5.793108004414904e-08,
+      "port_heel_deg": -0.770864487876895,
+      "starboard_heel_deg": 0.770864167711778,
+      "heel_mirror_residual_deg": 3.201651169737474e-07,
+      "port_leeway_deg": 14.9328397553955,
+      "starboard_leeway_deg": -14.9328314243617,
+      "leeway_mirror_residual_deg": 8.331033800601517e-06,
+      "port_rudder_deg": -35.0,
+      "starboard_rudder_deg": 35.0,
+      "rudder_mirror_residual_deg": 0.0,
+      "rudder_absolute_difference_deg": 0.0,
+      "status_match": true
+    },
+    {
+      "tws_kn": 6.0,
+      "absolute_twa_deg": 90.0,
+      "port_status": "STABLE",
+      "starboard_status": "STABLE",
+      "port_sog_kn": 0.746518449443461,
+      "starboard_sog_kn": 0.746518488064181,
+      "absolute_sog_difference_kn": 3.8620719955417826e-08,
+      "relative_sog_difference": 5.17344467309539e-08,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 0.73415252547027,
+      "starboard_vmg_kn": 0.734152566022027,
+      "absolute_vmg_difference_kn": 4.055175706341174e-08,
+      "port_heel_deg": -0.628701896323687,
+      "starboard_heel_deg": 0.628701636634203,
+      "heel_mirror_residual_deg": 2.596894840278807e-07,
+      "port_leeway_deg": 7.60335825853276,
+      "starboard_leeway_deg": -7.60335458668317,
+      "leeway_mirror_residual_deg": 3.671849589714782e-06,
+      "port_rudder_deg": -14.1922209236716,
+      "starboard_rudder_deg": 14.1922317612198,
+      "rudder_mirror_residual_deg": 1.0837548199305047e-05,
+      "rudder_absolute_difference_deg": 1.0837548199305047e-05,
+      "status_match": true
+    },
+    {
+      "tws_kn": 6.0,
+      "absolute_twa_deg": 120.0,
+      "port_status": "STABLE",
+      "starboard_status": "STABLE",
+      "port_sog_kn": 0.850944452744064,
+      "starboard_sog_kn": 0.850944680606313,
+      "absolute_sog_difference_kn": 2.278622489582105e-07,
+      "relative_sog_difference": 2.6777566704317077e-07,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 0.850540910632253,
+      "starboard_vmg_kn": 0.85054113463243,
+      "absolute_vmg_difference_kn": 2.2400017696266872e-07,
+      "port_heel_deg": -0.29712795382291,
+      "starboard_heel_deg": 0.297128901867396,
+      "heel_mirror_residual_deg": 9.480444859710779e-07,
+      "port_leeway_deg": 2.04551559810387,
+      "starboard_leeway_deg": -2.04551277387672,
+      "leeway_mirror_residual_deg": 2.8242271499223648e-06,
+      "port_rudder_deg": 1.40454631273784,
+      "starboard_rudder_deg": -1.40454038447175,
+      "rudder_mirror_residual_deg": 5.928266090027279e-06,
+      "rudder_absolute_difference_deg": 5.928266090027279e-06,
+      "status_match": true
+    },
+    {
+      "tws_kn": 6.0,
+      "absolute_twa_deg": 150.0,
+      "port_status": "STABLE",
+      "starboard_status": "STABLE",
+      "port_sog_kn": 0.655210831124117,
+      "starboard_sog_kn": 0.655210765468892,
+      "absolute_sog_difference_kn": 6.565522503443333e-08,
+      "relative_sog_difference": 1.002047359493031e-07,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 0.654302541303324,
+      "starboard_vmg_kn": 0.654302477579136,
+      "absolute_vmg_difference_kn": 6.372418803746172e-08,
+      "port_heel_deg": -0.0497559155100414,
+      "starboard_heel_deg": 0.04975586203802,
+      "heel_mirror_residual_deg": 5.3472021400990943e-08,
+      "port_leeway_deg": -0.706418459018738,
+      "starboard_leeway_deg": 0.706425349959232,
+      "leeway_mirror_residual_deg": 6.890940493997633e-06,
+      "port_rudder_deg": 11.5511653325074,
+      "starboard_rudder_deg": -11.5511686818916,
+      "rudder_mirror_residual_deg": 3.3493841993248452e-06,
+      "rudder_absolute_difference_deg": 3.3493841993248452e-06,
+      "status_match": true
+    },
+    {
+      "tws_kn": 12.0,
+      "absolute_twa_deg": 30.0,
+      "port_status": "HEADING_FAILED",
+      "starboard_status": "HEADING_FAILED",
+      "port_sog_kn": 1.32930417812668,
+      "starboard_sog_kn": 1.32930406226452,
+      "absolute_sog_difference_kn": 1.1586215986625348e-07,
+      "relative_sog_difference": 8.716000959148835e-08,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 0.761214046704844,
+      "starboard_vmg_kn": 0.761213872911604,
+      "absolute_vmg_difference_kn": 1.7379324002142482e-07,
+      "port_heel_deg": -3.62171847956984,
+      "starboard_heel_deg": 3.62171805268302,
+      "heel_mirror_residual_deg": 4.2688681967106845e-07,
+      "port_leeway_deg": 15.7110706471315,
+      "starboard_leeway_deg": -15.7110744037431,
+      "leeway_mirror_residual_deg": 3.756611599570192e-06,
+      "port_rudder_deg": -35.0,
+      "starboard_rudder_deg": 35.0,
+      "rudder_mirror_residual_deg": 0.0,
+      "rudder_absolute_difference_deg": 0.0,
+      "status_match": true
+    },
+    {
+      "tws_kn": 12.0,
+      "absolute_twa_deg": 60.0,
+      "port_status": "HEADING_FAILED",
+      "starboard_status": "HEADING_FAILED",
+      "port_sog_kn": 1.32926293119756,
+      "starboard_sog_kn": 1.32926269947324,
+      "absolute_sog_difference_kn": 2.3172431995455156e-07,
+      "relative_sog_difference": 1.74325436084724e-07,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 1.2040837150928,
+      "starboard_vmg_kn": 1.20408348336848,
+      "absolute_vmg_difference_kn": 2.3172432017659617e-07,
+      "port_heel_deg": -3.62170268475738,
+      "starboard_heel_deg": 3.62170140409691,
+      "heel_mirror_residual_deg": 1.2806604701154356e-06,
+      "port_leeway_deg": 15.7120302961672,
+      "starboard_leeway_deg": -15.7120388612711,
+      "leeway_mirror_residual_deg": 8.565103900792792e-06,
+      "port_rudder_deg": -35.0,
+      "starboard_rudder_deg": 35.0,
+      "rudder_mirror_residual_deg": 0.0,
+      "rudder_absolute_difference_deg": 0.0,
+      "status_match": true
+    },
+    {
+      "tws_kn": 12.0,
+      "absolute_twa_deg": 90.0,
+      "port_status": "STABLE",
+      "starboard_status": "STABLE",
+      "port_sog_kn": 2.12528046469966,
+      "starboard_sog_kn": 2.12528037973408,
+      "absolute_sog_difference_kn": 8.496558034920554e-08,
+      "relative_sog_difference": 3.997852681510064e-08,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 2.11218288083828,
+      "starboard_vmg_kn": 2.11218278814855,
+      "absolute_vmg_difference_kn": 9.268972966935962e-08,
+      "port_heel_deg": -2.75025322041183,
+      "starboard_heel_deg": 2.75025221011302,
+      "heel_mirror_residual_deg": 1.010298809944743e-06,
+      "port_leeway_deg": 4.72154210586139,
+      "starboard_leeway_deg": -4.72154411034809,
+      "leeway_mirror_residual_deg": 2.0044867001800526e-06,
+      "port_rudder_deg": -8.14138754593145,
+      "starboard_rudder_deg": 8.14139564945457,
+      "rudder_mirror_residual_deg": 8.103523120084333e-06,
+      "rudder_absolute_difference_deg": 8.103523120084333e-06,
+      "status_match": true
+    },
+    {
+      "tws_kn": 12.0,
+      "absolute_twa_deg": 120.0,
+      "port_status": "STABLE",
+      "starboard_status": "STABLE",
+      "port_sog_kn": 2.38684093720454,
+      "starboard_sog_kn": 2.38684102217012,
+      "absolute_sog_difference_kn": 8.496557990511633e-08,
+      "relative_sog_difference": 3.559750340646766e-08,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 2.38626673206139,
+      "starboard_vmg_kn": 2.38626681702698,
+      "absolute_vmg_difference_kn": 8.496558967507895e-08,
+      "port_heel_deg": -1.26360940726386,
+      "starboard_heel_deg": 1.26361026815229,
+      "heel_mirror_residual_deg": 8.60888430098683e-07,
+      "port_leeway_deg": 1.30283071951397,
+      "starboard_leeway_deg": -1.3028302097095,
+      "leeway_mirror_residual_deg": 5.098044699725079e-07,
+      "port_rudder_deg": 0.254430142583116,
+      "starboard_rudder_deg": -0.254432035512104,
+      "rudder_mirror_residual_deg": 1.8929289880009748e-06,
+      "rudder_absolute_difference_deg": 1.8929289880009748e-06,
+      "status_match": true
+    },
+    {
+      "tws_kn": 12.0,
+      "absolute_twa_deg": 150.0,
+      "port_status": "STABLE",
+      "starboard_status": "STABLE",
+      "port_sog_kn": 1.88982997805716,
+      "starboard_sog_kn": 1.88983042219545,
+      "absolute_sog_difference_kn": 4.4413829014544604e-07,
+      "relative_sog_difference": 2.3501491833274888e-07,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 1.88924798697683,
+      "starboard_vmg_kn": 1.88924843497719,
+      "absolute_vmg_difference_kn": 4.4800036014258637e-07,
+      "port_heel_deg": -0.181899893985877,
+      "starboard_heel_deg": 0.181899978029221,
+      "heel_mirror_residual_deg": 8.404334400635705e-08,
+      "port_leeway_deg": -0.377754094690417,
+      "starboard_leeway_deg": 0.377755792336241,
+      "leeway_mirror_residual_deg": 1.6976458240280934e-06,
+      "port_rudder_deg": 5.22182778316763,
+      "starboard_rudder_deg": -5.22181898905324,
+      "rudder_mirror_residual_deg": 8.794114389587548e-06,
+      "rudder_absolute_difference_deg": 8.794114389587548e-06,
+      "status_match": true
+    },
+    {
+      "tws_kn": 20.0,
+      "absolute_twa_deg": 30.0,
+      "port_status": "HEADING_FAILED",
+      "starboard_status": "HEADING_FAILED",
+      "port_sog_kn": 2.24920894878214,
+      "starboard_sog_kn": 2.24920894878214,
+      "absolute_sog_difference_kn": 0.0,
+      "relative_sog_difference": 0.0,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 1.43346252245728,
+      "starboard_vmg_kn": 1.43346252245728,
+      "absolute_vmg_difference_kn": 0.0,
+      "port_heel_deg": -10.6376858067992,
+      "starboard_heel_deg": 10.6376883681201,
+      "heel_mirror_residual_deg": 2.5613209011510207e-06,
+      "port_leeway_deg": 16.680228890637,
+      "starboard_leeway_deg": -16.6802362514878,
+      "leeway_mirror_residual_deg": 7.360850798221463e-06,
+      "port_rudder_deg": -35.0,
+      "starboard_rudder_deg": 35.0,
+      "rudder_mirror_residual_deg": 0.0,
+      "rudder_absolute_difference_deg": 0.0,
+      "status_match": true
+    },
+    {
+      "tws_kn": 20.0,
+      "absolute_twa_deg": 60.0,
+      "port_status": "HEADING_FAILED",
+      "starboard_status": "HEADING_FAILED",
+      "port_sog_kn": 2.46060594884159,
+      "starboard_sog_kn": 2.4606071074632,
+      "absolute_sog_difference_kn": 1.1586216102088542e-06,
+      "relative_sog_difference": 4.7086829891442776e-07,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 2.31601483878512,
+      "starboard_vmg_kn": 2.31601599740672,
+      "absolute_vmg_difference_kn": 1.1586215999948024e-06,
+      "port_heel_deg": -10.65486800143,
+      "starboard_heel_deg": 10.6548705627509,
+      "heel_mirror_residual_deg": 2.5613209011510207e-06,
+      "port_leeway_deg": 13.8705297010031,
+      "starboard_leeway_deg": -13.8705166537434,
+      "leeway_mirror_residual_deg": 1.3047259701082226e-05,
+      "port_rudder_deg": -27.9836185925358,
+      "starboard_rudder_deg": 27.9836064177621,
+      "rudder_mirror_residual_deg": 1.2174773701190134e-05,
+      "rudder_absolute_difference_deg": 1.2174773701190134e-05,
+      "status_match": true
+    },
+    {
+      "tws_kn": 20.0,
+      "absolute_twa_deg": 90.0,
+      "port_status": "STABLE",
+      "starboard_status": "STABLE",
+      "port_sog_kn": 4.15558871646163,
+      "starboard_sog_kn": 4.15558871646163,
+      "absolute_sog_difference_kn": 0.0,
+      "relative_sog_difference": 0.0,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 4.14198927951425,
+      "starboard_vmg_kn": 4.14198927951425,
+      "absolute_vmg_difference_kn": 0.0,
+      "port_heel_deg": -8.05528348917115,
+      "starboard_heel_deg": 8.05528434294479,
+      "heel_mirror_residual_deg": 8.537736402303153e-07,
+      "port_leeway_deg": 3.54210796863406,
+      "starboard_leeway_deg": -3.54210677264277,
+      "leeway_mirror_residual_deg": 1.1959912900039171e-06,
+      "port_rudder_deg": -4.95100614642728,
+      "starboard_rudder_deg": 4.95100482040933,
+      "rudder_mirror_residual_deg": 1.32601794966547e-06,
+      "rudder_absolute_difference_deg": 1.32601794966547e-06,
+      "status_match": true
+    },
+    {
+      "tws_kn": 20.0,
+      "absolute_twa_deg": 120.0,
+      "port_status": "STABLE",
+      "starboard_status": "STABLE",
+      "port_sog_kn": 4.6311185375403,
+      "starboard_sog_kn": 4.63111807409166,
+      "absolute_sog_difference_kn": 4.6344864035319233e-07,
+      "relative_sog_difference": 1.0007272752483378e-07,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 4.63053459225153,
+      "starboard_vmg_kn": 4.63053412880289,
+      "absolute_vmg_difference_kn": 4.6344864035319233e-07,
+      "port_heel_deg": -3.65170087559208,
+      "starboard_heel_deg": 3.65169959493161,
+      "heel_mirror_residual_deg": 1.2806604701154356e-06,
+      "port_leeway_deg": 0.979890507482195,
+      "starboard_leeway_deg": -0.97989070360597,
+      "leeway_mirror_residual_deg": 1.9612377499811373e-07,
+      "port_rudder_deg": 0.547066074652211,
+      "starboard_rudder_deg": -0.547069500155953,
+      "rudder_mirror_residual_deg": 3.425503741993907e-06,
+      "rudder_absolute_difference_deg": 3.425503741993907e-06,
+      "status_match": true
+    },
+    {
+      "tws_kn": 20.0,
+      "absolute_twa_deg": 150.0,
+      "port_status": "STABLE",
+      "starboard_status": "STABLE",
+      "port_sog_kn": 3.74889770285356,
+      "starboard_sog_kn": 3.74889839802653,
+      "absolute_sog_difference_kn": 6.951729698556619e-07,
+      "relative_sog_difference": 1.854339489904407e-07,
+      "relative_difference_applicable": true,
+      "port_vmg_kn": 3.74832580722948,
+      "starboard_vmg_kn": 3.74832650240245,
+      "absolute_vmg_difference_kn": 6.951729698556619e-07,
+      "port_heel_deg": -0.493972834431956,
+      "starboard_heel_deg": 0.493973154597073,
+      "heel_mirror_residual_deg": 3.2016511702925854e-07,
+      "port_leeway_deg": -0.277161774192853,
+      "starboard_leeway_deg": 0.27716526438192,
+      "leeway_mirror_residual_deg": 3.490189067034688e-06,
+      "port_rudder_deg": 3.63423890552093,
+      "starboard_rudder_deg": -3.63423928585258,
+      "rudder_mirror_residual_deg": 3.80331649729726e-07,
+      "rudder_absolute_difference_deg": 3.80331649729726e-07,
+      "status_match": true
+    }
+  ],
+  "anomaly_review_candidates": [
+    "15 case(s) are not STABLE; they remain categorized and are omitted from valid speed curves."
+  ],
+  "quality_gate": {
+    "passed": true,
+    "complete": true,
+    "expected_case_count": 36,
+    "result_count": 36,
+    "expected_tws_kn": [
+      6.0,
+      12.0,
+      20.0
+    ],
+    "status_counts": {
+      "STABLE": 21,
+      "NO_FORWARD_PROGRESS": 1,
+      "HEADING_FAILED": 14
+    },
+    "timing": {
+      "engine_physics_ticks_per_second_setting": 480.0,
+      "time_scale": 8.0,
+      "expected_simulated_step_seconds": 0.0166666666666667,
+      "time_scale_divided_by_engine_ticks_seconds": 0.016666666666666666,
+      "effective_simulated_steps_per_second": 59.99999999999988,
+      "accelerated_execution_preserves_step": true
+    },
+    "errors": [],
+    "warnings": [
+      "physical/control failures are retained as measured statuses; they are not converted to zero-speed Polar points"
+    ]
+  },
+  "test_run_id": "polar_2026-10-28_12-35-33_122160",
+  "configuration_fingerprint": "0f9cafbaea52f79ba6fe3f814cee4bdb7706d2dd57c1eeec0bb2fb758307bafc",
+  "dataset_kind": "sparse"
+}

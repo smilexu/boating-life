@@ -1,0 +1,102 @@
+{
+	"angular_damping": {
+		"profile_angular_damping": 0.08,
+		"project_default_angular_damp_setting": 0.1,
+		"runtime_angular_damp_mode_name": "COMBINE",
+		"runtime_angular_damp_mode_value": 0,
+		"runtime_body_angular_damp": 0.0799999982118607
+	},
+	"auto_trim": true,
+	"boat_config_hash": "fff7841f8afdb2ee2a742b05e606c51d9b530c052f815f59931bd47b7e7da18f",
+	"boat_scene_path": "res://scenes/boats/SailingBoat8mP23c.tscn",
+	"boat_scene_sha256": "2ebd14290c72562ac970ff2d0c08ed73932baf5cd67c378ec93e3c7f7f713624",
+	"conditions": [
+		{
+			"tack": "PORT",
+			"target_twa_deg": -50.0,
+			"tws_kn": 12.0
+		},
+		{
+			"tack": "PORT",
+			"target_twa_deg": -90.0,
+			"tws_kn": 12.0
+		}
+	],
+	"engine_state_expected": "OFF",
+	"execution_acceleration": {
+		"effective_simulated_steps_per_second": 60.0,
+		"engine_physics_ticks_per_second": 480,
+		"time_scale": 8.0
+	},
+	"p24_reference_run_id": "polar_2026-10-28_19-06-59_469219",
+	"phase": "Nordic 28 P2.5 yaw dynamics diagnostics",
+	"physics_profile_path": "res://resources/sailing/nordic28_p23c_physics_profile.tres",
+	"physics_profile_sha256": "9a50a679dd7abb550deeeb145f1badff813bd1eb50505eae608b44fac3ff8551",
+	"physics_step_seconds": 0.0166666666666667,
+	"polar_config_hash": "fff7841f8afdb2ee2a742b05e606c51d9b530c052f815f59931bd47b7e7da18f",
+	"runner_sha256": "4ebc7e9b0e496d6df204ffd2d4cacdcb65b57248dbff8a1d0b8bbeae19af8d0f",
+	"stability_parameters": {
+		"capture_yaw_timeseries": true,
+		"case_timeout_seconds": 180.0,
+		"engine_physics_ticks_per_second": 480.0,
+		"explicit_cases": [
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "p25_12kn_050twa_port",
+				"experiment_group": "P25_NORDIC28_YAW_DIAGNOSTICS",
+				"experiment_label": "P2.5 · 12 kn / 50° / PORT",
+				"experiment_variable": "target_twa",
+				"tack": "PORT",
+				"target_twa_deg": -50.0,
+				"target_tws_kn": 12.0
+			},
+			{
+				"auto_sail_trim_enabled": true,
+				"case_id": "p25_12kn_090twa_port",
+				"experiment_group": "P25_NORDIC28_YAW_DIAGNOSTICS",
+				"experiment_label": "P2.5 · 12 kn / 90° / PORT",
+				"experiment_variable": "target_twa",
+				"tack": "PORT",
+				"target_twa_deg": -90.0,
+				"target_tws_kn": 12.0
+			}
+		],
+		"fixed_wind_seed": 481516.0,
+		"include_extended_telemetry": true,
+		"include_port_tack": true,
+		"include_starboard_tack": true,
+		"maximum_heading_error_degrees": 5.0,
+		"maximum_mean_twa_error_degrees": 5.0,
+		"maximum_rudder_saturation_fraction": 0.2,
+		"maximum_speed_half_window_delta_mps": 0.12,
+		"maximum_speed_standard_deviation_mps": 0.2,
+		"minimum_warmup_seconds": 60.0,
+		"no_forward_progress_threshold_mps": 0.1,
+		"physics_step_seconds": 0.0166666666666667,
+		"rudder_d_gain": 3.0,
+		"rudder_limit_degrees": 35.0,
+		"rudder_p_gain": 5.0,
+		"sample_window_seconds": 30.0,
+		"stability_window_seconds": 30.0,
+		"time_scale": 8.0,
+		"twa_end_degrees": 180.0,
+		"twa_start_degrees": 0.0,
+		"twa_step_degrees": 10.0,
+		"tws_knots": [
+			4.0,
+			8.0,
+			12.0,
+			16.0,
+			20.0
+		],
+		"wave_mode": "zero_amplitude",
+		"wind_from_degrees": 180.0
+	},
+	"test_run_id": "polar_2026-10-28_19-27-37_907713",
+	"test_script_sha256": "0889dba86c5b01ef18042cbedd212df324e28974073e01323ccefab026a7a31b",
+	"time_series_interval_seconds": "approximately 1.0 simulated second; existing runner sample cadence",
+	"visual_profile_path": "res://resources/sailing/nordic28_p23c_visual_rig_profile.tres",
+	"visual_profile_sha256": "c7b2bdad425f8b5d8762fcd7dc451d1fdd282c97b34c5a9de1063c6bd9012938",
+	"wave_mode": "WaveSampler enabled, amplitude zero; current zero",
+	"yaw_acceleration_method": "offline central difference of neighboring 1 Hz local yaw-rate samples; one-sided at endpoints"
+}
