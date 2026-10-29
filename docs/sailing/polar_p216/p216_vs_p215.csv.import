@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://bd4o3dq3xo8f5"
+
+[deps]
+
+files=["res://docs/sailing/polar_p216/p216_vs_p215.target.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p23c.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p23c.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation"]
+
+source_file="res://docs/sailing/polar_p216/p216_vs_p215.csv"
+dest_files=["res://docs/sailing/polar_p216/p216_vs_p215.target.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p23c.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p23c.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation", "res://docs/sailing/polar_p216/p216_vs_p215.p216.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

@@ -5,15 +5,15 @@
 [resource]
 script = ExtResource("1_visual_profile")
 mast_base_local_m = Vector3(0, 1.3184, -1)
-mast_length_m = 6.5
+mast_length_m = 9.3
 visual_assembly_offset_local_m = Vector3(0, -0.3, 0)
-boom_pivot_local_m = Vector3(0, 1.9111, -1)
-boom_length_m = 3.3
-boom_clearance_over_roof_m = 0.4
-main_head_local_m = Vector3(0, 7.6384, -1)
-jib_head_local_m = Vector3(0, 5.95, -1)
+boom_pivot_local_m = Vector3(0, 2.4111, -1)
+boom_length_m = 4.4
+boom_clearance_over_roof_m = 0.9
+main_head_local_m = Vector3(0, 10.4384, -1)
+jib_head_local_m = Vector3(0, 10.33, -1)
 jib_tack_local_m = Vector3(0, 1.9614, -3.5498)
-jib_clew_local_m = Vector3(0, 1.6686, -1.1498)
+jib_clew_local_m = Vector3(0, 2.0686, -1.05)
 helm_station_local_m = Vector3(0, 0, 2.72)
 helm_pedestal_height_m = 0.72
 helm_pedestal_base_size_m = Vector2(0.48, 0.38)

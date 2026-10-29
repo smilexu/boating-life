@@ -1,0 +1,16 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://powhku4ku12c"
+
+[deps]
+
+source_file="res://docs/sailing/polar_p217/p217_20261029T071126_672320/p217_free_deceleration.csv"
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

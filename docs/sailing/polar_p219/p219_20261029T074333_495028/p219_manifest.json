@@ -1,0 +1,144 @@
+{
+	"base_data_sources": {
+		"p216_08kn_090twa_port": {
+			"configuration_fingerprint": "e010cc7ad52ebc68af6483e4b483b6e381eb60899f9bf997a1fee422a17735a6",
+			"status": "STABLE",
+			"test_run_id": "polar_2026-10-29_00-20-26_458381"
+		},
+		"p216_08kn_120twa_port": {
+			"configuration_fingerprint": "07735d7f01e7581d640ed6367de2bf60568198b3a6848ca4357e1e86d4565eb8",
+			"status": "STABLE",
+			"test_run_id": "polar_2026-10-29_00-21-29_109491"
+		},
+		"p216_12kn_090twa_port": {
+			"configuration_fingerprint": "e010cc7ad52ebc68af6483e4b483b6e381eb60899f9bf997a1fee422a17735a6",
+			"status": "STABLE",
+			"test_run_id": "polar_2026-10-29_00-20-26_458381"
+		},
+		"p216_12kn_120twa_port": {
+			"configuration_fingerprint": "07735d7f01e7581d640ed6367de2bf60568198b3a6848ca4357e1e86d4565eb8",
+			"status": "STABLE",
+			"test_run_id": "polar_2026-10-29_00-21-29_109491"
+		},
+		"p216_16kn_090twa_port": {
+			"configuration_fingerprint": "e010cc7ad52ebc68af6483e4b483b6e381eb60899f9bf997a1fee422a17735a6",
+			"status": "STABLE",
+			"test_run_id": "polar_2026-10-29_00-20-26_458381"
+		},
+		"p216_16kn_120twa_port": {
+			"configuration_fingerprint": "07735d7f01e7581d640ed6367de2bf60568198b3a6848ca4357e1e86d4565eb8",
+			"status": "STABLE",
+			"test_run_id": "polar_2026-10-29_00-21-29_109491"
+		}
+	},
+	"base_drag_values": {
+		"hull_longitudinal_drag_linear_n_s_m": 220.0,
+		"hull_longitudinal_drag_quadratic_n_s2_m2": 85.0
+	},
+	"base_profile_path": "res://resources/sailing/nordic28_p216_physics_profile.tres",
+	"base_profile_sha256": "bb8c525306eb24ed14014a89593e91d0f128f8c632720dd341cb851bee2fcc60",
+	"boat_scene_path": "res://scenes/boats/SailingBoat8mP216.tscn",
+	"case_statuses": {
+		"p219_08kn_090twa_port": "STABLE",
+		"p219_08kn_120twa_port": "STABLE",
+		"p219_12kn_090twa_port": "STABLE",
+		"p219_12kn_120twa_port": "STABLE",
+		"p219_16kn_090twa_port": "STABLE",
+		"p219_16kn_120twa_port": "STABLE"
+	},
+	"comparison_row_count": 6,
+	"conditions": [
+		{
+			"twa": 90.0,
+			"tws": 8.0
+		},
+		{
+			"twa": 120.0,
+			"tws": 8.0
+		},
+		{
+			"twa": 90.0,
+			"tws": 12.0
+		},
+		{
+			"twa": 120.0,
+			"tws": 12.0
+		},
+		{
+			"twa": 90.0,
+			"tws": 16.0
+		},
+		{
+			"twa": 120.0,
+			"tws": 16.0
+		}
+	],
+	"created_at": "2026-10-29T07:46:41",
+	"errors": [],
+	"execution": {
+		"auto_trim": true,
+		"engine_physics_ticks_per_second": 480,
+		"engine_state": "OFF",
+		"engine_time_scale": 8.0,
+		"godot_version": {
+			"build": "official",
+			"hash": "ed1daf0bf001b61586d9930840f2f1394092c079",
+			"hex": 263938,
+			"major": 4,
+			"minor": 7,
+			"patch": 2,
+			"status": "stable",
+			"string": "4.7.2-stable (official)",
+			"timestamp": 0
+		},
+		"water_current_mps": 0.0,
+		"wave_mode": "WaveSampler enabled with zero amplitude",
+		"wind": "fixed true wind per case; randomized gust amplitude 0"
+	},
+	"p216_base_results_path": "res://docs/sailing/polar_p216/p216_results.json",
+	"p219_configuration_fingerprint": "52d71fea3c54ae9ce285ad260278a077c4befd15ea53be9b45e7fdbb8f8cbee2",
+	"p219_run_id": "p219_20261029T074333_495028",
+	"phase": "Nordic 28 P2.19 longitudinal hull drag sensitivity",
+	"polar_stability_profile": {
+		"case_timeout_seconds": 180.0,
+		"fixed_physics_step_seconds": 0.0166666666666667,
+		"minimum_warmup_seconds": 60.0,
+		"sample_window_seconds": 30.0,
+		"stability_window_seconds": 30.0
+	},
+	"profile_difference_allowlist": [
+		"hull_longitudinal_drag_linear_n_s_m"
+	],
+	"runner_configuration_fingerprints": {
+		"remaining": "7c20e5e8b3484e0c3e09af4b20aa63382db0d5d82f19c0caf4b12ff791a26491",
+		"smoke": "c59bdd76f6410f8691a7329b28bf848da16b9740ef37c4d6786ee74b0fcd3a8b"
+	},
+	"runner_test_run_ids": {
+		"remaining": "polar_2026-10-29_07-44-04_827307",
+		"smoke": "polar_2026-10-29_07-43-33_018685"
+	},
+	"source_sha256": {
+		"res://project.godot": "e518dcafffba8e3b1ef00dcdd46f78307b1c8db714e13ddd4d5e5f4ebfc39a06",
+		"res://resources/sailing/nordic28_p216_physics_profile.tres": "bb8c525306eb24ed14014a89593e91d0f128f8c632720dd341cb851bee2fcc60",
+		"res://resources/sailing/nordic28_p219_physics_profile.tres": "3f054ac766d033b5ae3fc1b7d0a8fcf908e085c55fccc3cd0982833eddb3e7ce",
+		"res://resources/sailing/polar_test_profile.tres": "6d085f82c604f7eb0497663ddbe4eecf3c87a74c83faf9bd44ac4934b356f21c",
+		"res://scenes/SailboatLabP216.tscn": "6186c82bcef5bc44911a840cfe5efc43a655fd7420b6b7cfb22d019820053f07",
+		"res://scenes/boats/SailingBoat8mP216.tscn": "4ac4fe7e0abce3d8fa2b5c2aced3cbeb5436a61b60cf902f525ccc7e048c161e",
+		"res://scripts/polar_data_exporter.gd": "f983f2fb51f902a2e3333a2659b24d479c4dfab17974ce17e34eb74a0ca886dc",
+		"res://scripts/polar_stability_detector.gd": "b1016c2f9a74fd25dab9b700a6387f89e5a96e24d9c86c8a7068a382d00faeb1",
+		"res://scripts/polar_test_profile.gd": "f00f5e9804e941908e71386f874984abc091743f06d6d1f747100e6aab1a7923",
+		"res://scripts/polar_test_runner.gd": "4192453fb77b2ba20c85ff0c855f52d7bb659298e1b673d589621e27249e889f",
+		"res://scripts/sailboat_aero_math.gd": "026261798c8e8ded307bb3fa01af41254f8367d8a3ab05f0ad9558203a856188",
+		"res://scripts/sailboat_hydrodynamics.gd": "7136ad59898c0f27fdc1b82087bc2ff1b56851f0826147df3ab6333819981d92",
+		"res://scripts/sailboat_lab_body.gd": "9c493d689a55ce7bbfba7204f5af24678d101b444188db32ab2843b7dc927f28",
+		"res://tests/run_polar_p219_hull_drag_sensitivity.gd": "1a96372a9ab267385af383f60811128e3fa3bc5551aafbb1642c459da8b9b0a8"
+	},
+	"status": "COMPLETE",
+	"tack_tested": "PORT; BASE uses matching P2.16 PORT samples",
+	"test_drag_values": {
+		"hull_longitudinal_drag_linear_n_s_m": 165.0,
+		"hull_longitudinal_drag_quadratic_n_s2_m2": 85.0
+	},
+	"test_profile_path": "res://resources/sailing/nordic28_p219_physics_profile.tres",
+	"test_profile_sha256": "3f054ac766d033b5ae3fc1b7d0a8fcf908e085c55fccc3cd0982833eddb3e7ce"
+}

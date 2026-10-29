@@ -1,0 +1,25 @@
+{
+  "boat_scene_path": "res://scenes/boats/SailingBoat8mP216.tscn",
+  "configuration_fingerprint": "be52262644e8df378d4b64ba0d1fd769d1eb740700e4af53a07fd7707bb37246",
+  "engine_physics_ticks_per_second": 480,
+  "engine_time_scale": 8.0,
+  "errors": [
+    "%g kn: engine was not OFF during deceleration"
+  ],
+  "initial_speed_targets_kn": [
+    2.0,
+    3.0,
+    4.0,
+    5.0,
+    6.0
+  ],
+  "physics_profile_path": "res://resources/sailing/nordic28_p216_physics_profile.tres",
+  "profile_sha256": "bb8c525306eb24ed14014a89593e91d0f128f8c632720dd341cb851bee2fcc60",
+  "simulated_physics_step_seconds": 0.0166666666666667,
+  "summary_rows": [],
+  "test_method": "Per condition, calm at zero velocity with static zero-amplitude WaveSampler and zero wind/current; set one initial forward local velocity through set_test_initial_linear_velocity_local, then allow free solver deceleration with sails disabled and engine off.",
+  "test_run_id": "p217_20261029T071126_672320",
+  "timeseries_rows": [],
+  "status": "ABORTED_INVALID_HARNESS",
+  "failure_reason": "Harness compared localized state_name display text (关闭) with OFF and stopped before accepting physics samples. Engine running flag was false; this folder contains no valid measurement data."
+}

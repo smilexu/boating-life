@@ -22,6 +22,7 @@ var _weather_state_controller: Node
 var _sample_source: Node3D
 var _panel: PanelContainer
 var _layout: VBoxContainer
+var _drag_handle: Control
 var _arrow: Control
 var _graph: Control
 var _status_label: Label
@@ -44,6 +45,10 @@ var _debug_override_toggle: CheckButton
 var _refresh_elapsed := 0.0
 var _test_clock_seconds := 0.0
 var _test_clock_running := false
+var _panel_dragging := false
+var _panel_position_manually_set := false
+var _panel_drag_offset := Vector2.ZERO
+var _panel_layout_size := Vector2.ZERO
 var _next_graph_sample_time := -INF
 var _lab_mode := false
 var _validation_expected := Vector3.ZERO
@@ -155,6 +160,18 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	get_viewport().set_input_as_handled()
 
 
+func _input(event: InputEvent) -> void:
+	if not _panel_dragging:
+		return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		_panel_dragging = false
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseMotion:
+		_apply_panel_top_left(_clamped_panel_top_left(event.global_position - _panel_drag_offset))
+		_panel_position_manually_set = true
+		get_viewport().set_input_as_handled()
+
+
 func _build_panel() -> void:
 	_panel = PanelContainer.new()
 	_panel.name = "WindFieldTestPanel"
@@ -179,8 +196,20 @@ func _build_panel() -> void:
 	_layout.add_theme_constant_override("separation", 8)
 	scroll.add_child(_layout)
 
-	var title := _make_label("全局风场 W1 · F12 打开 / 关闭", 20)
-	_layout.add_child(title)
+	_drag_handle = HBoxContainer.new()
+	_drag_handle.name = "WindPanelDragHandle"
+	_drag_handle.mouse_filter = Control.MOUSE_FILTER_STOP
+	_drag_handle.mouse_default_cursor_shape = Control.CURSOR_MOVE
+	_drag_handle.gui_input.connect(_on_drag_handle_gui_input)
+	var title := _make_label("全局风场 W1 · F12 打开 / 关闭", 18)
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_drag_handle.add_child(title)
+	var drag_hint := _make_label("拖动此栏", 12)
+	drag_hint.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	drag_hint.add_theme_color_override("font_color", Color(0.62, 0.76, 0.77))
+	_drag_handle.add_child(drag_hint)
+	_layout.add_child(_drag_handle)
 	_layout.add_child(_make_label("X=东，Y=上，Z=南；风向角按真北顺时针表示气象来向。箭头表示空气实际流去方向。", 13))
 	_mode_label = _make_label("", 14)
 	_mode_label.name = "WindFieldOperatingMode"
@@ -294,9 +323,13 @@ func _fit_panel_to_viewport() -> void:
 		return
 	var viewport_size := get_viewport().get_visible_rect().size
 	var panel_size := panel_size_for_viewport(viewport_size, _lab_mode)
+	var previous_position := _panel.get_global_rect().position
+	_panel_layout_size = panel_size
 	_panel.custom_minimum_size = panel_size
 	_panel.size = panel_size
-	if _lab_mode:
+	if _panel_position_manually_set:
+		_apply_panel_top_left(_clamped_panel_top_left(previous_position))
+	elif _lab_mode:
 		_panel.anchor_left = 0.0
 		_panel.anchor_right = 0.0
 		_panel.anchor_top = 0.0
@@ -314,6 +347,36 @@ func _fit_panel_to_viewport() -> void:
 		_panel.offset_top = 76.0
 		_panel.offset_right = -18.0
 		_panel.offset_bottom = 76.0 + panel_size.y
+
+
+func _on_drag_handle_gui_input(event: InputEvent) -> void:
+	if not event is InputEventMouseButton or event.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if event.pressed:
+		var panel_position := _panel.get_global_rect().position
+		_apply_panel_top_left(panel_position)
+		_panel_drag_offset = event.global_position - panel_position
+		_panel_dragging = true
+		_panel_position_manually_set = true
+	_drag_handle.accept_event()
+
+
+func _clamped_panel_top_left(position: Vector2) -> Vector2:
+	var viewport_size := get_viewport().get_visible_rect().size
+	var maximum := Vector2(
+		maxf(12.0, viewport_size.x - _panel_layout_size.x - 12.0),
+		maxf(12.0, viewport_size.y - _panel_layout_size.y - 12.0)
+	)
+	return Vector2(clampf(position.x, 12.0, maximum.x), clampf(position.y, 12.0, maximum.y))
+
+
+func _apply_panel_top_left(position: Vector2) -> void:
+	_panel.anchor_left = 0.0
+	_panel.anchor_right = 0.0
+	_panel.anchor_top = 0.0
+	_panel.anchor_bottom = 0.0
+	_panel.position = position
+	_panel.size = _panel_layout_size
 
 
 func _add_number_row(label_text: String, minimum: float, maximum: float, step: float, value: float, callback: Callable) -> SpinBox:

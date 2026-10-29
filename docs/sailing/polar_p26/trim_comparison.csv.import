@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://coxmlu6i58ans"
+
+[deps]
+
+files=["res://docs/sailing/polar_p26/trim_comparison.run.translation", "res://docs/sailing/polar_p26/trim_comparison.trim.translation", "res://docs/sailing/polar_p26/trim_comparison.status.translation", "res://docs/sailing/polar_p26/trim_comparison.target.translation", "res://docs/sailing/polar_p26/trim_comparison.target.translation", "res://docs/sailing/polar_p26/trim_comparison.actual.translation", "res://docs/sailing/polar_p26/trim_comparison.twa.translation", "res://docs/sailing/polar_p26/trim_comparison.main.translation", "res://docs/sailing/polar_p26/trim_comparison.main.translation", "res://docs/sailing/polar_p26/trim_comparison.jib.translation", "res://docs/sailing/polar_p26/trim_comparison.jib.translation", "res://docs/sailing/polar_p26/trim_comparison.sog.translation", "res://docs/sailing/polar_p26/trim_comparison.longitudinal.translation", "res://docs/sailing/polar_p26/trim_comparison.leeway.translation", "res://docs/sailing/polar_p26/trim_comparison.heel.translation", "res://docs/sailing/polar_p26/trim_comparison.rudder.translation", "res://docs/sailing/polar_p26/trim_comparison.rudder.translation", "res://docs/sailing/polar_p26/trim_comparison.main.translation", "res://docs/sailing/polar_p26/trim_comparison.jib.translation", "res://docs/sailing/polar_p26/trim_comparison.main.translation", "res://docs/sailing/polar_p26/trim_comparison.jib.translation", "res://docs/sailing/polar_p26/trim_comparison.keel.translation", "res://docs/sailing/polar_p26/trim_comparison.rudder.translation", "res://docs/sailing/polar_p26/trim_comparison.buoyancy.translation", "res://docs/sailing/polar_p26/trim_comparison.known.translation", "res://docs/sailing/polar_p26/trim_comparison.rudder.translation", "res://docs/sailing/polar_p26/trim_comparison.rudder.translation"]
+
+source_file="res://docs/sailing/polar_p26/trim_comparison.csv"
+dest_files=["res://docs/sailing/polar_p26/trim_comparison.run.translation", "res://docs/sailing/polar_p26/trim_comparison.trim.translation", "res://docs/sailing/polar_p26/trim_comparison.status.translation", "res://docs/sailing/polar_p26/trim_comparison.target.translation", "res://docs/sailing/polar_p26/trim_comparison.target.translation", "res://docs/sailing/polar_p26/trim_comparison.actual.translation", "res://docs/sailing/polar_p26/trim_comparison.twa.translation", "res://docs/sailing/polar_p26/trim_comparison.main.translation", "res://docs/sailing/polar_p26/trim_comparison.main.translation", "res://docs/sailing/polar_p26/trim_comparison.jib.translation", "res://docs/sailing/polar_p26/trim_comparison.jib.translation", "res://docs/sailing/polar_p26/trim_comparison.sog.translation", "res://docs/sailing/polar_p26/trim_comparison.longitudinal.translation", "res://docs/sailing/polar_p26/trim_comparison.leeway.translation", "res://docs/sailing/polar_p26/trim_comparison.heel.translation", "res://docs/sailing/polar_p26/trim_comparison.rudder.translation", "res://docs/sailing/polar_p26/trim_comparison.rudder.translation", "res://docs/sailing/polar_p26/trim_comparison.main.translation", "res://docs/sailing/polar_p26/trim_comparison.jib.translation", "res://docs/sailing/polar_p26/trim_comparison.main.translation", "res://docs/sailing/polar_p26/trim_comparison.jib.translation", "res://docs/sailing/polar_p26/trim_comparison.keel.translation", "res://docs/sailing/polar_p26/trim_comparison.rudder.translation", "res://docs/sailing/polar_p26/trim_comparison.buoyancy.translation", "res://docs/sailing/polar_p26/trim_comparison.known.translation", "res://docs/sailing/polar_p26/trim_comparison.rudder.translation", "res://docs/sailing/polar_p26/trim_comparison.rudder.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

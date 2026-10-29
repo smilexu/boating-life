@@ -125,6 +125,7 @@ var _city_lighting_reset_button: Button
 var _sailing_panel: PanelContainer
 var _sailing_speed_label: Label
 var _sailing_heading_label: Label
+var _sailing_heel_label: Label
 var _sailing_true_wind_speed_label: Label
 var _sailing_true_wind_direction_label: Label
 var _sailing_relative_wind_label: Label
@@ -314,6 +315,9 @@ func _build_sailing_panel() -> void:
 	_sailing_heading_label = _make_sailing_label("船首航向 000°", 19, Color(0.9, 0.96, 0.94))
 	_sailing_heading_label.name = "SailingHeading"
 	core_data.add_child(_sailing_heading_label)
+	_sailing_heel_label = _make_sailing_label("横倾角 +0.0°", 16, Color(0.95, 0.77, 0.36))
+	_sailing_heel_label.name = "SailingHeel"
+	core_data.add_child(_sailing_heel_label)
 	_sailing_true_wind_speed_label = _make_sailing_label("真实风速 0.0 m/s", 16, Color(0.22, 0.81, 0.73))
 	_sailing_true_wind_speed_label.name = "SailingTrueWindSpeed"
 	core_data.add_child(_sailing_true_wind_speed_label)
@@ -668,6 +672,7 @@ func _refresh_sailing_navigation_text(snapshot: Dictionary) -> void:
 	var speed_knots := float(snapshot.get("sog_knots", 0.0))
 	_sailing_speed_label.text = "航速 %.1f 节" % speed_knots
 	_sailing_heading_label.text = "船首航向 %03.0f°" % heading
+	_sailing_heel_label.text = "横倾角 %+.1f°" % float(snapshot.get("heel_degrees", 0.0))
 	var true_valid := bool(snapshot.get("true_wind_valid", false))
 	var true_speed := float(snapshot.get("true_wind_speed_mps", 0.0))
 	var true_bearing := float(snapshot.get("true_wind_from_degrees", 0.0))

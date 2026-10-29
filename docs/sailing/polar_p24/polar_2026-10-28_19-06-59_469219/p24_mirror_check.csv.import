@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://q1xxe1esf1jo"
+
+[deps]
+
+files=["res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.p24.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.p24.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.sog.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.abs.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.heel.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.leeway.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.rudder.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.main.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.jib.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.sail.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.yaw.translation"]
+
+source_file="res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.csv"
+dest_files=["res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.p24.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.p24.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.sog.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.abs.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.heel.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.leeway.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.rudder.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.main.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.jib.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.sail.translation", "res://docs/sailing/polar_p24/polar_2026-10-28_19-06-59_469219/p24_mirror_check.yaw.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

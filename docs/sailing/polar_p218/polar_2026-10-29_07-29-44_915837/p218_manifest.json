@@ -1,0 +1,92 @@
+{
+	"base_data_sources": {
+		"12": {
+			"boat_config_hash": "e010cc7ad52ebc68af6483e4b483b6e381eb60899f9bf997a1fee422a17735a6",
+			"case_id": "p216_12kn_090twa_port",
+			"status": "STABLE",
+			"test_run_id": "polar_2026-10-29_00-20-26_458381"
+		},
+		"8": {
+			"boat_config_hash": "07735d7f01e7581d640ed6367de2bf60568198b3a6848ca4357e1e86d4565eb8",
+			"case_id": "p216_08kn_090twa_port",
+			"status": "STABLE",
+			"test_run_id": "polar_2026-10-29_00-21-29_109491"
+		}
+	},
+	"boat_config_fingerprint": "dd4cc2506a63932e7ecb1fe4c826d71529eed7fb5676df3cfcb114327e8cd210",
+	"boat_scene_path": "res://scenes/boats/SailingBoat8mP216.tscn",
+	"conditions": [
+		{
+			"auto_sail_trim_enabled": true,
+			"case_id": "p218_08kn_090twa_port",
+			"experiment_group": "P2.18_INDUCED_DRAG_SENSITIVITY",
+			"experiment_label": "P2.18 · 8 kn / 90° / induced drag 0.30",
+			"experiment_variable": "sail_induced_drag_factor",
+			"tack": "PORT",
+			"target_twa_deg": -90.0,
+			"target_tws_kn": 8.0
+		},
+		{
+			"auto_sail_trim_enabled": true,
+			"case_id": "p218_12kn_090twa_port",
+			"experiment_group": "P2.18_INDUCED_DRAG_SENSITIVITY",
+			"experiment_label": "P2.18 · 12 kn / 90° / induced drag 0.30",
+			"experiment_variable": "sail_induced_drag_factor",
+			"tack": "PORT",
+			"target_twa_deg": -90.0,
+			"target_tws_kn": 12.0
+		}
+	],
+	"created_at": "2026-10-29T07:32:48",
+	"execution": {
+		"auto_trim": true,
+		"engine_state": "OFF",
+		"godot_version": "4.7.2-stable (official)",
+		"observed_physics_step_seconds": 0.0166666675359011,
+		"physics_ticks_per_second": 480.0,
+		"time_scale": 8.0,
+		"water_current": "zero",
+		"wave_mode": "WaveSampler enabled, static zero amplitude"
+	},
+	"factor_values": {
+		"base": 0.55,
+		"test": 0.3
+	},
+	"fixed_input_aero_source": "Matching P2.16 PORT stable-row mean AWS/AWA and actual sheet angles; both coefficient calculations reuse these same fixed inputs.",
+	"phase": "Nordic 28 P2.18 induced-drag factor sensitivity",
+	"physics_profile_base": "res://resources/sailing/nordic28_p216_physics_profile.tres",
+	"physics_profile_base_sha256": "bb8c525306eb24ed14014a89593e91d0f128f8c632720dd341cb851bee2fcc60",
+	"physics_profile_test": "res://resources/sailing/nordic28_p218_physics_profile.tres",
+	"physics_profile_test_sha256": "bdbf02374ec9b746109fbaaad17f593682d3310d8cf27e806ab4b8e0a3735693",
+	"polar_config_fingerprint": "dd4cc2506a63932e7ecb1fe4c826d71529eed7fb5676df3cfcb114327e8cd210",
+	"polar_stability_profile": {
+		"case_timeout_seconds": 180.0,
+		"fixed_physics_step_seconds": 0.0166666666666667,
+		"sample_window_seconds": 30.0,
+		"stability_window_seconds": 30.0,
+		"warmup_seconds": 60.0
+	},
+	"profile_difference_allowlist": [
+		"sail_induced_drag_factor",
+		"headsail_induced_drag_factor"
+	],
+	"source_sha256": {
+		"res://project.godot": "e518dcafffba8e3b1ef00dcdd46f78307b1c8db714e13ddd4d5e5f4ebfc39a06",
+		"res://resources/sailing/nordic28_p216_physics_profile.tres": "bb8c525306eb24ed14014a89593e91d0f128f8c632720dd341cb851bee2fcc60",
+		"res://resources/sailing/nordic28_p218_physics_profile.tres": "bdbf02374ec9b746109fbaaad17f593682d3310d8cf27e806ab4b8e0a3735693",
+		"res://resources/sailing/polar_test_profile.tres": "6d085f82c604f7eb0497663ddbe4eecf3c87a74c83faf9bd44ac4934b356f21c",
+		"res://scenes/SailboatLabP216.tscn": "6186c82bcef5bc44911a840cfe5efc43a655fd7420b6b7cfb22d019820053f07",
+		"res://scenes/boats/SailingBoat8mP216.tscn": "4ac4fe7e0abce3d8fa2b5c2aced3cbeb5436a61b60cf902f525ccc7e048c161e",
+		"res://scripts/polar_data_exporter.gd": "f983f2fb51f902a2e3333a2659b24d479c4dfab17974ce17e34eb74a0ca886dc",
+		"res://scripts/polar_stability_detector.gd": "b1016c2f9a74fd25dab9b700a6387f89e5a96e24d9c86c8a7068a382d00faeb1",
+		"res://scripts/polar_test_profile.gd": "f00f5e9804e941908e71386f874984abc091743f06d6d1f747100e6aab1a7923",
+		"res://scripts/polar_test_runner.gd": "4192453fb77b2ba20c85ff0c855f52d7bb659298e1b673d589621e27249e889f",
+		"res://scripts/sailboat_aero_math.gd": "026261798c8e8ded307bb3fa01af41254f8367d8a3ab05f0ad9558203a856188",
+		"res://scripts/sailboat_buoyancy_math.gd": "3cc6b0a78c75c3d6653297ed2e8fbbe169f4777e9008c96edb4a7165aabda30b",
+		"res://scripts/sailboat_hydrodynamics.gd": "7136ad59898c0f27fdc1b82087bc2ff1b56851f0826147df3ab6333819981d92",
+		"res://scripts/sailboat_lab_body.gd": "9c493d689a55ce7bbfba7204f5af24678d101b444188db32ab2843b7dc927f28",
+		"res://tests/run_polar_p218_induced_drag_sensitivity.gd": "fcd4c425c97fa9c4539231a550964b7c77da8c650de9bc8359cf371a0029179b"
+	},
+	"test_errors": [],
+	"test_run_id": "polar_2026-10-29_07-29-44_915837"
+}
