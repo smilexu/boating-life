@@ -1,0 +1,81 @@
+{
+	"completed": true,
+	"created_at": "2026-10-29T13:44:16",
+	"expected_measurement_count": 95,
+	"grid_configuration_fingerprint": "5cd63eaa81fb7c7aecc7a62efe7d445d0f453a86319b838ea13c25009052dbc9",
+	"grid_run_id": "polar_2026-10-29_12-56-08_240915",
+	"measurement_count": 95,
+	"profile_paths": {
+		"boat_scene": "res://scenes/boats/SailingBoat8m.tscn",
+		"physics": "res://resources/sailing/sailboat_lab_profile.tres",
+		"visual_rig": "res://resources/sailing/nordic28_visual_rig_profile.tres"
+	},
+	"profile_sha256": {
+		"res://resources/sailing/nordic28_visual_rig_profile.tres": "346f3c3b3effc1650d490b6c85899afa754f14f6781e03afcd36458992c31242",
+		"res://resources/sailing/sailboat_lab_profile.tres": "bfed983da4987dab9d6e1b2a4e225f41eded593492aea4428057efeef4c71f66"
+	},
+	"raw_artifact_directories": [
+		"symmetry/",
+		"grid/"
+	],
+	"release_configuration_fingerprint": "abc7434f93e07b0e098d87f582203f60482f12949c8703751719a81331d98c83",
+	"source_sha256": {
+		"res://project.godot": "e518dcafffba8e3b1ef00dcdd46f78307b1c8db714e13ddd4d5e5f4ebfc39a06",
+		"res://resources/sailing/nordic28_visual_rig_profile.tres": "346f3c3b3effc1650d490b6c85899afa754f14f6781e03afcd36458992c31242",
+		"res://resources/sailing/polar_test_profile.tres": "6d085f82c604f7eb0497663ddbe4eecf3c87a74c83faf9bd44ac4934b356f21c",
+		"res://resources/sailing/sailboat_lab_profile.tres": "bfed983da4987dab9d6e1b2a4e225f41eded593492aea4428057efeef4c71f66",
+		"res://scenes/Boat.tscn": "64643073a5566eaf6b865869082a59dcd2bb484ccb0046b16e82a793737944cc",
+		"res://scenes/SailboatLab.tscn": "c64aa9044e856bae212397ad31d7a2c25d605da77f4a7c23d24ece2bacda88e8",
+		"res://scenes/boats/SailingBoat8m.tscn": "1ae6f6a1958472ae2822d8e8769bb22c4a76e47e453aa1471f61dd131ba8a895",
+		"res://scripts/polar_data_exporter.gd": "f0c209daf5032ff2414601949bb550f07163d1f6c181654f2463a18e14815369",
+		"res://scripts/polar_stability_detector.gd": "b1016c2f9a74fd25dab9b700a6387f89e5a96e24d9c86c8a7068a382d00faeb1",
+		"res://scripts/polar_test_math.gd": "7e2e65db5264a43036b1f1f18266b2ba601b17603b22361ae17b1dc66cbeef89",
+		"res://scripts/polar_test_profile.gd": "f00f5e9804e941908e71386f874984abc091743f06d6d1f747100e6aab1a7923",
+		"res://scripts/polar_test_runner.gd": "72090fb874e42b71a0c79093f10b99e61bef4ab7413de8144c22e8119c2b37fb",
+		"res://scripts/sailboat_aero_math.gd": "026261798c8e8ded307bb3fa01af41254f8367d8a3ab05f0ad9558203a856188",
+		"res://scripts/sailboat_auto_sail_trim.gd": "3e2e86e60a0cec036c5443d3e2709e20c24bbf97d3a5458a54f07292faa47ff7",
+		"res://scripts/sailboat_buoyancy_math.gd": "3cc6b0a78c75c3d6653297ed2e8fbbe169f4777e9008c96edb4a7165aabda30b",
+		"res://scripts/sailboat_hydrodynamics.gd": "7136ad59898c0f27fdc1b82087bc2ff1b56851f0826147df3ab6333819981d92",
+		"res://scripts/sailboat_lab_body.gd": "a7b14aaf07429079a3ef3f4ef14572650828f2bd8558849e5178248464840c18",
+		"res://scripts/wave_sampler.gd": "75088fb59dceea0861ba6453978914391ed837aa208ccee98726e4faefd8a165",
+		"res://scripts/wind_field.gd": "5ad5d5ef974f4caa8ee85e0402509c722ced69f5b0a1f41715fd3b8c608d2e9e",
+		"res://tests/run_nordic28_official_polar.gd": "e273292e920c6eb6283d079bef5bc8a02546ca00ce10b12c5beed2743b1743bc"
+	},
+	"status_counts": {
+		"HEADING_FAILED": 31,
+		"NO_FORWARD_PROGRESS": 3,
+		"STABLE": 61
+	},
+	"symmetry_configuration_fingerprint": "a84f44b0d585402562e927a2c6b24aa19894b9ac41b1dec72cb84756d249c5b9",
+	"symmetry_run_id": "polar_2026-10-29_12-54-03_932271",
+	"symmetry_validation": {
+		"method": "12 kn / 90° and 120° PORT vs STARBOARD; both must be STABLE, speed difference <=5%, measured TWA error <=5°, and heel sign must mirror when visible",
+		"pair_count": 2,
+		"pairs": [
+			{
+				"condition": "12.000|90.000",
+				"passed": true,
+				"port_case_id": "official_tws_12.00_twa_-90.00_port",
+				"port_heel_deg": -8.84357611184983,
+				"port_twa_error_deg": 0.517902203880197,
+				"relative_sog_difference": 0.0,
+				"starboard_case_id": "official_tws_12.00_twa_+90.00_starboard",
+				"starboard_heel_deg": 8.84357611184983,
+				"starboard_twa_error_deg": 0.517902203880197
+			},
+			{
+				"condition": "12.000|120.000",
+				"passed": true,
+				"port_case_id": "official_tws_12.00_twa_-120.00_port",
+				"port_heel_deg": -4.06505581331161,
+				"port_twa_error_deg": 0.484391294787997,
+				"relative_sog_difference": 0.000000255276337464297,
+				"starboard_case_id": "official_tws_12.00_twa_+120.00_starboard",
+				"starboard_heel_deg": 4.06505239821703,
+				"starboard_twa_error_deg": 0.484400407425994
+			}
+		],
+		"passed": true
+	},
+	"umbrella_run_id": "nordic28_polar_20261029T125403_72746"
+}

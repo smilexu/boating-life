@@ -10,7 +10,7 @@ const CSV_FIELDS := [
 	"mean_velocity_world_x_mps", "mean_velocity_world_z_mps", "mean_heading_deg", "mean_cog_deg",
 	"mean_sog_kn", "mean_stw_kn", "mean_vmg_kn",
 	"mean_heel_deg", "mean_leeway_deg", "speed_stddev_mps", "heading_error_deg", "mean_rudder_deg",
-	"rudder_saturation_fraction", "main_sail_deg", "headsail_deg", "mean_main_forward_force_n",
+	"rudder_saturation_fraction", "main_sail_deg", "headsail_deg", "main_sail_deployment", "jib_deployment", "auto_reef_enabled", "mean_main_forward_force_n",
 	"mean_headsail_forward_force_n", "mean_hull_resistance_forward_n", "mean_keel_force_forward_n",
 	"mean_rudder_force_forward_n", "mean_total_water_force_forward_n", "mean_longitudinal_velocity_mps",
 	"mean_body_calculation_usec", "p95_body_calculation_usec", "elapsed_simulation_seconds", "wall_clock_elapsed_seconds",

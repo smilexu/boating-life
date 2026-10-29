@@ -738,6 +738,7 @@ func _make_result(test_case: Dictionary, status: String, reason: String, metrics
 	var leeway_value: Variant = metrics.get("mean_leeway_deg", _mean_sample("leeway_deg"))
 	if typeof(leeway_value) == TYPE_FLOAT and not is_finite(float(leeway_value)):
 		leeway_value = null
+	var deployment: Dictionary = _boat.call("get_sail_deployment_snapshot") if _boat != null and _boat.has_method("get_sail_deployment_snapshot") else {}
 	var result := {
 		"case_id": str(test_case.get("case_id", "")),
 		"boat_id": _boat_name(),
@@ -775,6 +776,9 @@ func _make_result(test_case: Dictionary, status: String, reason: String, metrics
 		"rudder_saturation_fraction": float(metrics.get("rudder_saturation_fraction", 0.0)),
 		"main_sail_deg": float(metrics.get("main_sail_deg", _mean_sample("main_sail_deg"))),
 		"headsail_deg": float(metrics.get("headsail_deg", _mean_sample("headsail_deg"))),
+		"main_sail_deployment": float(deployment.get("main_current_deployment", NAN)),
+		"jib_deployment": float(deployment.get("jib_current_deployment", NAN)),
+		"auto_reef_enabled": bool(deployment.get("auto_reef_enabled", false)),
 		"mean_main_forward_force_n": float(metrics.get("main_force_forward_n", _mean_sample("main_force_forward_n"))),
 		"mean_headsail_forward_force_n": float(metrics.get("headsail_force_forward_n", _mean_sample("headsail_force_forward_n"))),
 		"mean_hull_resistance_forward_n": float(metrics.get("hull_resistance_forward_n", _mean_sample("hull_resistance_forward_n"))),

@@ -10,6 +10,7 @@ const SolarPositionScript := preload("res://scripts/solar_position.gd")
 const ExtremeSeaStatePresetsScript := preload("res://scripts/extreme_sea_state_presets.gd")
 const VesselPreviewCardScript := preload("res://scripts/vessel_preview_card.gd")
 const SAILING_NAVIGATION_INSTRUMENT_SCRIPT := preload("res://scripts/sailboat_navigation_instrument.gd")
+const SAILING_POLAR_CHART_SCRIPT := preload("res://scripts/sailing_polar_chart.gd")
 const NAVIGATION_HUD_FORMAT := preload("res://scripts/navigation_hud_format.gd")
 const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 
@@ -149,6 +150,11 @@ var _aux_engine_gear_option: OptionButton
 var _aux_engine_throttle_slider: HSlider
 var _aux_engine_feedback_label: Label
 var _sailing_navigation_instrument: Control
+var _polar_toggle_button: Button
+var _polar_panel: PanelContainer
+var _polar_chart: Control
+var _polar_detail_label: Label
+var _polar_requested := false
 var _compass_widget: Control
 var _sailing_refresh_elapsed := 0.0
 var _last_auto_trim_state := false
@@ -300,6 +306,12 @@ func _build_sailing_panel() -> void:
 	_sailing_mode_label.add_theme_font_size_override("font_size", 15)
 	_sailing_mode_label.add_theme_color_override("font_color", Color(0.95, 0.77, 0.36))
 	heading_row.add_child(_sailing_mode_label)
+	_polar_toggle_button = Button.new()
+	_polar_toggle_button.name = "OpenNordic28Polar"
+	_polar_toggle_button.text = "速度极曲线"
+	_polar_toggle_button.custom_minimum_size = Vector2(108.0, 34.0)
+	_polar_toggle_button.pressed.connect(_toggle_polar_panel)
+	heading_row.add_child(_polar_toggle_button)
 	layout.add_child(heading_row)
 	var core_row := HBoxContainer.new()
 	core_row.name = "CoreNavigationRow"
@@ -479,7 +491,64 @@ func _build_sailing_panel() -> void:
 	_sailing_control_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layout.add_child(_sailing_control_hint_label)
 	add_child(_sailing_panel)
+	_build_polar_panel()
 	_update_sailing_panel()
+
+
+func _build_polar_panel() -> void:
+	_polar_panel = PanelContainer.new()
+	_polar_panel.name = "Nordic28PolarPanel"
+	_polar_panel.anchor_left = 0.5
+	_polar_panel.anchor_right = 0.5
+	_polar_panel.anchor_top = 0.5
+	_polar_panel.anchor_bottom = 0.5
+	_polar_panel.offset_left = -520.0
+	_polar_panel.offset_right = 520.0
+	_polar_panel.offset_top = -390.0
+	_polar_panel.offset_bottom = 390.0
+	_polar_panel.custom_minimum_size = Vector2(1040.0, 780.0)
+	_polar_panel.visible = false
+	_polar_panel.z_index = 30
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.025, 0.085, 0.11, 0.96)
+	style.border_color = Color(0.28, 0.52, 0.55, 0.82)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(10)
+	style.content_margin_left = 16.0
+	style.content_margin_right = 16.0
+	style.content_margin_top = 12.0
+	style.content_margin_bottom = 12.0
+	_polar_panel.add_theme_stylebox_override("panel", style)
+	var layout := VBoxContainer.new()
+	layout.name = "PolarPanelContent"
+	layout.add_theme_constant_override("separation", 8)
+	_polar_panel.add_child(layout)
+	var header := HBoxContainer.new()
+	var title := _make_sailing_label("Nordic 28 · 速度极曲线", 20, Color(0.92, 0.97, 0.95))
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	var close_button := Button.new()
+	close_button.name = "CloseNordic28Polar"
+	close_button.text = "关闭  ×"
+	close_button.custom_minimum_size = Vector2(92.0, 34.0)
+	close_button.pressed.connect(_close_polar_panel)
+	header.add_child(close_button)
+	layout.add_child(header)
+	var subtitle := _make_sailing_label("角度为实际真风角 TWA；半径为船速（节）。缺失和非稳定工况保持断线。", 13, Color(0.65, 0.8, 0.79))
+	layout.add_child(subtitle)
+	_polar_detail_label = _make_sailing_label("等待船舶数据…", 14, Color(0.38, 0.91, 0.99))
+	_polar_detail_label.name = "Nordic28PolarCurrentState"
+	_polar_detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(_polar_detail_label)
+	_polar_chart = Control.new()
+	_polar_chart.name = "Nordic28PolarChart"
+	_polar_chart.set_script(SAILING_POLAR_CHART_SCRIPT)
+	_polar_chart.custom_minimum_size = Vector2(700.0, 460.0)
+	_polar_chart.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_polar_chart.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	layout.add_child(_polar_chart)
+	add_child(_polar_panel)
+	_update_hud_layout()
 
 
 func _make_sailing_label(text_value: String, font_size: int, color: Color) -> Label:
@@ -671,6 +740,8 @@ func _update_sailing_panel() -> void:
 	var active := _controller.is_sailing_active()
 	var debug_panel_open := _debug_panel != null and _debug_panel.visible
 	_sailing_panel.visible = active and not debug_panel_open
+	if _polar_panel != null:
+		_polar_panel.visible = _polar_requested and active and not debug_panel_open
 	if _compass_widget != null:
 		_compass_widget.visible = not active or debug_panel_open
 	if not active:
@@ -680,6 +751,9 @@ func _update_sailing_panel() -> void:
 		return
 	var snapshot: Dictionary = body.call("get_navigation_snapshot")
 	var deployment: Dictionary = snapshot.get("sail_deployment", {})
+	if _polar_chart != null:
+		_polar_chart.call("set_current_state", snapshot)
+		_polar_detail_label.text = str(_polar_chart.call("get_current_detail_text"))
 	var engine: Dictionary = snapshot.get("auxiliary_engine", {"available": false})
 	var engine_available := bool(engine.get("available", false))
 	if _aux_engine_panel != null:
@@ -833,6 +907,16 @@ func _on_sailing_auto_toggled(enabled: bool) -> void:
 	var body := _controller.get_sailing_body() if _controller != null else null
 	if body != null and body.has_method("set_auto_sail_trim_enabled"):
 		body.call("set_auto_sail_trim_enabled", enabled)
+
+
+func _toggle_polar_panel() -> void:
+	_polar_requested = not _polar_requested
+	_update_sailing_panel()
+
+
+func _close_polar_panel() -> void:
+	_polar_requested = false
+	_update_sailing_panel()
 
 
 func _on_main_deployment_changed(value: float) -> void:
@@ -1021,6 +1105,10 @@ func _sync_peberholm_debug_control() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if _polar_requested and event is InputEventKey and event.pressed and not event.echo and (event.physical_keycode == KEY_ESCAPE or event.keycode == KEY_ESCAPE):
+		_close_polar_panel()
+		get_viewport().set_input_as_handled()
+		return
 	if _vessel_picker_overlay == null or not _vessel_picker_overlay.visible:
 		return
 	if event is InputEventKey and event.pressed and not event.echo and (event.physical_keycode == KEY_ESCAPE or event.keycode == KEY_ESCAPE):
@@ -2258,6 +2346,14 @@ func _update_hud_layout() -> void:
 		_sailing_panel.custom_minimum_size.y = sailing_height
 		_sailing_panel.offset_top = -sailing_height - 24.0
 		_sailing_panel.offset_bottom = -24.0
+	if _polar_panel != null:
+		var polar_width := minf(1160.0, maxf(760.0, viewport_size.x * 0.94))
+		var polar_height := minf(860.0, maxf(560.0, viewport_size.y * 0.92))
+		_polar_panel.custom_minimum_size = Vector2(polar_width, polar_height)
+		_polar_panel.offset_left = -polar_width * 0.5
+		_polar_panel.offset_right = polar_width * 0.5
+		_polar_panel.offset_top = -polar_height * 0.5
+		_polar_panel.offset_bottom = polar_height * 0.5
 
 
 static func sailing_panel_layout_metrics(viewport_size: Vector2, ui_scale: float, detailed: bool) -> Dictionary:

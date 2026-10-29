@@ -1,0 +1,29 @@
+{
+	"method": "12 kn / 90° and 120° PORT vs STARBOARD; both must be STABLE, speed difference <=5%, measured TWA error <=5°, and heel sign must mirror when visible",
+	"pair_count": 2,
+	"pairs": [
+		{
+			"condition": "12.000|90.000",
+			"passed": true,
+			"port_case_id": "official_tws_12.00_twa_-90.00_port",
+			"port_heel_deg": -8.84357611184983,
+			"port_twa_error_deg": 0.517902203880197,
+			"relative_sog_difference": 0.0,
+			"starboard_case_id": "official_tws_12.00_twa_+90.00_starboard",
+			"starboard_heel_deg": 8.84357611184983,
+			"starboard_twa_error_deg": 0.517902203880197
+		},
+		{
+			"condition": "12.000|120.000",
+			"passed": true,
+			"port_case_id": "official_tws_12.00_twa_-120.00_port",
+			"port_heel_deg": -4.06505581331161,
+			"port_twa_error_deg": 0.484391294787997,
+			"relative_sog_difference": 0.000000255276337464297,
+			"starboard_case_id": "official_tws_12.00_twa_+120.00_starboard",
+			"starboard_heel_deg": 4.06505239821703,
+			"starboard_twa_error_deg": 0.484400407425994
+		}
+	],
+	"passed": true
+}
