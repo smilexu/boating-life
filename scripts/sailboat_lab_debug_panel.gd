@@ -41,6 +41,12 @@ var _headsail_toggle: CheckButton
 var _headsail_target_slider: HSlider
 var _headsail_target_value_label: Label
 var _headsail_metrics_label: Label
+var _main_deployment_slider: HSlider
+var _main_deployment_status_label: Label
+var _jib_deployment_slider: HSlider
+var _jib_deployment_status_label: Label
+var _auto_reef_toggle: CheckButton
+var _auto_reef_status_label: Label
 var _rudder_target_slider: HSlider
 var _rudder_target_value_label: Label
 var _engine_debug_label: Label
@@ -266,6 +272,30 @@ func _build_panel() -> void:
 	_auto_trim_status_label.name = "AutoSailTrimStatus"
 	sail_page.add_child(_auto_trim_status_label)
 	sail_page.add_child(_make_note("AUTO 按实际 AWA 连续调节两张帆的目标角；不会改变航向或舵角。手动拖动任一帆角滑块，或按 J/L，会自动切回 MANUAL。迎风禁航区只显示提示，不注入推进力。"))
+	sail_page.add_child(_section_title("连续卷收 · 主帆与前帆独立控制"))
+	_main_deployment_status_label = _make_note("主帆 · 目标 100% · 实际 100%")
+	_main_deployment_status_label.name = "MainSailDeploymentStatus"
+	sail_page.add_child(_main_deployment_status_label)
+	_main_deployment_slider = _make_wave_slider(0.0, 100.0, 1.0, 100.0)
+	_main_deployment_slider.name = "MainSailDeployment"
+	_main_deployment_slider.value_changed.connect(_on_main_deployment_changed)
+	sail_page.add_child(_main_deployment_slider)
+	_jib_deployment_status_label = _make_note("前帆 Jib · 目标 100% · 实际 100%")
+	_jib_deployment_status_label.name = "JibDeploymentStatus"
+	sail_page.add_child(_jib_deployment_status_label)
+	_jib_deployment_slider = _make_wave_slider(0.0, 100.0, 1.0, 100.0)
+	_jib_deployment_slider.name = "JibDeployment"
+	_jib_deployment_slider.value_changed.connect(_on_jib_deployment_changed)
+	sail_page.add_child(_jib_deployment_slider)
+	_auto_reef_toggle = CheckButton.new()
+	_auto_reef_toggle.name = "AutoReefToggle"
+	_auto_reef_toggle.text = "AUTO Reef · 按船体横倾自动缩帆"
+	_auto_reef_toggle.toggled.connect(_on_auto_reef_toggled)
+	sail_page.add_child(_auto_reef_toggle)
+	_auto_reef_status_label = _make_note("AUTO Reef OFF · 手动控制")
+	_auto_reef_status_label.name = "AutoReefStatus"
+	sail_page.add_child(_auto_reef_status_label)
+	sail_page.add_child(_make_note("滑块设定目标展开比例，帆面和受力按约 15 秒连续跟随。手动拖动任一滑块会关闭 AUTO Reef；AUTO Trim 与缩帆互相独立。"))
 	sail_page.add_child(_section_title("手动操帆 · 只改变目标帆角"))
 	_sail_target_value_label = _make_note("目标角 0° · 实际角 0°")
 	sail_page.add_child(_sail_target_value_label)
@@ -443,6 +473,8 @@ func set_boat_reference(boat: Node) -> void:
 		_headsail_toggle.set_pressed_no_signal(bool(_boat.call("is_headsail_enabled")) if _boat != null and _boat.has_method("is_headsail_enabled") else true)
 	if _auto_trim_toggle != null:
 		_auto_trim_toggle.set_pressed_no_signal(bool(_boat.call("get_auto_sail_trim_enabled")) if _boat != null and _boat.has_method("get_auto_sail_trim_enabled") else false)
+	if _auto_reef_toggle != null:
+		_auto_reef_toggle.set_pressed_no_signal(bool(_boat.get("auto_reef_enabled")) if _boat != null else false)
 	if _polar_runner != null:
 		_polar_runner.set_boat_instance(_boat)
 	_refresh_metrics()
@@ -960,6 +992,7 @@ func _refresh_auto_trim_controls(data: Dictionary) -> void:
 func _refresh_headsail_metrics(data: Dictionary) -> void:
 	if _headsail_target_slider == null:
 		return
+	_refresh_sail_deployment_controls(data)
 	var target_degrees := rad_to_deg(float(data.get("target_headsail_angle_rad", 0.0)))
 	var actual_degrees := rad_to_deg(float(data.get("actual_headsail_angle_rad", 0.0)))
 	_headsail_toggle.set_pressed_no_signal(bool(data.get("headsail_enabled", false)))
@@ -994,6 +1027,39 @@ func _refresh_headsail_metrics(data: Dictionary) -> void:
 		int(data.get("headsail_aero_calculation_average_usec", 0)),
 		int(data.get("headsail_aero_calculation_p95_usec", 0)),
 		int(data.get("wind_query_count_per_tick", 0)), int(data.get("wave_query_count_per_tick", 0)),
+	]
+
+
+func _refresh_sail_deployment_controls(data: Dictionary) -> void:
+	if _main_deployment_slider == null or _jib_deployment_slider == null:
+		return
+	var deployment: Dictionary = data.get("sail_deployment", {})
+	var main_target := float(deployment.get("main_target_deployment", 1.0))
+	var main_current := float(deployment.get("main_current_deployment", 1.0))
+	var jib_target := float(deployment.get("jib_target_deployment", 1.0))
+	var jib_current := float(deployment.get("jib_current_deployment", 1.0))
+	_main_deployment_slider.set_value_no_signal(main_target * 100.0)
+	_jib_deployment_slider.set_value_no_signal(jib_target * 100.0)
+	_main_deployment_status_label.text = "主帆 · 目标 %.0f%% · 实际 %.0f%% · %.2f / %.2f m² · %s" % [
+		main_target * 100.0,
+		main_current * 100.0,
+		float(deployment.get("main_effective_area_m2", 0.0)),
+		float(deployment.get("main_full_area_m2", 0.0)),
+		str(deployment.get("main_furling_state", "完全展开")),
+	]
+	_jib_deployment_status_label.text = "前帆 Jib · 目标 %.0f%% · 实际 %.0f%% · %.2f / %.2f m² · %s" % [
+		jib_target * 100.0,
+		jib_current * 100.0,
+		float(deployment.get("jib_effective_area_m2", 0.0)),
+		float(deployment.get("jib_full_area_m2", 0.0)),
+		str(deployment.get("jib_furling_state", "完全展开")),
+	]
+	var reef_enabled := bool(deployment.get("auto_reef_enabled", false))
+	_auto_reef_toggle.set_pressed_no_signal(reef_enabled)
+	_auto_reef_status_label.text = "AUTO Reef %s · %s · 平滑横倾 %.1f°" % [
+		"ON" if reef_enabled else "OFF",
+		str(deployment.get("auto_reef_status", "手动控制")),
+		float(deployment.get("auto_reef_filtered_heel_deg", 0.0)),
 	]
 
 
@@ -1215,6 +1281,24 @@ func _on_headsail_target_changed(value_degrees: float) -> void:
 func _on_headsail_toggled(enabled: bool) -> void:
 	if _boat != null and _boat.has_method("set_headsail_enabled"):
 		_boat.call("set_headsail_enabled", enabled)
+	_refresh_metrics()
+
+
+func _on_main_deployment_changed(value_percent: float) -> void:
+	if _boat != null and _boat.has_method("set_main_sail_deployment_target"):
+		_boat.call("set_main_sail_deployment_target", value_percent / 100.0)
+	_refresh_metrics()
+
+
+func _on_jib_deployment_changed(value_percent: float) -> void:
+	if _boat != null and _boat.has_method("set_jib_deployment_target"):
+		_boat.call("set_jib_deployment_target", value_percent / 100.0)
+	_refresh_metrics()
+
+
+func _on_auto_reef_toggled(enabled: bool) -> void:
+	if _boat != null and _boat.has_method("set_auto_reef_enabled"):
+		_boat.call("set_auto_reef_enabled", enabled)
 	_refresh_metrics()
 
 

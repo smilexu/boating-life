@@ -71,6 +71,17 @@ extends Resource
 ## measured sail data.
 @export var headsail_pressure_center_offset_from_centroid_m := Vector3.ZERO
 @export_range(0.0, 1.0, 0.01) var headsail_pressure_center_clew_follow := 0.333333
+## Continuous furling is visual/physical area scaling over simulation time.
+@export_range(1.0, 60.0, 0.5) var sail_full_deployment_time_seconds := 15.0
+## AUTO Reef tunes only from measured hull heel; wind speed is not an input.
+@export_range(0.5, 10.0, 0.5) var auto_reef_filter_seconds := 3.0
+@export_range(10.0, 40.0, 0.5) var auto_reef_reef_threshold_deg := 25.0
+@export_range(15.0, 45.0, 0.5) var auto_reef_aggressive_threshold_deg := 30.0
+@export_range(20.0, 55.0, 0.5) var auto_reef_emergency_threshold_deg := 35.0
+@export_range(5.0, 30.0, 0.5) var auto_reef_recovery_threshold_deg := 18.0
+@export_range(0.0, 15.0, 0.5) var auto_reef_reef_confirm_seconds := 3.0
+@export_range(0.0, 60.0, 1.0) var auto_reef_recovery_confirm_seconds := 20.0
+@export_range(0.5, 15.0, 0.5) var auto_reef_action_interval_seconds := 3.0
 @export_range(-1.396, 0.0, 0.01745, "radians_as_degrees") var min_headsail_angle_rad := -1.222
 @export_range(0.0, 1.396, 0.01745, "radians_as_degrees") var max_headsail_angle_rad := 1.222
 @export_range(0.05, 1.0, 0.01, "radians_as_degrees") var headsail_rotation_speed_rad_s := 0.52

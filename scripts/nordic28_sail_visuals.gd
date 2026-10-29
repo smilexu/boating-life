@@ -50,6 +50,7 @@ func _process(delta: float) -> void:
 	var step := _elapsed
 	_elapsed = 0.0
 	_visual_phase += step
+	_update_deployment_visuals()
 	_update_cached_cloth_state()
 	if not _rigging_built and _anchors != null and _anchors.has_method("is_configured") and bool(_anchors.call("is_configured")):
 		_build_fixed_rigging()
@@ -66,6 +67,7 @@ func set_debug_options(billow_enabled: bool, wireframe_enabled: bool, logo_enabl
 func get_visual_snapshot() -> Dictionary:
 	var main_snapshot: Dictionary = _main_sail.call("get_visual_snapshot") if _main_sail != null and _main_sail.has_method("get_visual_snapshot") else {}
 	var jib_snapshot: Dictionary = _jib_sail.call("get_visual_snapshot") if _jib_sail != null and _jib_sail.has_method("get_visual_snapshot") else {}
+	var deployment_snapshot: Dictionary = _body.get_sail_deployment_snapshot() if _body != null and _body.has_method("get_sail_deployment_snapshot") else {}
 	return {
 		"main_fill": _main_fill,
 		"jib_fill": _jib_fill,
@@ -80,7 +82,21 @@ func get_visual_snapshot() -> Dictionary:
 		"jib_mesh": jib_snapshot,
 		"rigging_line_count": _fixed_rigging_segment_count + 2,
 		"rigging_draw_call_count": 3 if _rigging_built else 0,
+		"sail_deployment": deployment_snapshot,
 	}
+
+
+func _update_deployment_visuals() -> void:
+	if _body == null:
+		return
+	if _main_sail != null and _main_sail.has_method("set_deployment"):
+		_main_sail.call("set_deployment", float(_body.get("current_main_sail_deployment")))
+	if _jib_sail != null and _jib_sail.has_method("set_deployment"):
+		_jib_sail.call(
+			"set_deployment",
+			float(_body.get("current_jib_deployment")),
+			float(_body.get("actual_headsail_angle_rad"))
+		)
 
 
 func _update_cached_cloth_state() -> void:

@@ -135,7 +135,12 @@ var _sailing_trim_angles_label: Label
 var _sailing_detail_label: Label
 var _sailing_control_hint_label: Label
 var _sailing_auto_toggle: CheckButton
-var _headsail_toggle: CheckButton
+var _main_deployment_slider: HSlider
+var _main_deployment_status: Label
+var _jib_deployment_slider: HSlider
+var _jib_deployment_status: Label
+var _auto_reef_toggle: CheckButton
+var _auto_reef_status: Label
 var _aux_engine_status_label: Label
 var _aux_engine_fuel_label: Label
 var _aux_engine_panel: VBoxContainer
@@ -147,7 +152,9 @@ var _sailing_navigation_instrument: Control
 var _compass_widget: Control
 var _sailing_refresh_elapsed := 0.0
 var _last_auto_trim_state := false
+var _last_auto_reef_state := false
 var _manual_trim_notice_until_msec := 0
+var _manual_reef_notice_until_msec := 0
 var _vessel_picker_overlay: Control
 var _vessel_picker_close_button: Button
 var _vessel_picker_cards: Array[Control] = []
@@ -254,10 +261,10 @@ func _build_sailing_panel() -> void:
 	_sailing_panel.anchor_top = 1.0
 	_sailing_panel.anchor_bottom = 1.0
 	_sailing_panel.offset_left = -470.0
-	_sailing_panel.offset_top = -390.0
+	_sailing_panel.offset_top = -500.0
 	_sailing_panel.offset_right = -24.0
 	_sailing_panel.offset_bottom = -24.0
-	_sailing_panel.custom_minimum_size = Vector2(470.0, 390.0)
+	_sailing_panel.custom_minimum_size = Vector2(470.0, 500.0)
 	_sailing_panel.visible = false
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.035, 0.12, 0.16, 0.88)
@@ -349,6 +356,57 @@ func _build_sailing_panel() -> void:
 	_sailing_auto_toggle.add_theme_font_size_override("font_size", 16)
 	_sailing_auto_toggle.toggled.connect(_on_sailing_auto_toggled)
 	layout.add_child(_sailing_auto_toggle)
+	var main_deployment_box := VBoxContainer.new()
+	main_deployment_box.name = "MainSailFurlControl"
+	main_deployment_box.add_theme_constant_override("separation", 2)
+	var main_deployment_header := HBoxContainer.new()
+	var main_deployment_title := _make_sailing_label("主帆展开", 14, Color(0.88, 0.93, 0.90))
+	main_deployment_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	main_deployment_header.add_child(main_deployment_title)
+	_main_deployment_status = _make_sailing_label("目标 100% · 实际 100% · 17.66 m²", 13, Color(0.69, 0.84, 0.80))
+	main_deployment_header.add_child(_main_deployment_status)
+	main_deployment_box.add_child(main_deployment_header)
+	_main_deployment_slider = HSlider.new()
+	_main_deployment_slider.name = "MainSailDeployment"
+	_main_deployment_slider.min_value = 0.0
+	_main_deployment_slider.max_value = 100.0
+	_main_deployment_slider.step = 1.0
+	_main_deployment_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_main_deployment_slider.custom_minimum_size.y = 24.0
+	_main_deployment_slider.value_changed.connect(_on_main_deployment_changed)
+	main_deployment_box.add_child(_main_deployment_slider)
+	layout.add_child(main_deployment_box)
+	var jib_deployment_box := VBoxContainer.new()
+	jib_deployment_box.name = "JibFurlControl"
+	jib_deployment_box.add_theme_constant_override("separation", 2)
+	var jib_deployment_header := HBoxContainer.new()
+	var jib_deployment_title := _make_sailing_label("前帆展开", 14, Color(0.88, 0.93, 0.90))
+	jib_deployment_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	jib_deployment_header.add_child(jib_deployment_title)
+	_jib_deployment_status = _make_sailing_label("目标 100% · 实际 100% · 10.32 m²", 13, Color(0.69, 0.84, 0.80))
+	jib_deployment_header.add_child(_jib_deployment_status)
+	jib_deployment_box.add_child(jib_deployment_header)
+	_jib_deployment_slider = HSlider.new()
+	_jib_deployment_slider.name = "JibDeployment"
+	_jib_deployment_slider.min_value = 0.0
+	_jib_deployment_slider.max_value = 100.0
+	_jib_deployment_slider.step = 1.0
+	_jib_deployment_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_jib_deployment_slider.custom_minimum_size.y = 24.0
+	_jib_deployment_slider.value_changed.connect(_on_jib_deployment_changed)
+	jib_deployment_box.add_child(_jib_deployment_slider)
+	layout.add_child(jib_deployment_box)
+	_auto_reef_toggle = CheckButton.new()
+	_auto_reef_toggle.name = "AutoReefToggle"
+	_auto_reef_toggle.text = "AUTO REEF 自动缩帆"
+	_auto_reef_toggle.custom_minimum_size.y = 40.0
+	_auto_reef_toggle.add_theme_font_size_override("font_size", 16)
+	_auto_reef_toggle.toggled.connect(_on_auto_reef_toggled)
+	layout.add_child(_auto_reef_toggle)
+	_auto_reef_status = _make_sailing_label("AUTO REEF OFF · 手动控制", 13, Color(0.72, 0.84, 0.81))
+	_auto_reef_status.name = "AutoReefStatus"
+	_auto_reef_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(_auto_reef_status)
 	var main_row := HBoxContainer.new()
 	var main_label := Label.new()
 	main_label.name = "MainSailControlLabel"
@@ -369,12 +427,6 @@ func _build_sailing_panel() -> void:
 	jib_row.add_child(_make_trim_button("−10°", _adjust_headsail.bind(-1)))
 	jib_row.add_child(_make_trim_button("+10°", _adjust_headsail.bind(1)))
 	layout.add_child(jib_row)
-	_headsail_toggle = CheckButton.new()
-	_headsail_toggle.name = "HeadsailEnabledToggle"
-	_headsail_toggle.text = "启用前帆"
-	_headsail_toggle.custom_minimum_size.y = 40.0
-	_headsail_toggle.toggled.connect(_on_headsail_toggled)
-	layout.add_child(_headsail_toggle)
 	_aux_engine_panel = VBoxContainer.new()
 	_aux_engine_panel.name = "AuxiliaryEnginePanel"
 	_aux_engine_panel.add_theme_constant_override("separation", 5)
@@ -627,6 +679,7 @@ func _update_sailing_panel() -> void:
 	if body == null or not body.has_method("get_navigation_snapshot"):
 		return
 	var snapshot: Dictionary = body.call("get_navigation_snapshot")
+	var deployment: Dictionary = snapshot.get("sail_deployment", {})
 	var engine: Dictionary = snapshot.get("auxiliary_engine", {"available": false})
 	var engine_available := bool(engine.get("available", false))
 	if _aux_engine_panel != null:
@@ -659,9 +712,36 @@ func _update_sailing_panel() -> void:
 	_last_auto_trim_state = auto_enabled
 	_sailing_auto_toggle.set_pressed_no_signal(auto_enabled)
 	_sailing_auto_toggle.text = "自动操帆 · %s 切换" % NAVIGATION_HUD_FORMAT.action_key_hint("sailboat_toggle_auto_trim")
-	var headsail_enabled := bool(snapshot.get("headsail_enabled", true))
-	_headsail_toggle.set_pressed_no_signal(headsail_enabled)
-	_headsail_toggle.text = "前帆%s（测试开关）" % ("已启用" if headsail_enabled else "已关闭")
+	var auto_reef_on := bool(deployment.get("auto_reef_enabled", false))
+	if _last_auto_reef_state and not auto_reef_on:
+		_manual_reef_notice_until_msec = Time.get_ticks_msec() + 2500
+	_last_auto_reef_state = auto_reef_on
+	_auto_reef_toggle.set_pressed_no_signal(auto_reef_on)
+	_auto_reef_toggle.text = "AUTO REEF 自动缩帆 · %s" % ("已开启" if auto_reef_on else "已关闭")
+	_main_deployment_slider.set_value_no_signal(float(deployment.get("main_target_deployment", 1.0)) * 100.0)
+	_jib_deployment_slider.set_value_no_signal(float(deployment.get("jib_target_deployment", 1.0)) * 100.0)
+	_main_deployment_status.text = "目标 %.0f%% · 实际 %.0f%% · %.2f m² · %s" % [
+		float(deployment.get("main_target_deployment", 1.0)) * 100.0,
+		float(deployment.get("main_current_deployment", 1.0)) * 100.0,
+		float(deployment.get("main_effective_area_m2", 0.0)),
+		str(deployment.get("main_furling_state", "完全展开")),
+	]
+	_jib_deployment_status.text = "目标 %.0f%% · 实际 %.0f%% · %.2f m² · %s" % [
+		float(deployment.get("jib_target_deployment", 1.0)) * 100.0,
+		float(deployment.get("jib_current_deployment", 1.0)) * 100.0,
+		float(deployment.get("jib_effective_area_m2", 0.0)),
+		str(deployment.get("jib_furling_state", "完全展开")),
+	]
+	var reef_state := str(deployment.get("auto_reef_status", "手动控制"))
+	if auto_reef_on:
+		_auto_reef_status.text = "AUTO REEF ON · %s" % reef_state
+		_auto_reef_status.add_theme_color_override("font_color", Color(0.43, 0.91, 0.68))
+	elif Time.get_ticks_msec() < _manual_reef_notice_until_msec:
+		_auto_reef_status.text = "AUTO REEF OFF · 已交还手动控制"
+		_auto_reef_status.add_theme_color_override("font_color", Color(0.95, 0.83, 0.52))
+	else:
+		_auto_reef_status.text = "AUTO REEF OFF · 手动控制"
+		_auto_reef_status.add_theme_color_override("font_color", Color(0.72, 0.84, 0.81))
 	_refresh_sailing_navigation_text(snapshot)
 
 
@@ -755,10 +835,25 @@ func _on_sailing_auto_toggled(enabled: bool) -> void:
 		body.call("set_auto_sail_trim_enabled", enabled)
 
 
-func _on_headsail_toggled(enabled: bool) -> void:
+func _on_main_deployment_changed(value: float) -> void:
 	var body := _controller.get_sailing_body() if _controller != null else null
-	if body != null and body.has_method("set_headsail_enabled"):
-		body.call("set_headsail_enabled", enabled)
+	if body != null and body.has_method("set_main_sail_deployment_target"):
+		body.call("set_main_sail_deployment_target", value / 100.0)
+		_update_sailing_panel()
+
+
+func _on_jib_deployment_changed(value: float) -> void:
+	var body := _controller.get_sailing_body() if _controller != null else null
+	if body != null and body.has_method("set_jib_deployment_target"):
+		body.call("set_jib_deployment_target", value / 100.0)
+		_update_sailing_panel()
+
+
+func _on_auto_reef_toggled(enabled: bool) -> void:
+	var body := _controller.get_sailing_body() if _controller != null else null
+	if body != null and body.has_method("set_auto_reef_enabled"):
+		body.call("set_auto_reef_enabled", enabled)
+	_update_sailing_panel()
 
 
 func _on_aux_engine_toggle_pressed() -> void:

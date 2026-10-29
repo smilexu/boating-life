@@ -4,6 +4,7 @@ extends MeshInstance3D
 
 const CLOTH_SHADER := preload("res://shaders/sail_cloth.gdshader")
 const SMILE_TEXTURE := preload("res://assets/boats/nordic28/sail_logo_smile.png")
+const AERO_MATH := preload("res://scripts/sailboat_aero_math.gd")
 const ROWS := 26
 const COLUMNS := 10
 const MAIN_MAX_BILLOW_M := 0.16
@@ -11,14 +12,17 @@ const MAIN_MAX_BILLOW_M := 0.16
 var _head := Vector3(0.0, 4.45, 0.04)
 var _tack := Vector3(0.0, 0.08, 0.0)
 var _clew := Vector3(0.0, 0.08, 4.65)
+var _deployment := 1.0
 var _cloth_material: ShaderMaterial
+var _furled_fabric: MeshInstance3D
 
 
 func _ready() -> void:
 	extra_cull_margin = 0.25
 	if mesh == null:
-		_rebuild_mesh()
+		_rebuild_mesh(_head)
 	_ensure_cloth_material()
+	_create_furled_fabric()
 	_set_normal()
 
 
@@ -26,9 +30,23 @@ func configure(head_from_pivot: Vector3, tack_from_pivot: Vector3, clew_from_piv
 	_head = head_from_pivot
 	_tack = tack_from_pivot
 	_clew = clew_from_pivot
-	_rebuild_mesh()
+	_rebuild_mesh(_deployed_head())
 	_ensure_cloth_material()
+	_update_furled_fabric()
 	_set_normal()
+
+
+func set_deployment(value: float) -> void:
+	if not is_finite(value):
+		return
+	var safe_value := clampf(value, 0.0, 1.0)
+	if absf(safe_value - _deployment) < 0.003 and mesh != null:
+		return
+	_deployment = safe_value
+	_rebuild_mesh(_deployed_head())
+	_set_normal()
+	_update_furled_fabric()
+	visible = true
 
 
 func set_cloth_state(
@@ -66,10 +84,17 @@ func get_visual_snapshot() -> Dictionary:
 		"cloth_material": _cloth_material != null,
 		"logo_texture": SMILE_TEXTURE.resource_path,
 		"maximum_billow_m": MAIN_MAX_BILLOW_M,
+		"deployment": _deployment,
+		"geometric_area_m2": AERO_MATH.triangular_sail_area_m2(_deployed_head(), _tack, _clew),
+		"furled_fabric_visible": _furled_fabric != null and _furled_fabric.visible,
 	}
 
 
-func _rebuild_mesh() -> void:
+func _deployed_head() -> Vector3:
+	return _tack.lerp(_head, _deployment)
+
+
+func _rebuild_mesh(head_position: Vector3) -> void:
 	var vertices := PackedVector3Array()
 	var normals := PackedVector3Array()
 	var tangents := PackedFloat32Array()
@@ -78,11 +103,11 @@ func _rebuild_mesh() -> void:
 	normals.resize(vertices.size())
 	tangents.resize(vertices.size() * 4)
 	uvs.resize(vertices.size())
-	var plane_normal := _plane_normal(_head, _tack, _clew)
+	var plane_normal := _plane_normal(head_position, _tack, _clew)
 	for row in range(ROWS + 1):
 		var height_fraction := float(row) / float(ROWS)
-		var luff_point := _tack.lerp(_head, height_fraction)
-		var leech_point := _clew.lerp(_head, height_fraction)
+		var luff_point := _tack.lerp(head_position, height_fraction)
+		var leech_point := _clew.lerp(head_position, height_fraction)
 		for column in range(COLUMNS + 1):
 			var chord_fraction := float(column) / float(COLUMNS)
 			var index := row * (COLUMNS + 1) + column
@@ -90,7 +115,7 @@ func _rebuild_mesh() -> void:
 			normals[index] = plane_normal
 			var tangent := _plane_tangent(luff_point, leech_point, plane_normal)
 			var bitangent := plane_normal.cross(tangent)
-			var luff_direction := (_head - _tack).normalized()
+			var luff_direction := (head_position - _tack).normalized()
 			var handedness := 1.0 if bitangent.dot(luff_direction) >= 0.0 else -1.0
 			tangents[index * 4] = tangent.x
 			tangents[index * 4 + 1] = tangent.y
@@ -146,7 +171,40 @@ func _ensure_cloth_material() -> void:
 func _set_normal() -> void:
 	if _cloth_material == null:
 		return
-	_cloth_material.set_shader_parameter("sail_normal_local", _plane_normal(_head, _tack, _clew))
+	_cloth_material.set_shader_parameter("sail_normal_local", _plane_normal(_deployed_head(), _tack, _clew))
+
+
+func _create_furled_fabric() -> void:
+	if _furled_fabric != null:
+		return
+	_furled_fabric = MeshInstance3D.new()
+	_furled_fabric.name = "BoomFurledCloth"
+	var roll := CylinderMesh.new()
+	roll.height = maxf(_tack.distance_to(_clew), 0.1)
+	roll.top_radius = 0.056
+	roll.bottom_radius = 0.056
+	roll.radial_segments = 8
+	_furled_fabric.mesh = roll
+	_furled_fabric.rotation.x = PI * 0.5
+	var cloth_material := StandardMaterial3D.new()
+	cloth_material.albedo_color = Color("#e7e1d3")
+	cloth_material.roughness = 0.9
+	_furled_fabric.material_override = cloth_material
+	add_child(_furled_fabric)
+	_update_furled_fabric()
+
+
+func _update_furled_fabric() -> void:
+	if _furled_fabric == null:
+		return
+	var cylinder := _furled_fabric.mesh as CylinderMesh
+	if cylinder != null:
+		cylinder.height = maxf(_tack.distance_to(_clew), 0.1)
+		var roll_radius := 0.066 + (1.0 - _deployment) * 0.025
+		cylinder.top_radius = roll_radius
+		cylinder.bottom_radius = roll_radius
+	_furled_fabric.position = (_tack + _clew) * 0.5
+	_furled_fabric.visible = _deployment < 0.999
 
 
 func _plane_normal(head: Vector3, tack: Vector3, clew: Vector3) -> Vector3:

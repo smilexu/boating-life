@@ -6,6 +6,7 @@ const AERO_MATH := preload("res://scripts/sailboat_aero_math.gd")
 const HYDRO_MATH := preload("res://scripts/sailboat_hydrodynamics.gd")
 const NAVIGATION_MATH := preload("res://scripts/sailboat_navigation_math.gd")
 const AUTO_SAIL_TRIM_SCRIPT := preload("res://scripts/sailboat_auto_sail_trim.gd")
+const AUTO_REEF_SCRIPT := preload("res://scripts/sailboat_auto_reef.gd")
 const FLOAT_POINT_COUNT := 4
 const PERF_WINDOW_SIZE := 600
 const ANOMALY_SAMPLE_CAPACITY := 600
@@ -82,6 +83,14 @@ var target_headsail_angle_rad := 0.0
 var actual_headsail_angle_rad := 0.0
 var auto_sail_trim_enabled := false
 var _auto_sail_trim = AUTO_SAIL_TRIM_SCRIPT.new()
+var target_main_sail_deployment := 1.0
+var current_main_sail_deployment := 1.0
+var target_jib_deployment := 1.0
+var current_jib_deployment := 1.0
+var auto_reef_enabled := false
+var _sail_full_deployment_time_seconds := 15.0
+var _auto_reef = AUTO_REEF_SCRIPT.new()
+var _last_auto_reef_result: Dictionary = {}
 var _auto_trim_applying_targets := false
 var _last_auto_trim_result: Dictionary = {}
 var _last_auto_trim_calculation_usec := 0
@@ -94,6 +103,7 @@ var _rudder_key_d_pressed := false
 var _rudder_keyboard_active := false
 var _water_current_world_mps := Vector3.ZERO
 var _sail_area_m2 := 26.0
+var _last_sail_effective_area_m2 := 26.0
 var _sail_pivot_local_m := Vector3.ZERO
 var _sail_pressure_center_from_pivot_m := Vector3(0.0, 2.4, 1.55)
 var _minimum_sail_angle_rad := -1.396
@@ -109,6 +119,7 @@ var _sail_induced_drag_factor := 0.55
 var _sail_flat_plate_drag_factor := 0.90
 var _sail_wrong_side_lift_retention := 0.20
 var _headsail_area_m2 := 5.16
+var _last_headsail_effective_clew_local_m := Vector3.ZERO
 var _headsail_head_local_m := Vector3(0.0, 4.95, -0.75)
 var _headsail_tack_local_m := Vector3(0.0, 0.65, -3.55)
 var _headsail_clew_neutral_local_m := Vector3(0.0, 0.65, -1.15)
@@ -271,6 +282,7 @@ func _ready() -> void:
 	var headsail_trim_curve: PackedVector2Array = profile.get("auto_headsail_trim_curve_points_degrees")
 	if not _auto_sail_trim.configure_curves(main_trim_curve, headsail_trim_curve):
 		push_warning("SailboatLabProfile has invalid AUTO sail-trim curve points; using the controller defaults.")
+	_auto_reef.configure(profile)
 
 	mass = float(profile.get("mass_kg"))
 	center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_CUSTOM
@@ -300,6 +312,8 @@ func _ready() -> void:
 	_headsail_visual = get_node_or_null(headsail_visual_path) as MeshInstance3D
 	_auxiliary_engine = get_node_or_null(auxiliary_engine_path) as AuxiliaryMarineEngine
 	_sail_area_m2 = float(profile.get("main_sail_area_m2"))
+	_last_sail_effective_area_m2 = _sail_area_m2
+	_sail_full_deployment_time_seconds = maxf(float(profile.get("sail_full_deployment_time_seconds")), 0.1)
 	_sail_pivot_local_m = profile.get("main_sail_pivot_local_m")
 	_sail_pressure_center_from_pivot_m = profile.get("main_sail_pressure_center_from_pivot_m")
 	_minimum_sail_angle_rad = float(profile.get("min_sail_angle_rad"))
@@ -333,7 +347,10 @@ func _ready() -> void:
 	_headsail_flat_plate_drag_factor = float(profile.get("headsail_flat_plate_drag_factor"))
 	_headsail_wrong_side_lift_retention = float(profile.get("headsail_wrong_side_lift_retention"))
 	if _headsail_visual != null:
-		_headsail_visual.visible = _headsail_enabled
+		if _headsail_visual.has_method("set_aero_enabled"):
+			_headsail_visual.call("set_aero_enabled", _headsail_enabled)
+		else:
+			_headsail_visual.visible = _headsail_enabled
 	_water_density_kg_m3 = float(profile.get("water_density_kg_m3"))
 	_keel_center_local_m = profile.get("keel_center_local_m")
 	_keel_area_m2 = float(profile.get("keel_area_m2"))
@@ -394,7 +411,10 @@ func _process(_delta: float) -> void:
 	if _rudder_angle_marker != null:
 		_rudder_angle_marker.rotation.y = actual_rudder_angle_rad
 	if _headsail_visual != null:
-		_headsail_visual.visible = _headsail_enabled
+		if _headsail_visual.has_method("set_aero_enabled"):
+			_headsail_visual.call("set_aero_enabled", _headsail_enabled)
+		else:
+			_headsail_visual.visible = _headsail_enabled
 		if _headsail_visual.has_method("set_sheet_angle"):
 			_headsail_visual.call("set_sheet_angle", actual_headsail_angle_rad)
 
@@ -467,6 +487,23 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	# solver step produced runaway motion, capture it before resistance/aero math
 	# can emit secondary normalization errors.
 	_record_anomaly_sample(state)
+	var state_basis := state.transform.basis
+	if auto_reef_enabled:
+		_last_auto_reef_result = _auto_reef.update(
+			state_basis.get_euler().z,
+			state.step,
+			target_main_sail_deployment,
+			target_jib_deployment,
+			current_main_sail_deployment,
+			current_jib_deployment
+		)
+		target_main_sail_deployment = float(_last_auto_reef_result.get("main_target", target_main_sail_deployment))
+		target_jib_deployment = float(_last_auto_reef_result.get("jib_target", target_jib_deployment))
+	var deployment_step := state.step / _sail_full_deployment_time_seconds
+	current_main_sail_deployment = move_toward(current_main_sail_deployment, target_main_sail_deployment, deployment_step)
+	current_jib_deployment = move_toward(current_jib_deployment, target_jib_deployment, deployment_step)
+	current_main_sail_deployment = clampf(current_main_sail_deployment, 0.0, 1.0)
+	current_jib_deployment = clampf(current_jib_deployment, 0.0, 1.0)
 
 	var start_usec := Time.get_ticks_usec()
 	var sample_usec := 0
@@ -557,9 +594,16 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_last_engine_thrust_forward_axis_n = engine_thrust_forward_axis_n
 	_last_engine_yaw_torque_nm = engine_yaw_torque_nm
 	var sail_pivot_rotation := Basis(Vector3.UP, actual_sail_angle_rad)
+	var main_sail_effective_area := _sail_area_m2 * current_main_sail_deployment
+	_last_sail_effective_area_m2 = main_sail_effective_area
+	var main_sail_center_from_pivot := Vector3(
+		_sail_pressure_center_from_pivot_m.x,
+		_sail_pressure_center_from_pivot_m.y * current_main_sail_deployment,
+		_sail_pressure_center_from_pivot_m.z
+	)
 	var sail_pressure_center_local := (
 		_sail_pivot_local_m
-		+ sail_pivot_rotation * _sail_pressure_center_from_pivot_m
+		+ sail_pivot_rotation * main_sail_center_from_pivot
 	)
 	var sail_center_offset_world := body_basis * sail_pressure_center_local
 	var sail_center_world := body_origin + sail_center_offset_world
@@ -584,7 +628,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	var sail_result: Dictionary = AERO_MATH.calculate_sail_forces(
 		apparent.get("apparent_velocity_local_mps", Vector3.ZERO),
 		actual_sail_angle_rad,
-		_sail_area_m2,
+		main_sail_effective_area,
 		_air_density_kg_m3,
 		_sail_maximum_lift_coefficient,
 		_sail_stall_angle_rad,
@@ -595,19 +639,38 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 		_full_lift_wind_from_angle_rad,
 		_sail_wrong_side_lift_retention
 	)
-	var headsail_clew_local := AERO_MATH.headsail_clew_from_sheet(
+	var headsail_full_clew_local := AERO_MATH.headsail_clew_from_sheet(
 		_headsail_tack_local_m,
 		_headsail_clew_neutral_local_m,
 		actual_headsail_angle_rad
 	)
-	# Sheeting changes orientation, not the amount of sail cloth.
-	var headsail_effective_area := _headsail_area_m2
-	var headsail_pressure_center_local := AERO_MATH.triangular_sail_centroid(
+	var headsail_effective_area := _headsail_area_m2 * current_jib_deployment
+	var headsail_clew_projection := _closest_point_on_segment(
+		headsail_full_clew_local,
+		_headsail_head_local_m,
+		_headsail_tack_local_m
+	)
+	var headsail_clew_local := headsail_clew_projection.lerp(headsail_full_clew_local, current_jib_deployment)
+	var headsail_full_pressure_center_local := AERO_MATH.triangular_sail_centroid(
 		_headsail_head_local_m,
 		_headsail_tack_local_m,
 		_headsail_clew_neutral_local_m
 	) + _headsail_pressure_center_offset_from_centroid_m
-	headsail_pressure_center_local += (headsail_clew_local - _headsail_clew_neutral_local_m) * _headsail_pressure_center_clew_follow
+	headsail_full_pressure_center_local += (headsail_full_clew_local - _headsail_clew_neutral_local_m) * _headsail_pressure_center_clew_follow
+	var headsail_pressure_center_local := headsail_full_pressure_center_local
+	if current_jib_deployment < 0.999999:
+		var zero_deployment_center := AERO_MATH.triangular_sail_centroid(
+			_headsail_head_local_m,
+			_headsail_tack_local_m,
+			headsail_clew_projection
+		) + _headsail_pressure_center_offset_from_centroid_m
+		var full_geometry_center := AERO_MATH.triangular_sail_centroid(
+			_headsail_head_local_m,
+			_headsail_tack_local_m,
+			headsail_full_clew_local
+		)
+		zero_deployment_center += headsail_full_pressure_center_local - full_geometry_center
+		headsail_pressure_center_local = zero_deployment_center.lerp(headsail_full_pressure_center_local, current_jib_deployment)
 	var headsail_chord := headsail_clew_local - _headsail_tack_local_m
 	var headsail_chord_xz := Vector2(headsail_chord.x, headsail_chord.z)
 	var headsail_arm_from_com_world := world_arm_from_local_point(headsail_pressure_center_local, center_of_mass, body_basis)
@@ -620,7 +683,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	)
 	var headsail_aero_start_usec := Time.get_ticks_usec()
 	var headsail_result: Dictionary = _empty_sail_result()
-	if _headsail_enabled:
+	if _headsail_enabled and headsail_effective_area > 0.0001:
 		headsail_result = AERO_MATH.calculate_sail_forces_for_chord(
 			headsail_apparent.get("apparent_velocity_local_mps", Vector3.ZERO),
 			headsail_chord_xz,
@@ -800,6 +863,7 @@ func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
 	_last_headsail_cl = float(headsail_result.get("cl", 0.0))
 	_last_headsail_cd = float(headsail_result.get("cd", 0.0))
 	_last_headsail_effective_area_m2 = headsail_effective_area if _headsail_enabled else 0.0
+	_last_headsail_effective_clew_local_m = headsail_clew_local
 	_last_headsail_pressure_center_local_m = headsail_pressure_center_local
 	_last_headsail_lift_force_local_n = headsail_lift_local
 	_last_headsail_drag_force_local_n = headsail_drag_local
@@ -979,6 +1043,7 @@ func get_debug_snapshot() -> Dictionary:
 		"max_sail_angle_rad": _maximum_sail_angle_rad,
 		"sail_rotation_speed_rad_s": _sail_rotation_speed_rad_s,
 		"sail_area_m2": _sail_area_m2,
+		"sail_effective_area_m2": _last_sail_effective_area_m2,
 		"sail_apparent_wind_speed_mps": _last_apparent_wind_speed_mps,
 		"sail_apparent_wind_from_angle_degrees": _last_apparent_wind_from_angle_degrees,
 		"sail_pressure_center_local_m": _last_sail_pressure_center_local_m,
@@ -999,9 +1064,11 @@ func get_debug_snapshot() -> Dictionary:
 		"headsail_enabled": _headsail_enabled,
 		"auto_sail_trim_enabled": auto_sail_trim_enabled,
 		"auto_sail_trim": get_auto_sail_trim_snapshot(),
+		"sail_deployment": get_sail_deployment_snapshot(),
 		"auto_trim_calculation_usec": _last_auto_trim_calculation_usec,
 		"headsail_area_m2": _headsail_area_m2,
 		"headsail_effective_area_m2": _last_headsail_effective_area_m2,
+		"headsail_effective_clew_local_m": _last_headsail_effective_clew_local_m,
 		"target_headsail_angle_rad": target_headsail_angle_rad,
 		"actual_headsail_angle_rad": actual_headsail_angle_rad,
 		"min_headsail_angle_rad": _minimum_headsail_angle_rad,
@@ -1009,7 +1076,7 @@ func get_debug_snapshot() -> Dictionary:
 		"headsail_rotation_speed_rad_s": _headsail_rotation_speed_rad_s,
 		"headsail_head_local_m": _headsail_head_local_m,
 		"headsail_tack_local_m": _headsail_tack_local_m,
-		"headsail_clew_local_m": AERO_MATH.headsail_clew_from_sheet(_headsail_tack_local_m, _headsail_clew_neutral_local_m, actual_headsail_angle_rad),
+		"headsail_clew_local_m": _last_headsail_effective_clew_local_m,
 		"headsail_pressure_center_local_m": _last_headsail_pressure_center_local_m,
 		"headsail_apparent_wind_local_mps": _last_headsail_apparent_wind_local_mps,
 		"headsail_apparent_wind_speed_mps": _last_headsail_apparent_wind_speed_mps,
@@ -1148,6 +1215,7 @@ func get_s1_c4_diagnostic_snapshot() -> Dictionary:
 		"summed_measured_yaw_torque_world_vertical_nm": world_total_yaw_vector.y,
 		"actual_sail_angle_rad": actual_sail_angle_rad,
 		"target_sail_angle_rad": target_sail_angle_rad,
+		"sail_deployment": get_sail_deployment_snapshot(),
 		"actual_headsail_angle_rad": actual_headsail_angle_rad,
 		"target_headsail_angle_rad": target_headsail_angle_rad,
 		"actual_rudder_angle_rad": actual_rudder_angle_rad,
@@ -1199,6 +1267,7 @@ func get_navigation_snapshot() -> Dictionary:
 		"headsail_enabled": _headsail_enabled,
 		"auto_sail_trim_enabled": auto_sail_trim_enabled,
 		"auto_sail_trim": get_auto_sail_trim_snapshot(),
+		"sail_deployment": get_sail_deployment_snapshot(),
 		"actual_headsail_angle_rad": actual_headsail_angle_rad,
 		"target_headsail_angle_rad": target_headsail_angle_rad,
 		"headsail_apparent_wind_speed_mps": _last_headsail_apparent_wind_speed_mps,
@@ -1338,6 +1407,12 @@ func _reset_controls_for_main_spawn() -> void:
 	actual_sail_angle_rad = 0.0
 	target_headsail_angle_rad = 0.0
 	actual_headsail_angle_rad = 0.0
+	target_main_sail_deployment = 1.0
+	current_main_sail_deployment = 1.0
+	target_jib_deployment = 1.0
+	current_jib_deployment = 1.0
+	auto_reef_enabled = false
+	_auto_reef.set_enabled(false, _last_roll_rad, 1.0, 1.0)
 	_headsail_enabled = bool(profile.get("headsail_enabled"))
 	set_auto_sail_trim_enabled(false)
 	_auto_sail_trim.reset(0.0, 0.0)
@@ -1350,7 +1425,10 @@ func _reset_controls_for_main_spawn() -> void:
 	if _auxiliary_engine != null:
 		_auxiliary_engine.stop_for_vessel_switch()
 	if _headsail_visual != null:
-		_headsail_visual.visible = _headsail_enabled
+		if _headsail_visual.has_method("set_aero_enabled"):
+			_headsail_visual.call("set_aero_enabled", _headsail_enabled)
+		else:
+			_headsail_visual.visible = _headsail_enabled
 
 
 func set_dynamic_waves_enabled(enabled: bool) -> void:
@@ -1685,6 +1763,13 @@ func reset_to_neutral(heading_degrees: float = 0.0) -> void:
 	if offsets.size() != FLOAT_POINT_COUNT:
 		return
 	set_auto_sail_trim_enabled(false)
+	target_main_sail_deployment = 1.0
+	current_main_sail_deployment = 1.0
+	target_jib_deployment = 1.0
+	current_jib_deployment = 1.0
+	auto_reef_enabled = false
+	_auto_reef.set_enabled(false, 0.0, 1.0, 1.0)
+	_last_auto_reef_result = _auto_reef.get_snapshot()
 	var mean_float_y := 0.0
 	for offset in offsets:
 		mean_float_y += offset.y
@@ -1796,6 +1881,72 @@ func set_target_headsail_angle(angle_rad: float) -> void:
 	target_headsail_angle_rad = clampf(angle_rad, _minimum_headsail_angle_rad, _maximum_headsail_angle_rad)
 
 
+func set_main_sail_deployment_target(deployment: float) -> void:
+	if not is_finite(deployment):
+		return
+	if auto_reef_enabled:
+		set_auto_reef_enabled(false)
+	target_main_sail_deployment = clampf(deployment, 0.0, 1.0)
+
+
+func set_jib_deployment_target(deployment: float) -> void:
+	if not is_finite(deployment):
+		return
+	if auto_reef_enabled:
+		set_auto_reef_enabled(false)
+	target_jib_deployment = clampf(deployment, 0.0, 1.0)
+
+
+func set_auto_reef_enabled(enabled: bool) -> void:
+	if auto_reef_enabled == enabled:
+		return
+	auto_reef_enabled = enabled
+	if enabled:
+		# Take over from the current physical deployment rather than resetting to
+		# full sail, so enabling AUTO Reef never changes the target abruptly.
+		target_main_sail_deployment = current_main_sail_deployment
+		target_jib_deployment = current_jib_deployment
+	_auto_reef.set_enabled(enabled, _last_roll_rad, current_main_sail_deployment, current_jib_deployment)
+	_last_auto_reef_result = _auto_reef.get_snapshot()
+
+
+func get_sail_deployment_snapshot() -> Dictionary:
+	var reef_state: Dictionary = _auto_reef.get_snapshot()
+	return {
+		"main_target_deployment": target_main_sail_deployment,
+		"main_current_deployment": current_main_sail_deployment,
+		"main_full_area_m2": _sail_area_m2,
+		"main_effective_area_m2": _last_sail_effective_area_m2,
+		"main_pressure_center_local_m": _last_sail_pressure_center_local_m,
+		"main_furling_state": _deployment_state_name(target_main_sail_deployment, current_main_sail_deployment),
+		"jib_target_deployment": target_jib_deployment,
+		"jib_current_deployment": current_jib_deployment,
+		"jib_full_area_m2": _headsail_area_m2,
+		"jib_effective_area_m2": _last_headsail_effective_area_m2,
+		"jib_pressure_center_local_m": _last_headsail_pressure_center_local_m,
+		"jib_furling_state": _deployment_state_name(target_jib_deployment, current_jib_deployment),
+		"full_deployment_time_seconds": _sail_full_deployment_time_seconds,
+		"auto_reef_enabled": auto_reef_enabled,
+		"auto_reef_filtered_heel_deg": float(reef_state.get("filtered_heel_deg", absf(rad_to_deg(_last_roll_rad)))) if auto_reef_enabled else absf(rad_to_deg(_last_roll_rad)),
+		"auto_reef_status": str(reef_state.get("status", "手动控制")),
+	}
+
+
+func _deployment_state_name(target: float, current: float) -> String:
+	if absf(target - current) <= 0.005:
+		return "完全展开" if current >= 0.995 else "已卷收" if current <= 0.005 else "保持部分展开"
+	return "正在展开" if target > current else "正在卷收"
+
+
+func _closest_point_on_segment(point: Vector3, start: Vector3, end: Vector3) -> Vector3:
+	var segment := end - start
+	var length_squared := segment.length_squared()
+	if length_squared <= 0.000001:
+		return start
+	var amount := clampf((point - start).dot(segment) / length_squared, 0.0, 1.0)
+	return start + segment * amount
+
+
 func set_auto_sail_trim_enabled(enabled: bool) -> void:
 	if auto_sail_trim_enabled == enabled:
 		return
@@ -1878,7 +2029,10 @@ func set_headsail_enabled(enabled: bool) -> void:
 		return
 	_headsail_enabled = enabled
 	if _headsail_visual != null:
-		_headsail_visual.visible = enabled
+		if _headsail_visual.has_method("set_aero_enabled"):
+			_headsail_visual.call("set_aero_enabled", enabled)
+		else:
+			_headsail_visual.visible = enabled
 	if not enabled:
 		_last_total_horizontal_force_local_n -= _last_headsail_net_force_local_n
 		_last_total_external_yaw_torque_nm -= _last_headsail_yaw_torque_nm
@@ -1893,6 +2047,7 @@ func set_headsail_enabled(enabled: bool) -> void:
 		_last_headsail_cl = 0.0
 		_last_headsail_cd = 0.0
 		_last_headsail_pressure_center_local_m = Vector3.ZERO
+		_last_headsail_effective_clew_local_m = Vector3.ZERO
 		_last_headsail_lift_force_local_n = Vector3.ZERO
 		_last_headsail_drag_force_local_n = Vector3.ZERO
 		_last_headsail_net_force_local_n = Vector3.ZERO
