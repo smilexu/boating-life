@@ -5,20 +5,22 @@ extends MeshInstance3D
 const CLOTH_SHADER := preload("res://shaders/sail_cloth.gdshader")
 const SMILE_TEXTURE := preload("res://assets/boats/nordic28/sail_logo_smile.png")
 const AERO_MATH := preload("res://scripts/sailboat_aero_math.gd")
-const ROWS := 26
-const COLUMNS := 10
-const MAIN_MAX_BILLOW_M := 0.16
+const VISUAL_TUNING := preload("res://scripts/sail_cloth_visual_tuning.gd")
+const ROWS := 36
+const COLUMNS := 28
+const MAIN_MAX_BILLOW_M := VISUAL_TUNING.MAX_BILLOW_MAIN_M
 
 var _head := Vector3(0.0, 4.45, 0.04)
 var _tack := Vector3(0.0, 0.08, 0.0)
 var _clew := Vector3(0.0, 0.08, 4.65)
 var _deployment := 1.0
+var _smoothed_pressure_side := 0.0
 var _cloth_material: ShaderMaterial
 var _furled_fabric: MeshInstance3D
 
 
 func _ready() -> void:
-	extra_cull_margin = 0.25
+	extra_cull_margin = MAIN_MAX_BILLOW_M + 0.10
 	if mesh == null:
 		_rebuild_mesh(_head)
 	_ensure_cloth_material()
@@ -40,11 +42,17 @@ func set_deployment(value: float) -> void:
 	if not is_finite(value):
 		return
 	var safe_value := clampf(value, 0.0, 1.0)
-	if absf(safe_value - _deployment) < 0.003 and mesh != null:
+	var is_furled := safe_value <= 0.00001
+	var was_furled := _deployment <= 0.00001
+	if absf(safe_value - _deployment) < 0.003 and is_furled == was_furled:
 		return
 	_deployment = safe_value
-	_rebuild_mesh(_deployed_head())
+	if is_furled:
+		mesh = null
+	else:
+		_rebuild_mesh(_deployed_head())
 	_set_normal()
+	_update_shader_geometry()
 	_update_furled_fabric()
 	visible = true
 
@@ -53,17 +61,20 @@ func set_cloth_state(
 	airflow_local_mps: Vector3,
 	airflow_speed_mps: float,
 	sheet_efficiency: float,
-	animation_phase: float
+	animation_phase: float,
+	response_delta_seconds: float = 0.05
 ) -> void:
 	if _cloth_material == null:
 		return
 	var safe_speed := airflow_speed_mps if is_finite(airflow_speed_mps) else 0.0
-	var speed_factor := smoothstep(0.5, 5.0, maxf(safe_speed, 0.0))
+	var speed_factor := smoothstep(VISUAL_TUNING.WIND_FILL_START_MPS, VISUAL_TUNING.WIND_FILL_FULL_MPS, maxf(safe_speed, 0.0))
 	var efficiency := clampf(sheet_efficiency, 0.0, 1.0) if is_finite(sheet_efficiency) else 0.0
-	_cloth_material.set_shader_parameter("airflow_local", airflow_local_mps if _finite_vector(airflow_local_mps) else Vector3.ZERO)
+	var sail_normal := _plane_normal(_deployed_head(), _tack, _clew)
+	_update_pressure_side(airflow_local_mps, sail_normal, response_delta_seconds)
 	_cloth_material.set_shader_parameter("sail_fill", speed_factor * efficiency)
 	_cloth_material.set_shader_parameter("flutter_amount", speed_factor * (1.0 - efficiency))
-	_cloth_material.set_shader_parameter("slack_amount", 0.018 * (1.0 - speed_factor))
+	_cloth_material.set_shader_parameter("slack_amount", VISUAL_TUNING.MAX_SLACK_M * (1.0 - speed_factor))
+	_cloth_material.set_shader_parameter("strong_wind_tension", smoothstep(VISUAL_TUNING.STRONG_WIND_TENSION_START_MPS, VISUAL_TUNING.STRONG_WIND_TENSION_FULL_MPS, maxf(safe_speed, 0.0)))
 	_cloth_material.set_shader_parameter("animation_phase", animation_phase)
 
 
@@ -84,7 +95,9 @@ func get_visual_snapshot() -> Dictionary:
 		"cloth_material": _cloth_material != null,
 		"logo_texture": SMILE_TEXTURE.resource_path,
 		"maximum_billow_m": MAIN_MAX_BILLOW_M,
+		"tack_transition_seconds": VISUAL_TUNING.TACK_TRANSITION_SECONDS,
 		"deployment": _deployment,
+		"pressure_side_blend": _smoothed_pressure_side,
 		"geometric_area_m2": AERO_MATH.triangular_sail_area_m2(_deployed_head(), _tack, _clew),
 		"furled_fabric_visible": _furled_fabric != null and _furled_fabric.visible,
 	}
@@ -164,6 +177,9 @@ func _ensure_cloth_material() -> void:
 	_cloth_material.set_shader_parameter("logo_size", Vector2(0.98, 0.25))
 	_cloth_material.set_shader_parameter("wireframe_grid", Vector2(COLUMNS, ROWS))
 	_cloth_material.set_shader_parameter("maximum_billow_m", MAIN_MAX_BILLOW_M)
+	_cloth_material.set_shader_parameter("billow_time_variation", VISUAL_TUNING.BILLOW_TIME_VARIATION)
+	_cloth_material.set_shader_parameter("leech_flutter_fraction", VISUAL_TUNING.LEECH_FLUTTER_FRACTION)
+	_update_shader_geometry()
 	_cloth_material.set_shader_parameter("sail_normal_local", Vector3.RIGHT)
 	material_override = _cloth_material
 
@@ -172,6 +188,30 @@ func _set_normal() -> void:
 	if _cloth_material == null:
 		return
 	_cloth_material.set_shader_parameter("sail_normal_local", _plane_normal(_deployed_head(), _tack, _clew))
+	_update_shader_geometry()
+
+
+func _update_shader_geometry() -> void:
+	if _cloth_material == null:
+		return
+	_cloth_material.set_shader_parameter("deployment_fraction", _deployment)
+	_cloth_material.set_shader_parameter("pressure_side_blend", _smoothed_pressure_side)
+	_cloth_material.set_shader_parameter("sail_chord_tangent_local", (_clew - _tack).normalized())
+	_cloth_material.set_shader_parameter("sail_geometry_lengths_m", Vector2(
+		_tack.distance_to(_clew),
+		_tack.distance_to(_deployed_head())
+	))
+
+
+func _update_pressure_side(airflow_local_mps: Vector3, sail_normal: Vector3, delta_seconds: float) -> void:
+	var target_side := 0.0
+	if _finite_vector(airflow_local_mps) and airflow_local_mps.length_squared() > 0.04:
+		var crossing := airflow_local_mps.normalized().dot(sail_normal)
+		target_side = signf(crossing) * smoothstep(0.025, 0.22, absf(crossing))
+	var safe_delta := maxf(delta_seconds, 0.0) if is_finite(delta_seconds) else 0.0
+	var blend := 1.0 - exp(-safe_delta / VISUAL_TUNING.TACK_TRANSITION_SECONDS)
+	_smoothed_pressure_side = lerpf(_smoothed_pressure_side, target_side, blend)
+	_cloth_material.set_shader_parameter("pressure_side_blend", _smoothed_pressure_side)
 
 
 func _create_furled_fabric() -> void:
@@ -200,7 +240,7 @@ func _update_furled_fabric() -> void:
 	var cylinder := _furled_fabric.mesh as CylinderMesh
 	if cylinder != null:
 		cylinder.height = maxf(_tack.distance_to(_clew), 0.1)
-		var roll_radius := 0.066 + (1.0 - _deployment) * 0.025
+		var roll_radius := VISUAL_TUNING.MAIN_ROLL_BASE_RADIUS_M + (1.0 - _deployment) * VISUAL_TUNING.MAIN_ROLL_ADDED_RADIUS_M
 		cylinder.top_radius = roll_radius
 		cylinder.bottom_radius = roll_radius
 	_furled_fabric.position = (_tack + _clew) * 0.5

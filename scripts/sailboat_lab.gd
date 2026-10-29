@@ -6,6 +6,9 @@ enum WaterDisplayMode { NORMAL, TRANSLUCENT, HIDDEN }
 
 const CAMERA_FOLLOW_RESPONSE := 7.0
 const CAMERA_FOCUS_OFFSET := Vector3(0.0, 1.8, 0.0)
+const FOLLOW_ORBIT_SENSITIVITY := 0.008
+const FOLLOW_PITCH_MIN_RAD := 0.04
+const FOLLOW_PITCH_MAX_RAD := 1.25
 const INSPECTION_FOLLOW_RESPONSE := 6.0
 const INSPECTION_RADIUS_MIN_M := 3.0
 const INSPECTION_RADIUS_MAX_M := 12.0
@@ -20,8 +23,11 @@ const INSPECTION_PAN_LIMIT_M := 8.0
 @onready var _bathymetry_manager: BathymetryManager = $BathymetryManager
 
 var _camera_mode := CameraMode.FOLLOW
-var _camera_follow_offset_world := Vector3.ZERO
 var _fixed_camera_global_transform := Transform3D.IDENTITY
+var _follow_orbit_yaw_rad := 0.0
+var _follow_orbit_pitch_rad := 0.0
+var _follow_orbit_radius_m := 20.0
+var _follow_orbit_dragging := false
 var _inspection_yaw_rad := 0.0
 var _inspection_pitch_rad := -0.25
 var _inspection_radius_m := 6.5
@@ -38,7 +44,7 @@ var _normal_static_transparency := BaseMaterial3D.TRANSPARENCY_DISABLED
 
 
 func _ready() -> void:
-	_camera_follow_offset_world = _camera.global_position - _boat.global_position
+	_initialize_follow_orbit_from_camera()
 	_camera.look_at(_boat.global_position + CAMERA_FOCUS_OFFSET, Vector3.UP)
 	_fixed_camera_global_transform = _camera.global_transform
 	_isolate_lab_water_materials()
@@ -67,10 +73,25 @@ func _update_follow_camera(delta: float) -> void:
 	# Follow the interpolated render transform so camera motion does not inherit
 	# fixed-step jitter from the RigidBody3D. This is presentation-only.
 	var boat_transform := _boat.get_global_transform_interpolated()
-	var target_position := boat_transform.origin + _camera_follow_offset_world
+	var focus_position := boat_transform.origin + CAMERA_FOCUS_OFFSET
+	var pitch_cos := cos(_follow_orbit_pitch_rad)
+	var orbit_offset := Vector3(
+		sin(_follow_orbit_yaw_rad) * pitch_cos,
+		sin(_follow_orbit_pitch_rad),
+		cos(_follow_orbit_yaw_rad) * pitch_cos
+	) * _follow_orbit_radius_m
+	var target_position := focus_position + orbit_offset
 	var blend := 1.0 - exp(-CAMERA_FOLLOW_RESPONSE * maxf(delta, 0.0))
 	_camera.global_position = _camera.global_position.lerp(target_position, blend)
-	_camera.look_at(boat_transform.origin + CAMERA_FOCUS_OFFSET, Vector3.UP)
+	_camera.look_at(focus_position, Vector3.UP)
+
+
+func _initialize_follow_orbit_from_camera() -> void:
+	var focus_position := _boat.global_position + CAMERA_FOCUS_OFFSET
+	var offset := _camera.global_position - focus_position
+	_follow_orbit_radius_m = maxf(offset.length(), 1.0)
+	_follow_orbit_yaw_rad = atan2(offset.x, offset.z)
+	_follow_orbit_pitch_rad = asin(clampf(offset.y / _follow_orbit_radius_m, -1.0, 1.0))
 
 
 func _update_underwater_camera(delta: float) -> void:
@@ -91,15 +112,25 @@ func _update_underwater_camera(delta: float) -> void:
 	_look_at_inspection_target(focus_world)
 
 
-func _handle_inspection_mouse_input(event: InputEvent) -> bool:
-	if _camera_mode != CameraMode.UNDERWATER:
-		return false
+func _handle_camera_mouse_input(event: InputEvent) -> bool:
 	if event is InputEventMouseButton:
 		var button := event as InputEventMouseButton
 		if button.button_index == MOUSE_BUTTON_RIGHT:
+			if _camera_mode == CameraMode.FOLLOW:
+				if button.pressed and _pointer_is_over_debug_panel(button.position):
+					return false
+				_follow_orbit_dragging = button.pressed
+				get_viewport().set_input_as_handled()
+				return true
+			if _camera_mode != CameraMode.UNDERWATER:
+				return false
+			if button.pressed and _pointer_is_over_debug_panel(button.position):
+				return false
 			_inspection_orbit_dragging = button.pressed
 			get_viewport().set_input_as_handled()
 			return true
+		if _camera_mode != CameraMode.UNDERWATER:
+			return false
 		elif button.button_index == MOUSE_BUTTON_MIDDLE:
 			_inspection_pan_dragging = button.pressed
 			get_viewport().set_input_as_handled()
@@ -116,7 +147,17 @@ func _handle_inspection_mouse_input(event: InputEvent) -> bool:
 			_inspection_radius_m = minf(INSPECTION_RADIUS_MAX_M, _inspection_radius_m + 0.5)
 			get_viewport().set_input_as_handled()
 			return true
-	elif event is InputEventMouseMotion and _inspection_orbit_dragging:
+	elif event is InputEventMouseMotion and _camera_mode == CameraMode.FOLLOW and _follow_orbit_dragging:
+		var follow_motion := event as InputEventMouseMotion
+		_follow_orbit_yaw_rad = wrapf(_follow_orbit_yaw_rad - follow_motion.relative.x * FOLLOW_ORBIT_SENSITIVITY, -PI, PI)
+		_follow_orbit_pitch_rad = clampf(
+			_follow_orbit_pitch_rad + follow_motion.relative.y * FOLLOW_ORBIT_SENSITIVITY,
+			FOLLOW_PITCH_MIN_RAD,
+			FOLLOW_PITCH_MAX_RAD
+		)
+		get_viewport().set_input_as_handled()
+		return true
+	elif event is InputEventMouseMotion and _camera_mode == CameraMode.UNDERWATER and _inspection_orbit_dragging:
 		var orbit_motion := event as InputEventMouseMotion
 		_inspection_yaw_rad = wrapf(_inspection_yaw_rad - orbit_motion.relative.x * 0.008, -PI, PI)
 		_inspection_pitch_rad = clampf(_inspection_pitch_rad + orbit_motion.relative.y * 0.006, -0.65, 0.45)
@@ -146,7 +187,7 @@ func _pointer_is_over_debug_panel(position: Vector2) -> bool:
 
 
 func _input(event: InputEvent) -> void:
-	if _handle_inspection_mouse_input(event):
+	if _handle_camera_mouse_input(event):
 		return
 	if not event is InputEventKey:
 		return
@@ -175,6 +216,7 @@ func cycle_camera_mode() -> void:
 
 func set_camera_mode(mode: int) -> void:
 	_camera_mode = clampi(mode, CameraMode.FOLLOW, CameraMode.UNDERWATER)
+	_follow_orbit_dragging = false
 	_inspection_orbit_dragging = false
 	_inspection_pan_dragging = false
 	if _camera_mode == CameraMode.FIXED and _camera != null:

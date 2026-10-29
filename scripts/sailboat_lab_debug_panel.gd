@@ -59,6 +59,10 @@ var _engine_feedback_label: Label
 var _hydrodynamics_metrics_label: Label
 var _wind_test_status_label: Label
 var _wind_test_buttons: Array[Button] = []
+var _wind_speed_slider: HSlider
+var _wind_speed_value_label: Label
+var _selected_test_wind_speed_mps := 0.0
+var _selected_test_wind_from_degrees := 240.0
 var _water_display_option: OptionButton
 var _inspection_camera_option: OptionButton
 var _inspection_markers: Dictionary = {}
@@ -94,6 +98,10 @@ func _ready() -> void:
 	_polar_runner = get_node_or_null(^"../PolarTestRunner") as PolarTestRunner
 	_wave_sampler = get_node_or_null(^"../WaveSampler") as WaveSampler
 	_sail_visual_controller = _boat.get_node_or_null("VisualRoot/SailVisuals") if _boat != null else null
+	var wind_field := get_node_or_null(^"../WindField") as WindField
+	if wind_field != null:
+		_selected_test_wind_speed_mps = wind_field.mean_wind_speed_mps
+		_selected_test_wind_from_degrees = wind_field.mean_wind_from_degrees
 	_build_panel()
 	if _boat == null:
 		push_error("SailboatLabDebugPanel cannot find its test RigidBody3D.")
@@ -336,14 +344,43 @@ func _build_panel() -> void:
 	_sail_visual_metrics_label = _make_note("帆面鼓风与索具状态读取中。")
 	_sail_visual_metrics_label.name = "SailVisualDiagnostics"
 	sail_page.add_child(_sail_visual_metrics_label)
-	sail_page.add_child(_section_title("本地风向测试 · 不修改正式天气"))
+	sail_page.add_child(_section_title("本地风况测试 · 不修改正式天气"))
 	_wind_test_status_label = _make_note("风场状态读取中。")
 	sail_page.add_child(_wind_test_status_label)
-	_add_wind_test_button(sail_page, "无风 0 m/s", 0.0, 0.0)
-	_add_wind_test_button(sail_page, "迎风 8 m/s（来向 0°）", 8.0, 0.0)
-	_add_wind_test_button(sail_page, "顺风 8 m/s（来向 180°）", 8.0, 180.0)
-	_add_wind_test_button(sail_page, "左舷横风 8 m/s（来向 270°）", 8.0, 270.0)
-	_add_wind_test_button(sail_page, "右舷横风 8 m/s（来向 90°）", 8.0, 90.0)
+	var wind_settings_row := HBoxContainer.new()
+	wind_settings_row.name = "WindSettingsRow"
+	wind_settings_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wind_settings_row.add_theme_constant_override("separation", 12)
+	sail_page.add_child(wind_settings_row)
+	var direction_group := VBoxContainer.new()
+	direction_group.name = "WindDirectionControls"
+	direction_group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wind_settings_row.add_child(direction_group)
+	direction_group.add_child(_make_note("风向 · 风从此方向来"))
+	_add_wind_test_button(direction_group, "迎风 · 来向 0°", 0.0)
+	_add_wind_test_button(direction_group, "顺风 · 来向 180°", 180.0)
+	_add_wind_test_button(direction_group, "左舷横风 · 来向 270°", 270.0)
+	_add_wind_test_button(direction_group, "右舷横风 · 来向 90°", 90.0)
+	var strength_group := VBoxContainer.new()
+	strength_group.name = "WindStrengthControls"
+	strength_group.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wind_settings_row.add_child(strength_group)
+	strength_group.add_child(_make_note("风力强度"))
+	_wind_speed_value_label = _make_note("")
+	_wind_speed_value_label.name = "LabWindSpeedValue"
+	strength_group.add_child(_wind_speed_value_label)
+	_wind_speed_slider = HSlider.new()
+	_wind_speed_slider.name = "LabWindSpeed"
+	_wind_speed_slider.min_value = 0.0
+	_wind_speed_slider.max_value = 30.0
+	_wind_speed_slider.step = 0.5
+	_wind_speed_slider.value = _selected_test_wind_speed_mps
+	_wind_speed_slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_wind_speed_slider.tick_count = 7
+	_wind_speed_slider.ticks_on_borders = true
+	_wind_speed_slider.value_changed.connect(_on_lab_wind_speed_changed)
+	strength_group.add_child(_wind_speed_slider)
+	_refresh_wind_selection_label()
 	sail_page.add_child(_make_note("实验风按钮只写入 SailboatLab 自己的 WindField；若连接由 WeatherStateController 管理的风场，按钮会锁定。F12 临时覆盖仍按 WindField 现有规则生效。"))
 	sail_page.add_child(_section_title("手动掌舵 · A 左舵，D 右舵，松开回中"))
 	_rudder_target_value_label = _make_note("目标舵角 0° · 实际舵角 0°")
@@ -423,7 +460,7 @@ func _build_panel() -> void:
 	_inspection_camera_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_inspection_camera_option.item_selected.connect(_on_inspection_camera_selected)
 	underwater_page.add_child(_inspection_camera_option)
-	underwater_page.add_child(_make_note("C 循环摄像机模式；水下模式：右键拖动旋转，中键拖动平移，滚轮缩放。滚轮在调试面板上仍用于滚动内容。镜头只移动相机，不影响船体。"))
+	underwater_page.add_child(_make_note("C 循环摄像机模式；平滑跟随和水下模式均可按住右键拖动旋转视角。水下模式另支持中键拖动平移、滚轮缩放。调试面板区域不会启动视角拖动；镜头只移动相机，不影响船体。"))
 
 	underwater_page.add_child(_section_title("水下调试标记 · 位置来自当前刚体 / 船型参数"))
 	_add_inspection_marker_toggle(underwater_page, "rudder_axis", "显示船舵旋转轴")
@@ -924,6 +961,8 @@ func _refresh_sail_metrics(data: Dictionary) -> void:
 		var can_test_wind := bool(_boat.call("can_set_lab_test_wind")) if _boat.has_method("can_set_lab_test_wind") else false
 		for button in _wind_test_buttons:
 			button.disabled = not can_test_wind
+		if _wind_speed_slider != null:
+			_wind_speed_slider.editable = can_test_wind
 		_wind_test_status_label.text = (
 			"风场：%s · 权威天气所有权：%s · F12 覆盖：%s\n"
 			+ "本步查询 %d 次 · 采样 %d μs（均值/P95 %d/%d）"
@@ -1312,8 +1351,9 @@ func _center_rudder() -> void:
 		_boat.call("clear_rudder_input")
 
 
-func _add_wind_test_button(parent: VBoxContainer, text: String, speed_mps: float, from_degrees: float) -> void:
-	var button := _make_button(text, _set_lab_test_wind.bind(speed_mps, from_degrees))
+func _add_wind_test_button(parent: VBoxContainer, text: String, from_degrees: float) -> void:
+	var button := _make_button(text, _set_lab_test_wind_direction.bind(from_degrees))
+	button.name = "WindFrom%d" % int(from_degrees)
 	parent.add_child(button)
 	_wind_test_buttons.append(button)
 
@@ -1362,9 +1402,29 @@ func _refresh_sail_visual_metrics() -> void:
 	]
 
 
-func _set_lab_test_wind(speed_mps: float, from_degrees: float) -> void:
+func _on_lab_wind_speed_changed(speed_mps: float) -> void:
+	_selected_test_wind_speed_mps = clampf(speed_mps, 0.0, 30.0)
+	_apply_selected_lab_test_wind()
+
+
+func _set_lab_test_wind_direction(from_degrees: float) -> void:
+	_selected_test_wind_from_degrees = fposmod(from_degrees, 360.0)
+	_refresh_wind_selection_label()
+	_apply_selected_lab_test_wind()
+
+
+func _refresh_wind_selection_label() -> void:
+	if _wind_speed_value_label != null:
+		_wind_speed_value_label.text = "%.1f m/s\n来向 %.0f°" % [
+			_selected_test_wind_speed_mps,
+			_selected_test_wind_from_degrees,
+		]
+
+
+func _apply_selected_lab_test_wind() -> void:
 	if _boat != null and _boat.has_method("set_lab_test_wind"):
-		_boat.call("set_lab_test_wind", speed_mps, from_degrees)
+		_boat.call("set_lab_test_wind", _selected_test_wind_speed_mps, _selected_test_wind_from_degrees)
+	_refresh_wind_selection_label()
 	_refresh_metrics()
 
 

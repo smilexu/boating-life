@@ -3,6 +3,7 @@ extends Node3D
 ## body's already-cached wind/aero state; it never queries wind or water.
 
 const AERO_MATH := preload("res://scripts/sailboat_aero_math.gd")
+const VISUAL_TUNING := preload("res://scripts/sail_cloth_visual_tuning.gd")
 const UPDATE_INTERVAL_S := 0.05
 const MAST_LINE_RADIUS_M := 0.009
 
@@ -116,13 +117,13 @@ func _update_cached_cloth_state() -> void:
 	var jib_world := body_basis * jib_apparent_body
 	if _main_sail != null and _main_sail.has_method("set_cloth_state"):
 		var main_air_local := _main_sail.global_basis.inverse() * main_world
-		_main_sail.call("set_cloth_state", main_air_local, main_apparent_speed, main_efficiency, _visual_phase)
+		_main_sail.call("set_cloth_state", main_air_local, main_apparent_speed, main_efficiency, _visual_phase, UPDATE_INTERVAL_S)
 		if _main_sail.has_method("set_visual_options"):
 			_main_sail.call("set_visual_options", _billow_enabled, _wireframe_enabled, _logo_enabled)
 	_main_fill = _air_fill(main_apparent_speed, main_efficiency)
 	if _jib_sail != null and _jib_sail.has_method("set_cloth_state"):
 		var jib_air_local := _jib_sail.global_basis.inverse() * jib_world
-		_jib_sail.call("set_cloth_state", jib_air_local, jib_apparent_speed, jib_efficiency, _visual_phase)
+		_jib_sail.call("set_cloth_state", jib_air_local, jib_apparent_speed, jib_efficiency, _visual_phase, UPDATE_INTERVAL_S)
 		if _jib_sail.has_method("set_visual_options"):
 			_jib_sail.call("set_visual_options", _billow_enabled, _wireframe_enabled, false)
 	_jib_fill = _air_fill(jib_apparent_speed, jib_efficiency) if _headsail_is_enabled else 0.0
@@ -133,7 +134,7 @@ func _update_cached_cloth_state() -> void:
 func _air_fill(speed_mps: float, efficiency: float) -> float:
 	if not is_finite(speed_mps) or not is_finite(efficiency):
 		return 0.0
-	return smoothstep(0.5, 5.0, maxf(speed_mps, 0.0)) * clampf(efficiency, 0.0, 1.0)
+	return smoothstep(VISUAL_TUNING.WIND_FILL_START_MPS, VISUAL_TUNING.WIND_FILL_FULL_MPS, maxf(speed_mps, 0.0)) * clampf(efficiency, 0.0, 1.0)
 
 
 func _apply_visual_options() -> void:

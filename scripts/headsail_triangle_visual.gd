@@ -4,9 +4,10 @@ extends MeshInstance3D
 
 const AERO_MATH := preload("res://scripts/sailboat_aero_math.gd")
 const CLOTH_SHADER := preload("res://shaders/sail_cloth.gdshader")
-const ROWS := 20
-const COLUMNS := 8
-const JIB_MAX_BILLOW_M := 0.13
+const VISUAL_TUNING := preload("res://scripts/sail_cloth_visual_tuning.gd")
+const ROWS := 30
+const COLUMNS := 24
+const JIB_MAX_BILLOW_M := VISUAL_TUNING.MAX_BILLOW_JIB_M
 
 var _head_local := Vector3(0.0, 4.95, -0.75)
 var _tack_local := Vector3(0.0, 0.65, -3.55)
@@ -14,6 +15,7 @@ var _neutral_clew_local := Vector3(0.0, 0.65, -1.15)
 var _last_angle_rad := INF
 var _last_geometry_angle_rad := INF
 var _deployment := 1.0
+var _smoothed_pressure_side := 0.0
 var _current_clew_local := Vector3.ZERO
 var _aero_enabled := true
 var _partial_mesh_active := false
@@ -22,7 +24,7 @@ var _furled_fabric: MeshInstance3D
 
 
 func _ready() -> void:
-	extra_cull_margin = 0.22
+	extra_cull_margin = JIB_MAX_BILLOW_M + 0.10
 	if mesh == null:
 		_rebuild_mesh()
 	_current_clew_local = _neutral_clew_local
@@ -55,6 +57,7 @@ func set_sheet_angle(angle_rad: float) -> void:
 		_current_clew_local = clew
 		_cloth_material.set_shader_parameter("clew_delta_local", clew - _neutral_clew_local)
 		_cloth_material.set_shader_parameter("sail_normal_local", _plane_normal(_head_local, _tack_local, clew))
+		_update_shader_geometry()
 
 
 func set_deployment(value: float, angle_rad: float) -> void:
@@ -63,7 +66,7 @@ func set_deployment(value: float, angle_rad: float) -> void:
 	var safe_deployment := clampf(value, 0.0, 1.0)
 	var angle_changed := not is_finite(_last_geometry_angle_rad) or absf(angle_rad - _last_geometry_angle_rad) >= 0.004
 	var deployment_changed := absf(safe_deployment - _deployment) >= 0.003
-	var no_open_cloth := safe_deployment <= 0.001 and _deployment <= 0.001
+	var no_open_cloth := safe_deployment <= 0.00001 and _deployment <= 0.00001
 	if not deployment_changed and not angle_changed and (mesh != null or no_open_cloth):
 		if safe_deployment >= 0.999:
 			_current_clew_local = get_clew_for_angle(angle_rad)
@@ -87,12 +90,13 @@ func set_deployment(value: float, angle_rad: float) -> void:
 			_rebuild_mesh_for_clew(partial_clew)
 			_partial_mesh_active = true
 		_current_clew_local = partial_clew
-		if _deployment <= 0.001:
+		if _deployment <= 0.00001:
 			_current_clew_local = luff_projection
 			mesh = null
 		if _cloth_material != null:
 			_cloth_material.set_shader_parameter("clew_delta_local", Vector3.ZERO)
 			_cloth_material.set_shader_parameter("sail_normal_local", _plane_normal(_head_local, _tack_local, partial_clew))
+	_update_shader_geometry()
 	_refresh_furl_visibility()
 	_update_furled_fabric()
 
@@ -120,17 +124,20 @@ func set_cloth_state(
 	airflow_local_mps: Vector3,
 	airflow_speed_mps: float,
 	sheet_efficiency: float,
-	animation_phase: float
+	animation_phase: float,
+	response_delta_seconds: float = 0.05
 ) -> void:
 	if _cloth_material == null:
 		return
 	var safe_speed := airflow_speed_mps if is_finite(airflow_speed_mps) else 0.0
-	var speed_factor := smoothstep(0.5, 5.0, maxf(safe_speed, 0.0))
+	var speed_factor := smoothstep(VISUAL_TUNING.WIND_FILL_START_MPS, VISUAL_TUNING.WIND_FILL_FULL_MPS, maxf(safe_speed, 0.0))
 	var efficiency := clampf(sheet_efficiency, 0.0, 1.0) if is_finite(sheet_efficiency) else 0.0
-	_cloth_material.set_shader_parameter("airflow_local", airflow_local_mps if _finite_vector(airflow_local_mps) else Vector3.ZERO)
+	var sail_normal := _plane_normal(_head_local, _tack_local, _current_clew_local)
+	_update_pressure_side(airflow_local_mps, sail_normal, response_delta_seconds)
 	_cloth_material.set_shader_parameter("sail_fill", speed_factor * efficiency)
 	_cloth_material.set_shader_parameter("flutter_amount", speed_factor * (1.0 - efficiency))
-	_cloth_material.set_shader_parameter("slack_amount", 0.016 * (1.0 - speed_factor))
+	_cloth_material.set_shader_parameter("slack_amount", VISUAL_TUNING.MAX_SLACK_M * (1.0 - speed_factor))
+	_cloth_material.set_shader_parameter("strong_wind_tension", smoothstep(VISUAL_TUNING.STRONG_WIND_TENSION_START_MPS, VISUAL_TUNING.STRONG_WIND_TENSION_FULL_MPS, maxf(safe_speed, 0.0)))
 	_cloth_material.set_shader_parameter("animation_phase", animation_phase)
 
 
@@ -143,6 +150,10 @@ func set_visual_options(billow_enabled: bool, wireframe_enabled: bool, logo_enab
 
 
 func get_visual_snapshot() -> Dictionary:
+	var furled_roll_radius_m := 0.0
+	var roll_mesh := _furled_fabric.mesh as CylinderMesh if _furled_fabric != null else null
+	if roll_mesh != null:
+		furled_roll_radius_m = roll_mesh.top_radius
 	return {
 		"rows": ROWS,
 		"columns": COLUMNS,
@@ -150,11 +161,15 @@ func get_visual_snapshot() -> Dictionary:
 		"triangle_count": ROWS * COLUMNS * 2,
 		"cloth_material": _cloth_material != null,
 		"maximum_billow_m": JIB_MAX_BILLOW_M,
+		"tack_transition_seconds": VISUAL_TUNING.TACK_TRANSITION_SECONDS,
 		"neutral_area_m2": AERO_MATH.triangular_sail_area_m2(_head_local, _tack_local, _neutral_clew_local),
 		"deployment": _deployment,
+		"pressure_side_blend": _smoothed_pressure_side,
 		"geometric_area_m2": AERO_MATH.triangular_sail_area_m2(_head_local, _tack_local, _current_clew_local),
 		"last_clew_local_m": _current_clew_local,
 		"furled_fabric_visible": _furled_fabric != null and _furled_fabric.visible,
+		"furled_roll_radius_m": furled_roll_radius_m,
+		"exposed_foot_length_m": _tack_local.distance_to(_current_clew_local),
 	}
 
 
@@ -230,7 +245,10 @@ func _ensure_cloth_material() -> void:
 	_cloth_material.set_shader_parameter("logo_enabled", false)
 	_cloth_material.set_shader_parameter("wireframe_grid", Vector2(COLUMNS, ROWS))
 	_cloth_material.set_shader_parameter("maximum_billow_m", JIB_MAX_BILLOW_M)
+	_cloth_material.set_shader_parameter("billow_time_variation", VISUAL_TUNING.BILLOW_TIME_VARIATION)
+	_cloth_material.set_shader_parameter("leech_flutter_fraction", VISUAL_TUNING.LEECH_FLUTTER_FRACTION)
 	_cloth_material.set_shader_parameter("sail_normal_local", _plane_normal(_head_local, _tack_local, _neutral_clew_local))
+	_update_shader_geometry()
 	material_override = _cloth_material
 
 
@@ -245,6 +263,32 @@ func _refresh_furl_visibility() -> void:
 	visible = _aero_enabled
 	if _furled_fabric != null:
 		_furled_fabric.visible = _aero_enabled and _deployment < 0.999
+
+
+func _update_shader_geometry() -> void:
+	if _cloth_material == null:
+		return
+	_cloth_material.set_shader_parameter("deployment_fraction", _deployment)
+	_cloth_material.set_shader_parameter("pressure_side_blend", _smoothed_pressure_side)
+	var chord := _current_clew_local - _tack_local
+	if chord.length_squared() < 0.000001:
+		chord = _neutral_clew_local - _tack_local
+	_cloth_material.set_shader_parameter("sail_chord_tangent_local", chord.normalized())
+	_cloth_material.set_shader_parameter("sail_geometry_lengths_m", Vector2(
+		_tack_local.distance_to(_current_clew_local),
+		_tack_local.distance_to(_head_local)
+	))
+
+
+func _update_pressure_side(airflow_local_mps: Vector3, sail_normal: Vector3, delta_seconds: float) -> void:
+	var target_side := 0.0
+	if _finite_vector(airflow_local_mps) and airflow_local_mps.length_squared() > 0.04:
+		var crossing := airflow_local_mps.normalized().dot(sail_normal)
+		target_side = signf(crossing) * smoothstep(0.025, 0.22, absf(crossing))
+	var safe_delta := maxf(delta_seconds, 0.0) if is_finite(delta_seconds) else 0.0
+	var blend := 1.0 - exp(-safe_delta / VISUAL_TUNING.TACK_TRANSITION_SECONDS)
+	_smoothed_pressure_side = lerpf(_smoothed_pressure_side, target_side, blend)
+	_cloth_material.set_shader_parameter("pressure_side_blend", _smoothed_pressure_side)
 
 
 func _closest_point_on_segment(point: Vector3, start: Vector3, end: Vector3) -> Vector3:
@@ -265,7 +309,7 @@ func _create_furled_fabric() -> void:
 	roll.height = maxf(_head_local.distance_to(_tack_local), 0.1)
 	roll.top_radius = 0.04
 	roll.bottom_radius = 0.04
-	roll.radial_segments = 8
+	roll.radial_segments = 12
 	_furled_fabric.mesh = roll
 	var cloth_material := StandardMaterial3D.new()
 	cloth_material.albedo_color = Color("#e7e1d3")
@@ -285,7 +329,7 @@ func _update_furled_fabric() -> void:
 	var cylinder := _furled_fabric.mesh as CylinderMesh
 	if cylinder != null:
 		cylinder.height = luff.length()
-		var radius := 0.022 + (1.0 - _deployment) * 0.025
+		var radius := VISUAL_TUNING.JIB_ROLL_BASE_RADIUS_M + (1.0 - _deployment) * VISUAL_TUNING.JIB_ROLL_ADDED_RADIUS_M
 		cylinder.top_radius = radius
 		cylinder.bottom_radius = radius
 	_furled_fabric.position = (_head_local + _tack_local) * 0.5

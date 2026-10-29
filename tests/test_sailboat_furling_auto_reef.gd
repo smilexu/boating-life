@@ -4,6 +4,8 @@ const AUTO_REEF := preload("res://scripts/sailboat_auto_reef.gd")
 const AERO := preload("res://scripts/sailboat_aero_math.gd")
 const MAIN_SAIL_SCRIPT := preload("res://scripts/sail_triangle_visual.gd")
 const JIB_SAIL_SCRIPT := preload("res://scripts/headsail_triangle_visual.gd")
+const CLOTH_SHADER := preload("res://shaders/sail_cloth.gdshader")
+const VISUAL_TUNING := preload("res://scripts/sail_cloth_visual_tuning.gd")
 const PROFILE := preload("res://resources/sailing/sailboat_lab_profile.tres")
 const LAB_SCENE := preload("res://scenes/SailboatLab.tscn")
 
@@ -29,6 +31,7 @@ func _run() -> void:
 
 
 func _test_visual_geometry() -> void:
+	_expect(is_equal_approx(VISUAL_TUNING.WIND_FILL_START_MPS, 1.0) and is_equal_approx(VISUAL_TUNING.WIND_FILL_FULL_MPS, 10.0), "cloth visual tuning maps apparent wind from 1 m/s to near-full billow at 10 m/s")
 	var main_sail := MAIN_SAIL_SCRIPT.new() as MeshInstance3D
 	root.add_child(main_sail)
 	var main_head := Vector3(0.0, 8.0273, 0.0)
@@ -37,14 +40,21 @@ func _test_visual_geometry() -> void:
 	main_sail.call("configure", main_head, main_tack, main_clew)
 	await process_frame
 	var main_full_area := AERO.triangular_sail_area_m2(main_head, main_tack, main_clew)
+	var main_initial_snapshot: Dictionary = main_sail.call("get_visual_snapshot")
+	_expect(int(main_initial_snapshot.get("rows", 0)) == 36 and int(main_initial_snapshot.get("columns", 0)) == 28, "mainsail billow mesh uses the refined 36×28 grid")
+	_expect(is_equal_approx(float(main_initial_snapshot.get("maximum_billow_m", 0.0)), 0.90), "mainsail visual-only maximum billow is 0.90 m")
 	for deployment in [0.0, 0.25, 0.5, 0.75, 1.0]:
 		main_sail.call("set_deployment", deployment)
 		var main_snapshot: Dictionary = main_sail.call("get_visual_snapshot")
 		_expect(absf(float(main_snapshot.get("geometric_area_m2", -1.0)) - main_full_area * deployment) < 0.002, "main cloth geometry area matches its %.0f%% deployment" % (deployment * 100.0))
 		if deployment == 0.0:
 			_expect(bool(main_snapshot.get("furled_fabric_visible", false)), "main boom retains the rolled-cloth visual when the sail is fully furled")
-	main_sail.queue_free()
-
+			_expect(main_sail.mesh == null, "fully furled main sail has no open cloth mesh")
+			var main_material := main_sail.material_override as ShaderMaterial
+			_expect(is_equal_approx(float(main_material.get_shader_parameter("deployment_fraction")), 0.0), "main cloth shader disables billow at zero deployment")
+		if deployment == 0.5:
+			var main_material := main_sail.material_override as ShaderMaterial
+			_expect(is_equal_approx(float(main_material.get_shader_parameter("deployment_fraction")), 0.5), "main visual billow follows the current half-deployed area")
 	var jib_sail := JIB_SAIL_SCRIPT.new() as MeshInstance3D
 	root.add_child(jib_sail)
 	var jib_head := Vector3(0.0, 10.03, -1.0)
@@ -53,16 +63,75 @@ func _test_visual_geometry() -> void:
 	jib_sail.call("configure", jib_head, jib_tack, jib_clew)
 	await process_frame
 	var jib_full_area := AERO.triangular_sail_area_m2(jib_head, jib_tack, jib_clew)
+	var jib_initial_snapshot: Dictionary = jib_sail.call("get_visual_snapshot")
+	var jib_snapshot: Dictionary
+	_expect(int(jib_initial_snapshot.get("rows", 0)) == 30 and int(jib_initial_snapshot.get("columns", 0)) == 24, "Jib billow mesh uses the refined 30×24 grid")
+	_expect(is_equal_approx(float(jib_initial_snapshot.get("maximum_billow_m", 0.0)), 0.65), "Jib visual-only maximum billow is 0.65 m")
 	for deployment in [0.0, 0.25, 0.5, 0.75, 1.0]:
 		jib_sail.call("set_deployment", deployment, 0.0)
-		var jib_snapshot: Dictionary = jib_sail.call("get_visual_snapshot")
+		jib_snapshot = jib_sail.call("get_visual_snapshot")
 		_expect(absf(float(jib_snapshot.get("geometric_area_m2", -1.0)) - jib_full_area * deployment) < 0.002, "Jib cloth geometry area matches its %.0f%% deployment" % (deployment * 100.0))
 		if deployment == 0.0:
 			_expect(bool(jib_snapshot.get("furled_fabric_visible", false)), "Jib retains its furled-cloth visual at 0% deployment")
+			var jib_material := jib_sail.material_override as ShaderMaterial
+			_expect(is_equal_approx(float(jib_material.get_shader_parameter("deployment_fraction")), 0.0), "Jib cloth shader disables billow at zero deployment")
 		if deployment > 0.0:
 			var deployed_clew: Vector3 = jib_snapshot.get("last_clew_local_m", Vector3.ZERO)
 			_expect(AERO.triangular_sail_area_m2(jib_head, jib_tack, deployed_clew) > 0.0, "partially deployed Jib remains a valid sail triangle")
+	var jib_foot_lengths := {}
+	var jib_roll_radii := {}
+	for deployment in [1.0, 0.7, 0.5, 0.3]:
+		jib_sail.call("set_deployment", deployment, 0.0)
+		jib_snapshot = jib_sail.call("get_visual_snapshot")
+		jib_foot_lengths[deployment] = float(jib_snapshot.get("exposed_foot_length_m", 0.0))
+		jib_roll_radii[deployment] = float(jib_snapshot.get("furled_roll_radius_m", 0.0))
+	_expect(jib_foot_lengths[1.0] > jib_foot_lengths[0.7] and jib_foot_lengths[0.7] > jib_foot_lengths[0.5] and jib_foot_lengths[0.5] > jib_foot_lengths[0.3], "Jib clew and exposed foot become visibly shorter at 70%, 50%, and 30% deployment")
+	_expect(jib_roll_radii[1.0] < jib_roll_radii[0.7] and jib_roll_radii[0.7] < jib_roll_radii[0.5] and jib_roll_radii[0.5] < jib_roll_radii[0.3], "forestay roll thickens progressively as the Jib is furled")
+	main_sail.call("set_deployment", 1.0)
+	var apparent_flow := Vector3.RIGHT
+	main_sail.call("set_cloth_state", apparent_flow, 6.0, 1.0, 0.0, 0.05)
+	var main_material := main_sail.material_override as ShaderMaterial
+	var billow_at_6_mps := float(main_material.get_shader_parameter("sail_fill"))
+	main_sail.call("set_cloth_state", apparent_flow, 8.0, 1.0, 0.0, 0.05)
+	var billow_at_8_mps := float(main_material.get_shader_parameter("sail_fill"))
+	main_sail.call("set_cloth_state", apparent_flow, 10.0, 1.0, 0.0, 0.05)
+	var billow_at_10_mps := float(main_material.get_shader_parameter("sail_fill"))
+	_expect(billow_at_6_mps > 0.55 and billow_at_8_mps > billow_at_6_mps + 0.20 and billow_at_10_mps > billow_at_8_mps + 0.10, "apparent-wind fill changes clearly from 6 to 10 m/s and approaches maximum near 10 m/s")
+	_expect(_test_sail_side_transition(main_sail, true), "main visual pressure side changes smoothly when apparent wind crosses the sail")
+	_expect(_test_sail_side_transition(jib_sail, false), "Jib visual pressure side changes smoothly when apparent wind crosses the sail")
+	_expect(CLOTH_SHADER.code.contains("cull_disabled") and CLOTH_SHADER.code.contains("FRONT_FACING"), "cloth shader keeps both sides visible and flips back-face lighting normals")
+	_expect(CLOTH_SHADER.code.contains("TANGENT = normalize(curved_tangent") and CLOTH_SHADER.code.contains("BINORMAL = normalize(curved_binormal)"), "billow shader updates its tangent basis to follow the curved surface")
+	_expect(CLOTH_SHADER.code.contains("CHORD_POWER_LEECH = 3.26") and CLOTH_SHADER.code.contains("VERTICAL_PROFILE_NORMALIZER"), "cloth shader places its full chord belly near 38% and tapers it with the triangular sail chord")
 	jib_sail.queue_free()
+	main_sail.queue_free()
+	await process_frame
+
+
+func _test_sail_side_transition(sail: MeshInstance3D, is_main_sail: bool) -> bool:
+	if is_main_sail:
+		sail.call("set_deployment", 1.0)
+	else:
+		sail.call("set_deployment", 1.0, 0.0)
+	var flow := Vector3.RIGHT
+	for index in range(30):
+		sail.call("set_cloth_state", flow, 8.0, 1.0, float(index) * 0.05, 0.05)
+	var snapshot: Dictionary = sail.call("get_visual_snapshot")
+	var pressure_side := float(snapshot.get("pressure_side_blend", 0.0))
+	if pressure_side <= 0.5:
+		return false
+	flow = Vector3.LEFT
+	if is_main_sail:
+		sail.call("set_cloth_state", flow, 8.0, 1.0, 2.0, 0.05)
+	else:
+		sail.call("set_cloth_state", flow, 8.0, 1.0, 2.0, 0.05)
+	snapshot = sail.call("get_visual_snapshot")
+	var after_one_step := float(snapshot.get("pressure_side_blend", 0.0))
+	if after_one_step <= 0.0:
+		return false
+	for index in range(30):
+		sail.call("set_cloth_state", flow, 8.0, 1.0, 2.05 + float(index) * 0.05, 0.05)
+	snapshot = sail.call("get_visual_snapshot")
+	return float(snapshot.get("pressure_side_blend", 0.0)) < -0.5
 
 
 func _test_auto_reef_timing_and_staging() -> void:
