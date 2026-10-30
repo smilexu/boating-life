@@ -14,6 +14,7 @@ extends CanvasLayer
 @export_node_path("Node") var copenhagen_port_services_path := NodePath("../CopenhagenHarbor/PortServiceController")
 
 const MENU_LAYER := 100
+const GRAPHICS_SETTINGS_PAGE_SCRIPT := preload("res://scripts/graphics_settings_page.gd")
 
 var _boat: Node3D
 var _camera_rig: Node3D
@@ -27,12 +28,14 @@ var _background: ColorRect
 var _panel: PanelContainer
 var _main_page: VBoxContainer
 var _settings_page: VBoxContainer
+var _graphics_page: VBoxContainer
 var _music_toggle: CheckButton
 var _ui_scale_option: OptionButton
 var _navigation_detail_option: OptionButton
 var _mix_sliders: Dictionary = {}
 var _menu_open := false
 var _settings_open := false
+var _graphics_open := false
 
 
 func _ready() -> void:
@@ -76,7 +79,10 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if not _menu_open:
 		_open_menu()
 	elif _settings_open:
-		_show_main_page()
+		if _graphics_open:
+			_graphics_page.call("_cancel_draft")
+		else:
+			_show_main_page()
 	else:
 		_close_menu()
 	get_viewport().set_input_as_handled()
@@ -85,9 +91,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _open_menu() -> void:
 	_menu_open = true
 	_settings_open = false
+	_graphics_open = false
 	visible = true
 	_main_page.visible = true
 	_settings_page.visible = false
+	_graphics_page.visible = false
 	_set_manual_input_enabled(false)
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	if _camera_rig != null and _camera_rig.has_method("release_mouse_look"):
@@ -100,6 +108,7 @@ func _open_menu() -> void:
 func _close_menu() -> void:
 	_menu_open = false
 	_settings_open = false
+	_graphics_open = false
 	visible = false
 	_set_manual_input_enabled(true)
 	get_viewport().gui_release_focus()
@@ -108,8 +117,10 @@ func _close_menu() -> void:
 
 func _show_main_page() -> void:
 	_settings_open = false
+	_graphics_open = false
 	_main_page.visible = true
 	_settings_page.visible = false
+	_graphics_page.visible = false
 	var settings_button := _main_page.get_node_or_null("SettingsButton") as Button
 	if settings_button != null:
 		settings_button.grab_focus()
@@ -117,13 +128,28 @@ func _show_main_page() -> void:
 
 func _show_settings_page() -> void:
 	_settings_open = true
+	_graphics_open = false
 	_main_page.visible = false
 	_settings_page.visible = true
+	_graphics_page.visible = false
 	if _music_manager != null and _music_manager.has_method("is_music_enabled"):
 		_music_toggle.set_pressed_no_signal(bool(_music_manager.call("is_music_enabled")))
 	_refresh_mix_sliders()
 	_sync_interface_settings()
 	_music_toggle.grab_focus()
+
+
+func _show_graphics_page() -> void:
+	_settings_open = true
+	_graphics_open = true
+	_main_page.visible = false
+	_settings_page.visible = false
+	_graphics_page.visible = true
+	_graphics_page.call("open_page")
+
+
+func _return_from_graphics_page() -> void:
+	_show_settings_page()
 
 
 func _has_existing_overlay_open() -> bool:
@@ -239,10 +265,17 @@ func _build_ui() -> void:
 	_navigation_detail_option = _add_settings_option_row(settings_controls, "航行信息", ["简洁", "详细"])
 	_navigation_detail_option.name = "NavigationDetailOption"
 	_navigation_detail_option.item_selected.connect(_on_navigation_detail_selected)
+	_add_button(settings_controls, "图形设置…", "GraphicsSettingsButton", _show_graphics_page)
 	_add_volume_slider(settings_controls, "天气音效", "weather", 68.0)
 	_add_volume_slider(settings_controls, "海浪与船体音效", "ocean", 72.0)
 	_add_volume_slider(settings_controls, "发动机音量", "engine", 62.0)
 	_add_button(_settings_page, "返回", "BackButton", _show_main_page)
+
+	_graphics_page = GRAPHICS_SETTINGS_PAGE_SCRIPT.new() as VBoxContainer
+	_graphics_page.visible = false
+	pages.add_child(_graphics_page)
+	_graphics_page.call("setup", _quality_manager)
+	_graphics_page.connect("back_requested", _return_from_graphics_page)
 
 
 func _add_page_spacer(parent: VBoxContainer) -> void:

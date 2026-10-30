@@ -625,7 +625,17 @@ float depth_from_water_to_object(vec2 screen_uv, mat4 inv_projection_matrix, vec
 	 */
 
 void fragment() {
-	ALPHA = 1.0;
+	// Performance isolation only: keep vertex displacement/WaveSampler inputs,
+	// but bypass the regular per-pixel water shading path.
+	if (water_diagnostic_mode == 14) {
+		ALBEDO = vec3(0.0);
+		EMISSION = vec3(0.015, 0.055, 0.075);
+		METALLIC = 0.0;
+		ROUGHNESS = 1.0;
+		SPECULAR = 0.0;
+		ALPHA = 1.0;
+	} else {
+		ALPHA = 1.0;
 
 	// Calculate distance from the camera to the water
 #if defined(DISTANCE_FADE) || defined(FOAM_FADE) || defined (SHORE_FADE) || defined(DEPTH_FOG_FADE)
@@ -1019,5 +1029,6 @@ void fragment() {
 		ALPHA = 1.0;
 	}
 	ALPHA *= debug_visual_alpha_scale;
+	}
 
 }

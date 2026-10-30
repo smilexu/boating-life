@@ -7,7 +7,7 @@ extends Node
 @export var georeference: GeoReference
 @export var water_material: ShaderMaterial
 @export var enable_depth_color := true
-@export_enum("D - Full", "A - Flat Base", "B - Waves No Color Texture No Depth", "C - Waves Plus Depth No Color Texture", "Normal", "Fresnel", "Depth Validity", "Diffuse Shadows Only", "Specular Reflection Only", "Diffuse Flat Normal", "Specular Flat Normal", "Full Flat Normal") var water_diagnostic_mode := 0
+@export_enum("D - Full", "A - Flat Base", "B - Waves No Color Texture No Depth", "C - Waves Plus Depth No Color Texture", "Normal", "Fresnel", "Depth Validity", "Diffuse Shadows Only", "Specular Reflection Only", "Diffuse Flat Normal", "Specular Flat Normal", "Full Flat Normal", "Fragment Cost Isolation:14") var water_diagnostic_mode := 0
 @export_file("*.json") var grid_metadata_path := "res://assets/geodata/processed/bathymetry/grid_metadata.json"
 @export_file("*.rg8") var depth_texture_path := "res://assets/geodata/processed/bathymetry/depth_texture.rg8"
 @export_file("*.json") var manifest_path := "res://assets/geodata/processed/bathymetry/manifest.json"
@@ -30,7 +30,9 @@ const WATER_DIAGNOSTIC_NAMES := [
 	"Diffuse Flat Normal",
 	"Specular Flat Normal",
 	"Full Flat Normal",
+	"Fragment Cost Isolation · waves retained",
 ]
+const WATER_DIAGNOSTIC_MODE_VALUES := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 14]
 
 var data_available := false
 var source_description := SOURCE_NAME
@@ -47,6 +49,7 @@ var _unresolved_depth_map_points := PackedVector2Array()
 var _depth_texture: ImageTexture
 var _depth_texture_image: Image
 var _depth_texture_bounds := Vector4.ZERO
+var _performance_isolation_previous_mode := -1
 var _land_mask: Image
 var _land_mask_meta: Dictionary = {}
 var _rows := 0
@@ -71,15 +74,36 @@ func set_depth_color_enabled(enabled: bool) -> void:
 	print("Bathymetry sea tint: %s" % ("ON" if enabled else "OFF"))
 
 
+func set_fragment_cost_isolation(enabled: bool) -> void:
+	if enabled:
+		if water_diagnostic_mode == 14:
+			return
+		_performance_isolation_previous_mode = water_diagnostic_mode
+		water_diagnostic_mode = 14
+	else:
+		if water_diagnostic_mode != 14:
+			return
+		water_diagnostic_mode = _performance_isolation_previous_mode if _performance_isolation_previous_mode >= 0 else 0
+		_performance_isolation_previous_mode = -1
+	_apply_water_diagnostic_mode()
+	print("Water fragment cost isolation: %s" % ("ON · vertex waves retained" if enabled else "OFF · previous shader mode restored"))
+
+
+func get_water_diagnostic_mode() -> int:
+	return water_diagnostic_mode
+
+
 func _unhandled_key_input(event: InputEvent) -> void:
 	if event is not InputEventKey or not event.pressed or event.echo:
 		return
 	if event.physical_keycode == KEY_B:
 		set_depth_color_enabled(not enable_depth_color)
 	elif event.physical_keycode == KEY_F10:
-		water_diagnostic_mode = (water_diagnostic_mode + 1) % WATER_DIAGNOSTIC_NAMES.size()
+		var current_index := WATER_DIAGNOSTIC_MODE_VALUES.find(water_diagnostic_mode)
+		water_diagnostic_mode = int(WATER_DIAGNOSTIC_MODE_VALUES[(current_index + 1) % WATER_DIAGNOSTIC_MODE_VALUES.size()])
 		_apply_water_diagnostic_mode()
-		print("Water diagnostic: %s" % WATER_DIAGNOSTIC_NAMES[water_diagnostic_mode])
+		var next_index := WATER_DIAGNOSTIC_MODE_VALUES.find(water_diagnostic_mode)
+		print("Water diagnostic: %s" % WATER_DIAGNOSTIC_NAMES[next_index])
 	elif event.physical_keycode == KEY_F9:
 		if water_material != null:
 			var frozen := not bool(water_material.get_shader_parameter("freeze_time"))

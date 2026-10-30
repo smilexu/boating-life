@@ -37,6 +37,8 @@ var _weather_state_controller: Node
 var _day_night_visual_controller: Node
 var _wave_sampler: Node
 var _quality_manager: Node
+var _diagnostic_bathymetry: Node
+var _diagnostic_seabed_manager: Node
 var _fish_resource_manager: FishResourceManager
 var _fish_school_renderer: FishSchoolRenderer
 var _dolphin_world_manager: Node
@@ -64,6 +66,23 @@ var _moon_label: Label
 var _cloud_label: Label
 var _wave_label: Label
 var _performance_label: Label
+var _perf_sample_duration_option: OptionButton
+var _perf_sample_button: Button
+var _diagnostic_scale_option: OptionButton
+var _water_fragment_toggle: CheckButton
+var _building_visual_toggle: CheckButton
+var _seagrass_visual_toggle: CheckButton
+var _perf_frame_samples := PackedFloat64Array()
+var _perf_last_tick_usec := 0
+var _perf_elapsed_seconds := 0.0
+var _perf_target_duration_seconds := 30.0
+var _perf_sampling_active := false
+var _perf_sample_result := "等待开始"
+var _building_visual_roots: Array[Node] = []
+var _building_visual_previous_states: Dictionary = {}
+var _building_visuals_hidden := false
+var _debug_panel_snapshot: Dictionary = {}
+var _debug_panel_visual_snapshot: Dictionary = {}
 var _sailboat_physics_label: Label
 var _fish_location_feedback: Label
 var _fish_motion_toggle: CheckButton
@@ -177,6 +196,9 @@ func _ready() -> void:
 	_day_night_visual_controller = get_node_or_null(day_night_visual_controller_path)
 	_wave_sampler = get_node_or_null(wave_sampler_path)
 	_quality_manager = get_node_or_null(quality_manager_path)
+	_diagnostic_bathymetry = get_node_or_null("../../BathymetryManager")
+	_diagnostic_seabed_manager = get_node_or_null("../../ShallowSeabedManager")
+	_cache_building_visual_roots()
 	_fish_resource_manager = get_node_or_null(fish_resource_manager_path) as FishResourceManager
 	_fish_school_renderer = get_node_or_null(fish_school_renderer_path) as FishSchoolRenderer
 	_dolphin_world_manager = get_node_or_null(dolphin_world_manager_path)
@@ -980,6 +1002,7 @@ func _adjust_headsail(direction: int) -> void:
 
 
 func _process(delta: float) -> void:
+	_sample_debug_frame_time()
 	_runtime_elapsed += delta
 	_fps_elapsed += delta
 	if _fps_elapsed >= 0.5:
@@ -1000,6 +1023,47 @@ func _process(delta: float) -> void:
 	if _sailing_refresh_elapsed >= 0.10:
 		_sailing_refresh_elapsed = fmod(_sailing_refresh_elapsed, 0.10)
 		_update_sailing_panel()
+
+
+func _sample_debug_frame_time() -> void:
+	if _debug_panel == null or not _debug_panel.visible:
+		if _perf_sampling_active:
+			_perf_sampling_active = false
+			_perf_last_tick_usec = 0
+			_perf_sample_result = "采样已中断（F3 面板关闭）"
+		return
+	if not _perf_sampling_active:
+		return
+	var now := Time.get_ticks_usec()
+	if _perf_last_tick_usec > 0:
+		var frame_ms := float(now - _perf_last_tick_usec) / 1000.0
+		_perf_frame_samples.append(frame_ms)
+		_perf_elapsed_seconds += frame_ms / 1000.0
+		if _perf_elapsed_seconds >= _perf_target_duration_seconds:
+			_perf_sampling_active = false
+			var sorted := _perf_frame_samples.duplicate()
+			sorted.sort()
+			var mean_ms := _perf_elapsed_seconds * 1000.0 / float(sorted.size())
+			var p95 := sorted[clampi(ceili(float(sorted.size()) * 0.95) - 1, 0, sorted.size() - 1)]
+			_perf_sample_result = "%d秒：%.1f FPS · 平均 %.2f ms · P95 %.2f ms" % [roundi(_perf_target_duration_seconds), 1000.0 / mean_ms, mean_ms, p95]
+	_perf_last_tick_usec = now
+
+
+func _start_performance_sample() -> void:
+	_perf_frame_samples.clear()
+	_perf_elapsed_seconds = 0.0
+	_perf_last_tick_usec = Time.get_ticks_usec()
+	_perf_sampling_active = true
+	_perf_sample_result = "采样中：0 / %d s" % roundi(_perf_target_duration_seconds)
+
+
+func _reset_performance_sample_duration(index: int) -> void:
+	_perf_target_duration_seconds = 60.0 if index == 1 else 30.0
+	_perf_sampling_active = false
+	_perf_last_tick_usec = 0
+	_perf_frame_samples.clear()
+	_perf_elapsed_seconds = 0.0
+	_perf_sample_result = "等待预热后开始 %d 秒采样" % roundi(_perf_target_duration_seconds)
 
 
 func _build_autopilot_panel() -> void:
@@ -1131,8 +1195,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F3:
 		_debug_panel.visible = not _debug_panel.visible
 		if _debug_panel.visible:
+			_begin_debug_panel_overrides()
 			_update_debug_status()
 			_sync_peberholm_debug_control()
+		else:
+			_restore_debug_panel_overrides()
 		_update_sailing_panel()
 		get_viewport().set_input_as_handled()
 
@@ -1343,9 +1410,38 @@ func _build_debug_panel() -> void:
 	_frame_limit_option = _add_option_row(layout, "帧率上限", ["30 FPS", "60 FPS", "Unlimited"])
 	_frame_limit_option.item_selected.connect(_on_frame_limit_selected)
 	_clouds_toggle = CheckButton.new()
-	_clouds_toggle.text = "体积云渲染（性能对照）"
+	_clouds_toggle.text = "体积云渲染（性能 A/B；天气模拟保留）"
 	_clouds_toggle.toggled.connect(_on_clouds_toggled)
 	layout.add_child(_clouds_toggle)
+	if OS.is_debug_build():
+		_diagnostic_scale_option = _add_option_row(layout, "测试：仅 3D Rendering Scale", ["0.50 · FSR2", "0.67 · FSR2", "0.75 · FSR2"])
+		_diagnostic_scale_option.item_selected.connect(_on_diagnostic_scale_selected)
+		_perf_sample_duration_option = _add_option_row(layout, "性能采样时长", ["30 秒筛查", "60 秒复核"])
+		_perf_sample_duration_option.select(0)
+		_perf_sample_duration_option.item_selected.connect(_reset_performance_sample_duration)
+		_perf_sample_button = Button.new()
+		_perf_sample_button.text = "开始 / 重置性能采样"
+		_perf_sample_button.pressed.connect(_start_performance_sample)
+		layout.add_child(_perf_sample_button)
+		var restore_graphics_button := Button.new()
+		restore_graphics_button.text = "恢复玩家图形设置"
+		restore_graphics_button.pressed.connect(_reset_debug_graphics_overrides)
+		layout.add_child(restore_graphics_button)
+		_water_fragment_toggle = CheckButton.new()
+		_water_fragment_toggle.text = "海面片元隔离（保留顶点波浪）"
+		_water_fragment_toggle.toggled.connect(_on_water_fragment_isolation_toggled)
+		layout.add_child(_water_fragment_toggle)
+		_building_visual_toggle = CheckButton.new()
+		_building_visual_toggle.text = "岸边建筑 / 港口装饰视觉"
+		_building_visual_toggle.toggled.connect(_on_building_visuals_toggled)
+		layout.add_child(_building_visual_toggle)
+		_seagrass_visual_toggle = CheckButton.new()
+		_seagrass_visual_toggle.text = "海底植被视觉（生态与海床保留）"
+		_seagrass_visual_toggle.toggled.connect(_on_seagrass_visuals_toggled)
+		layout.add_child(_seagrass_visual_toggle)
+		var diagnostic_note := _make_debug_label()
+		diagnostic_note.text = "A/B 每次只改一项。固定机位和天气，改完预热，再按采样按钮；记录结束后恢复基线。"
+		layout.add_child(diagnostic_note)
 	_window_mode_button = Button.new()
 	_window_mode_button.pressed.connect(_on_window_mode_pressed)
 	layout.add_child(_window_mode_button)
@@ -2297,11 +2393,102 @@ func _refresh_settings_controls() -> void:
 		_clouds_toggle.disabled = true
 		_window_mode_button.disabled = true
 		_window_mode_button.text = "画面设置不可用"
+	else:
+		_quality_option.select(int(_quality_manager.call("get_quality_index")))
+		_frame_limit_option.select(int(_quality_manager.call("get_frame_limit_index")))
+		_clouds_toggle.set_pressed_no_signal(bool(_quality_manager.call("get_clouds_enabled")))
+		_update_window_mode_button()
+	_sync_performance_diagnostic_controls()
+
+
+func _sync_performance_diagnostic_controls() -> void:
+	if _diagnostic_scale_option != null:
+		var current_scale := get_viewport().scaling_3d_scale
+		var scales := [0.50, 0.67, 0.75]
+		var closest_index := 0
+		var closest_distance := INF
+		for index in range(scales.size()):
+			var distance := absf(current_scale - float(scales[index]))
+			if distance < closest_distance:
+				closest_distance = distance
+				closest_index = index
+		_diagnostic_scale_option.select(closest_index)
+	if _water_fragment_toggle != null:
+		_water_fragment_toggle.disabled = _diagnostic_bathymetry == null or not _diagnostic_bathymetry.has_method("set_fragment_cost_isolation")
+		var water_mode := int(_diagnostic_bathymetry.call("get_water_diagnostic_mode")) if _diagnostic_bathymetry != null and _diagnostic_bathymetry.has_method("get_water_diagnostic_mode") else 0
+		_water_fragment_toggle.set_pressed_no_signal(water_mode == 14)
+	if _building_visual_toggle != null:
+		_building_visual_toggle.disabled = _building_visual_roots.is_empty()
+		_building_visual_toggle.set_pressed_no_signal(not _building_visuals_hidden)
+	if _seagrass_visual_toggle != null:
+		_seagrass_visual_toggle.disabled = _diagnostic_seabed_manager == null or not _diagnostic_seabed_manager.has_method("set_performance_seagrass_render_enabled")
+		var grass_visible := bool(_diagnostic_seabed_manager.call("get_performance_seagrass_render_enabled")) if _diagnostic_seabed_manager != null and _diagnostic_seabed_manager.has_method("get_performance_seagrass_render_enabled") else true
+		_seagrass_visual_toggle.set_pressed_no_signal(grass_visible)
+
+
+func _on_diagnostic_scale_selected(index: int) -> void:
+	var scales := [0.50, 0.67, 0.75]
+	if index < 0 or index >= scales.size():
 		return
-	_quality_option.select(int(_quality_manager.call("get_quality_index")))
-	_frame_limit_option.select(int(_quality_manager.call("get_frame_limit_index")))
-	_clouds_toggle.set_pressed_no_signal(bool(_quality_manager.call("get_clouds_enabled")))
-	_update_window_mode_button()
+	var viewport := get_viewport()
+	viewport.scaling_3d_scale = float(scales[index])
+	viewport.scaling_3d_mode = Viewport.SCALING_3D_MODE_FSR2
+	viewport.fsr_sharpness = 0.2
+	_update_debug_status()
+
+
+func _on_water_fragment_isolation_toggled(enabled: bool) -> void:
+	if _diagnostic_bathymetry != null and _diagnostic_bathymetry.has_method("set_fragment_cost_isolation"):
+		_diagnostic_bathymetry.call("set_fragment_cost_isolation", enabled)
+	_sync_performance_diagnostic_controls()
+
+
+func _on_building_visuals_toggled(enabled: bool) -> void:
+	_set_building_visuals_visible(enabled)
+
+
+func _on_seagrass_visuals_toggled(enabled: bool) -> void:
+	if _diagnostic_seabed_manager != null and _diagnostic_seabed_manager.has_method("set_performance_seagrass_render_enabled"):
+		_diagnostic_seabed_manager.call("set_performance_seagrass_render_enabled", enabled)
+
+
+func _cache_building_visual_roots() -> void:
+	_building_visual_roots.clear()
+	for path in [
+		NodePath("../../MalmoHarbor/CityDistrict"),
+		NodePath("../../CopenhagenHarbor"),
+	]:
+		var root := get_node_or_null(path)
+		if root != null:
+			_building_visual_roots.append(root)
+
+
+func _set_building_visuals_visible(enabled: bool) -> void:
+	if enabled:
+		for entry in _building_visual_previous_states.values():
+			var visual := entry.get("node") as VisualInstance3D
+			if is_instance_valid(visual):
+				visual.visible = bool(entry.get("visible", true))
+		_building_visual_previous_states.clear()
+		_building_visuals_hidden = false
+		return
+	_building_visual_previous_states.clear()
+	for root in _building_visual_roots:
+		if is_instance_valid(root):
+			var visuals: Array[VisualInstance3D] = []
+			_collect_visual_instances(root, visuals)
+			for visual in visuals:
+				var instance_id := visual.get_instance_id()
+				_building_visual_previous_states[instance_id] = {"node": visual, "visible": visual.visible}
+				visual.visible = false
+	_building_visuals_hidden = true
+
+
+func _collect_visual_instances(node: Node, output: Array[VisualInstance3D]) -> void:
+	if node is VisualInstance3D:
+		output.append(node as VisualInstance3D)
+	for child in node.get_children():
+		_collect_visual_instances(child, output)
 
 
 func _update_window_mode_button() -> void:
@@ -2420,13 +2607,19 @@ func _update_debug_status() -> void:
 	var fps := Engine.get_frames_per_second()
 	var draw_calls := int(Performance.get_monitor(Performance.RENDER_TOTAL_DRAW_CALLS_IN_FRAME))
 	var visible_objects := int(Performance.get_monitor(Performance.RENDER_TOTAL_OBJECTS_IN_FRAME))
+	var primitives := int(Performance.get_monitor(Performance.RENDER_TOTAL_PRIMITIVES_IN_FRAME))
 	var process_ms := float(Performance.get_monitor(Performance.TIME_PROCESS)) * 1000.0
 	var render_metrics: Dictionary = _quality_manager.call("get_render_metrics") if _quality_manager != null else {}
 	var window_px: Vector2i = render_metrics.get("window_px", Vector2i.ZERO)
 	var viewport_px: Vector2i = render_metrics.get("viewport_px", Vector2i.ZERO)
+	var requested_viewport_px: Vector2i = render_metrics.get("root_viewport_requested_px", viewport_px)
 	var design_viewport_px: Vector2i = render_metrics.get("design_viewport_px", Vector2i.ZERO)
 	var internal_px: Vector2i = render_metrics.get("internal_3d_px_estimate", Vector2i.ZERO)
+	var clouds_compute_px: Vector2i = render_metrics.get("cloud_compute_px_estimate", Vector2i.ZERO)
+	var clouds_post_px: Vector2i = render_metrics.get("cloud_postprocess_px_estimate", Vector2i.ZERO)
 	var screen_px: Vector2i = render_metrics.get("screen_px", Vector2i.ZERO)
+	var window_screen_index := int(render_metrics.get("window_screen_index", -1))
+	var screen_count := int(render_metrics.get("screen_count", 0))
 	var screen_scale := float(render_metrics.get("screen_scale", 1.0))
 	var ui_scale := float(render_metrics.get("ui_scale_factor", 1.0))
 	var content_scale_factor := float(render_metrics.get("window_content_scale_factor", 1.0))
@@ -2437,16 +2630,20 @@ func _update_debug_status() -> void:
 	var vsync_mode := int(render_metrics.get("vsync", 0))
 	var max_fps := int(render_metrics.get("max_fps", 0))
 	var frame_limit_text := "Unlimited" if max_fps <= 0 else "%d FPS" % max_fps
-	_performance_label.text = "平台 %s · 窗口模式：%s\n实际 %d FPS · 平均帧时 %.2f ms · 脚本 %.2f ms\nDraw Calls %d · 可见物体 %d\nGodot 窗口 API 尺寸 %dx%d · 屏幕 API 尺寸 %dx%d\nHiDPI 允许 %s · DisplayServer 屏幕比例 ×%.1f（API 值，不等同 OS DPI）\nUI Scale ×%.2f · Window 内容因子 ×%.2f · 内容模式 %s / %s · 导航 %s\n项目基准 %dx%d · 根 Viewport %dx%d\n3D 估算 %dx%d @ %.0f%% (%s) · 超采样 %s\n帧率上限 %s · VSync %s · 档位来源：%s · GPU：%s" % [
+	var sample_status := "采样中：%.1f / %d s" % [_perf_elapsed_seconds, roundi(_perf_target_duration_seconds)] if _perf_sampling_active else _perf_sample_result
+	_performance_label.text = "平台 %s · 窗口模式：%s\n实际 %d FPS · FPS 反算帧时 %.2f ms · Godot Process monitor %.2f ms（不是 GDScript 总耗时）\n%s\nDraw Calls %d · 可见物体 %d · 图元 %d\nGodot 窗口 API 尺寸 %dx%d · 屏幕 API 尺寸 %dx%d · 窗口屏幕索引 %d / %d（从 0 开始）\nHiDPI 允许 %s · DisplayServer 屏幕比例 ×%.1f（API 值，不等同 OS DPI）\nUI Scale ×%.2f · Window 内容因子 ×%.2f · 内容模式 %s / %s · 导航 %s\n项目基准 %dx%d · 根 Viewport 实际 %dx%d / 请求 %dx%d\n3D 内部估算 %dx%d @ %.0f%% (%s) · 超采样 %s\nSunshine Clouds Compute / PostPass 尺寸估算 %dx%d / %dx%d\n帧率上限 %s · VSync %s · 档位来源：%s · GPU：%s" % [
 		str(render_metrics.get("platform", OS.get_name())),
 		str(render_metrics.get("window_mode", "未知")),
 		fps,
 		1000.0 / float(fps) if fps > 0 else 0.0,
 		process_ms,
+		sample_status,
 		draw_calls,
 		visible_objects,
+		primitives,
 		window_px.x, window_px.y,
 		screen_px.x, screen_px.y,
+		window_screen_index, screen_count,
 		"开" if bool(render_metrics.get("hidpi_enabled", false)) else "关",
 		screen_scale,
 		ui_scale,
@@ -2456,16 +2653,20 @@ func _update_debug_status() -> void:
 		"详细" if _quality_manager != null and _quality_manager.has_method("get_navigation_detail_enabled") and bool(_quality_manager.call("get_navigation_detail_enabled")) else "简洁",
 		design_viewport_px.x, design_viewport_px.y,
 		viewport_px.x, viewport_px.y,
+		requested_viewport_px.x, requested_viewport_px.y,
 		internal_px.x, internal_px.y,
 		scale * 100.0,
 		str(render_metrics.get("upscaler", "n/a")),
 		"开" if bool(render_metrics.get("supersampling", false)) else "关",
+		clouds_compute_px.x, clouds_compute_px.y,
+		clouds_post_px.x, clouds_post_px.y,
 		frame_limit_text,
 		"开" if vsync_mode == DisplayServer.VSYNC_ENABLED else "关",
 		source,
 		str(render_metrics.get("adapter", "n/a")),
 	]
 	_refresh_settings_controls()
+	_sync_performance_diagnostic_controls()
 	_refresh_city_lighting_controls()
 	_update_sailing_physics_debug_status()
 
@@ -2979,19 +3180,21 @@ func _update_extreme_sea_status() -> void:
 
 
 func _exit_tree() -> void:
+	if _quality_manager != null and _quality_manager.has_method("is_diagnostic_override_active") and bool(_quality_manager.call("is_diagnostic_override_active")):
+		_restore_debug_panel_overrides()
 	if is_instance_valid(_wave_sampler) and _wave_sampler.has_method("clear_extreme_sea_test"):
 		_wave_sampler.call("clear_extreme_sea_test")
 
 
 func _on_quality_selected(index: int) -> void:
 	if _quality_manager != null:
-		_quality_manager.call("set_quality", index)
+		_quality_manager.call("set_quality_for_diagnostic", index)
 		_refresh_settings_controls()
 
 
 func _on_frame_limit_selected(index: int) -> void:
 	if _quality_manager != null:
-		_quality_manager.call("set_frame_limit", index)
+		_quality_manager.call("set_frame_limit_for_diagnostic", index)
 		_refresh_settings_controls()
 
 
@@ -3002,6 +3205,53 @@ func _on_clouds_toggled(enabled: bool) -> void:
 
 func _on_window_mode_pressed() -> void:
 	if _quality_manager != null:
-		_quality_manager.call("toggle_fullscreen")
+		_quality_manager.call("toggle_fullscreen_for_diagnostic")
 		_update_window_mode_button()
+
+
+func _begin_debug_panel_overrides() -> void:
+	if _quality_manager != null and _quality_manager.has_method("begin_diagnostic_override"):
+		_quality_manager.call("begin_diagnostic_override")
+	_debug_panel_snapshot = {
+		"water_fragment_was_active": _diagnostic_bathymetry != null and _diagnostic_bathymetry.has_method("get_water_diagnostic_mode") and int(_diagnostic_bathymetry.call("get_water_diagnostic_mode")) == 14,
+		"seagrass_visible": _diagnostic_seabed_manager != null and _diagnostic_seabed_manager.has_method("get_performance_seagrass_render_enabled") and bool(_diagnostic_seabed_manager.call("get_performance_seagrass_render_enabled")),
+		"buildings_hidden": _building_visuals_hidden,
+	}
+	_debug_panel_visual_snapshot.clear()
+	for root in _building_visual_roots:
+		if not is_instance_valid(root):
+			continue
+		var visuals: Array[VisualInstance3D] = []
+		_collect_visual_instances(root, visuals)
+		for visual in visuals:
+			_debug_panel_visual_snapshot[visual.get_instance_id()] = {"node": visual, "visible": visual.visible}
+
+
+func _restore_debug_panel_overrides() -> void:
+	if _diagnostic_bathymetry != null and _diagnostic_bathymetry.has_method("get_water_diagnostic_mode") and _diagnostic_bathymetry.has_method("set_fragment_cost_isolation"):
+		if not bool(_debug_panel_snapshot.get("water_fragment_was_active", false)) and int(_diagnostic_bathymetry.call("get_water_diagnostic_mode")) == 14:
+			_diagnostic_bathymetry.call("set_fragment_cost_isolation", false)
+	for entry in _debug_panel_visual_snapshot.values():
+		var visual := entry.get("node") as VisualInstance3D
+		if is_instance_valid(visual):
+			visual.visible = bool(entry.get("visible", true))
+	_debug_panel_visual_snapshot.clear()
+	_building_visual_previous_states.clear()
+	_building_visuals_hidden = bool(_debug_panel_snapshot.get("buildings_hidden", false))
+	if _diagnostic_seabed_manager != null and _diagnostic_seabed_manager.has_method("set_performance_seagrass_render_enabled"):
+		_diagnostic_seabed_manager.call("set_performance_seagrass_render_enabled", bool(_debug_panel_snapshot.get("seagrass_visible", true)))
+	_debug_panel_snapshot.clear()
+	if _quality_manager != null and _quality_manager.has_method("restore_diagnostic_overrides"):
+		_quality_manager.call("restore_diagnostic_overrides")
+	_refresh_settings_controls()
+	_update_debug_status()
+
+
+func _reset_debug_graphics_overrides() -> void:
+	_restore_debug_panel_overrides()
+	if _quality_manager != null and _quality_manager.has_method("begin_diagnostic_override"):
+		_quality_manager.call("begin_diagnostic_override")
+	_begin_debug_panel_overrides()
+	_sync_performance_diagnostic_controls()
+	_update_debug_status()
 

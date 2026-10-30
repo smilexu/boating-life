@@ -130,6 +130,7 @@ var _seagrass_refresh_elapsed := 0.0
 var _last_seagrass_focus := Vector2(INF, INF)
 var _seagrass_revision := 0
 var _runtime_seagrass_enabled := false
+var _performance_seagrass_render_enabled := true
 var _runtime_seagrass_sway := false
 var _runtime_seagrass_density_preset := -1
 var _runtime_seagrass_coverage_scale := -1.0
@@ -350,6 +351,22 @@ func get_debug_stats() -> Dictionary:
 		"near_lod_chunks": _count_lod_chunks(0),
 		"far_lod_chunks": _count_lod_chunks(1),
 	}
+
+
+## Diagnostic-only render visibility switch. Keeps seagrass generation and ecology active.
+func set_performance_seagrass_render_enabled(enabled: bool) -> void:
+	_performance_seagrass_render_enabled = enabled
+	for tile_data in _loaded_tiles.values():
+		var tile_root := tile_data.get("root") as Node3D
+		if not is_instance_valid(tile_root):
+			continue
+		var grass_root := tile_root.get_node_or_null("Seagrass") as Node3D
+		if grass_root != null:
+			grass_root.visible = enabled
+
+
+func get_performance_seagrass_render_enabled() -> bool:
+	return _performance_seagrass_render_enabled
 
 
 ## Read-only ecology context for client fish behavior. It reuses the exact
@@ -807,6 +824,7 @@ func _finish_seagrass_job(key: Vector2i, job: Dictionary) -> void:
 		old_grass.queue_free()
 	var grass_root := Node3D.new()
 	grass_root.name = "Seagrass"
+	grass_root.visible = _performance_seagrass_render_enabled
 	tile_root.add_child(grass_root)
 	var triangles := 0
 	var batches := 0

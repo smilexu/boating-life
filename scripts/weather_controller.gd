@@ -259,7 +259,8 @@ func _copy_state(preset: Dictionary, weather_index: int) -> Dictionary:
 
 
 func _apply_current_state() -> void:
-	_sunshine_clouds.enabled = true
+	# Cloud visibility is owned by QualityManager/user display settings.
+	# Applying weather updates cloud appearance without undoing the render toggle.
 	_sunshine_clouds.clouds_coverage = float(_current["clouds_coverage"])
 	_sunshine_clouds.clouds_density = float(_current["clouds_density"])
 	_sunshine_clouds.lighting_density = float(_current["lighting_density"])
