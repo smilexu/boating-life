@@ -403,11 +403,9 @@ hud.environment.details_tooltip,Open environment details,打开环境详情
 hud.environment.summary_format,"%s
 Wind %s m/s · from %s° · Sea %s","%s
 风速 %s 米/秒 · 来向 %s° · 海况 ×%s"
-hud.environment.detail_format,"%s
-Instant wind %s · from %s°
-Mean wind %s · sea intensity %s","%s
-瞬时风速 %s · 来向 %s°
-平均风速 %s · 海况强度 %s"
+hud.environment.detail_format,"%s · wind %s m/s from %s°
+Mean %s m/s · sea %s","%s · 风 %s 米/秒 · 来向 %s°
+平均 %s 米/秒 · 海况 ×%s"
 hud.activities.title,Activities,活动
 hud.activities.trolling,Trolling,拖钓
 hud.activities.fish_finder,Fish Finder,鱼探仪

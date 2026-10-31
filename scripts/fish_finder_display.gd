@@ -304,7 +304,10 @@ var _range_initialized := false
 var _range_shrink_candidate_m := -1.0
 var _range_shrink_started_at_seconds := -1.0
 var _refresh_elapsed := 0.0
-var _overlay_obstruction_rect := Rect2()
+var _title_drag_area: HBoxContainer
+var _dragging := false
+var _drag_offset := Vector2.ZERO
+var _has_user_position := false
 var _debug_preview_active := false
 var _debug_preview_target_depth_m := 5.0
 var _debug_preview_peak_strength := 0.8
@@ -324,7 +327,7 @@ func configure(manager: Node, speed_source: Node) -> void:
 
 
 func _ready() -> void:
-	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	mouse_filter = Control.MOUSE_FILTER_STOP
 	z_index = 18
 	_build_ui()
 	get_viewport().size_changed.connect(_update_layout)
@@ -366,13 +369,6 @@ func set_expanded(expanded: bool) -> void:
 
 func get_display_mode() -> String:
 	return "hidden" if not is_visible_in_tree() else _display_mode
-
-
-func set_overlay_obstruction_rect(obstruction: Rect2) -> void:
-	if _overlay_obstruction_rect == obstruction:
-		return
-	_overlay_obstruction_rect = obstruction
-	_update_layout()
 
 
 func set_gain_mode(mode: String) -> void:
@@ -755,26 +751,32 @@ func _build_ui() -> void:
 	var layout := VBoxContainer.new()
 	layout.add_theme_constant_override("separation", 4)
 	panel.add_child(layout)
-	var title_row := HBoxContainer.new()
+	_title_drag_area = HBoxContainer.new()
+	_title_drag_area.name = "FishFinderDragTitleBar"
+	_title_drag_area.mouse_filter = Control.MOUSE_FILTER_STOP
+	_title_drag_area.mouse_default_cursor_shape = Control.CURSOR_MOVE
+	_title_drag_area.gui_input.connect(_on_title_drag_gui_input)
 	_title_label = Label.new()
 	_title_label.name = "FishFinderTitle"
 	_title_label.text = tr("fish.finder.title")
 	_title_label.add_theme_font_size_override("font_size", 15)
 	_title_label.add_theme_color_override("font_color", Color(0.58, 0.83, 0.82))
 	_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title_row.add_child(_title_label)
+	_title_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_title_drag_area.add_child(_title_label)
 	_preview_badge = Label.new()
 	_preview_badge.text = tr("fish.finder.debug_preview")
 	_preview_badge.add_theme_font_size_override("font_size", 10)
 	_preview_badge.add_theme_color_override("font_color", Color(1.0, 0.76, 0.35))
 	_preview_badge.visible = false
-	title_row.add_child(_preview_badge)
+	_preview_badge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_title_drag_area.add_child(_preview_badge)
 	_expand_button = Button.new()
 	_expand_button.name = "ExpandCollapseButton"
 	_expand_button.focus_mode = Control.FOCUS_NONE
 	_expand_button.custom_minimum_size = Vector2(36.0, 28.0)
 	_expand_button.pressed.connect(func() -> void: set_expanded(_display_mode == "mini"))
-	title_row.add_child(_expand_button)
+	_title_drag_area.add_child(_expand_button)
 	_close_button = Button.new()
 	_close_button.name = "CloseFishFinderButton"
 	_close_button.text = "×"
@@ -782,8 +784,8 @@ func _build_ui() -> void:
 	_close_button.focus_mode = Control.FOCUS_NONE
 	_close_button.custom_minimum_size = Vector2(32.0, 28.0)
 	_close_button.pressed.connect(close_display)
-	title_row.add_child(_close_button)
-	layout.add_child(title_row)
+	_title_drag_area.add_child(_close_button)
+	layout.add_child(_title_drag_area)
 
 	var status_row := HBoxContainer.new()
 	status_row.add_theme_constant_override("separation", 12)
@@ -986,11 +988,42 @@ func _update_layout() -> void:
 	var viewport_size := get_viewport().get_visible_rect().size
 	if viewport_size.x <= 0.0 or viewport_size.y <= 0.0:
 		return
-	var layout := compute_layout_rect(viewport_size, _display_mode, _overlay_obstruction_rect)
-	position = layout.position
+	var layout := compute_layout_rect(viewport_size, _display_mode)
 	size = layout.size
+	position = _clamp_window_position(position if _has_user_position else layout.position, viewport_size)
 	if _plot != null:
 		_plot.queue_redraw()
+
+
+func _on_title_drag_gui_input(event: InputEvent) -> void:
+	if not event is InputEventMouseButton or event.button_index != MOUSE_BUTTON_LEFT:
+		return
+	if event.pressed:
+		_drag_offset = event.global_position - position
+		_dragging = true
+		_has_user_position = true
+		_title_drag_area.accept_event()
+	else:
+		_dragging = false
+		_title_drag_area.accept_event()
+
+
+func _input(event: InputEvent) -> void:
+	if not _dragging:
+		return
+	if event is InputEventMouseMotion:
+		position = _clamp_window_position(event.global_position - _drag_offset, get_viewport().get_visible_rect().size)
+		_has_user_position = true
+		get_viewport().set_input_as_handled()
+	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+		_dragging = false
+		get_viewport().set_input_as_handled()
+
+
+func _clamp_window_position(candidate: Vector2, viewport_size: Vector2) -> Vector2:
+	var margin := LAYOUT_SAFE_MARGIN_PX
+	var max_position := Vector2(maxf(margin, viewport_size.x - size.x - margin), maxf(margin, viewport_size.y - size.y - margin))
+	return Vector2(clampf(candidate.x, margin, max_position.x), clampf(candidate.y, margin, max_position.y))
 
 
 func _refresh_sensor_data(force: bool) -> void:
@@ -1198,7 +1231,7 @@ func _clear_shrink_candidate() -> void:
 	_range_shrink_started_at_seconds = -1.0
 
 
-static func compute_layout_rect(viewport_size: Vector2, display_mode: String, obstruction: Rect2 = Rect2()) -> Rect2:
+static func compute_layout_rect(viewport_size: Vector2, display_mode: String) -> Rect2:
 	var safe_size := Vector2(maxf(viewport_size.x - LAYOUT_SAFE_MARGIN_PX * 2.0, 1.0), maxf(viewport_size.y - LAYOUT_SAFE_MARGIN_PX * 2.0, 1.0))
 	var safe_rect := Rect2(Vector2(LAYOUT_SAFE_MARGIN_PX, LAYOUT_SAFE_MARGIN_PX), safe_size)
 	var expanded := display_mode == "expanded"
@@ -1213,48 +1246,6 @@ static func compute_layout_rect(viewport_size: Vector2, display_mode: String, ob
 			clampf(viewport_size.y * 0.32, minf(250.0, safe_size.y), minf(400.0, safe_size.y))
 		)
 	var preferred := Rect2(Vector2(safe_rect.position.x, safe_rect.end.y - target_size.y), target_size) if not expanded else Rect2((viewport_size - target_size) * 0.5, target_size)
-	if obstruction.size.x <= 0.0 or obstruction.size.y <= 0.0 or not preferred.intersects(obstruction):
-		return _clamp_layout_rect(preferred, viewport_size)
-	if not expanded:
-		var corner_candidates: Array[Rect2] = [
-			preferred,
-			Rect2(Vector2(safe_rect.end.x - target_size.x, safe_rect.end.y - target_size.y), target_size),
-			Rect2(Vector2(safe_rect.end.x - target_size.x, safe_rect.position.y), target_size),
-			Rect2(safe_rect.position, target_size),
-		]
-		for corner in corner_candidates:
-			if not corner.intersects(obstruction):
-				return _clamp_layout_rect(corner, viewport_size)
-
-	var free_regions: Array[Rect2] = []
-	var left_width := maxf(obstruction.position.x - safe_rect.position.x - LAYOUT_SAFE_MARGIN_PX, 0.0)
-	var right_x := obstruction.end.x + LAYOUT_SAFE_MARGIN_PX
-	var right_width := maxf(safe_rect.end.x - right_x, 0.0)
-	var top_height := maxf(obstruction.position.y - safe_rect.position.y - LAYOUT_SAFE_MARGIN_PX, 0.0)
-	var bottom_y := obstruction.end.y + LAYOUT_SAFE_MARGIN_PX
-	var bottom_height := maxf(safe_rect.end.y - bottom_y, 0.0)
-	if left_width > 0.0:
-		free_regions.append(Rect2(safe_rect.position, Vector2(left_width, safe_rect.size.y)))
-	if right_width > 0.0:
-		free_regions.append(Rect2(Vector2(right_x, safe_rect.position.y), Vector2(right_width, safe_rect.size.y)))
-	if top_height > 0.0:
-		free_regions.append(Rect2(safe_rect.position, Vector2(safe_rect.size.x, top_height)))
-	if bottom_height > 0.0:
-		free_regions.append(Rect2(Vector2(safe_rect.position.x, bottom_y), Vector2(safe_rect.size.x, bottom_height)))
-
-	var best := Rect2(Vector2.ZERO, Vector2.ZERO)
-	var best_area := -1.0
-	for region in free_regions:
-		var candidate_size := Vector2(minf(target_size.x, region.size.x), minf(target_size.y, region.size.y))
-		if candidate_size.x < minf(240.0, safe_size.x) or candidate_size.y < minf(180.0, safe_size.y):
-			continue
-		var candidate := Rect2(region.position + (region.size - candidate_size) * 0.5, candidate_size)
-		var area := candidate_size.x * candidate_size.y
-		if not candidate.intersects(obstruction) and area > best_area:
-			best = candidate
-			best_area = area
-	if best_area >= 0.0:
-		return _clamp_layout_rect(best, viewport_size)
 	return _clamp_layout_rect(preferred, viewport_size)
 
 

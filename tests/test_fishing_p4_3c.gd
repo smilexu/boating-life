@@ -50,19 +50,17 @@ func _test_bottom_sample_continuity() -> void:
 func _test_layouts() -> void:
 	var viewport_sizes: Array[Vector2] = [Vector2(1280.0, 720.0), Vector2(1600.0, 900.0), Vector2(1920.0, 1080.0), Vector2(1024.0, 768.0)]
 	for viewport_size in viewport_sizes:
-		var right_panel := Rect2(Vector2(viewport_size.x - 414.0, viewport_size.y * 0.2), Vector2(390.0, viewport_size.y * 0.8 - 16.0))
 		for mode in ["mini", "expanded"]:
-			var layout := DISPLAY_SCRIPT.compute_layout_rect(viewport_size, mode, right_panel)
+			var layout := DISPLAY_SCRIPT.compute_layout_rect(viewport_size, mode)
 			_check(layout.position.x >= 16.0 and layout.position.y >= 16.0, "%s layout at %s stays inside the safe viewport" % [mode, viewport_size])
 			_check(layout.end.x <= viewport_size.x - 16.0 and layout.end.y <= viewport_size.y - 16.0, "%s layout at %s does not cross the viewport edge" % [mode, viewport_size])
-			_check(not layout.intersects(right_panel), "%s layout at %s avoids the right-side F3 panel" % [mode, viewport_size])
 		var normal_layout := DISPLAY_SCRIPT.compute_layout_rect(viewport_size, "mini")
 		_check(normal_layout.end.x <= viewport_size.x - 16.0 and normal_layout.end.y <= viewport_size.y - 16.0, "normal mini layout at %s remains within viewport bounds" % viewport_size)
 
 
 func _test_display_lifecycle() -> void:
 	var canvas := CanvasLayer.new()
-	canvas.layer = 1
+	canvas.layer = 90
 	root.add_child(canvas)
 	var display := DISPLAY_SCRIPT.new() as Control
 	display.name = "FishFinderP4_3cLifecycleTest"
@@ -76,9 +74,27 @@ func _test_display_lifecycle() -> void:
 	display.call("set_fish_symbols_enabled", true)
 	_check(bool(display.call("start_debug_preview", 5.0, 0.8, "medium")), "sonar preview can start independently from authority fish")
 	display.call("set_expanded", true)
-	var expanded_rect := Rect2(Vector2(610.0, 140.0), Vector2(390.0, 600.0))
-	display.call("set_overlay_obstruction_rect", expanded_rect)
-	_check(canvas.layer == 1, "expanded fish finder keeps the containing HUD canvas layer unchanged")
+	_check(canvas.layer == 90 and display.mouse_filter == Control.MOUSE_FILTER_STOP, "fish finder occupies a top interactive overlay layer")
+	var initial_size := display.size
+	var initial_position := display.position
+	var press := InputEventMouseButton.new()
+	press.button_index = MOUSE_BUTTON_LEFT
+	press.pressed = true
+	press.global_position = initial_position + Vector2(80.0, 16.0)
+	display.call("_on_title_drag_gui_input", press)
+	var motion := InputEventMouseMotion.new()
+	motion.global_position = press.global_position + Vector2(110.0, 70.0)
+	display.call("_input", motion)
+	_check(display.position.distance_to(initial_position + Vector2(110.0, 70.0)) < 0.1, "dragging the title bar moves the floating finder")
+	_check(display.size == initial_size, "dragging preserves the fish finder window dimensions")
+	var viewport_size := root.get_visible_rect().size
+	var clamped_position: Vector2 = display.call("_clamp_window_position", Vector2(10000.0, 10000.0), viewport_size)
+	_check(clamped_position.x + display.size.x <= viewport_size.x - 16.0 and clamped_position.y + display.size.y <= viewport_size.y - 16.0, "dragging clamps the floating finder inside the viewport")
+	var release := InputEventMouseButton.new()
+	release.button_index = MOUSE_BUTTON_LEFT
+	release.pressed = false
+	release.global_position = motion.global_position
+	display.call("_input", release)
 	var settings: Dictionary = display.call("get_display_settings")
 	_check(settings.get("gain_mode", "") == "manual" and is_equal_approx(float(settings.get("manual_gain_percent", -1.0)), 73.0), "manual gain survives expansion and preview")
 	_check(settings.get("range_mode", "") == "manual" and is_equal_approx(float(settings.get("display_range_m", -1.0)), 30.0), "manual range survives expansion and preview")
@@ -88,7 +104,7 @@ func _test_display_lifecycle() -> void:
 	display.call("set_expanded", false)
 	settings = display.call("get_display_settings")
 	_check(settings.get("gain_mode", "") == "manual" and settings.get("range_mode", "") == "manual" and bool(settings.get("fish_symbols_enabled", false)), "settings persist across hide, reopen, and mini/expanded changes")
-	_check(canvas.layer == 1, "hide and reopen do not change other HUD canvas layers")
+	_check(canvas.layer == 90, "hide and reopen do not change the overlay canvas layer")
 	_check(bool(display.call("is_debug_preview_active")), "preview remains isolated and active across display visibility changes")
 	canvas.queue_free()
 	await process_frame

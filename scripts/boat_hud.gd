@@ -76,9 +76,6 @@ var _world_time_control: WorldTimeControlPort
 var _status_panel: PanelContainer
 var _status_label: Label
 var _environment_title_label: Label
-var _environment_details_button: Button
-var _environment_detail_panel: PanelContainer
-var _environment_detail_label: Label
 var _activity_button: Button
 var _activity_menu: PanelContainer
 var _navigation_core_panel: PanelContainer
@@ -87,9 +84,9 @@ var _navigation_speed_label: Label
 var _navigation_core_detail: Label
 var _navigation_core_extra_detail: Label
 var _navigation_detail_button: Button
+var _sailing_panel_collapse_button: Button
 var _navigation_detail_requested := false
-var _environment_detail_requested := false
-var _restore_map_mini_after_finder := false
+var _fish_finder_canvas_layer: CanvasLayer
 var _help_panel: PanelContainer
 var _help_label: Label
 var _map_button: Button
@@ -239,6 +236,7 @@ func _ready() -> void:
 	if _controller == null:
 		push_error("Boat HUD could not find its controller at %s." % controller_path)
 		return
+	_navigation_detail_requested = _controller.is_sailing_active()
 	_weather_controller = get_node_or_null(weather_controller_path)
 	_weather_state_controller = get_node_or_null(weather_state_controller_path)
 	_day_night_visual_controller = get_node_or_null(day_night_visual_controller_path)
@@ -296,12 +294,6 @@ func _ready() -> void:
 	_environment_title_label.add_theme_color_override("font_color", Color(0.58, 0.83, 0.82))
 	_environment_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	environment_header.add_child(_environment_title_label)
-	_environment_details_button = Button.new()
-	_environment_details_button.name = "EnvironmentDetailsButton"
-	_environment_details_button.text = tr("hud.environment.details")
-	_environment_details_button.focus_mode = Control.FOCUS_NONE
-	_environment_details_button.pressed.connect(_toggle_environment_details)
-	environment_header.add_child(_environment_details_button)
 	status_layout.add_child(environment_header)
 	_status_label = Label.new()
 	_status_label.name = "EnvironmentSummaryText"
@@ -332,7 +324,6 @@ func _ready() -> void:
 	_cargo_task_label.visible = false
 	status_layout.add_child(_cargo_task_label)
 	add_child(_status_panel)
-	_build_environment_detail_panel()
 	_build_activity_menu()
 	_build_navigation_core_panel()
 	_build_autopilot_panel()
@@ -353,45 +344,6 @@ func _ready() -> void:
 	_update_navigation_core_panel()
 	_update_hud_layout()
 	get_viewport().size_changed.connect(_update_hud_layout)
-
-
-func _build_environment_detail_panel() -> void:
-	_environment_detail_panel = PanelContainer.new()
-	_environment_detail_panel.name = "EnvironmentDetailsPanel"
-	_environment_detail_panel.custom_minimum_size = Vector2(340.0, 0.0)
-	_environment_detail_panel.visible = false
-	_environment_detail_panel.mouse_filter = Control.MOUSE_FILTER_STOP
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.035, 0.12, 0.16, 0.91)
-	style.border_color = Color(0.28, 0.52, 0.55, 0.72)
-	style.set_border_width_all(1)
-	style.set_corner_radius_all(8)
-	style.content_margin_left = 12.0
-	style.content_margin_right = 12.0
-	style.content_margin_top = 9.0
-	style.content_margin_bottom = 9.0
-	_environment_detail_panel.add_theme_stylebox_override("panel", style)
-	var layout := VBoxContainer.new()
-	_environment_detail_panel.add_child(layout)
-	var header := HBoxContainer.new()
-	var title := Label.new()
-	title.text = tr("hud.environment.details")
-	title.name = "EnvironmentDetailsTitle"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	header.add_child(title)
-	var close_button := Button.new()
-	close_button.name = "CloseEnvironmentDetails"
-	close_button.text = "×"
-	close_button.tooltip_text = tr("hud.close")
-	close_button.pressed.connect(_toggle_environment_details)
-	header.add_child(close_button)
-	layout.add_child(header)
-	_environment_detail_label = Label.new()
-	_environment_detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	layout.add_child(_environment_detail_label)
-	add_child(_environment_detail_panel)
-
-
 func _build_activity_menu() -> void:
 	_activity_button = Button.new()
 	_activity_button.name = "ActivitiesButton"
@@ -556,10 +508,6 @@ func _open_trolling_activity() -> void:
 
 func _open_fish_finder_tool() -> void:
 	_activity_menu.visible = false
-	if _fish_map != null and _fish_map.has_method("get_display_mode") and str(_fish_map.call("get_display_mode")) == "mini":
-		_restore_map_mini_after_finder = true
-		_fish_map.call("set_display_mode", "hidden")
-	_prepare_major_tool("finder")
 	if _fish_finder_display != null:
 		_fish_finder_display.call("set_expanded", false)
 		_fish_finder_display.call("open_display")
@@ -575,15 +523,6 @@ func _open_map_tool() -> void:
 		_fish_map.call("set_display_mode", "expanded")
 	elif _fish_map.has_method("set_map_open"):
 		_fish_map.call("set_map_open", true)
-	_update_hud_layout()
-
-
-func _toggle_environment_details() -> void:
-	_environment_detail_requested = not _environment_detail_requested
-	_environment_detail_panel.visible = _environment_detail_requested
-	if _environment_detail_requested:
-		_prepare_major_tool("environment")
-		_update_environment_summary()
 	_update_hud_layout()
 
 
@@ -607,20 +546,10 @@ func _toggle_controls_help() -> void:
 
 
 func _prepare_major_tool(tool_name: String) -> void:
-	if tool_name != "environment":
-		_environment_detail_requested = false
-		if _environment_detail_panel != null:
-			_environment_detail_panel.visible = false
 	if tool_name != "map" and _fish_map != null and _fish_map.has_method("set_display_mode"):
 		if str(_fish_map.call("get_display_mode")) == "expanded":
 			_fish_map.call("set_display_mode", "mini")
-	if tool_name != "finder" and _fish_finder_display != null:
-		if str(_fish_finder_display.call("get_display_mode")) != "hidden":
-			_fish_finder_display.call("close_display")
-			if _restore_map_mini_after_finder and tool_name != "map" and _fish_map != null:
-				_fish_map.call("set_display_mode", "mini")
-			_restore_map_mini_after_finder = false
-	if tool_name != "navigation":
+	if tool_name != "navigation" and not (_controller != null and _controller.is_sailing_active()):
 		_navigation_detail_requested = false
 		if _navigation_detail_button != null:
 			_navigation_detail_button.text = tr("hud.navigation.expand")
@@ -674,15 +603,6 @@ func _update_controls_help_text() -> void:
 func _on_locale_changed(_locale_id: String) -> void:
 	if _environment_title_label != null:
 		_environment_title_label.text = tr("hud.environment.title")
-	if _environment_details_button != null:
-		_environment_details_button.text = tr("hud.environment.details")
-		_environment_details_button.tooltip_text = tr("hud.environment.details_tooltip")
-	var environment_title := get_node_or_null("EnvironmentDetailsPanel/VBoxContainer/EnvironmentDetailsTitle") as Label
-	if environment_title != null:
-		environment_title.text = tr("hud.environment.details")
-	var environment_close := get_node_or_null("EnvironmentDetailsPanel/VBoxContainer/HBoxContainer/CloseEnvironmentDetails") as Button
-	if environment_close != null:
-		environment_close.tooltip_text = tr("hud.close")
 	if _activity_button != null:
 		_activity_button.text = tr("hud.activities.title")
 		var menu := _activity_menu.get_child(0) as VBoxContainer
@@ -711,6 +631,8 @@ func _on_locale_changed(_locale_id: String) -> void:
 		_fish_map.call("refresh_localized_text")
 	if _navigation_detail_button != null:
 		_navigation_detail_button.text = tr("hud.navigation.collapse") if _navigation_detail_requested else tr("hud.navigation.expand")
+	if _sailing_panel_collapse_button != null:
+		_sailing_panel_collapse_button.tooltip_text = tr("hud.navigation.collapse")
 	_update_controls_help_text()
 	_update_status()
 	_update_navigation_core_panel()
@@ -724,6 +646,8 @@ func _on_locale_changed(_locale_id: String) -> void:
 
 
 func _refresh_sailing_static_text() -> void:
+	if _sailing_panel_collapse_button != null:
+		_sailing_panel_collapse_button.tooltip_text = tr("hud.navigation.collapse")
 	if _polar_toggle_button != null:
 		_polar_toggle_button.text = tr("hud.sailing.polar")
 	if _sailing_auto_toggle != null:
@@ -822,9 +746,7 @@ func _update_environment_summary() -> void:
 	var wind_speed := float(wind_details.get("instant_speed_mps", -1.0))
 	var wind_direction := float(wind_details.get("instant_wind_from_degrees", -1.0))
 	var wave_scale := float(_wave_sampler.call("get_effective_wave_strength")) if _wave_sampler != null and _wave_sampler.has_method("get_effective_wave_strength") else -1.0
-	_status_label.text = tr("hud.environment.summary_format") % [weather_name, "—" if wind_speed < 0.0 else "%.1f" % wind_speed, "—" if wind_direction < 0.0 else "%03.0f°" % wind_direction, "—" if wave_scale < 0.0 else "%.2f×" % wave_scale]
-	if _environment_detail_label != null:
-		_environment_detail_label.text = tr("hud.environment.detail_format") % [weather_name, "—" if wind_speed < 0.0 else "%.1f m/s" % wind_speed, "—" if wind_direction < 0.0 else "%03.0f°" % wind_direction, "—" if float(wind_details.get("mean_speed_mps", -1.0)) < 0.0 else "%.1f m/s" % float(wind_details.get("mean_speed_mps", -1.0)), "—" if wave_scale < 0.0 else "%.2f×" % wave_scale]
+	_status_label.text = tr("hud.environment.detail_format") % [weather_name, "—" if wind_speed < 0.0 else "%.1f m/s" % wind_speed, "—" if wind_direction < 0.0 else "%03.0f°" % wind_direction, "—" if float(wind_details.get("mean_speed_mps", -1.0)) < 0.0 else "%.1f m/s" % float(wind_details.get("mean_speed_mps", -1.0)), "—" if wave_scale < 0.0 else "%.2f×" % wave_scale]
 
 
 func _add_compass_widget() -> void:
@@ -875,13 +797,16 @@ func _build_fish_finder_display() -> void:
 	_fish_finder_display.call("configure", _fish_resource_manager, _controller)
 	_fish_finder_display.connect("close_requested", _on_fish_finder_close_requested)
 	_fish_finder_display.connect("display_mode_changed", _on_fish_finder_mode_changed)
-	add_child(_fish_finder_display)
+	_fish_finder_canvas_layer = CanvasLayer.new()
+	_fish_finder_canvas_layer.name = "FishFinderOverlayLayer"
+	_fish_finder_canvas_layer.layer = 90
+	add_child(_fish_finder_canvas_layer)
+	_fish_finder_canvas_layer.add_child(_fish_finder_display)
 	_fish_finder_display.visible = false
 
 
 func _on_fish_finder_open_pressed() -> void:
 	if _fish_finder_display != null and is_instance_valid(_fish_finder_display):
-		_prepare_major_tool("finder")
 		_fish_finder_display.call("open_display")
 		_fish_finder_toggle_button.visible = false
 		_update_hud_layout()
@@ -890,15 +815,10 @@ func _on_fish_finder_open_pressed() -> void:
 func _on_fish_finder_close_requested() -> void:
 	if _fish_finder_toggle_button != null:
 		_fish_finder_toggle_button.visible = false
-	if _restore_map_mini_after_finder and _fish_map != null and str(_fish_map.call("get_display_mode")) == "hidden":
-		_fish_map.call("set_display_mode", "mini")
-	_restore_map_mini_after_finder = false
 	_update_hud_layout()
 
 
-func _on_fish_finder_mode_changed(mode: String) -> void:
-	if mode == "expanded":
-		_prepare_major_tool("finder")
+func _on_fish_finder_mode_changed(_mode: String) -> void:
 	_update_hud_layout()
 
 
@@ -1043,6 +963,14 @@ func _build_sailing_panel() -> void:
 	title.add_theme_font_size_override("font_size", 18)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading_row.add_child(title)
+	_sailing_panel_collapse_button = Button.new()
+	_sailing_panel_collapse_button.name = "CollapseSailingInstrumentButton"
+	_sailing_panel_collapse_button.text = "−"
+	_sailing_panel_collapse_button.tooltip_text = tr("hud.navigation.collapse")
+	_sailing_panel_collapse_button.focus_mode = Control.FOCUS_NONE
+	_sailing_panel_collapse_button.custom_minimum_size = Vector2(36.0, 28.0)
+	_sailing_panel_collapse_button.pressed.connect(_toggle_navigation_details)
+	heading_row.add_child(_sailing_panel_collapse_button)
 	_sailing_mode_label = Label.new()
 	_sailing_mode_label.name = "SailingTrimMode"
 	_sailing_mode_label.add_theme_font_size_override("font_size", 15)
@@ -1650,11 +1578,13 @@ func _sail_deployment_state_key(target: float, current: float) -> String:
 	return "hud.sailing.furling.partial"
 
 func _on_vessel_mode_changed(sailboat_active: bool) -> void:
+	_navigation_detail_requested = sailboat_active
 	if _boat_audio_controller != null and _boat_audio_controller.has_method("bind_vessel"):
 		var motion_source: Node = _controller.get_sailing_body() if sailboat_active else _controller.get_node_or_null("VisualRoot")
 		_boat_audio_controller.call("bind_vessel", _controller, motion_source)
 	_update_vessel_picker_selection()
 	_update_status()
+	_update_navigation_core_panel()
 	_update_sailing_panel()
 	_update_autopilot_panel()
 	_update_sailing_physics_debug_status()
@@ -3381,18 +3311,6 @@ func _update_hud_layout() -> void:
 		_autopilot_panel.offset_right = -margin
 		_autopilot_panel.offset_top = top_after_activity
 		_autopilot_panel.offset_bottom = top_after_activity + 156.0 * scale
-	if _environment_detail_panel != null:
-		_environment_detail_panel.anchor_left = 0.0
-		_environment_detail_panel.anchor_right = 0.0
-		_environment_detail_panel.anchor_top = 0.0
-		_environment_detail_panel.anchor_bottom = 0.0
-		var detail_top := margin + environment_height + 8.0 * scale
-		var detail_height := minf(200.0 * scale, maxf(120.0 * scale, viewport_size.y - detail_top - margin))
-		_environment_detail_panel.offset_left = margin
-		_environment_detail_panel.offset_top = detail_top
-		_environment_detail_panel.offset_right = margin + status_width
-		_environment_detail_panel.offset_bottom = detail_top + detail_height
-		_environment_detail_panel.custom_minimum_size = Vector2(status_width, 0.0)
 	if _help_panel != null:
 		_help_panel.anchor_left = 1.0
 		_help_panel.anchor_right = 1.0
@@ -3411,7 +3329,7 @@ func _update_hud_layout() -> void:
 		_map_button.offset_right = margin + 120.0 * scale
 		_map_button.offset_top = -52.0 * scale - margin
 		_map_button.offset_bottom = -margin
-		_map_button.visible = _fish_map != null and _fish_map.has_method("get_display_mode") and str(_fish_map.call("get_display_mode")) == "hidden" and (_fish_finder_display == null or str(_fish_finder_display.call("get_display_mode")) == "hidden")
+		_map_button.visible = _fish_map != null and _fish_map.has_method("get_display_mode") and str(_fish_map.call("get_display_mode")) == "hidden"
 	if _navigation_core_panel != null:
 		var nav_width := minf(310.0 * scale, maxf(230.0 * scale, viewport_width * 0.32))
 		var sail_detail := _controller != null and _controller.is_sailing_active() and _navigation_detail_requested
@@ -3441,14 +3359,6 @@ func _update_hud_layout() -> void:
 		_debug_panel.offset_bottom = -16.0 * scale
 		_debug_panel.custom_minimum_size.y = 0.0
 		_debug_scroll.custom_minimum_size.y = 0.0
-		if _fish_finder_display != null and is_instance_valid(_fish_finder_display) and _fish_finder_display.has_method("set_overlay_obstruction_rect"):
-			var obstruction := Rect2()
-			if _debug_panel.visible:
-				obstruction = Rect2(
-					Vector2(viewport_width + _debug_panel.offset_left, _debug_panel.offset_top),
-					Vector2(_debug_panel.offset_right - _debug_panel.offset_left, viewport_size.y + _debug_panel.offset_bottom - _debug_panel.offset_top)
-				)
-			_fish_finder_display.call("set_overlay_obstruction_rect", obstruction)
 	if _catch_result_panel != null:
 		var catch_scale := scale
 		var catch_width := minf(336.0 * catch_scale, maxf(220.0, viewport_width - 48.0 * catch_scale))

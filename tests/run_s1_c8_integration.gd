@@ -51,6 +51,7 @@ func _run() -> void:
 	var resource_map_canvas := fish_map.find_child("ResourceDistributionMap", true, false) as FishResourceMapCanvas if fish_map != null else null
 	var weather_runtime_diagnostics := main.get_node_or_null("WeatherRuntimeDiagnostics") as CanvasLayer
 	var environment_summary := vessel_hud.find_child("EnvironmentSummaryPanel", true, false) as Control if vessel_hud != null else null
+	var environment_summary_text := vessel_hud.find_child("EnvironmentSummaryText", true, false) as Label if vessel_hud != null else null
 	var navigation_core_panel := vessel_hud.find_child("NavigationCorePanel", true, false) as Control if vessel_hud != null else null
 	var navigation_core_status := vessel_hud.find_child("NavigationCoreStatus", true, false) as Label if vessel_hud != null else null
 	var weather_runtime_readout := vessel_hud.find_child("WeatherRuntimeReadout", true, false) as Label if vessel_hud != null else null
@@ -80,6 +81,7 @@ func _run() -> void:
 		_check(weather_runtime_readout.text.contains("Weather runtime") and weather_runtime_readout.text.contains("Timeline wind") and weather_runtime_readout.text.contains("effective wind"), "F3 retains the weather source, quality, timeline and effective wind diagnostics")
 		developer_panel.visible = false
 	_check(environment_summary != null and environment_summary.size.y <= 115.0, "Environment summary uses a compact content-sized height")
+	_check(vessel_hud.find_child("EnvironmentDetailsPanel", true, false) == null and environment_summary_text != null and environment_summary_text.text.count("\n") <= 1, "Environment summary and details are consolidated into one compact page")
 	var fps_display := environment_summary.find_child("FPSDisplay", true, false) as Label if environment_summary != null else null
 	_check(fps_display != null and fps_display.visible and fps_display.text.begins_with("FPS:"), "Environment summary shows a live FPS readout")
 	_check(navigation_core_panel != null and navigation_core_status != null and navigation_core_status.visible and navigation_core_status.text.contains("油门输入"), "Powerboat compact instrument shows the real driving mode and throttle input")
@@ -175,7 +177,11 @@ func _run() -> void:
 		if open_finder != null:
 			open_finder.pressed.emit()
 		await process_frame
-		_check(fish_finder.visible and fish_map.get_display_mode() == "hidden", "Opening Fish Finder temporarily hides the compact chart")
+		var fish_finder_layer := fish_finder.get_parent() as CanvasLayer
+		var game_menu_layer := main.get_node_or_null("GameMenu") as CanvasLayer
+		_check(fish_finder.visible and fish_map.get_display_mode() == "mini", "Opening Fish Finder keeps the Sea Chart visible")
+		_check(fish_finder_layer != null and fish_finder_layer.layer > fish_map.layer and (game_menu_layer == null or fish_finder_layer.layer < game_menu_layer.layer), "Fish Finder renders above normal HUD tools while modal menus retain priority")
+		_check(fish_finder.mouse_filter == Control.MOUSE_FILTER_STOP, "Fish Finder overlay intercepts pointer input over overlapping panels")
 		var finder_title := fish_finder.find_child("FishFinderTitle", true, false) as Label
 		var sea_chart_title := sea_chart.find_child("SeaChartTitle", true, false) as Label if sea_chart != null else null
 		if localization_manager != null and localization_manager.has_method("set_locale_id"):
@@ -187,7 +193,7 @@ func _run() -> void:
 			_check(finder_title != null and finder_title.text.begins_with("鱼探仪") and sea_chart_title != null and sea_chart_title.text == "海图 · 厄勒海峡", "Open Fish Finder and the compact Sea Chart refresh in Chinese at runtime")
 		fish_finder.close_display()
 		await process_frame
-		_check(not fish_finder.visible and fish_map.get_display_mode() == "mini", "Closing Fish Finder restores the compact chart")
+		_check(not fish_finder.visible and fish_map.get_display_mode() == "mini", "Closing Fish Finder leaves the compact chart unchanged")
 	if controller == null or sailboat == null:
 		quit(1)
 		return
@@ -269,7 +275,12 @@ func _run() -> void:
 	var sailing_panel := vessel_hud.find_child("SailingControlsPanel", true, false) as Control if vessel_hud != null else null
 	var compact_navigation_panel := vessel_hud.find_child("NavigationCorePanel", true, false) as Control if vessel_hud != null else null
 	var depth_chart_panel := fish_map.find_child("MapPanel", true, false) as Control if fish_map != null else null
-	_check(compact_navigation_panel != null and compact_navigation_panel.visible and sailing_panel != null and not sailing_panel.visible, "the sailboat starts with compact navigation information and hides expanded controls")
+	_check(compact_navigation_panel != null and not compact_navigation_panel.visible and sailing_panel != null and sailing_panel.visible, "switching to the sailboat immediately displays its instrument panel")
+	var collapse_sailing_button := vessel_hud.find_child("CollapseSailingInstrumentButton", true, false) as Button if vessel_hud != null else null
+	if collapse_sailing_button != null:
+		collapse_sailing_button.pressed.emit()
+		await process_frame
+	_check(compact_navigation_panel != null and compact_navigation_panel.visible and sailing_panel != null and not sailing_panel.visible, "sailboat instrument can still be collapsed to compact navigation")
 	var navigation_details_button := vessel_hud.find_child("NavigationInstrumentExpandButton", true, false) as Button if vessel_hud != null else null
 	if navigation_details_button != null:
 		navigation_details_button.pressed.emit()
