@@ -3,6 +3,7 @@ extends SceneTree
 const GEOREFERENCE := preload("res://resources/oresund_georeference.tres")
 const WAVE_SETTINGS := preload("res://resources/sea_waves.tres")
 const FISHING_DEBUG_PANEL_SCRIPT := preload("res://scripts/fishing_debug_panel.gd")
+const FISH_FINDER_DISPLAY_SCRIPT := preload("res://scripts/fish_finder_display.gd")
 
 class FishingTestBoat extends Node3D:
 	var speed_mps := 0.0
@@ -30,6 +31,25 @@ func _run() -> void:
 	root.add_child(fishing_panel)
 	fishing_panel.configure(manager)
 	_check(fishing_panel.find_child("FishingDebugContent", true, false) != null, "Fishing debug panel builds its localized controls")
+	var preview_canvas := CanvasLayer.new()
+	preview_canvas.layer = 1
+	fixture_root.add_child(preview_canvas)
+	var preview_display := FISH_FINDER_DISPLAY_SCRIPT.new() as Control
+	preview_display.name = "P2FishingDebugPreviewDisplay"
+	preview_display.call("configure", manager, boat)
+	preview_canvas.add_child(preview_display)
+	await process_frame
+	fishing_panel.configure(manager, null, preview_display)
+	var preview_start := fishing_panel.find_child("SonarPreviewStart", true, false) as Button
+	var preview_stop := fishing_panel.find_child("SonarPreviewStop", true, false) as Button
+	var real_finder_history := finder.get_scan_history()
+	_check(preview_start != null and preview_stop != null, "F3 Fishing exposes start/stop sonar preview controls")
+	if preview_start != null and preview_stop != null:
+		preview_start.emit_signal("pressed")
+		_check(bool(preview_display.call("is_debug_preview_active")) and str(preview_display.call("get_display_mode")) != "hidden", "F3 start opens the Fish Finder and activates its isolated preview")
+		_check(finder.get_scan_history() == real_finder_history, "F3 sonar preview leaves the real sensor history unchanged")
+		preview_stop.emit_signal("pressed")
+		_check(not bool(preview_display.call("is_debug_preview_active")) and finder.get_scan_history() == real_finder_history, "F3 stop returns to real history without changing Authority scans")
 	var hud_script_source := FileAccess.get_file_as_string("res://scripts/boat_hud.gd")
 	_check(hud_script_source.contains("FISHING_DEBUG_PANEL_SCRIPT.new()") and hud_script_source.contains("set_tab_title(2, tr(\"fishing.debug.tab\"))"), "BoatHUD registers the Fishing panel as an F3 tab")
 	_check(manager.get_all_school_snapshots().size() > 0, "Fish Finder and trolling share existing authoritative schools")
@@ -148,10 +168,12 @@ func _run() -> void:
 	var surface := wave_sampler.sample_physics_surface(Vector3(finder_position.x, 0.0, finder_position.z), wave_time)
 	boat.global_position = Vector3(finder_position.x, float(surface.get("height", 0.0)) + 2.0, finder_position.z)
 	finder.transducer_offset_local_m = Vector3(0.0, -2.0, 0.0)
-	finder.beam_angle_deg = 120.0
+	finder.beam_half_cone_angle_deg = 60.0
 	finder.max_slant_range_m = 1000.0
 	finder.maximum_water_depth_m = 60.0
 	var authority_count_before := manager.get_all_school_snapshots().size()
+	var authority_revision_before := manager.get_state_revision()
+	var encounter_rng_state_before := encounter._rng.state
 	var profile_visual_states: Dictionary = {}
 	for profile in manager.get_species_profiles():
 		profile_visual_states[profile.species_id] = profile.visual_enabled
@@ -160,14 +182,23 @@ func _run() -> void:
 	_check(bool(scan.get("accepted", false)), "Fish Finder scans using bathymetry, live surface and Authority schools")
 	var echoes: Array = scan.get("echoes", [])
 	_check(not echoes.is_empty(), "Fish Finder returns at least one real school echo when placed above a school")
-	var anonymized := true
+	var stable_school_ids := not echoes.is_empty()
+	var catch_data_hidden := true
 	for echo in echoes:
-		if echo.has("species_id") or echo.has("bite_probability") or echo.has("school_id"):
-			anonymized = false
-	_check(anonymized, "Fish Finder echo data does not expose fish identity or catch chance")
+		var school_id := str(echo.get("school_id", ""))
+		var species_id := str(echo.get("species_id", ""))
+		if school_id.is_empty() or species_id.is_empty() or manager.get_school(school_id).is_empty():
+			stable_school_ids = false
+		if echo.has("bite_probability"):
+			catch_data_hidden = false
+	_check(stable_school_ids and catch_data_hidden, "Fish Finder exposes stable internal school/species identifiers without catch probability")
+	_check(float(scan.get("bottom_depth_below_transducer_m", -1.0)) > 0.0 and scan.get("probe_world_position") is Vector3, "scan column records transducer origin and valid bottom range")
+	_check(is_equal_approx(float(scan.get("scan_frequency_hz", 0.0)), 3.0) and finder.history_capacity >= 180, "default cadence and capacity retain at least 60 seconds at 3 Hz")
 	_check(manager.get_all_school_snapshots().size() == authority_count_before, "disabling every species visual does not change authoritative population queries")
+	_check(manager.get_state_revision() == authority_revision_before and encounter._rng.state == encounter_rng_state_before, "sonar scanning does not mutate Authority state or encounter RNG")
 	_check(FishFinderSensor.is_within_beam(0.0, 5.0, 42.0, 220.0), "Fish Finder cone accepts targets directly below the transducer")
 	_check(not FishFinderSensor.is_within_beam(10.0, 1.0, 42.0, 220.0), "Fish Finder cone rejects targets outside its geometry")
+	_check(is_equal_approx(FishFinderSensor.scan_radius_for_depth(10.0, 10.0) / FishFinderSensor.scan_radius_for_depth(1.0, 10.0), 10.0), "sonar cone coverage radius scales with target depth")
 	_check(finder.get_scan_history().size() <= finder.history_capacity, "Fish Finder keeps bounded scan history")
 	for profile in manager.get_species_profiles():
 		profile.visual_enabled = bool(profile_visual_states.get(profile.species_id, true))

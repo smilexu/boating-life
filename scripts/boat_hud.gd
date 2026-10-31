@@ -13,6 +13,7 @@ const SAILING_NAVIGATION_INSTRUMENT_SCRIPT := preload("res://scripts/sailboat_na
 const SAILING_POLAR_CHART_SCRIPT := preload("res://scripts/sailing_polar_chart.gd")
 const FISHING_DEBUG_PANEL_SCRIPT := preload("res://scripts/fishing_debug_panel.gd")
 const FISHING_PLAYER_PANEL_SCRIPT := preload("res://scripts/fishing_player_panel.gd")
+const FISH_FINDER_DISPLAY_SCRIPT := preload("res://scripts/fish_finder_display.gd")
 const NAVIGATION_HUD_FORMAT := preload("res://scripts/navigation_hud_format.gd")
 const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 
@@ -44,6 +45,8 @@ var _diagnostic_bathymetry: Node
 var _diagnostic_seabed_manager: Node
 var _fish_resource_manager: FishResourceManager
 var _fish_school_renderer: FishSchoolRenderer
+var _fish_finder_display: Control
+var _fish_finder_toggle_button: Button
 var _dolphin_world_manager: Node
 var _navigation_depth_monitor: NavigationDepthMonitor
 var _cargo_economy_manager: CargoEconomyManager
@@ -282,6 +285,7 @@ func _ready() -> void:
 	status_layout.add_child(_cargo_task_label)
 	add_child(_status_panel)
 	_build_autopilot_panel()
+	_build_fish_finder_display()
 	_build_debug_panel()
 	_add_compass_widget()
 	_build_sailing_panel()
@@ -317,6 +321,46 @@ func _build_fishing_player_panel() -> void:
 	_fishing_player_panel.offset_bottom = 370.0
 	add_child(_fishing_player_panel)
 	_fishing_player_panel.configure(_fish_resource_manager, _fishing_rod_system)
+
+
+func _build_fish_finder_display() -> void:
+	_fish_finder_toggle_button = Button.new()
+	_fish_finder_toggle_button.name = "FishFinderOpenButton"
+	_fish_finder_toggle_button.text = tr("fish.finder.open")
+	_fish_finder_toggle_button.z_index = 18
+	_fish_finder_toggle_button.focus_mode = Control.FOCUS_NONE
+	_fish_finder_toggle_button.custom_minimum_size = Vector2(170.0, 42.0)
+	_fish_finder_toggle_button.anchor_left = 1.0
+	_fish_finder_toggle_button.anchor_right = 1.0
+	_fish_finder_toggle_button.anchor_top = 1.0
+	_fish_finder_toggle_button.anchor_bottom = 1.0
+	_fish_finder_toggle_button.offset_left = -188.0
+	_fish_finder_toggle_button.offset_right = -18.0
+	_fish_finder_toggle_button.offset_top = -60.0
+	_fish_finder_toggle_button.offset_bottom = -18.0
+	_fish_finder_toggle_button.visible = false
+	_fish_finder_toggle_button.pressed.connect(_on_fish_finder_open_pressed)
+	add_child(_fish_finder_toggle_button)
+	_fish_finder_display = FISH_FINDER_DISPLAY_SCRIPT.new() as Control
+	_fish_finder_display.name = "FishFinderDisplay"
+	_fish_finder_display.call("configure", _fish_resource_manager, _controller)
+	_fish_finder_display.connect("close_requested", _on_fish_finder_close_requested)
+	add_child(_fish_finder_display)
+
+
+func _on_fish_finder_open_pressed() -> void:
+	if _fish_finder_display != null and is_instance_valid(_fish_finder_display):
+		_fish_finder_display.call("open_display")
+		_fish_finder_toggle_button.visible = false
+		_update_hud_layout()
+		_update_hud_layout()
+
+
+func _on_fish_finder_close_requested() -> void:
+	if _fish_finder_toggle_button != null:
+		_fish_finder_toggle_button.visible = true
+	_update_hud_layout()
+	_update_hud_layout()
 
 
 func _build_catch_result_panel() -> void:
@@ -1333,6 +1377,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		else:
 			_restore_debug_panel_overrides()
 		_update_sailing_panel()
+		_update_hud_layout()
 		get_viewport().set_input_as_handled()
 
 
@@ -1614,7 +1659,7 @@ func _build_debug_panel() -> void:
 	_debug_scroll.add_child(fishing_debug_panel)
 	_debug_scroll.set_tab_title(2, tr("fishing.debug.tab"))
 	add_child(_debug_panel)
-	fishing_debug_panel.configure(_fish_resource_manager, _fishing_rod_system)
+	fishing_debug_panel.configure(_fish_resource_manager, _fishing_rod_system, _fish_finder_display, _fish_school_renderer)
 	_refresh_weather_controls()
 	_refresh_settings_controls()
 	_refresh_city_lighting_controls()
@@ -2717,6 +2762,29 @@ func _update_hud_layout() -> void:
 		_debug_panel.offset_bottom = -16.0
 		_debug_panel.custom_minimum_size.y = 0.0
 		_debug_scroll.custom_minimum_size.y = 0.0
+		if _fish_finder_display != null and is_instance_valid(_fish_finder_display) and _fish_finder_display.has_method("set_overlay_obstruction_rect"):
+			var obstruction := Rect2()
+			if _debug_panel.visible:
+				obstruction = Rect2(
+					Vector2(viewport_width + _debug_panel.offset_left, _debug_panel.offset_top),
+					Vector2(_debug_panel.offset_right - _debug_panel.offset_left, viewport_size.y + _debug_panel.offset_bottom - _debug_panel.offset_top)
+				)
+			_fish_finder_display.call("set_overlay_obstruction_rect", obstruction)
+	if _fish_finder_toggle_button != null:
+		if _debug_panel != null and _debug_panel.visible:
+			_fish_finder_toggle_button.anchor_left = 0.0
+			_fish_finder_toggle_button.anchor_right = 0.0
+			_fish_finder_toggle_button.offset_left = 18.0
+			_fish_finder_toggle_button.offset_right = 188.0
+		else:
+			_fish_finder_toggle_button.anchor_left = 1.0
+			_fish_finder_toggle_button.anchor_right = 1.0
+			_fish_finder_toggle_button.offset_left = -188.0
+			_fish_finder_toggle_button.offset_right = -18.0
+		_fish_finder_toggle_button.anchor_top = 1.0
+		_fish_finder_toggle_button.anchor_bottom = 1.0
+		_fish_finder_toggle_button.offset_top = -60.0
+		_fish_finder_toggle_button.offset_bottom = -18.0
 	if _sailing_panel != null:
 		_sailing_panel.custom_minimum_size.x = sailing_width
 		_sailing_panel.offset_left = -sailing_width - 24.0

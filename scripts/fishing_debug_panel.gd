@@ -6,6 +6,8 @@ var _manager: Node
 var _encounter: FishingEncounterSystem
 var _finder: FishFinderSensor
 var _rod_system: FishingRodSystem
+var _fish_finder_display: Control
+var _fish_school_renderer: FishSchoolRenderer
 var _lure_option: OptionButton
 var _trolling_start_button: Button
 var _trolling_stop_button: Button
@@ -22,6 +24,11 @@ var _simulation_pause_button: Button
 var _simulation_speed_option: OptionButton
 var _simulation_phase_option: OptionButton
 var _simulation_seek_button: Button
+var _finder_preview_depth_spin: SpinBox
+var _finder_preview_strength_spin: SpinBox
+var _finder_preview_size_option: OptionButton
+var _finder_preview_start_button: Button
+var _finder_preview_stop_button: Button
 var _advanced_toggle: Button
 var _advanced_controls: VBoxContainer
 var _seed_spin: SpinBox
@@ -137,6 +144,50 @@ func _ready() -> void:
 	_simulation_seek_button.name = "SimulatedCatchSeek"
 	content.add_child(seek_row)
 
+	_add_section_heading(content, "fishing.debug.finder_preview_heading")
+	var finder_preview_depth_row := HBoxContainer.new()
+	var finder_preview_depth_label := Label.new()
+	finder_preview_depth_label.text = tr("fishing.debug.finder_preview_depth")
+	finder_preview_depth_row.add_child(finder_preview_depth_label)
+	_finder_preview_depth_spin = SpinBox.new()
+	_finder_preview_depth_spin.name = "SonarPreviewDepth"
+	_finder_preview_depth_spin.min_value = 0.25
+	_finder_preview_depth_spin.max_value = 45.0
+	_finder_preview_depth_spin.step = 0.25
+	_finder_preview_depth_spin.value = 5.0
+	_finder_preview_depth_spin.suffix = tr("fishing.debug.unit.m")
+	_finder_preview_depth_spin.value_changed.connect(_on_finder_preview_parameter_changed)
+	finder_preview_depth_row.add_child(_finder_preview_depth_spin)
+	content.add_child(finder_preview_depth_row)
+	var finder_preview_strength_row := HBoxContainer.new()
+	var finder_preview_strength_label := Label.new()
+	finder_preview_strength_label.text = tr("fishing.debug.finder_preview_strength")
+	finder_preview_strength_row.add_child(finder_preview_strength_label)
+	_finder_preview_strength_spin = SpinBox.new()
+	_finder_preview_strength_spin.name = "SonarPreviewStrength"
+	_finder_preview_strength_spin.min_value = 0.0
+	_finder_preview_strength_spin.max_value = 1.0
+	_finder_preview_strength_spin.step = 0.05
+	_finder_preview_strength_spin.value = 0.8
+	_finder_preview_strength_spin.value_changed.connect(_on_finder_preview_parameter_changed)
+	finder_preview_strength_row.add_child(_finder_preview_strength_spin)
+	content.add_child(finder_preview_strength_row)
+	_finder_preview_size_option = OptionButton.new()
+	_finder_preview_size_option.name = "SonarPreviewSizeBand"
+	_finder_preview_size_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	for size_band in ["small", "medium", "large"]:
+		_finder_preview_size_option.add_item(tr("fishing.debug.finder_preview_size." + size_band))
+		_finder_preview_size_option.set_item_metadata(_finder_preview_size_option.item_count - 1, size_band)
+	_finder_preview_size_option.select(1)
+	_finder_preview_size_option.item_selected.connect(_on_finder_preview_size_selected)
+	content.add_child(_finder_preview_size_option)
+	var finder_preview_buttons := HBoxContainer.new()
+	_finder_preview_start_button = _add_button(finder_preview_buttons, "fishing.debug.finder_preview_start", _on_finder_preview_start_pressed)
+	_finder_preview_start_button.name = "SonarPreviewStart"
+	_finder_preview_stop_button = _add_button(finder_preview_buttons, "fishing.debug.finder_preview_stop", _on_finder_preview_stop_pressed)
+	_finder_preview_stop_button.name = "SonarPreviewStop"
+	content.add_child(finder_preview_buttons)
+
 	_status_label = Label.new()
 	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	content.add_child(_status_label)
@@ -180,9 +231,11 @@ func _ready() -> void:
 	_refresh_status()
 
 
-func configure(manager: Node, rod_system: FishingRodSystem = null) -> void:
+func configure(manager: Node, rod_system: FishingRodSystem = null, fish_finder_display: Control = null, fish_school_renderer: FishSchoolRenderer = null) -> void:
 	_manager = manager
 	_rod_system = rod_system
+	_fish_finder_display = fish_finder_display
+	_fish_school_renderer = fish_school_renderer
 	if _hanging_struggle_intensity_spin != null and _rod_system != null:
 		_hanging_struggle_intensity_spin.set_value_no_signal(_rod_system.get_hanging_struggle_intensity())
 	if _manager != null and _manager.has_signal("resources_ready") and not _manager.is_node_ready():
@@ -400,6 +453,52 @@ func _on_scan_pressed() -> void:
 	_refresh_status()
 
 
+func _on_finder_preview_start_pressed() -> void:
+	if _fish_finder_display == null or not is_instance_valid(_fish_finder_display) or not _fish_finder_display.has_method("start_debug_preview"):
+		_show_feedback(tr("fishing.debug.unavailable"))
+		return
+	if _fish_finder_display.has_method("open_display"):
+		_fish_finder_display.call("open_display")
+	_fish_finder_display.call(
+		"start_debug_preview",
+		float(_finder_preview_depth_spin.value),
+		float(_finder_preview_strength_spin.value),
+		str(_finder_preview_size_option.get_item_metadata(_finder_preview_size_option.selected))
+	)
+	_show_feedback(tr("fishing.debug.finder_preview_started"))
+	_refresh_status()
+
+
+func _on_finder_preview_stop_pressed() -> void:
+	var stopped := _fish_finder_display != null and is_instance_valid(_fish_finder_display) and _fish_finder_display.has_method("stop_debug_preview") and bool(_fish_finder_display.call("stop_debug_preview"))
+	_show_feedback(tr("fishing.debug.finder_preview_stopped") if stopped else tr("fishing.debug.action_not_ready"))
+	_refresh_status()
+
+
+func _on_finder_preview_parameter_changed(_value: float = 0.0) -> void:
+	_apply_finder_preview_parameters()
+	_refresh_status()
+
+
+func _on_finder_preview_size_selected(_index: int) -> void:
+	_apply_finder_preview_parameters()
+	_refresh_status()
+
+
+func _apply_finder_preview_parameters() -> void:
+	if _fish_finder_display == null or not is_instance_valid(_fish_finder_display) or not _fish_finder_display.has_method("set_debug_preview_parameters"):
+		return
+	var size_band := "medium"
+	if _finder_preview_size_option != null and _finder_preview_size_option.selected >= 0:
+		size_band = str(_finder_preview_size_option.get_item_metadata(_finder_preview_size_option.selected))
+	_fish_finder_display.call(
+		"set_debug_preview_parameters",
+		float(_finder_preview_depth_spin.value),
+		float(_finder_preview_strength_spin.value),
+		size_band
+	)
+
+
 func _on_simulation_species_selected(index: int) -> void:
 	if _simulation_species_option == null or index < 0 or index >= _simulation_species_option.item_count:
 		return
@@ -557,14 +656,174 @@ func _refresh_status() -> void:
 		var profile := _manager.call("get_species_profile", str(result.get("species_id", ""))) as FishSpeciesProfile
 		lines.append(tr("fishing.debug.last_catch") % [tr(profile.name_key) if profile != null else str(result.get("species_id", "")), float(result.get("length_m", 0.0)) * 100.0, float(result.get("estimated_weight_kg", 0.0)), int(result.get("population_before", 0)), int(result.get("population_after", 0))])
 	var scan := _finder.get_last_scan() if _finder != null else {}
-	lines.append(tr("fishing.debug.finder") % [int(scan.get("scan_id", 0)), scan.get("echoes", []).size(), _localized_reason(str(scan.get("reason", "not_scanned")))])
-	if not scan.is_empty():
-		var echoes: Array = scan.get("echoes", [])
-		var nearest_depth := float(echoes[0].get("depth_below_surface_m", 0.0)) if not echoes.is_empty() else -1.0
-		var nearest_strength := float(echoes[0].get("echo_strength", 0.0)) if not echoes.is_empty() else 0.0
-		lines.append(tr("fishing.debug.finder_detail") % [float(scan.get("chart_depth_lat_m", 0.0)), float(scan.get("water_column_below_surface_m", 0.0)), nearest_depth, nearest_strength])
+	var finder_history: Array[Dictionary] = _finder.get_scan_history() if _finder != null else []
+	var finder_capacity := _finder.get_effective_history_capacity() if _finder != null else 0
+	var finder_echoes: Array = scan.get("echoes", [])
+	var finder_status := tr("fishing.debug.reason.valid") if bool(scan.get("valid", false)) else _localized_reason(str(scan.get("reason", "not_scanned")))
+	lines.append(tr("fishing.debug.finder_runtime") % [
+		finder_status,
+		int(scan.get("scan_id", 0)),
+		float(scan.get("scan_runtime_seconds", 0.0)),
+		float(scan.get("bottom_depth_below_transducer_m", -1.0)),
+		int(scan.get("schools_considered_count", 0)),
+		finder_echoes.size(),
+		finder_history.size(),
+		finder_capacity,
+		_finder.get_history_coverage_seconds() if _finder != null else 0.0,
+	])
+	lines.append(tr("fishing.debug.finder_config") % [
+		float(scan.get("beam_half_cone_angle_deg", _finder.beam_half_cone_angle_deg if _finder != null else 10.0)),
+		float(scan.get("max_slant_range_m", _finder.max_slant_range_m if _finder != null else 0.0)),
+		float(_finder.maximum_water_depth_m) if _finder != null else 0.0,
+		float(scan.get("scan_frequency_hz", _finder.scan_frequency_hz if _finder != null else 0.0)),
+	])
+	if _fish_finder_display != null and is_instance_valid(_fish_finder_display) and _fish_finder_display.has_method("get_diagnostic_snapshot"):
+		var display_state: Dictionary = _fish_finder_display.call("get_diagnostic_snapshot")
+		var mode_key := "fish.finder.mode.%s" % str(display_state.get("mode", "hidden"))
+		var display_status := tr("fish.finder.debug.valid") if bool(display_state.get("bottom_valid", false)) else tr("fish.finder.debug.invalid")
+		var scan_runtime := float(display_state.get("scan_runtime_seconds", -1.0))
+		lines.append(tr("fish.finder.debug.ui") % [
+			tr(mode_key),
+			int(display_state.get("drawn_columns", 0)),
+			float(display_state.get("display_range_m", 10.0)),
+			int(display_state.get("echo_count", 0)),
+			display_status,
+			"--" if scan_runtime < 0.0 else "%.1f" % scan_runtime,
+		])
+		var bottom_jump: Dictionary = display_state.get("bottom_history_diagnostic", {})
+		if bool(bottom_jump.get("available", false)):
+			var link_key := "fishing.debug.bottom_link." + str(bottom_jump.get("reason", "invalid_bottom"))
+			var link_text := tr(link_key)
+			if link_text == link_key:
+				link_text = str(bottom_jump.get("reason", "invalid_bottom"))
+			lines.append(tr("fishing.debug.finder_bottom_jump") % [
+				float(bottom_jump.get("max_delta_depth_m", 0.0)),
+				float(bottom_jump.get("previous_depth_m", 0.0)),
+				float(bottom_jump.get("current_depth_m", 0.0)),
+				float(bottom_jump.get("chart_depth_delta_m", -1.0)),
+				float(bottom_jump.get("probe_vertical_displacement_m", -1.0)),
+				float(bottom_jump.get("delta_time_seconds", -1.0)),
+				float(bottom_jump.get("horizontal_displacement_m", -1.0)),
+				int(bottom_jump.get("previous_scan_id", -1)),
+				int(bottom_jump.get("current_scan_id", -1)),
+				tr("fish.finder.debug.connected") if bool(bottom_jump.get("connected_for_display", false)) else tr("fish.finder.debug.disconnected"),
+				link_text,
+			])
+		lines.append(tr("fishing.debug.finder_bottom_source") % [
+			str(display_state.get("latest_bottom_source", "--")) if not str(display_state.get("latest_bottom_source", "")).is_empty() else "--",
+			str(display_state.get("latest_bottom_datum", "--")) if not str(display_state.get("latest_bottom_datum", "")).is_empty() else "--",
+			tr("fish.finder.debug.yes") if bool(display_state.get("latest_bottom_estimated", false)) else tr("fish.finder.debug.no"),
+			tr("fish.finder.debug.yes") if bool(display_state.get("latest_bottom_interpolated", false)) else tr("fish.finder.debug.no"),
+			tr("fish.finder.mode." + str(display_state.get("range_mode", "auto"))),
+			float(display_state.get("display_range_m", 10.0)),
+		])
+		lines.append(tr("fishing.debug.finder_display_settings") % [
+			tr("fish.finder.mode." + str(display_state.get("gain_mode", "auto"))),
+			float(display_state.get("manual_gain_percent", 50.0)),
+			float(display_state.get("effective_gain_percent", display_state.get("auto_gain_percent", 62.0))),
+			tr("fish.finder.mode." + str(display_state.get("range_mode", "auto"))),
+			float(display_state.get("manual_range_m", 10.0)),
+			float(display_state.get("display_range_m", 10.0)),
+		])
+		lines.append(tr("fishing.debug.finder_symbols") % [
+			tr("fish.finder.symbols.on") if bool(display_state.get("fish_symbols_enabled", false)) else tr("fish.finder.symbols.off"),
+		])
+		lines.append(tr("fishing.debug.finder_preview_status") % [
+			tr("fishing.debug.finder_preview_active") if bool(display_state.get("preview_active", false)) else tr("fishing.debug.finder_preview_inactive"),
+			float(display_state.get("preview_target_depth_m", 5.0)),
+			float(display_state.get("preview_peak_strength", 0.8)),
+			tr("fishing.debug.finder_preview_size." + str(display_state.get("preview_size_band", "medium"))),
+		])
+		var preview_active := bool(display_state.get("preview_active", false))
+		if _finder_preview_start_button != null:
+			_finder_preview_start_button.disabled = preview_active
+		if _finder_preview_stop_button != null:
+			_finder_preview_stop_button.disabled = not preview_active
+	_append_fish_finder_school_diagnostics(lines, scan)
 	_status_label.text = "\n".join(lines)
 	_update_simulation_weight_preview()
+
+
+func _append_fish_finder_school_diagnostics(lines: Array, scan: Dictionary) -> void:
+	var diagnostics: Array = scan.get("school_diagnostics", [])
+	var probe_value: Variant = scan.get("probe_world_position", Vector3.ZERO)
+	if diagnostics.is_empty() or not probe_value is Vector3:
+		lines.append(tr("fishing.debug.finder_school_none") % float(scan.get("max_slant_range_m", 0.0)))
+		lines.append(tr("fishing.debug.finder_school_mapping"))
+		return
+	var probe_position: Vector3 = probe_value
+	var presentation_rows: Array[Dictionary] = []
+	for diagnostic_variant in diagnostics:
+		if not diagnostic_variant is Dictionary:
+			continue
+		var diagnostic: Dictionary = diagnostic_variant
+		var school_id := str(diagnostic.get("school_id", ""))
+		var school: Dictionary = _manager.call("get_school", school_id) if _manager != null and _manager.has_method("get_school") else {}
+		var visual_count := 0
+		var visual_distance_m := -1.0
+		var visual_anchor_offset_m := -1.0
+		var visual_reason := "mapping_unavailable"
+		if not school.is_empty() and _fish_school_renderer != null and is_instance_valid(_fish_school_renderer):
+			var visual_debug: Dictionary = _fish_school_renderer.get_school_visual_debug(school_id, probe_position)
+			visual_count = int(visual_debug.get("visual_instances_bound_to_school", 0))
+			visual_distance_m = float(visual_debug.get("visual_nearest_horizontal_distance_m", -1.0))
+			visual_anchor_offset_m = float(visual_debug.get("visual_nearest_anchor_offset_m", -1.0))
+			if visual_count > 0:
+				var visual_position: Variant = visual_debug.get("visual_nearest_world_position", Vector3(NAN, NAN, NAN))
+				if visual_position is Vector3 and is_finite(visual_position.x) and is_finite(visual_position.y) and is_finite(visual_position.z):
+					var depth_limit := float(scan.get("effective_detection_depth_range_below_transducer_m", Vector2.ZERO).y)
+					var geometry := FishFinderSensor.diagnose_target_geometry(
+						visual_position - probe_position,
+						float(scan.get("beam_half_cone_angle_deg", 10.0)),
+						depth_limit,
+						float(scan.get("max_slant_range_m", 0.0))
+					)
+					visual_reason = str(geometry.get("reason", "invalid_geometry"))
+			else:
+				visual_reason = "no_visual_instances"
+		var row := diagnostic.duplicate(true)
+		row["visual_count"] = visual_count
+		row["visual_distance_m"] = visual_distance_m
+		row["visual_anchor_offset_m"] = visual_anchor_offset_m
+		row["visual_reason"] = visual_reason
+		presentation_rows.append(row)
+	presentation_rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var a_visible := int(a.get("visual_count", 0)) > 0
+		var b_visible := int(b.get("visual_count", 0)) > 0
+		if a_visible != b_visible:
+			return a_visible
+		return float(a.get("anchor_horizontal_distance_m", INF)) < float(b.get("anchor_horizontal_distance_m", INF))
+	)
+	for row in presentation_rows.slice(0, mini(4, presentation_rows.size())):
+		var species_id := str(row.get("species_id", ""))
+		var profile := _manager.call("get_species_profile", species_id) as FishSpeciesProfile if _manager != null else null
+		var species_label := tr(profile.name_key) if profile != null else species_id
+		var reason_key := "fishing.debug.finder_reason." + str(row.get("rejection_reason", "invalid_geometry"))
+		var visual_reason_key := "fishing.debug.finder_reason." + str(row.get("visual_reason", "mapping_unavailable"))
+		var reason_label := tr(reason_key) if reason_key != "fishing.debug.finder_reason." else tr("fishing.debug.finder_reason.invalid_geometry")
+		var visual_reason_label := tr(visual_reason_key)
+		lines.append(tr("fishing.debug.finder_school_row") % [
+			str(row.get("school_id", "—")), species_label,
+			float(row.get("anchor_horizontal_distance_m", -1.0)),
+			float(row.get("target_depth_below_transducer_m", -1.0)),
+			float(row.get("beam_radius_m", -1.0)),
+			float(row.get("effective_school_radius_m", -1.0)),
+			float(row.get("vertical_half_thickness_m", -1.0)),
+			float(row.get("overlap_factor", 0.0)),
+			float(row.get("final_echo_strength", 0.0)),
+			tr("fishing.debug.finder_hit") if bool(row.get("hit", false)) else tr("fishing.debug.finder_miss"),
+			reason_label,
+		])
+		if int(row.get("visual_count", 0)) > 0:
+			lines.append(tr("fishing.debug.finder_school_visual") % [
+				int(row["visual_count"]),
+				float(row["visual_anchor_offset_m"]),
+				float(row["visual_distance_m"]),
+				visual_reason_label,
+			])
+		else:
+			lines.append(tr("fishing.debug.finder_school_unrendered") % visual_reason_label)
+	lines.append(tr("fishing.debug.finder_school_mapping"))
 
 
 func _refresh_controls() -> void:

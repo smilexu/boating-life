@@ -175,7 +175,7 @@ func use_local_disturbance_sources() -> void:
 	_has_authoritative_disturbance_snapshot = false
 
 
-func get_school_visual_debug(school_id: String) -> Dictionary:
+func get_school_visual_debug(school_id: String, reference_world_position: Variant = null) -> Dictionary:
 	if _manager == null:
 		return {}
 	var school := _manager.get_school(school_id)
@@ -194,6 +194,15 @@ func get_school_visual_debug(school_id: String) -> Dictionary:
 	var total_visual_length := 0.0
 	var total_surface_depth := 0.0
 	var total_threat_level := 0.0
+	var reference_is_valid := false
+	var reference_position := Vector3.ZERO
+	if reference_world_position is Vector3:
+		reference_position = reference_world_position
+		reference_is_valid = is_finite(reference_position.x) and is_finite(reference_position.y) and is_finite(reference_position.z)
+	var nearest_visual_position := Vector3(NAN, NAN, NAN)
+	var nearest_visual_reference_distance := INF
+	var nearest_visual_anchor_offset := INF
+	var maximum_visual_anchor_offset := 0.0
 	for key_variant in _individual_states.keys():
 		var key := str(key_variant)
 		if not key.begins_with(school_id + ":"):
@@ -206,6 +215,13 @@ func get_school_visual_debug(school_id: String) -> Dictionary:
 		total_threat_level += float(state.get("threat_level", 0.0))
 		var transform: Transform3D = state.get("visual_to_transform", Transform3D.IDENTITY)
 		total_surface_depth += surface_height - transform.origin.y
+		var anchor_offset := Vector2(transform.origin.x - school_position.x, transform.origin.z - school_position.z).length()
+		maximum_visual_anchor_offset = maxf(maximum_visual_anchor_offset, anchor_offset)
+		var reference_distance := Vector2(transform.origin.x - reference_position.x, transform.origin.z - reference_position.z).length() if reference_is_valid else anchor_offset
+		if reference_distance < nearest_visual_reference_distance:
+			nearest_visual_position = transform.origin
+			nearest_visual_reference_distance = reference_distance
+			nearest_visual_anchor_offset = anchor_offset
 	var visible_in_school := _visible_count_for_school(school_id, str(school.get("species_id", "")))
 	var average_depth := total_surface_depth / float(fish_count) if fish_count > 0 else activity_depth_m
 	if profile.surface_activity_cycle_enabled and fish_count == 0:
@@ -215,6 +231,11 @@ func get_school_visual_debug(school_id: String) -> Dictionary:
 		"school_population": int(school.get("population", 0)),
 		"visible_fish": visible_in_school,
 		"visualized_fish": fish_count,
+		"visual_instances_bound_to_school": fish_count,
+		"visual_nearest_world_position": nearest_visual_position,
+		"visual_nearest_horizontal_distance_m": nearest_visual_reference_distance if fish_count > 0 else -1.0,
+		"visual_nearest_anchor_offset_m": nearest_visual_anchor_offset if fish_count > 0 else -1.0,
+		"visual_max_anchor_offset_m": maximum_visual_anchor_offset if fish_count > 0 else -1.0,
 		"average_visual_length_m": total_visual_length / float(fish_count) if fish_count > 0 else profile.target_visual_length_m,
 		"depth_from_surface_m": average_depth,
 		"bathymetry_depth_m": depth_m,

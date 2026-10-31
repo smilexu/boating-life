@@ -159,8 +159,102 @@ fishing.debug.rate,Rate: %.3f per game hour · p/min %.2f%%,事件率：%.3f / �
 fishing.debug.pending,Pending catch: %s,待处理中鱼：%s
 fishing.debug.candidate_row,%s · school %s · depth %.1f m · depth match %.2f · speed %.2f · rate %.3f/h · %s,%s · 鱼群 %s · 深度 %.1f m · 水层匹配 %.2f · 船速匹配 %.2f · 事件率 %.3f/小时 · %s
 fishing.debug.last_catch,Last catch: %s · %.0f cm · %.2f kg · population %d→%d,最近渔获：%s · %.0f cm · %.2f kg · 种群 %d→%d
-fishing.debug.finder,Fish Finder: scan %d · echoes %d · %s,鱼探仪：扫描 %d · 回波 %d · %s
-fishing.debug.finder_detail,Probe chart depth %.1f m · water column %.1f m · first echo depth %.1f m · strength %.2f,探头海图水深 %.1f m · 水柱 %.1f m · 首个回波深度 %.1f m · 强度 %.2f
+fishing.debug.finder_runtime,Fish Finder: %s · scan %d · t %.1f s · bottom %.1f m · queried %d · echoes %d · history %d/%d (%.1f s),鱼探仪：%s · 扫描 %d · 运行时间 %.1f 秒 · 探头至海底 %.1f 米 · 查询鱼群 %d · 回波 %d · 历史 %d/%d（%.1f 秒）
+fishing.debug.finder_config,Cone half-angle %.1f° · range %.0f m · max depth %.1f m · rate %.1f Hz,声束半锥角 %.1f° · 范围 %.0f 米 · 最大水深 %.1f 米 · 频率 %.1f Hz
+fishing.debug.finder_school_row,School %s · %s · H %.1f m · D %.2f m · beam r %.2f m · school r %.1f m · V±%.1f m · overlap %.2f · echo %.2f · %s (%s),鱼群 %s · %s · 水平 %.1f 米 · 深度 %.2f 米 · 声束半径 %.2f 米 · 鱼群半径 %.1f 米 · 垂直半厚 %.1f 米 · 重叠 %.2f · 回波 %.2f · %s（%s）
+fishing.debug.finder_school_visual,Renderer instances %d · nearest fish offset from anchor %.2f m · nearest fish H %.2f m · visual-point test: %s,渲染实例 %d · 最近鱼距锚点 %.2f 米 · 最近鱼距探头 %.2f 米 · 可视点声束判定：%s
+fishing.debug.finder_school_unrendered,No current renderer instance: %s,当前没有可用渲染实例：%s
+fishing.debug.finder_school_none,No queried Authority school within %.0f m of the probe.,探头周围 %.0f 米查询范围内没有 Authority 鱼群。
+fishing.debug.finder_school_mapping,Visual SchoolRenderer fish carry Authority school IDs; other visible aquatic models cannot be matched here.,SchoolRenderer 鱼实例带有 Authority 鱼群 ID；其他可见水生模型无法在此对应。
+fishing.debug.finder_hit,HIT,命中
+fishing.debug.finder_miss,MISS,未命中
+fishing.debug.finder_reason.inside_beam,inside beam,在声束内
+fishing.debug.finder_reason.outside_beam,outside cone footprint,在声束覆盖外
+fishing.debug.finder_reason.slant_range_exceeded,slant range exceeded,超过斜距
+fishing.debug.finder_reason.depth_limit_exceeded,depth limit exceeded,超过探测深度
+fishing.debug.finder_reason.not_below_probe,not below transducer,不在探头下方
+fishing.debug.finder_reason.insufficient_seabed_clearance,insufficient seabed clearance,海床净空不足
+fishing.debug.finder_reason.activity_depth_invalid,activity depth invalid,活动深度无效
+fishing.debug.finder_reason.invalid_school_position,invalid school position,鱼群锚点无效
+fishing.debug.finder_reason.school_bathymetry_invalid,school bathymetry invalid,鱼群位置水深无效
+fishing.debug.finder_reason.surface_sample_invalid,local surface unavailable,局部水面数据无效
+fishing.debug.finder_reason.outside_school_volume,outside school distribution volume,在鱼群空间分布之外
+fishing.debug.finder_reason.partial_overlap,partial school/beam overlap,鱼群与声束部分重叠
+fishing.debug.finder_reason.school_volume_detected,school distribution under beam,声束覆盖鱼群空间分布
+fishing.debug.finder_reason.overlap_below_threshold,overlap below echo threshold,空间重叠低于回波阈值
+fishing.debug.finder_reason.school_volume_outside_water,school volume outside valid water,鱼群空间代理超出有效水层
+fishing.debug.reason.empty_population,empty population,鱼群数量为零
+fishing.debug.reason.invalid_geometry,invalid spatial geometry,空间几何无效
+fishing.debug.finder_reason.empty_population,empty population,种群数量为零
+fishing.debug.finder_reason.invalid_geometry,invalid target geometry,目标几何数据无效
+fishing.debug.finder_reason.mapping_unavailable,visual mapping unavailable,视觉对应数据不可用
+fishing.debug.finder_reason.no_visual_instances,no renderer instances allocated,未分配视觉实例
+fish.finder.title,Fish Finder,鱼探仪
+fish.finder.open,Show Fish Finder,打开鱼探仪
+fish.finder.depth,BOTTOM · BELOW PROBE,探头至海底
+fish.finder.speed,SPEED,航速
+fish.finder.range,RANGE,量程
+fish.finder.gain,GAIN,增益
+fish.finder.mode.auto,Auto,自动
+fish.finder.mode.manual,Manual,手动
+fish.finder.mode_short.auto,AUTO,自动
+fish.finder.mode_short.manual,MANUAL,手动
+fish.finder.gain_mode_status.auto,G AUTO,增益自动
+fish.finder.gain_mode_status.manual,G MANUAL,增益手动
+fish.finder.gain_value_auto,Auto %.0f%%,自动 %.0f%%
+fish.finder.gain_value_manual,%.0f%%,%.0f%%
+fish.finder.range_option,%.0f m,%.0f 米
+fish.finder.fish_symbols,Fish Symbols,鱼形标记
+fish.finder.symbols.on,On,开
+fish.finder.symbols.off,Off,关
+fish.finder.close,Close Fish Finder,关闭鱼探仪
+fish.finder.expand,Expand Fish Finder,展开鱼探仪
+fish.finder.collapse,Collapse Fish Finder,收起鱼探仪
+fish.finder.now,NOW,现在
+fish.finder.seconds_short,s,秒
+fish.finder.status.waiting,Waiting for scan,等待扫描
+fish.finder.status.unavailable,Fish Finder unavailable,鱼探仪不可用
+fish.finder.status.no_bottom,Bottom data unavailable,海底数据不可用
+fish.finder.status.empty,No fish returns · history %.0f s,无鱼群回波 · 历史 %.0f 秒
+fish.finder.status.live,Live echoes %d · history %.0f s,实时回波 %d · 历史 %.0f 秒
+fish.finder.debug_preview,SONAR PREVIEW,声呐预览
+fish.finder.preview_footer,SONAR PREVIEW · %d echo · %.1f m · intensity %.2f · %s,声呐预览 · %d 个模拟回波 · %.1f 米 · 强度 %.2f · %s
+fish.finder.debug.ui,UI %s · columns %d · range %.0f m · echoes %d · bottom %s · last t %s s,界面 %s · 扫描列 %d · 量程 %.0f 米 · 回波 %d · 海底 %s · 最近时刻 %s 秒
+fishing.debug.finder_bottom_jump,"Bottom history max step: below-probe Δ %.2f m (%.2f → %.2f), chart LAT Δ %.2f m, probe ΔY %.2f m; dt %.2f s, horizontal travel %.2f m; scan %d → %d; display link %s (%s)",海底历史最大相邻变化：探头下方 Δ %.2f 米（%.2f → %.2f），海图 LAT 深度 Δ %.2f 米，探头 ΔY %.2f 米；时间差 %.2f 秒，水平位移 %.2f 米；扫描 %d → %d；绘图连接 %s（%s）
+fishing.debug.finder_bottom_source,Bottom source %s · datum %s · estimated %s · interpolated %s · display range %s %.0f m,海底来源 %s · 基准 %s · 估算 %s · 插值 %s · 显示量程 %s %.0f 米
+fish.finder.debug.connected,connected,已连接
+fish.finder.debug.disconnected,not connected,未连接
+fish.finder.debug.yes,yes,是
+fish.finder.debug.no,no,否
+fishing.debug.bottom_link.continuous,continuous samples,连续扫描
+fishing.debug.bottom_link.invalid_bottom,invalid bottom sample,海底数据无效
+fishing.debug.bottom_link.non_monotonic_time,non-monotonic scan time,扫描时间不连续
+fishing.debug.bottom_link.scan_gap,scan gap,扫描间隔过长
+fishing.debug.bottom_link.vessel_changed,active vessel changed,活动船只改变
+fishing.debug.bottom_link.bathymetry_source_changed,bathymetry source changed,海底数据来源改变
+fishing.debug.bottom_link.probe_discontinuity,probe position discontinuity,探头位置跳变
+fishing.debug.bottom_link.probe_metadata_missing,probe position metadata missing,缺少探头位置数据
+fishing.debug.finder_preview_heading,Sonar Echo Preview,声呐回波预览
+fishing.debug.finder_display_settings,%s gain · manual %.0f%% · effective %.0f%% · %s range · manual %.0f m · current %.0f m,%s 增益 · 手动 %.0f%% · 当前 %.0f%% · %s 量程 · 手动 %.0f 米 · 当前 %.0f 米
+fishing.debug.finder_symbols,%s fish symbols,%s 鱼形标记
+fishing.debug.finder_preview_depth,Target depth,目标深度
+fishing.debug.finder_preview_strength,Peak intensity,峰值强度
+fishing.debug.finder_preview_size.small,Small,小
+fishing.debug.finder_preview_size.medium,Medium,中
+fishing.debug.finder_preview_size.large,Large,大
+fishing.debug.finder_preview_start,Start preview,开始预览
+fishing.debug.finder_preview_stop,Stop preview,停止预览
+fishing.debug.finder_preview_started,Sonar preview started. Real scan history is untouched.,声呐预览已启动；真实扫描历史未修改。
+fishing.debug.finder_preview_stopped,Sonar preview stopped; real scan history restored.,声呐预览已停止；已恢复真实扫描历史。
+fishing.debug.finder_preview_active,Preview active,预览中
+fishing.debug.finder_preview_inactive,Preview stopped,预览已停止
+fishing.debug.finder_preview_status,%s · depth %.1f m · peak %.2f · size %s,%s · 深度 %.1f 米 · 峰值 %.2f · 规模 %s
+fishing.debug.unit.m, m, 米
+fish.finder.mode.hidden,hidden,隐藏
+fish.finder.mode.mini,mini,迷你
+fish.finder.mode.expanded,expanded,展开
+fish.finder.debug.valid,valid,有效
+fish.finder.debug.invalid,invalid,无效
 fishing.debug.reason.valid,valid,有效
 fishing.debug.reason.other,other,其他
 fishing.debug.reason.unknown_species,unknown species,未知鱼种

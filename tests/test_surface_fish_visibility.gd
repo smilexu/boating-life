@@ -65,8 +65,8 @@ func _run() -> void:
 	var boat := scene.get_node("PlayerBoat/MotionRoot") as Node3D
 	var hud := scene.get_node("PlayerBoat/BoatHUD") as CanvasLayer
 	var original_boat_transform := boat.global_transform
-	var tried_species := {"needlefish": false, "herring": false}
-	for species_id in ["needlefish", "herring"]:
+	var tried_species := {"needlefish": false, "herring": false, "sea_trout": false}
+	for species_id in ["needlefish", "herring", "sea_trout"]:
 		var school_id := _nearest_visual_school_id(schools, species_id, boat.global_position, manager)
 		if school_id.is_empty():
 			print("[SURFACE_FISH_TEST] skipped F3 %s: no visual school inside the configured search range" % species_id)
@@ -86,6 +86,49 @@ func _run() -> void:
 		var before_position: Array = selected_position.duplicate()
 		var before_population := int(selected["population"])
 		renderer.call("_update_visible_fish", 0.16)
+		var visual_diagnostics := renderer.get_school_visual_debug(selected_id, boat.global_position)
+		var nearest_visual_position: Variant = visual_diagnostics.get("visual_nearest_world_position", Vector3(NAN, NAN, NAN))
+		_check(
+			int(visual_diagnostics.get("visual_instances_bound_to_school", 0)) > 0
+			and nearest_visual_position is Vector3
+			and is_finite(nearest_visual_position.x)
+			and float(visual_diagnostics.get("visual_nearest_anchor_offset_m", -1.0)) >= 0.0,
+			"visual-school diagnostics expose the Authority-linked MultiMesh instance position and offset"
+		)
+		if nearest_visual_position is Vector3 and is_finite(nearest_visual_position.x) and is_finite(nearest_visual_position.y) and is_finite(nearest_visual_position.z):
+			var observation_boat_transform := boat.global_transform
+			var wave_sampler := manager.get_wave_sampler()
+			var fish_xz := Vector3(nearest_visual_position.x, 0.0, nearest_visual_position.z)
+			var local_surface: Dictionary = wave_sampler.sample_physics_surface(fish_xz, wave_sampler.wave_time_seconds)
+			boat.global_position = Vector3(nearest_visual_position.x, float(local_surface.get("height", 0.0)) + 0.55, nearest_visual_position.z)
+			var finder := manager.get_fish_finder_sensor()
+			var proximity_scan := finder.scan(true)
+			var matched_diagnostic: Dictionary = {}
+			for candidate_variant in proximity_scan.get("school_diagnostics", []):
+				if str(candidate_variant.get("school_id", "")) == selected_id:
+					matched_diagnostic = candidate_variant
+					break
+			var anchor_values: Array = selected.get("world_position", [])
+			var probe_position: Vector3 = proximity_scan.get("probe_world_position", Vector3.ZERO)
+			var measured_anchor_distance := Vector2(float(anchor_values[0]) - probe_position.x, float(anchor_values[2]) - probe_position.z).length()
+			_check(not matched_diagnostic.is_empty(), "sonar diagnostic retains the visible school's Authority ID near the visually selected fish")
+			if not matched_diagnostic.is_empty():
+				var school_echo: Dictionary = {}
+				for echo_variant in proximity_scan.get("echoes", []):
+					if str(echo_variant.get("school_id", "")) == selected_id:
+						school_echo = echo_variant
+						break
+				var spatial_reason := str(matched_diagnostic.get("rejection_reason", ""))
+				_check(
+					is_equal_approx(float(matched_diagnostic.get("anchor_horizontal_distance_m", -1.0)), measured_anchor_distance)
+					and bool(matched_diagnostic.get("hit", false))
+					and spatial_reason in ["partial_overlap", "school_volume_detected"]
+					and str(school_echo.get("school_id", "")) == selected_id,
+					"sonar detects the Authority school's aggregate volume around rendered fish without sampling renderer individuals"
+				)
+				_check(float(matched_diagnostic.get("overlap_factor", 0.0)) > 0.0 and float(school_echo.get("echo_strength", 0.0)) > 0.0, "real-school beam overlap produces one finite-strength aggregate echo")
+				print("[SURFACE_FISH_TEST][SONAR] species=%s school=%s visual_offset=%.2fm anchor_distance=%.2fm target_depth=%.2fm beam_radius=%.2fm school_radius=%.2fm overlap=%.3f echo_strength=%.3f reason=%s" % [species_id, selected_id, float(visual_diagnostics.get("visual_nearest_anchor_offset_m", -1.0)), float(matched_diagnostic.get("anchor_horizontal_distance_m", -1.0)), float(matched_diagnostic.get("target_depth_below_transducer_m", -1.0)), float(matched_diagnostic.get("beam_radius_m", -1.0)), float(matched_diagnostic.get("effective_school_radius_m", -1.0)), float(matched_diagnostic.get("overlap_factor", 0.0)), float(matched_diagnostic.get("final_echo_strength", 0.0)), spatial_reason])
+			boat.global_transform = observation_boat_transform
 		var unchanged := manager.get_school(selected_id)
 		_check(unchanged["world_position"] == before_position and int(unchanged["population"]) == before_population, "local observation changes no shared fish position or population")
 		var reveal_count := int(bathymetry.water_material.get_shader_parameter("surface_fish_reveal_count"))
@@ -98,7 +141,7 @@ func _run() -> void:
 		_check(not renderer.is_observation_active(), "manual underwater observation returns to the boat camera")
 		boat.global_transform = original_boat_transform
 		await process_frame
-	_check(tried_species["needlefish"] or tried_species["herring"], "at least one F3 surface-species observation was exercised in the local test region")
+	_check(tried_species["needlefish"] or tried_species["herring"] or tried_species["sea_trout"], "at least one F3 surface-species observation was exercised in the local test region")
 
 	print("[SURFACE_FISH_TEST] schools=%d states=%s map_states=%s" % [schools.size(), state_counts, map_states])
 	scene.queue_free()
