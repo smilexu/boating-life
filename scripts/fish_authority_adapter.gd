@@ -10,11 +10,11 @@ func authority_source_name() -> String:
 	return "Unconfigured"
 
 
-func initialize(_seed: int, _bathymetry: BathymetryManager, _georeference: GeoReference, _profiles: Array[FishSpeciesProfile]) -> void:
+func initialize(_seed: int, _bathymetry: BathymetryManager, _georeference: GeoReference, _profiles: Array[FishSpeciesProfile], _initial_game_time_seconds: float = 0.0) -> void:
 	push_error("FishAuthorityAdapter.initialize must be implemented by an authority adapter.")
 
 
-func update(_delta: float) -> void:
+func update(_delta: float, _game_time_seconds: float = -1.0) -> void:
 	pass
 
 
@@ -34,7 +34,7 @@ func get_map_snapshot(_species_ids: Array[String] = []) -> Array[Dictionary]:
 	return []
 
 
-func request_population_change(_school_id: String, _population_delta: int) -> Dictionary:
+func request_population_change(_school_id: String, _population_delta: int, _game_time_seconds: float = -1.0) -> Dictionary:
 	return {"accepted": false, "reason": "Authority adapter does not allow client-side resource mutation."}
 
 

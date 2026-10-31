@@ -26,6 +26,9 @@ var _wave_sampler: WaveSampler
 var _authority: FishAuthorityAdapter
 var _renderer: FishSchoolRenderer
 var _map_layer: FishResourceMap
+var _fishing_encounter_system: FishingEncounterSystem
+var _fish_finder_sensor: FishFinderSensor
+var _world_time_manager: Node
 var _last_revision := -1
 var _map_refresh_elapsed := 0.0
 
@@ -36,6 +39,7 @@ func _ready() -> void:
 	_shallow_seabed_manager = get_node_or_null(shallow_seabed_manager_path) as ShallowSeabedManager
 	_boat = get_node_or_null(boat_path) as Node3D
 	_wave_sampler = get_node_or_null(wave_sampler_path) as WaveSampler
+	_world_time_manager = get_node_or_null("/root/WorldTimeManager")
 	if _bathymetry != null:
 		_georeference = _bathymetry.georeference
 	if species_profiles.is_empty():
@@ -52,6 +56,14 @@ func _ready() -> void:
 	_map_layer = get_node_or_null(map_layer_path) as FishResourceMap
 	if _map_layer != null:
 		_map_layer.configure(self, _bathymetry, _georeference, _boat)
+	_fishing_encounter_system = FishingEncounterSystem.new()
+	_fishing_encounter_system.name = "FishingEncounterSystem"
+	_fishing_encounter_system.configure(self, _boat)
+	add_child(_fishing_encounter_system)
+	_fish_finder_sensor = FishFinderSensor.new()
+	_fish_finder_sensor.name = "FishFinderSensor"
+	_fish_finder_sensor.configure(self, _boat, _bathymetry, _wave_sampler)
+	add_child(_fish_finder_sensor)
 	_last_revision = _authority.get_state_revision()
 	resources_ready.emit()
 	resources_changed.emit(_last_revision)
@@ -60,7 +72,7 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _authority == null:
 		return
-	_authority.update(delta)
+	_authority.update(delta, _world_game_time_seconds())
 	var revision := _authority.get_state_revision()
 	if revision != _last_revision:
 		_last_revision = revision
@@ -129,9 +141,14 @@ func get_map_distribution(species_ids: Array[String] = []) -> Array[Dictionary]:
 
 func get_school_render_state(school: Dictionary) -> String:
 	var species_id := str(school.get("species_id", ""))
-	if species_id not in ["needlefish", "herring"]:
+	var profile := get_species_profile(species_id)
+	if profile == null:
 		return "visual"
-	return "visual" if float(school.get("activity_depth_m", INF)) <= 6.0 else "logical"
+	if not profile.visual_enabled:
+		return "logical"
+	if not profile.surface_activity_cycle_enabled:
+		return "visual"
+	return "visual" if float(school.get("activity_depth_m", INF)) <= profile.logical_depth_threshold_m else "logical"
 
 
 func get_resource_density_at(world_position: Vector3, species_id: String = "") -> Dictionary:
@@ -153,7 +170,7 @@ func get_resource_density_at(world_position: Vector3, species_id: String = "") -
 func request_population_change(school_id: String, population_delta: int) -> Dictionary:
 	if _authority == null:
 		return {"accepted": false, "reason": "No active fish authority."}
-	var result := _authority.request_population_change(school_id, population_delta)
+	var result := _authority.request_population_change(school_id, population_delta, _world_game_time_seconds())
 	if bool(result.get("accepted", false)):
 		_last_revision = _authority.get_state_revision()
 		resources_changed.emit(_last_revision)
@@ -205,6 +222,24 @@ func get_boat() -> Node3D:
 	return _boat
 
 
+func get_wave_sampler() -> WaveSampler:
+	return _wave_sampler
+
+
+func get_fishing_encounter_system() -> FishingEncounterSystem:
+	return _fishing_encounter_system
+
+
+func get_fish_finder_sensor() -> FishFinderSensor:
+	return _fish_finder_sensor
+
+
+## Absolute simulation time in game seconds. Fishing cadence uses this instead
+## of render delta, so pause and time acceleration follow the shared world clock.
+func get_world_game_time_seconds() -> float:
+	return _world_game_time_seconds()
+
+
 ## A server adapter can pass one shared ship-threat snapshot to all clients.
 ## In the current local-authority prototype, the renderer samples the player
 ## boat and nodes in its configured disturbance-source group instead.
@@ -225,6 +260,7 @@ func _load_default_profiles() -> void:
 		"res://resources/fish_species/needlefish.tres",
 		"res://resources/fish_species/herring.tres",
 		"res://resources/fish_species/three_spined_stickleback.tres",
+		"res://resources/fish_species/sea_trout.tres",
 	]:
 		var profile := ResourceLoader.load(path) as FishSpeciesProfile
 		if profile != null:
@@ -232,4 +268,13 @@ func _load_default_profiles() -> void:
 
 
 func _initialize_authority(adapter: FishAuthorityAdapter) -> void:
-	adapter.initialize(world_seed, _bathymetry, _georeference, species_profiles)
+	adapter.initialize(world_seed, _bathymetry, _georeference, species_profiles, _world_game_time_seconds())
+
+
+func _world_game_time_seconds() -> float:
+	if _world_time_manager == null:
+		return 0.0
+	var time_state: Variant = _world_time_manager.get("state")
+	if time_state == null:
+		return 0.0
+	return maxf(0.0, float(time_state.get("day_cycle_index")) * 86400.0 + float(time_state.get("cycle_seconds")))

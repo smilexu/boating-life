@@ -18,7 +18,7 @@ func _run() -> void:
 	var bathymetry := manager.get_bathymetry_manager()
 	var georeference := manager.get_georeference()
 	_check(manager.get_all_school_snapshots().size() > 0, "local authority generated fish resources")
-	_check(manager.get_species_profiles().size() == 3, "three species profiles loaded")
+	_check(manager.get_species_profiles().size() == 4, "four species profiles loaded")
 	_check(bathymetry != null and bathymetry.data_available, "existing EMODnet bathymetry loaded")
 	_check(georeference != null, "existing GeoReference loaded")
 	if bathymetry == null or georeference == null:
@@ -26,6 +26,36 @@ func _run() -> void:
 		return
 
 	var profiles := manager.get_species_profiles()
+	var previous_locale := TranslationServer.get_locale()
+	TranslationServer.set_locale("en")
+	var sea_trout_profile := manager.get_species_profile("sea_trout")
+	_check(TranslationServer.translate(sea_trout_profile.name_key) == "Sea trout", "English locale resolves the stable sea trout name key")
+	TranslationServer.set_locale("zh_CN")
+	_check(TranslationServer.translate(sea_trout_profile.name_key) == "海鳟", "Simplified Chinese resolves the same stable sea trout name key")
+	_check(TranslationServer.translate(sea_trout_profile.description_key) != sea_trout_profile.description_key, "sea trout habitat description uses a localization key")
+	var fish_ui_translation_keys := [
+		"fish.map.title", "fish.map.close", "fish.map.subtitle", "fish.map.tab.fish_resources",
+		"fish.map.species_heading", "fish.map.filter_hint", "fish.map.dolphin_filter", "fish.map.summary",
+		"fish.map.detail_heading", "fish.map.detail_prompt", "fish.map.footer",
+		"fish.debug.observation_title", "fish.debug.camera.enter", "fish.debug.camera.return",
+		"fish.debug.location.initial", "fish.debug.motion_toggle", "fish.debug.renderer_unavailable",
+		"fish.debug.manager_unavailable", "fish.debug.profile_or_depth_unavailable",
+		"fish.debug.location.no_resource", "fish.debug.location.no_safe_approach",
+		"fish.debug.location.camera_started", "fish.debug.location.camera_available",
+		"fish.debug.location.arrived", "fish.debug.location.no_visible_school",
+		"fish.debug.location.no_safe_surface_approach", "fish.debug.location.activity_near_surface",
+		"fish.debug.location.activity_visible_layer", "fish.debug.location.arrived_surface",
+		"fish.debug.camera.select_school_first", "fish.debug.camera.school_unavailable",
+		"fish.debug.enabled", "fish.debug.disabled",
+	]
+	var fish_ui_translations_resolve := true
+	for locale in ["en", "zh_CN"]:
+		TranslationServer.set_locale(locale)
+		for key in fish_ui_translation_keys:
+			if TranslationServer.translate(key) == key:
+				fish_ui_translations_resolve = false
+	_check(fish_ui_translations_resolve, "fish map and observation HUD labels resolve localization keys in English and Simplified Chinese")
+	TranslationServer.set_locale(previous_locale)
 	var first_authority := FishLocalAuthority.new()
 	var authority_init_usec := Time.get_ticks_usec()
 	first_authority.initialize(manager.get_world_seed(), bathymetry, georeference, profiles)
@@ -35,14 +65,46 @@ func _run() -> void:
 	second_authority.initialize(manager.get_world_seed(), bathymetry, georeference, profiles)
 	var second_snapshot := second_authority.create_snapshot()
 	_check(_snapshot_layouts_equal(first_snapshot, second_snapshot), "initial resources are deterministic for the same seed")
+	var reindexed_profiles: Array[FishSpeciesProfile] = []
+	for profile in profiles:
+		var reindexed := profile.duplicate(true) as FishSpeciesProfile
+		reindexed.species_index = 100 - profile.species_index
+		reindexed_profiles.append(reindexed)
+	var reindexed_authority := FishLocalAuthority.new()
+	reindexed_authority.initialize(manager.get_world_seed(), bathymetry, georeference, reindexed_profiles)
+	_check(_snapshot_layouts_equal(first_snapshot, reindexed_authority.create_snapshot()), "species_index reassignment does not change species identity or generated school layout")
+	_check(reindexed_authority.restore_snapshot(first_snapshot), "species_index reassignment does not invalidate an otherwise identical ecology snapshot")
+	var reversed_profiles := profiles.duplicate()
+	reversed_profiles.reverse()
+	var reversed_authority := FishLocalAuthority.new()
+	reversed_authority.initialize(manager.get_world_seed(), bathymetry, georeference, reversed_profiles)
+	_check(_snapshot_layouts_equal(first_snapshot, reversed_authority.create_snapshot()), "profile resource array order does not change the generated fish layout")
+	var changed_profiles: Array[FishSpeciesProfile] = []
+	for profile in profiles:
+		var changed := profile.duplicate(true) as FishSpeciesProfile
+		if changed.species_id == "sea_trout":
+			changed.spawn_chance += 0.01
+		changed_profiles.append(changed)
+	var changed_authority := FishLocalAuthority.new()
+	changed_authority.initialize(manager.get_world_seed(), bathymetry, georeference, changed_profiles)
+	_check(not changed_authority.restore_snapshot(first_snapshot), "authority rejects snapshots created with a different ecology profile signature")
 	_check(first_authority.restore_snapshot(first_snapshot), "authority snapshot restores")
+	var legacy_school_state: Dictionary = first_snapshot["schools"][0].duplicate(true)
+	legacy_school_state["schema_version"] = 2
+	_check(FishSchoolState.from_dictionary(legacy_school_state) == null, "legacy school schema v2 is explicitly rejected instead of being reinterpreted")
+	var legacy_snapshot: Dictionary = first_snapshot.duplicate(true)
+	legacy_snapshot["schema_version"] = 2
+	legacy_snapshot["layout_version"] = 4
+	_check(not first_authority.restore_snapshot(legacy_snapshot), "pre-recovery authority snapshot v2/layout4 is explicitly rejected")
 	var wrong_layout: Dictionary = first_snapshot.duplicate(true)
 	wrong_layout["layout_version"] = 99
 	_check(not first_authority.restore_snapshot(wrong_layout), "unsupported layout snapshots are rejected")
 
-	var species_counts := {"needlefish": 0, "herring": 0, "three_spined_stickleback": 0}
+	var species_counts := {"needlefish": 0, "herring": 0, "three_spined_stickleback": 0, "sea_trout": 0}
+	var population_totals := {"needlefish": 0, "herring": 0, "three_spined_stickleback": 0, "sea_trout": 0}
 	var invalid_school_count := 0
 	var unsuitable_school_count := 0
+	var out_of_profile_population_count := 0
 	var seagrass_proxy_school_count := 0
 	var stickleback_small_groups := 0
 	var stickleback_common_groups := 0
@@ -64,6 +126,10 @@ func _run() -> void:
 			if profile.suitability_for_depth(float(sample["depth_m"])) <= 0.0:
 				unsuitable_school_count += 1
 		species_counts[str(school["species_id"])] = int(species_counts.get(str(school["species_id"]), 0)) + 1
+		var school_population := int(school.get("population", 0))
+		population_totals[str(school["species_id"])] = int(population_totals.get(str(school["species_id"]), 0)) + school_population
+		if school_population < profile.population_min or school_population > profile.population_max:
+			out_of_profile_population_count += 1
 		if str(school["species_id"]) == "three_spined_stickleback":
 			stickleback_school_count += 1
 			var population := int(school.get("population", 0))
@@ -85,8 +151,11 @@ func _run() -> void:
 	_check(species_counts["needlefish"] > 0, "needlefish resources exist in the map region")
 	_check(species_counts["herring"] > 0, "herring resources exist in the map region")
 	_check(species_counts["three_spined_stickleback"] > 0, "stickleback resources exist in the map region")
+	_check(species_counts["sea_trout"] > 0, "sea trout resources exist in the map region")
+	_check(species_counts["sea_trout"] < species_counts["herring"] and float(species_counts["sea_trout"]) / float(all_schools.size()) < 0.1, "sea trout remains a sparse minority rather than dominating the regional schools")
 	_check(invalid_school_count == 0, "all generated school locations pass real water and land-mask validation")
 	_check(unsuitable_school_count == 0, "all generated schools satisfy their profile depth rules")
+	_check(out_of_profile_population_count == 0, "all generated school populations satisfy their species profile bounds")
 	_check(seagrass_proxy_school_count > 0, "some stickleback resources align with deterministic eelgrass meadow habitat")
 	var stickleback_profile := manager.get_species_profile("three_spined_stickleback")
 	_check(stickleback_profile != null and is_equal_approx(stickleback_profile.maximum_depth_m, 6.0), "stickleback habitat is restricted to the 0-6 m shallows")
@@ -97,11 +166,11 @@ func _run() -> void:
 	_check(manager.get_map_distribution(["herring"]).all(func(school: Dictionary) -> bool: return str(school["species_id"]) == "herring"), "map filter returns only the selected species")
 
 	var nearby := manager.get_schools_near(boat.global_position, 1200.0)
-	var nearby_by_species := {"needlefish": 0, "herring": 0, "three_spined_stickleback": 0}
+	var nearby_by_species := {"needlefish": 0, "herring": 0, "three_spined_stickleback": 0, "sea_trout": 0}
 	for school in nearby:
 		var id := str(school["species_id"])
 		nearby_by_species[id] = int(nearby_by_species.get(id, 0)) + 1
-	print("[FISH_TEST] regional species counts=%s; schools within 1200m of boat=%s" % [species_counts, nearby_by_species])
+	print("[FISH_TEST] regional school counts=%s; total fish=%s; schools within 1200m of boat=%s" % [species_counts, population_totals, nearby_by_species])
 	var revision_before_step := first_authority.get_state_revision()
 	var simulation_start_usec := Time.get_ticks_usec()
 	var worst_simulation_frame_usec := 0
@@ -132,6 +201,9 @@ func _run() -> void:
 		var model := packed.instantiate()
 		var mesh_nodes := model.find_children("*", "MeshInstance3D", true, false)
 		_check(not mesh_nodes.is_empty(), "%s contains a renderable mesh" % profile.species_id)
+		if profile.species_id == "sea_trout":
+			var sea_trout_mesh := (mesh_nodes[0] as MeshInstance3D).mesh if not mesh_nodes.is_empty() else null
+			_check(mesh_nodes.size() == 1 and sea_trout_mesh != null and sea_trout_mesh.get_surface_count() == 1, "sea trout model matches the current single-mesh, single-surface MultiMesh adapter")
 		if not mesh_nodes.is_empty():
 			var mesh_instance := mesh_nodes[0] as MeshInstance3D
 			_check(mesh_instance.mesh != null and mesh_instance.mesh.get_surface_count() > 0, "%s mesh has surfaces" % profile.species_id)
@@ -142,6 +214,23 @@ func _run() -> void:
 
 	var resource_map := main_root.get_node("FishResourceMap") as FishResourceMap
 	var map_canvas := resource_map.find_child("ResourceDistributionMap", true, false) as FishResourceMapCanvas
+	var details_label := resource_map.get("_details_label") as Label
+	var sample_by_species: Dictionary = {}
+	for school in manager.get_all_school_snapshots():
+		var species_id := str(school.get("species_id", ""))
+		if not sample_by_species.has(species_id):
+			sample_by_species[species_id] = school
+	for locale in ["en", "zh_CN"]:
+		TranslationServer.set_locale(locale)
+		for profile in profiles:
+			var school: Dictionary = sample_by_species.get(profile.species_id, {})
+			if school.is_empty() or details_label == null:
+				continue
+			resource_map.call("_update_school_details", school)
+			var expected_name := TranslationServer.translate(profile.name_key)
+			_check(details_label.text.contains(expected_name), "%s F4 details show the localized %s name" % [locale, profile.species_id])
+			_check(not details_label.text.contains("fish.map.") and not details_label.text.contains("%s"), "%s F4 details resolve species, habitat, activity and format keys" % locale)
+	TranslationServer.set_locale(previous_locale)
 	var map_key := InputEventKey.new()
 	map_key.physical_keycode = KEY_F4
 	map_key.pressed = true
@@ -164,9 +253,20 @@ func _run() -> void:
 	_check(not resource_map.is_map_open(), "F4 key closes the fish resource map")
 
 	var renderer := main_root.get_node("FishResourceManager/FishSchoolRenderer") as FishSchoolRenderer
+	var authority_population_before_budget_change := 0
+	for school in manager.get_all_school_snapshots():
+		authority_population_before_budget_change += int(school.get("population", 0))
+	var previous_visible_budget := renderer.maximum_visible_fish
+	renderer.maximum_visible_fish = 100
+	await process_frame
+	var authority_population_after_budget_change := 0
+	for school in manager.get_all_school_snapshots():
+		authority_population_after_budget_change += int(school.get("population", 0))
+	_check(authority_population_before_budget_change == authority_population_after_budget_change, "changing the visual fish budget does not alter authoritative population")
+	renderer.maximum_visible_fish = previous_visible_budget
 	await create_timer(0.5).timeout
 	var render_stats := renderer.get_render_statistics()
-	_check(int(render_stats.get("multimesh_batches", 0)) == 3, "renderer builds one MultiMesh batch per fish species")
+	_check(int(render_stats.get("multimesh_batches", 0)) == 4, "renderer builds one MultiMesh batch per fish species")
 	_check(renderer.smooth_motion_enabled, "fish visual interpolation is enabled by default")
 	_check(is_equal_approx(float(render_stats.get("movement_update_hz", 0.0)), 6.25), "fish behavior tick remains at 6.25 Hz")
 	var start_transform := Transform3D(Basis(Vector3.UP, deg_to_rad(170.0)), Vector3(0.0, -2.0, 0.0))
@@ -197,9 +297,12 @@ func _run() -> void:
 	var vertical_test_passed := 0
 	var vertical_test_count := 0
 	var wave_sampler := main_root.get_node("WaveSampler") as WaveSampler
-	if not nearby.is_empty():
-		var school: Dictionary = nearby[0]
+	var saved_initial_boat_position := boat.global_position
+	if not nearest_shallow_stickleback.is_empty():
+		var school: Dictionary = nearest_shallow_stickleback
 		var profile := manager.get_species_profile(str(school["species_id"]))
+		var school_position_data: Array = school["world_position"]
+		boat.global_position = Vector3(float(school_position_data[0]) + 100.0, 0.0, float(school_position_data[2]))
 		var test_records := renderer._build_school_fish(school, profile, mini(12, int(school["population"])), 0.16, 1.0, {})
 		if not test_records.is_empty():
 			var individual_key := str(test_records[0]["individual_key"])
@@ -226,6 +329,7 @@ func _run() -> void:
 				vertical_test_passed += 1
 	_check(vertical_test_count > 0, "client generated school transforms for local fish")
 	_check(vertical_test_passed == vertical_test_count, "client fish transforms remain between sampled wave surface and seabed")
+	boat.global_position = saved_initial_boat_position
 	if not nearest_shallow_stickleback.is_empty() and stickleback_profile != null:
 		var saved_boat_position := boat.global_position
 		var stickleback_position_values: Array = nearest_shallow_stickleback["world_position"]
@@ -394,10 +498,13 @@ func _snapshot_layouts_equal(a: Dictionary, b: Dictionary) -> bool:
 	var schools_b: Array = b.get("schools", [])
 	if schools_a.size() != schools_b.size():
 		return false
-	for index in range(schools_a.size()):
-		var one: Dictionary = schools_a[index]
-		var two: Dictionary = schools_b[index]
-		if one["school_id"] != two["school_id"] or one["population"] != two["population"] or one["world_position"] != two["world_position"]:
+	var schools_by_id: Dictionary = {}
+	for school in schools_b:
+		schools_by_id[str(school.get("school_id", ""))] = school
+	for one in schools_a:
+		var school_id := str(one.get("school_id", ""))
+		var two: Dictionary = schools_by_id.get(school_id, {})
+		if two.is_empty() or one["population"] != two["population"] or one["world_position"] != two["world_position"] or one["seed"] != two["seed"]:
 			return false
 	return true
 

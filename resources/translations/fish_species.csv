@@ -1,0 +1,284 @@
+keys,en,zh_CN
+fish.species.needlefish.name,Needlefish,针鱼
+fish.species.needlefish.description,Pelagic fish that often feeds near the surface; chart depth is a habitat proxy in this prototype.,常在近表层摄食的远洋鱼；本原型以海图水深近似栖息地。
+fish.species.herring.name,Herring,鲱鱼
+fish.species.herring.description,Schooling pelagic fish with simplified surface and deep activity states.,群游远洋鱼；表层与深层活动状态为简化的游戏模拟。
+fish.species.three_spined_stickleback.name,Three-spined stickleback,三刺鱼
+fish.species.three_spined_stickleback.description,Small coastal fish associated here with shallow water and eelgrass-edge proxy habitat.,小型近岸鱼；本原型以浅水和海草边缘代理栖息地。
+fish.species.sea_trout.name,Sea trout,海鳟
+fish.species.sea_trout.description,The marine growth phase of brown trout; freshwater migration and spawning are not simulated.,褐鳟的海水生长阶段；本原型不模拟淡水洄游和繁殖。
+fishing.lure.surface_lure.name,Surface lure,表层拟饵
+fishing.lure.shallow_minnow.name,Shallow minnow,浅潜米诺
+fishing.lure.medium_minnow.name,Medium minnow,中潜米诺
+fish.map.species_filter,%s · %s,%s · %s
+fish.map.legend.species,● %s,● %s
+fish.map.legend.dolphins,◇ Dolphin pods,◇ 海豚群
+fish.map.legend.visual_logical,Solid: visible fish schools · outlined: deep logical schools (not rendered),实心：可见鱼群 · 空心轮廓：深水逻辑鱼群（不渲染）
+fish.map.legend.depth_source,Chart depth reference: EMODnet DTM 2024 / LAT,海图水深基准：EMODnet DTM 2024 / LAT
+fish.map.empty_selection,No predicted resource point matches the current filter.,当前位置没有符合筛选条件的预测资源点。
+fish.map.position_unknown,Position unknown,位置未知
+fish.map.render.visual_layer,Visible fish (activity depth ≤ %.1f m),可见鱼群（活动深度 ≤ %.1f m）
+fish.map.render.logical_layer,Logical school (activity depth > %.1f m; no 3D fish rendered),逻辑鱼群（活动深度 > %.1f m；不渲染 3D 鱼体）
+fish.map.render.resource_point,Eco-resource point,生态资源点
+fish.map.activity_depth,Activity depth,活动深度
+fish.map.chart_depth,Chart depth,海图水深
+fish.map.activity_label,Activity,活动状态
+fish.map.resource.available,available,可用
+fish.map.resource.depleted,depleted,耗尽
+fish.map.activity.near_surface,near surface,近表层
+fish.map.activity.ascending,ascending,上浮中
+fish.map.activity.deep,deep,深层
+fish.map.activity.descending,descending,下潜中
+fish.map.activity.inactive,inactive,未活动
+fish.map.activity.schooling,schooling,群游
+fish.map.activity.cruise,cruising,巡游
+fish.map.activity.unknown,unknown,未知
+fish.map.population.small,small,小型群
+fish.map.population.medium,medium,中型群
+fish.map.population.large,large,大型群
+fish.map.details.format,"%s · %s
+%s
+%s
+%s: %.1f m · %s: %.1f m
+%s: %s
+%s: %s
+%s (%d fish)
+%s: %s · %s: %s","%s · %s
+%s
+%s
+%s：%.1f m · %s：%.1f m
+%s：%s
+%s：%s
+%s（%d 条鱼）
+%s：%s · %s：%s"
+fish.map.habitat_label,Habitat,栖息区域
+fish.map.habitat.coastal_eelgrass_edge,eelgrass edge,海草边缘
+fish.map.habitat.coastal_eelgrass_proxy,eelgrass meadow proxy,海草草甸代理区
+fish.map.habitat.coastal_shallow,coastal shallows,近岸浅水
+fish.map.habitat.nearshore_shelf,nearshore shelf,近岸陆架
+fish.map.habitat.open_shelf,open shelf,外陆架
+fish.map.habitat.unknown,unknown,未知
+fish.behavior.cruise,cruise,巡游
+fish.behavior.turn,turning,转向
+fish.behavior.hover,hovering,悬停
+fish.behavior.flee,fleeing,受惊逃散
+fish.debug.observation.none,Fish observation: no school selected.,鱼群观察数据：未选择鱼群。
+fish.debug.observation.loading,Fish observation: school data is loading or outside the visible range.,鱼群观察数据：鱼群正在加载或已离开可见范围。
+fish.debug.behavior_counts,%s %d · %s %d · %s %d · %s %d,%s %d · %s %d · %s %d · %s %d
+fish.debug.visibility.visual,visible school,可见鱼群
+fish.debug.visibility.logical,logical school (not rendered),逻辑鱼群（不渲染 3D 鱼体）
+fish.debug.observation_status,"%s · %s · display length %.0f cm · population %d (visible %d)
+Surface depth %.2f m · chart depth %.2f m · seabed clearance %.2f m
+Habitat: %s · behaviour: %s · activity: %s","%s · %s · 显示长度 %.0f cm · 种群 %d（可见 %d）
+距水面 %.2f m · 海图水深 %.2f m · 距海床 %.2f m
+栖息区：%s · 行为：%s · 活动：%s"
+fish.debug.observe_species,Observe %s,观察%s
+fish.debug.observe_coastal_tooltip,Move above this shallow school; fish scatter sideways.,移动到该浅水鱼群上方；鱼群会向侧方躲避。
+fish.debug.observe_surface_tooltip,Move near a visible school and keep the boat outside its disturbance range.,移动到可见鱼群附近，并让船保持在鱼群惊扰范围之外。
+fish.debug.observation_initial_status,"Choose a fish school to inspect its displayed size, activity layer, and seabed clearance.",选择鱼群以查看显示尺寸、活动水层和海床净空。
+fish.debug.species_render_counts,%s visual/logical schools %d/%d,%s 视觉/逻辑鱼群 %d/%d
+fish.debug.motion_status,Visual smoothing %s · AI %.2f Hz · visible fish %d · near-surface schools %d · ripples %d\n%s\nAI update %.2f ms · MultiMesh submit %.2f ms/frame,运动平滑 %s · AI %.2f Hz · 可见鱼 %d · 近表层群 %d · 水纹 %d\n%s\nAI 更新 %.2f ms · MultiMesh 提交 %.2f ms/帧
+fish.debug.location.over_school,above the school,鱼群正上方
+fish.debug.location.near_school,near the school,鱼群附近
+fish.map.location_label,Position,位置
+fish.map.resource_label,Resource,资源状态
+fish.map.unknown_species,Unknown species,未知鱼种
+fish.map.activity.surface_cruise,surface cruising,表层巡游
+fish.map.activity.deep_cruise,deep cruising,深层巡游
+fish.map.activity.surface_schooling,surface schooling,表层群游
+fish.map.activity.deep_schooling,deep schooling,深层群游
+fish.map.activity.turn,turning,转向
+fish.map.activity.flee,fleeing,逃散
+fish.map.activity.scattering,scattering,散开中
+fish.map.activity.recovering,regrouping,重新聚群
+fish.map.title,Map & Environment · ØRESUND,海图与环境数据 · ØRESUND
+fish.map.close,Close · F4 / Esc,关闭 · F4 / Esc
+fish.map.subtitle,Predicted fish resources and current dolphin positions · EMODnet bathymetry with OSM coast mask,鱼类资源预测与海豚当前位置 · 底图由 EMODnet 水深和 OSM 海岸掩膜约束
+fish.map.tab.fish_resources,Fish resources,鱼类资源
+fish.map.species_heading,Species filter,鱼种筛选
+fish.map.filter_hint,Fish tracking is off by default; dolphin pods show their current positions. Filter choices are saved.,鱼类追踪默认关闭；海豚群默认显示当前位置。筛选选择会自动保存。
+fish.map.dolphin_filter,Dolphin pods · 海豚群,Dolphin pods · 海豚群
+fish.map.summary,Filtered resources: %d fish schools · %d dolphin pods,当前筛选：%d 个鱼类资源点 · %d 个海豚群
+fish.map.detail_heading,Area details,区域信息
+fish.map.detail_prompt,Select a fish resource point or dolphin pod marker to view species and group details.,点击鱼类资源点或海豚群标记查看物种、位置与群体信息。
+fish.map.footer,%s Authority · Seed %d · Revision %d · Fish are predicted resource points; enable dolphin pods to track their local authority positions,%s Authority · Seed %d · Revision %d · 鱼类为预测资源点；勾选海豚群可追踪当前本地权威位置
+fish.debug.observation_title,Fish observation points · debug teleport,鱼群观察点 · 调试传送
+fish.debug.camera.enter,Enter underwater fish view,进入水下鱼群观察视角
+fish.debug.camera.return,Return to boat view,返回船上视角
+fish.debug.location.initial,Move the boat to a real fish observation point; this does not move the shared school anchor.,移动船只到真实鱼群观察位置；不会移动鱼群的共享生态锚点。
+fish.debug.motion_toggle,Per-frame fish motion smoothing (A/B debug),鱼群逐帧平滑运动（A/B 调试）
+fish.debug.renderer_unavailable,Fish renderer is unavailable.,鱼群渲染器不可用。
+fish.debug.enabled,On,开
+fish.debug.disabled,Off,关
+fish.debug.manager_unavailable,Fish resource manager is unavailable.,鱼类资源管理器不可用。
+fish.debug.profile_or_depth_unavailable,Fish profile or bathymetry data is unavailable.,鱼种配置或水深数据不可用。
+fish.debug.location.no_resource,No usable %s school resource exists in this world.,当前世界没有可用的%s鱼群资源点。
+fish.debug.location.no_safe_approach,Found a %s school, but no nearby approach position has suitable water depth.,找到了%s鱼群，但附近没有可用水深的靠近位置。
+fish.debug.location.camera_started,Underwater observation is active; shallow fish scatter sideways. Use Return to boat view to leave.,已切换到水下观察视角；鱼群会在浅水层侧向散开，按‘返回船上视角’恢复。
+fish.debug.location.camera_available,Use Enter underwater fish view to observe the school.,可按‘进入水下鱼群观察视角’查看。
+fish.debug.location.arrived,Near %s %s: boat is %.0f m from the school center · chart depth %.1f m · school size %d · start point was %.1f km away. %s,已到最近%s%s：船距群中心 %.0f m · 水深 %.1f m · 群体 %d 条 · 出发点距群 %.1f km。%s
+fish.debug.location.no_visible_school,No visible schools within %.0f km for %s; deep logical schools remain in world resources.,%.0f km 内没有可观察的%s视觉鱼群；深水逻辑鱼群仍保留在世界资源中。
+fish.debug.location.no_safe_surface_approach,Found a visible %s school, but there is no safe surface position nearby.,找到了%s视觉鱼群，但鱼群附近没有安全水面位置。
+fish.debug.location.activity_near_surface,active near the surface,正在近表层活动
+fish.debug.location.activity_visible_layer,in the visible water layer,位于可见水层
+fish.debug.location.arrived_surface,Near %s %s: boat is %.0f m from the school center · fish depth %.1f m · chart depth %.1f m · school size %d · start point was %.1f km away. Keep the boat view; switch underwater manually for a close view.,已到%s%s：船距群中心 %.0f m · 鱼群深度 %.1f m · 海图水深 %.1f m · 群体 %d 条 · 出发点距群 %.1f km。保持船上镜头；需要水下近景时再手动切换。
+fish.debug.camera.select_school_first,Select a species and move to a school before entering its observation view.,先选择一个鱼种，传送到鱼群后再进入观察视角。
+fish.debug.camera.school_unavailable,The selected school is outside the 6 m visual layer or unavailable. Select a visible near-surface school.,所选鱼群当前不在 6 米视觉层或已不可用，请重新选择近表层鱼群。
+fishing.lure.surface_lure.name,Surface lure,表层拟饵
+fishing.lure.shallow_minnow.name,Shallow minnow,浅潜米诺
+fishing.lure.medium_minnow.name,Medium minnow,中潜米诺
+fishing.debug.tab,Fishing,钓鱼
+fishing.debug.title,Trolling and fish finder diagnostics,拖钓与鱼探仪诊断
+fishing.debug.seed,Random seed,随机种子
+fishing.debug.start,Start trolling,开始拖钓
+fishing.debug.stop,Stop trolling,停止拖钓
+fishing.debug.roll,Judge 60 game seconds,判定 60 游戏秒
+fishing.debug.force_hook,Hook valid school,有效鱼群强制中鱼
+fishing.debug.begin_retrieval,Begin retrieval,开始收线
+fishing.debug.settle,Complete retrieval,完成收线结算
+fishing.debug.cancel,Cancel catch,取消中鱼
+fishing.debug.scan,Scan fish finder,扫描鱼探仪
+fishing.debug.unavailable,Unavailable,不可用
+fishing.debug.lure_selected,Lure selected.,已选择拟饵。
+fishing.debug.lure_rejected,Lure change rejected while a catch is pending.,中鱼待处理时不能更换拟饵。
+fishing.debug.seed_applied,Random seed set to %d.,随机种子已设为 %d。
+fishing.debug.started,Trolling started.,已开始拖钓。
+fishing.debug.stopped,Trolling stopped.,已停止拖钓。
+fishing.debug.roll_result,Judgement complete: hooked=%s · chance %.2f%%,判定完成：中鱼=%s · 概率 %.2f%%
+fishing.debug.action_result,Accepted=%s · %s,已接受=%s · %s
+fishing.debug.action_not_ready,Action is not available in the current state.,当前状态下不能执行此操作。
+fishing.debug.retrieval_started,Retrieval started.,已开始收线。
+fishing.debug.cancel_result,Catch cancelled=%s,已取消中鱼=%s
+fishing.debug.scan_result,Scan accepted=%s · echoes %d · %s,扫描已接受=%s · 回波 %d · %s
+fishing.debug.state,State: %s,状态：%s
+fishing.debug.current_lure,Lure: %s,拟饵：%s
+fishing.debug.speed,Boat speed: %.2f m/s,船速：%.2f m/s
+fishing.debug.work_depth,Effective lure depth: %.1f–%.1f m,拟饵有效水层：%.1f–%.1f m
+fishing.debug.candidates,Valid schools: %d / nearby schools: %d,有效鱼群：%d / 附近鱼群：%d
+fishing.debug.rate,Rate: %.3f per game hour · p/min %.2f%%,事件率：%.3f / 游戏小时 · 每分钟概率 %.2f%%
+fishing.debug.pending,Pending catch: %s,待处理中鱼：%s
+fishing.debug.candidate_row,%s · school %s · depth %.1f m · depth match %.2f · speed %.2f · rate %.3f/h · %s,%s · 鱼群 %s · 深度 %.1f m · 水层匹配 %.2f · 船速匹配 %.2f · 事件率 %.3f/小时 · %s
+fishing.debug.last_catch,Last catch: %s · %.0f cm · %.2f kg · population %d→%d,最近渔获：%s · %.0f cm · %.2f kg · 种群 %d→%d
+fishing.debug.finder,Fish Finder: scan %d · echoes %d · %s,鱼探仪：扫描 %d · 回波 %d · %s
+fishing.debug.finder_detail,Probe chart depth %.1f m · water column %.1f m · first echo depth %.1f m · strength %.2f,探头海图水深 %.1f m · 水柱 %.1f m · 首个回波深度 %.1f m · 强度 %.2f
+fishing.debug.reason.valid,valid,有效
+fishing.debug.reason.other,other,其他
+fishing.debug.reason.unknown_species,unknown species,未知鱼种
+fishing.debug.reason.empty_school,school empty,鱼群已耗尽
+fishing.debug.reason.method_or_lure_mismatch,method or lure mismatch,钓法或拟饵不匹配
+fishing.debug.reason.activity_depth_mismatch,water layer mismatch,活动水层不匹配
+fishing.debug.reason.boat_speed_outside_trolling_window,speed outside trolling range,船速不在拖钓范围
+fishing.debug.reason.school_cooldown,school cooldown,鱼群冷却中
+fishing.debug.reason.zero_event_rate,zero encounter rate,中鱼事件率为零
+fishing.debug.reason.not_ready_to_judge,not ready to judge,当前不可判定
+fishing.debug.reason.not_ready_to_hook,not ready to hook,当前不可强制中鱼
+fishing.debug.reason.no_valid_school_candidate,no valid fish school,没有有效鱼群
+fishing.debug.reason.no_retrieval_pending,no retrieval pending,没有待收线的中鱼
+fishing.debug.reason.catch_id_mismatch,catch ID mismatch,中鱼事件编号不匹配
+fishing.debug.reason.catch_already_settled,catch already settled,中鱼已结算
+fishing.debug.reason.school_unavailable,school unavailable,鱼群不可用
+fishing.debug.reason.species_mismatch,species mismatch,鱼种不匹配
+fishing.debug.reason.authority_rejected_settlement,authority rejected settlement,生态权威拒绝结算
+fishing.debug.reason.scan_interval,scan interval not reached,尚未达到扫描间隔
+fishing.debug.reason.dependencies_unavailable,required system unavailable,所需系统不可用
+fishing.debug.reason.unavailable,unavailable,不可用
+fishing.debug.reason.hooked,hooked,已中鱼
+fishing.debug.reason.settled,settled,已结算
+fishing.debug.reason.not_scanned,not scanned,尚未扫描
+fishing.debug.state.idle,Idle,待机
+fishing.debug.state.trolling,Trolling,拖钓中
+fishing.debug.state.hooked,Hooked,已中鱼
+fishing.debug.state.retrieving,Retrieving,收线中
+fishing.debug.state.settled,Settled,已结算
+fishing.ui.title,Trolling,拖钓
+fishing.ui.depth,Lure running depth %.1f–%.1f m,拟饵工作水层 %.1f–%.1f 米
+fishing.ui.start,Start trolling,开始拖钓
+fishing.ui.stop,Stop,停止
+fishing.ui.unavailable,Unavailable,不可用
+fishing.ui.lure_locked,Lure cannot be changed during a catch.,中鱼期间不能更换拟饵。
+fishing.ui.start_rejected,Unable to start trolling.,无法开始拖钓。
+fishing.ui.cancelled,Catch cancelled.,已取消中鱼。
+fishing.ui.hooked,Fish on! Reeling in...,中鱼！正在收线……
+fishing.ui.unknown_fish,Unknown fish,未知鱼种
+fishing.ui.catch_result,%s · %.0f cm · %.2f kg,%s · %.0f 厘米 · %.2f 千克
+fishing.ui.catch_confirmed,Catch confirmed,捕获成功
+fishing.ui.simulation_preview,Simulation preview,模拟预览
+fishing.ui.catch_length_format,Length: %.0f cm,长度：%.0f 厘米
+fishing.ui.catch_weight_format,Estimated weight: %.2f kg,估计重量：%.2f 千克
+fishing.ui.last_catch_format,Last catch: %s · %.0f cm · %.2f kg,最近渔获：%s · %.0f 厘米 · %.2f 千克
+camera.mode.follow,Follow camera,跟随视角
+camera.mode.god,God view,上帝视角
+camera.mode.fight_camera,Fight Camera,中鱼视角
+fishing.debug.presentation_status,Fight: %s · %.1f s left · %.0f%%,搏鱼：%s · 剩余 %.1f 秒 · %.0f%%
+fishing.debug.presentation_load,Rod load %.0f%% · line %s %.1f m · fish %s,鱼竿负载 %.0f%% · 鱼线%s %.1f 米 · 鱼体%s
+fishing.debug.presentation_camera,Camera: %s · auto switch %s,镜头：%s · 自动切换 %s
+fishing.debug.auto_on,ON,开启
+fishing.debug.auto_off,OFF,关闭
+fishing.debug.phase.none,Inactive,未进行
+fishing.debug.phase.hook_strike,Hook strike,突然中鱼
+fishing.debug.phase.fish_struggle,Fish struggle,鱼体挣扎
+fishing.debug.phase.progressive_retrieval,Progressive retrieval,持续收线
+fishing.debug.phase.surface_landing,Surface and landing,水面扑腾与提升
+fishing.debug.phase.catch_presentation,Catch presentation,渔获展示
+fishing.debug.line_state.out,OUT,放线
+fishing.debug.line_state.hold,HOLD,绷紧
+fishing.debug.line_state.backing_out,BACKING OUT,反向出线
+fishing.debug.line_state.reeling,REELING,收线
+fishing.debug.line_state.landed,LANDED,已出水
+fishing.debug.fish_stage.hidden,HIDDEN,隐藏
+fishing.debug.fish_stage.far,FAR,FAR
+fishing.debug.fish_stage.approaching,APPROACHING,接近中
+fishing.debug.fish_stage.surface,SURFACE,水面
+fishing.debug.fish_stage.breach,BREACHING,跃出水面
+fishing.debug.fish_stage.washing_gills,WASHING GILLS,侧身洗鳃
+fishing.debug.fish_stage.lifting,LIFTING,提升中
+fishing.debug.fish_stage.landed,LANDED,已提升
+fishing.ui.state.ready,Ready,待命
+fishing.ui.state.deploying,Deploying line…,正在放线……
+fishing.ui.state.trolling,Trolling,拖钓中
+fishing.ui.state.hooked,Hooked,已中鱼
+fishing.ui.state.reeling,Reeling in,收线中
+fishing.ui.state.catch,Catch complete,捕获完成
+fishing.ui.state.simulation_preview,Debug simulation,调试模拟
+fishing.debug.section.real_trolling,Real trolling,真实拖钓
+fishing.debug.section.simulation,Simulated catch · animation debugging,模拟中鱼 · 动画调试
+fishing.debug.sim_length,Test fish length,测试鱼体长度
+fishing.debug.hanging_intensity,Hanging struggle intensity,悬挂挣扎强度
+fishing.debug.unit.cm, cm, 厘米
+fishing.debug.phase_start_format,%s · %.0f s,%s · %.0f 秒
+fishing.debug.sim_seed,Animation seed,动画种子
+fishing.debug.sim_weight,Preview weight: %.2f kg,预览重量：%.2f 千克
+fishing.debug.sim_start,Simulate catch,模拟中鱼
+fishing.debug.sim_stop,Stop simulation,停止模拟
+fishing.debug.sim_replay,Replay,重新播放
+fishing.debug.sim_pause,Pause,暂停
+fishing.debug.sim_continue,Continue,继续
+fishing.debug.sim_seek,Seek to phase,跳转阶段
+fishing.debug.sim_speed.half,0.5×,0.5 倍
+fishing.debug.sim_speed.normal,1×,1 倍
+fishing.debug.sim_speed.double,2×,2 倍
+fishing.debug.sim_result,Simulation accepted=%s · %s,模拟已接受=%s · %s
+fishing.debug.sim_stopped,Simulation stopped; no real catch was settled.,模拟已停止；未结算真实渔获。
+fishing.debug.sim_replayed,Simulation replayed with the same seed.,已使用相同种子重新播放模拟。
+fishing.debug.sim_seek_done,Simulation moved to the selected phase.,模拟已跳转到所选阶段。
+fishing.debug.presentation_source,Source: %s,来源：%s
+fishing.debug.presentation_catch,%s · %.0f cm · %.2f kg,%s · %.0f 厘米 · %.2f 千克
+fishing.debug.sim_status,%s · %.0f cm · %.2f kg · seed %d,%s · %.0f 厘米 · %.2f 千克 · 种子 %d
+fishing.debug.sim_preview_only,Debug preview only · does not create a real catch or consume a school.,仅调试预览 · 不生成真实渔获，也不消耗鱼群。
+fishing.debug.sim_no_school_required,Ready · does not require a school or boat speed.,就绪 · 不需要附近鱼群或船速。
+fishing.debug.sim_blocked_pending,Unavailable while a real catch is pending.,存在真实待处理中鱼时不可用。
+fishing.debug.sim_source_real_catch,Real catch,真实中鱼
+fishing.debug.sim_source_debug_simulation,Debug simulation,调试模拟
+fishing.debug.sim_source_none,None,无
+fishing.debug.advanced,Advanced P2 diagnostics,高级 P2 诊断
+fishing.debug.visual.simulating,debug simulation,调试模拟
+fishing.debug.reason.real_presentation_active,real catch presentation is active,真实中鱼演出正在进行
+fishing.debug.rod_reset,Reset rod to standby,恢复鱼竿待机
+fishing.debug.rod_reset_done,Rod visual reset.,鱼竿视觉已复位。
+fishing.debug.rod_visual_state,Rod visual: %s,鱼竿视觉：%s
+fishing.debug.visual.idle,standby,待机
+fishing.debug.visual.casting,casting,放线中
+fishing.debug.visual.trolling,trolling,拖钓中
+fishing.debug.visual.hooked,hooked,中鱼
+fishing.debug.visual.reeling,reeling,收线中
+fishing.debug.visual.presentation,catch display,渔获展示

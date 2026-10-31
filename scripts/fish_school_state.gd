@@ -21,11 +21,17 @@ var surface_activity_cycle_index := 0
 var direction_radians := 0.0
 var movement_speed_mps := 0.0
 var seed := 0
+## Original school capacity. Recovery never exceeds this value.
+var baseline_population := 0
+## Absolute WorldTimeManager cycle seconds at the last recovery calculation.
+var last_population_update_game_time_seconds := 0.0
+## Fractional fish accumulated by the continuous recovery curve; always [0, 1).
+var recovery_fractional_population := 0.0
 
 
 func to_dictionary() -> Dictionary:
 	return {
-		"schema_version": 2,
+		"schema_version": 3,
 		"school_id": school_id,
 		"species_id": species_id,
 		"world_position": [world_position.x, world_position.y, world_position.z],
@@ -43,12 +49,15 @@ func to_dictionary() -> Dictionary:
 		"direction_radians": direction_radians,
 		"movement_speed_mps": movement_speed_mps,
 		"seed": seed,
+		"baseline_population": baseline_population,
+		"last_population_update_game_time_seconds": last_population_update_game_time_seconds,
+		"recovery_fractional_population": recovery_fractional_population,
 	}
 
 
 static func from_dictionary(data: Dictionary) -> FishSchoolState:
 	var schema_version := int(data.get("schema_version", -1))
-	if schema_version not in [1, 2]:
+	if schema_version != 3:
 		return null
 	var position: Variant = data.get("world_position", [])
 	if not position is Array or position.size() != 3:
@@ -71,6 +80,15 @@ static func from_dictionary(data: Dictionary) -> FishSchoolState:
 	school.direction_radians = float(data.get("direction_radians", 0.0))
 	school.movement_speed_mps = maxf(0.0, float(data.get("movement_speed_mps", 0.0)))
 	school.seed = int(data.get("seed", 0))
+	school.baseline_population = maxi(0, int(data.get("baseline_population", -1)))
+	school.last_population_update_game_time_seconds = float(data.get("last_population_update_game_time_seconds", -1.0))
+	school.recovery_fractional_population = float(data.get("recovery_fractional_population", -1.0))
 	if school.school_id.is_empty() or school.species_id.is_empty():
+		return null
+	if school.baseline_population < school.population:
+		return null
+	if not is_finite(school.last_population_update_game_time_seconds) or school.last_population_update_game_time_seconds < 0.0:
+		return null
+	if not is_finite(school.recovery_fractional_population) or school.recovery_fractional_population < 0.0 or school.recovery_fractional_population >= 1.0:
 		return null
 	return school

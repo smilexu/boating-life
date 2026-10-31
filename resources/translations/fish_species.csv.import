@@ -1,0 +1,19 @@
+[remap]
+
+importer="csv_translation"
+type="Translation"
+uid="uid://c0gfbjhxxmbsp"
+
+[deps]
+
+files=["res://resources/translations/fish_species.en.translation", "res://resources/translations/fish_species.zh_CN.translation"]
+
+source_file="res://resources/translations/fish_species.csv"
+dest_files=["res://resources/translations/fish_species.en.translation", "res://resources/translations/fish_species.zh_CN.translation"]
+
+[params]
+
+compress=1
+delimiter=0
+unescape_keys=false
+unescape_translations=true

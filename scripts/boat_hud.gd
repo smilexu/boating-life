@@ -11,6 +11,8 @@ const ExtremeSeaStatePresetsScript := preload("res://scripts/extreme_sea_state_p
 const VesselPreviewCardScript := preload("res://scripts/vessel_preview_card.gd")
 const SAILING_NAVIGATION_INSTRUMENT_SCRIPT := preload("res://scripts/sailboat_navigation_instrument.gd")
 const SAILING_POLAR_CHART_SCRIPT := preload("res://scripts/sailing_polar_chart.gd")
+const FISHING_DEBUG_PANEL_SCRIPT := preload("res://scripts/fishing_debug_panel.gd")
+const FISHING_PLAYER_PANEL_SCRIPT := preload("res://scripts/fishing_player_panel.gd")
 const NAVIGATION_HUD_FORMAT := preload("res://scripts/navigation_hud_format.gd")
 const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 
@@ -30,6 +32,7 @@ const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 @export_node_path("Node") var boat_audio_controller_path := NodePath("../../BoatAudioController")
 @export_node_path("Node") var game_menu_path := NodePath("../../GameMenu")
 @export_node_path("Node") var fish_map_path := NodePath("../../FishResourceMap")
+@export_node_path("Node") var fishing_rod_system_path := NodePath("../FishingRodSystem")
 
 var _controller: BoatController
 var _weather_controller: Node
@@ -49,6 +52,17 @@ var _boat_audio_controller: Node
 var _oresund_region: Node
 var _game_menu: Node
 var _fish_map: Node
+var _fishing_rod_system: FishingRodSystem
+var _fishing_player_panel: FishingPlayerPanel
+var _catch_result_panel: PanelContainer
+var _catch_result_title: Label
+var _catch_result_species: Label
+var _catch_result_length: Label
+var _catch_result_weight: Label
+var _catch_result_card_hold_remaining := 0.0
+var _catch_result_card_is_retained := false
+const CATCH_RESULT_CARD_HOLD_SECONDS := 12.0
+const CATCH_RESULT_CARD_FADE_SECONDS := 0.6
 var _port_service_controllers: Array[Node] = []
 var _selected_fish_school_id := ""
 var _world_time_control: WorldTimeControlPort
@@ -85,6 +99,9 @@ var _debug_panel_snapshot: Dictionary = {}
 var _debug_panel_visual_snapshot: Dictionary = {}
 var _sailboat_physics_label: Label
 var _fish_location_feedback: Label
+var _fish_observation_species_row: GridContainer
+var _fish_observation_species_status: Label
+var _fish_resources_initialized := false
 var _fish_motion_toggle: CheckButton
 var _fish_motion_status: Label
 var _fish_observation_status: Label
@@ -201,6 +218,9 @@ func _ready() -> void:
 	_cache_building_visual_roots()
 	_fish_resource_manager = get_node_or_null(fish_resource_manager_path) as FishResourceManager
 	_fish_school_renderer = get_node_or_null(fish_school_renderer_path) as FishSchoolRenderer
+	_fish_resources_initialized = _fish_resource_manager != null and _fish_resource_manager.is_node_ready()
+	if _fish_resource_manager != null and not _fish_resources_initialized and _fish_resource_manager.has_signal("resources_ready"):
+		_fish_resource_manager.connect("resources_ready", _on_fish_resources_ready, CONNECT_ONE_SHOT)
 	_dolphin_world_manager = get_node_or_null(dolphin_world_manager_path)
 	_navigation_depth_monitor = get_node_or_null(navigation_depth_monitor_path) as NavigationDepthMonitor
 	_cargo_economy_manager = get_node_or_null(cargo_economy_manager_path) as CargoEconomyManager
@@ -209,6 +229,7 @@ func _ready() -> void:
 	_oresund_region = get_node_or_null(oresund_region_path)
 	_game_menu = get_node_or_null(game_menu_path)
 	_fish_map = get_node_or_null(fish_map_path)
+	_fishing_rod_system = get_node_or_null(fishing_rod_system_path) as FishingRodSystem
 	for service_path in [
 		NodePath("../../MalmoHarbor/PortServiceController"),
 		NodePath("../../CopenhagenHarbor/PortServiceController"),
@@ -264,6 +285,8 @@ func _ready() -> void:
 	_build_debug_panel()
 	_add_compass_widget()
 	_build_sailing_panel()
+	_build_fishing_player_panel()
+	_build_catch_result_panel()
 	_build_vessel_picker()
 	_controller.vessel_mode_changed.connect(_on_vessel_mode_changed)
 	if _quality_manager != null and _quality_manager.has_signal("settings_changed"):
@@ -279,6 +302,114 @@ func _add_compass_widget() -> void:
 	_compass_widget.set_script(COMPASS_HUD_SCRIPT)
 	add_child(_compass_widget)
 	_compass_widget.call("configure", _controller)
+
+
+func _build_fishing_player_panel() -> void:
+	_fishing_player_panel = FISHING_PLAYER_PANEL_SCRIPT.new() as FishingPlayerPanel
+	_fishing_player_panel.name = "FishingPlayerPanel"
+	_fishing_player_panel.anchor_left = 0.0
+	_fishing_player_panel.anchor_right = 0.0
+	_fishing_player_panel.anchor_top = 0.0
+	_fishing_player_panel.anchor_bottom = 0.0
+	_fishing_player_panel.offset_left = 24.0
+	_fishing_player_panel.offset_top = 205.0
+	_fishing_player_panel.offset_right = 380.0
+	_fishing_player_panel.offset_bottom = 370.0
+	add_child(_fishing_player_panel)
+	_fishing_player_panel.configure(_fish_resource_manager, _fishing_rod_system)
+
+
+func _build_catch_result_panel() -> void:
+	_catch_result_panel = PanelContainer.new()
+	_catch_result_panel.name = "CatchResultCard"
+	_catch_result_panel.anchor_left = 1.0
+	_catch_result_panel.anchor_right = 1.0
+	_catch_result_panel.anchor_top = 0.34
+	_catch_result_panel.anchor_bottom = 0.34
+	_catch_result_panel.offset_left = -360.0
+	_catch_result_panel.offset_right = -24.0
+	_catch_result_panel.offset_top = 0.0
+	_catch_result_panel.offset_bottom = 138.0
+	_catch_result_panel.custom_minimum_size = Vector2(336.0, 138.0)
+	_catch_result_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_catch_result_panel.visible = false
+	_catch_result_panel.z_index = 20
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.12, 0.16, 0.92)
+	style.border_color = Color(0.28, 0.52, 0.55, 0.78)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 16.0
+	style.content_margin_right = 16.0
+	style.content_margin_top = 11.0
+	style.content_margin_bottom = 11.0
+	_catch_result_panel.add_theme_stylebox_override("panel", style)
+	var content := VBoxContainer.new()
+	content.add_theme_constant_override("separation", 3)
+	_catch_result_panel.add_child(content)
+	_catch_result_title = Label.new()
+	_catch_result_title.add_theme_font_size_override("font_size", 14)
+	_catch_result_title.add_theme_color_override("font_color", Color(0.42, 0.82, 0.77, 1.0))
+	content.add_child(_catch_result_title)
+	_catch_result_species = Label.new()
+	_catch_result_species.add_theme_font_size_override("font_size", 23)
+	_catch_result_species.add_theme_color_override("font_color", Color(0.94, 0.97, 0.93, 1.0))
+	content.add_child(_catch_result_species)
+	_catch_result_length = Label.new()
+	_catch_result_length.add_theme_font_size_override("font_size", 16)
+	_catch_result_length.add_theme_color_override("font_color", Color(0.82, 0.92, 0.88, 1.0))
+	content.add_child(_catch_result_length)
+	_catch_result_weight = Label.new()
+	_catch_result_weight.add_theme_font_size_override("font_size", 16)
+	_catch_result_weight.add_theme_color_override("font_color", Color(0.82, 0.92, 0.88, 1.0))
+	content.add_child(_catch_result_weight)
+	add_child(_catch_result_panel)
+	if _fishing_rod_system != null and _fishing_rod_system.has_signal("catch_display_updated"):
+		_fishing_rod_system.catch_display_updated.connect(_on_catch_display_updated)
+
+
+func _on_catch_display_updated(snapshot: Dictionary) -> void:
+	if _catch_result_panel == null:
+		return
+	if not bool(snapshot.get("visible", false)):
+		if _catch_result_card_is_retained and _catch_result_card_hold_remaining > 0.0:
+			_catch_result_panel.visible = true
+			_catch_result_panel.modulate.a = 1.0
+			return
+		_catch_result_panel.visible = false
+		_catch_result_card_is_retained = false
+		return
+	var simulated := str(snapshot.get("source", "")) == "DEBUG_SIMULATION"
+	_catch_result_card_is_retained = simulated or not str(snapshot.get("catch_id", "")).is_empty()
+	_catch_result_card_hold_remaining = CATCH_RESULT_CARD_HOLD_SECONDS if _catch_result_card_is_retained else 0.0
+	_catch_result_title.text = tr("fishing.ui.simulation_preview") if simulated else tr("fishing.ui.catch_confirmed")
+	_catch_result_species.text = tr(str(snapshot.get("species_name_key", "fishing.ui.unknown_fish")))
+	_catch_result_length.text = tr("fishing.ui.catch_length_format") % float(snapshot.get("length_cm", 0.0))
+	_catch_result_weight.text = tr("fishing.ui.catch_weight_format") % float(snapshot.get("weight_kg", 0.0))
+	_catch_result_panel.visible = true
+	if simulated:
+		_catch_result_panel.modulate.a = clampf(float(snapshot.get("alpha", 1.0)), 0.0, 1.0)
+	else:
+		var presentation_elapsed := float(snapshot.get("presentation_elapsed", 0.0))
+		_catch_result_panel.modulate.a = _smoothstep01(presentation_elapsed / 0.4)
+
+
+func _advance_catch_result_card(delta: float) -> void:
+	if not _catch_result_card_is_retained or _catch_result_panel == null or not _catch_result_panel.visible:
+		return
+	_catch_result_card_hold_remaining = maxf(0.0, _catch_result_card_hold_remaining - delta)
+	if _catch_result_card_hold_remaining <= 0.0:
+		_catch_result_card_is_retained = false
+		_catch_result_panel.visible = false
+		_catch_result_panel.modulate.a = 1.0
+		return
+	if _catch_result_card_hold_remaining < CATCH_RESULT_CARD_FADE_SECONDS:
+		_catch_result_panel.modulate.a = _catch_result_card_hold_remaining / CATCH_RESULT_CARD_FADE_SECONDS
+
+
+func _smoothstep01(value: float) -> float:
+	var t := clampf(value, 0.0, 1.0)
+	return t * t * (3.0 - 2.0 * t)
 
 
 func _build_sailing_panel() -> void:
@@ -1002,6 +1133,7 @@ func _adjust_headsail(direction: int) -> void:
 
 
 func _process(delta: float) -> void:
+	_advance_catch_result_card(delta)
 	_sample_debug_frame_time()
 	_runtime_elapsed += delta
 	_fps_elapsed += delta
@@ -1477,7 +1609,12 @@ func _build_debug_panel() -> void:
 	_sailboat_physics_label = _make_debug_label()
 	_sailboat_physics_label.name = "SailingPhysicsReadout"
 	sailing_debug_layout.add_child(_sailboat_physics_label)
+	var fishing_debug_panel := FISHING_DEBUG_PANEL_SCRIPT.new() as ScrollContainer
+	fishing_debug_panel.name = "FishingDebugTab"
+	_debug_scroll.add_child(fishing_debug_panel)
+	_debug_scroll.set_tab_title(2, tr("fishing.debug.tab"))
 	add_child(_debug_panel)
+	fishing_debug_panel.configure(_fish_resource_manager, _fishing_rod_system)
 	_refresh_weather_controls()
 	_refresh_settings_controls()
 	_refresh_city_lighting_controls()
@@ -1708,44 +1845,46 @@ func _add_peberholm_render_debug_control(parent: VBoxContainer) -> void:
 
 func _add_fish_observation_controls(parent: VBoxContainer) -> void:
 	var title := Label.new()
-	title.text = "鱼群观察点 · 调试传送"
+	title.text = tr("fish.debug.observation_title")
 	title.add_theme_font_size_override("font_size", 16)
 	title.add_theme_color_override("font_color", Color(0.94, 0.96, 0.94))
 	parent.add_child(title)
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	for fish in [["needlefish", "前往观察针鱼"], ["herring", "前往观察鲱鱼"], ["three_spined_stickleback", "前往观察三刺鱼"]]:
-		var button := Button.new()
-		button.text = str(fish[1])
-		button.tooltip_text = "将船移到三刺鱼群上方，鱼群会在浅水层侧向躲避。" if str(fish[0]) == "three_spined_stickleback" else "将船停在鱼群惊扰范围外，并切换到真实鱼群位置的水下观察视角。"
-		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		button.pressed.connect(_on_fish_observation_pressed.bind(str(fish[0])))
-		row.add_child(button)
-	parent.add_child(row)
+	_fish_observation_species_row = GridContainer.new()
+	_fish_observation_species_row.name = "FishObservationSpeciesButtons"
+	_fish_observation_species_row.columns = 2
+	_fish_observation_species_row.add_theme_constant_override("h_separation", 6)
+	_fish_observation_species_row.add_theme_constant_override("v_separation", 4)
+	_fish_observation_species_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	parent.add_child(_fish_observation_species_row)
+	_fish_observation_species_status = _make_debug_label()
+	_fish_observation_species_status.name = "FishObservationSpeciesStatus"
+	_fish_observation_species_status.text = tr("fish.debug.observation.loading")
+	parent.add_child(_fish_observation_species_status)
+	_populate_fish_observation_species_buttons()
 	var observer_row := HBoxContainer.new()
 	observer_row.add_theme_constant_override("separation", 6)
 	var observe_button := Button.new()
-	observe_button.text = "进入水下鱼群观察视角"
+	observe_button.text = tr("fish.debug.camera.enter")
 	observe_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	observe_button.pressed.connect(_on_fish_observation_camera_pressed)
 	observer_row.add_child(observe_button)
 	var return_button := Button.new()
-	return_button.text = "返回船上视角"
+	return_button.text = tr("fish.debug.camera.return")
 	return_button.pressed.connect(_on_fish_observation_camera_return_pressed)
 	observer_row.add_child(return_button)
 	parent.add_child(observer_row)
 	_fish_location_feedback = _make_debug_label()
 	_fish_location_feedback.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_fish_location_feedback.text = "移动船只到真实鱼群观察位置；不会移动鱼群的共享生态锚点。"
+	_fish_location_feedback.text = tr("fish.debug.location.initial")
 	parent.add_child(_fish_location_feedback)
 	_fish_observation_status = _make_debug_label()
 	_fish_observation_status.name = "FishObservationStatus"
 	_fish_observation_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_fish_observation_status.text = "选择三刺鱼后显示鱼群实际尺寸、水层与海床净空。"
+	_fish_observation_status.text = tr("fish.debug.observation_initial_status")
 	parent.add_child(_fish_observation_status)
 	_fish_motion_toggle = CheckButton.new()
 	_fish_motion_toggle.name = "FishSmoothMotionToggle"
-	_fish_motion_toggle.text = "鱼群逐帧平滑运动（A/B 调试）"
+	_fish_motion_toggle.text = tr("fish.debug.motion_toggle")
 	_fish_motion_toggle.button_pressed = _fish_school_renderer != null and _fish_school_renderer.smooth_motion_enabled
 	_fish_motion_toggle.disabled = _fish_school_renderer == null
 	_fish_motion_toggle.toggled.connect(_on_fish_smoothing_toggled)
@@ -1754,6 +1893,37 @@ func _add_fish_observation_controls(parent: VBoxContainer) -> void:
 	_fish_motion_status.name = "FishMotionStatus"
 	parent.add_child(_fish_motion_status)
 	_update_fish_motion_status()
+
+
+func _on_fish_resources_ready() -> void:
+	_fish_resources_initialized = true
+	_populate_fish_observation_species_buttons()
+
+
+func _populate_fish_observation_species_buttons() -> void:
+	if _fish_observation_species_row == null:
+		return
+	var fish_profiles: Array[FishSpeciesProfile] = _fish_resource_manager.get_species_profiles() if _fish_resource_manager != null else []
+	for profile in fish_profiles:
+		var button_name := "ObserveFishSpecies_%s" % profile.species_id
+		if _fish_observation_species_row.has_node(button_name):
+			continue
+		var button := Button.new()
+		button.name = button_name
+		button.text = tr("fish.debug.observe_species") % tr(profile.name_key)
+		button.tooltip_text = tr("fish.debug.observe_coastal_tooltip") if profile.behavior_type == "coastal_benthic" else tr("fish.debug.observe_surface_tooltip")
+		button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		button.pressed.connect(_on_fish_observation_pressed.bind(profile.species_id))
+		_fish_observation_species_row.add_child(button)
+	if _fish_observation_species_status != null:
+		_fish_observation_species_status.visible = fish_profiles.is_empty()
+		if fish_profiles.is_empty():
+			if _fish_resource_manager == null:
+				_fish_observation_species_status.text = tr("fish.debug.manager_unavailable")
+			elif _fish_resources_initialized:
+				_fish_observation_species_status.text = tr("fish.debug.profile_or_depth_unavailable")
+			else:
+				_fish_observation_species_status.text = tr("fish.debug.observation.loading")
 
 
 func _add_dolphin_controls(parent: VBoxContainer) -> void:
@@ -1871,19 +2041,22 @@ func _update_fish_motion_status() -> void:
 	if _fish_motion_status == null:
 		return
 	if _fish_school_renderer == null:
-		_fish_motion_status.text = "鱼群渲染器不可用。"
+		_fish_motion_status.text = tr("fish.debug.renderer_unavailable")
 		return
 	var stats := _fish_school_renderer.get_render_statistics()
-	_fish_motion_status.text = "运动平滑 %s · AI %.2f Hz · 可见 %d 条 · 近表层群 %d · 水纹 %d\n针鱼视觉/逻辑 %d/%d · 鲱鱼视觉/逻辑 %d/%d\nAI 更新 %.2f ms · MultiMesh 提交 %.2f ms/帧" % [
-		"开" if _fish_school_renderer.smooth_motion_enabled else "关",
+	var species_lines := PackedStringArray()
+	var species_counts: Dictionary = stats.get("school_counts_by_species", {})
+	if _fish_resource_manager != null:
+		for profile in _fish_resource_manager.get_species_profiles():
+			var counts: Dictionary = species_counts.get(profile.species_id, {})
+			species_lines.append(tr("fish.debug.species_render_counts") % [tr(profile.name_key), int(counts.get("visual", 0)), int(counts.get("logical", 0))])
+	_fish_motion_status.text = tr("fish.debug.motion_status") % [
+	tr("fish.debug.enabled") if _fish_school_renderer.smooth_motion_enabled else tr("fish.debug.disabled"),
 		float(stats.get("movement_update_hz", 0.0)),
 		int(stats.get("visible_fish", 0)),
 		int(stats.get("near_surface_schools", 0)),
 		int(stats.get("surface_ripple_count", 0)),
-		int(stats.get("visual_needlefish_schools", 0)),
-		int(stats.get("logical_needlefish_schools", 0)),
-		int(stats.get("visual_herring_schools", 0)),
-		int(stats.get("logical_herring_schools", 0)),
+		"\n".join(species_lines),
 		float(stats.get("ai_update_ms", 0.0)),
 		float(stats.get("multimesh_submit_ms", 0.0)),
 	]
@@ -1893,44 +2066,53 @@ func _update_fish_observation_status() -> void:
 	if _fish_observation_status == null:
 		return
 	if _fish_school_renderer == null or _selected_fish_school_id.is_empty():
-		_fish_observation_status.text = "鱼群观察数据：未选择鱼群。"
+		_fish_observation_status.text = tr("fish.debug.observation.none")
 		return
 	var stats := _fish_school_renderer.get_school_visual_debug(_selected_fish_school_id)
 	if stats.is_empty():
-		_fish_observation_status.text = "鱼群观察数据：鱼群正在加载或已离开可见范围。"
+		_fish_observation_status.text = tr("fish.debug.observation.loading")
 		return
 	var behaviors: Dictionary = stats.get("behavior_counts", {})
-	var behavior_text := "巡游 %d · 转向 %d · 悬停 %d · 受惊 %d" % [
-		int(behaviors.get("cruise", 0)),
-		int(behaviors.get("turn", 0)),
-		int(behaviors.get("hover", 0)),
-		int(behaviors.get("flee", 0)),
+	var behavior_text := tr("fish.debug.behavior_counts") % [
+		tr("fish.behavior.cruise"), int(behaviors.get("cruise", 0)),
+		tr("fish.behavior.turn"), int(behaviors.get("turn", 0)),
+		tr("fish.behavior.hover"), int(behaviors.get("hover", 0)),
+		tr("fish.behavior.flee"), int(behaviors.get("flee", 0)),
 	]
-	var visibility_text := "视觉鱼" if str(stats.get("render_state", "visual")) == "visual" else "逻辑鱼（无 3D 渲染）"
-	_fish_observation_status.text = "选中群体 · %s · 显示长度 %.0f cm · 数量 %d（可见 %d）\n距水面 %.2f m · 图表水深 %.2f m · 距海床 %.2f m\n生境：%s · 行为：%s · 活动：%s" % [
-		visibility_text,
+	var visibility_key := "fish.debug.visibility.visual" if str(stats.get("render_state", "visual")) == "visual" else "fish.debug.visibility.logical"
+	var species_profile := _fish_resource_manager.get_species_profile(str(stats.get("species_id", ""))) if _fish_resource_manager != null else null
+	var species_name := tr(species_profile.name_key) if species_profile != null else tr("fish.map.unknown_species")
+	var habitat_id := str(stats.get("habitat_region", "unknown"))
+	var habitat_key := "fish.map.habitat.%s" % habitat_id
+	var habitat_text := tr(habitat_key) if tr(habitat_key) != habitat_key else tr("fish.map.habitat.unknown")
+	var activity_id := str(stats.get("activity_label", "cruise"))
+	var activity_key := "fish.map.activity.%s" % activity_id
+	var activity_text := tr(activity_key) if tr(activity_key) != activity_key else tr("fish.map.activity.unknown")
+	_fish_observation_status.text = tr("fish.debug.observation_status") % [
+		species_name,
+		tr(visibility_key),
 		float(stats.get("average_visual_length_m", 0.0)) * 100.0,
 		int(stats.get("school_population", 0)),
 		int(stats.get("visible_fish", 0)),
 		float(stats.get("depth_from_surface_m", 0.0)),
 		float(stats.get("bathymetry_depth_m", 0.0)),
 		float(stats.get("seabed_clearance_m", 0.0)),
-		str(stats.get("habitat_region", "unknown")),
+		habitat_text,
 		behavior_text,
-		str(stats.get("activity_label", "巡游")),
+		activity_text,
 	]
 
 
 func _on_fish_observation_pressed(species_id: String) -> void:
 	if _fish_resource_manager == null or _controller == null:
-		_fish_location_feedback.text = "鱼类资源管理器不可用。"
+		_fish_location_feedback.text = tr("fish.debug.manager_unavailable")
 		return
 	var profile := _fish_resource_manager.get_species_profile(species_id)
 	var bathymetry := _fish_resource_manager.get_bathymetry_manager()
 	if profile == null or bathymetry == null:
-		_fish_location_feedback.text = "鱼种配置或水深数据不可用。"
+		_fish_location_feedback.text = tr("fish.debug.profile_or_depth_unavailable")
 		return
-	if species_id in ["needlefish", "herring"]:
+	if profile.surface_activity_cycle_enabled:
 		_on_surface_species_observation_pressed(profile, bathymetry)
 		return
 	var origin := _controller.global_position
@@ -1964,15 +2146,15 @@ func _on_fish_observation_pressed(species_id: String) -> void:
 		if preferred_position.size() == 3:
 			target_position = Vector3(float(preferred_position[0]), origin.y, float(preferred_position[2]))
 	if nearest_school.is_empty():
-		_fish_location_feedback.text = "当前世界没有可用的%s鱼群资源点。" % profile.display_name
+		_fish_location_feedback.text = tr("fish.debug.location.no_resource") % tr(profile.name_key)
 		return
 	var destination_result: Dictionary
-	if species_id == "three_spined_stickleback":
-		destination_result = _find_stickleback_overhead_position(target_position, origin, bathymetry)
+	if profile.behavior_type == "coastal_benthic":
+		destination_result = _find_coastal_overhead_position(target_position, origin, bathymetry, profile)
 	else:
-		destination_result = _find_safe_fish_observation_position(target_position, origin, float(nearest_school.get("depth_m", 0.0)), species_id, bathymetry)
+		destination_result = _find_safe_fish_observation_position(target_position, origin, float(nearest_school.get("depth_m", 0.0)), profile, bathymetry)
 	if not bool(destination_result.get("valid", false)):
-		_fish_location_feedback.text = "找到了%s鱼群，但附近没有可用水深的靠近位置。" % profile.display_name
+		_fish_location_feedback.text = tr("fish.debug.location.no_safe_approach") % tr(profile.name_key)
 		return
 	var destination: Vector3 = destination_result["position"]
 	_controller.speed_mps = 0.0
@@ -1989,10 +2171,10 @@ func _on_fish_observation_pressed(species_id: String) -> void:
 	_selected_fish_school_id = school_id
 	var observation_started := not school_id.is_empty() and _fish_school_renderer != null and _fish_school_renderer.begin_observation(school_id)
 	var departure_distance_km := nearest_distance / 1000.0
-	var camera_note := "已切换到水下观察视角；鱼群会在浅水层侧向散开，按‘返回船上视角’恢复。" if observation_started else "可按‘进入水下鱼群观察视角’查看。"
-	var location_label := "鱼群正上方" if species_id == "three_spined_stickleback" else "鱼群附近"
-	_fish_location_feedback.text = "已到最近%s%s：船距群中心 %.0f m · 水深 %.1f m · 群体 %d 条 · 出发点距群 %.1f km。%s" % [
-		profile.display_name,
+	var camera_note := tr("fish.debug.location.camera_started") if observation_started else tr("fish.debug.location.camera_available")
+	var location_label := tr("fish.debug.location.over_school") if profile.behavior_type == "coastal_benthic" else tr("fish.debug.location.near_school")
+	_fish_location_feedback.text = tr("fish.debug.location.arrived") % [
+		tr(profile.name_key),
 		location_label,
 		float(destination_result.get("school_distance_m", 0.0)),
 		float(destination_result.get("depth_m", 0.0)),
@@ -2008,6 +2190,10 @@ func _on_surface_species_observation_pressed(profile: FishSpeciesProfile, bathym
 	var nearest_rank := 99
 	var nearest_distance := INF
 	var target_position := Vector3.ZERO
+	var nearest_remote_school: Dictionary = {}
+	var nearest_remote_rank := 99
+	var nearest_remote_distance := INF
+	var nearest_remote_position := Vector3.ZERO
 	var local_search_radius := _fish_school_renderer.observation_search_radius_m if _fish_school_renderer != null else 5000.0
 	var preferred_search_radius := _fish_school_renderer.preferred_observation_search_radius_m if _fish_school_renderer != null else 1500.0
 	for school in _fish_resource_manager.get_all_school_snapshots():
@@ -2016,15 +2202,15 @@ func _on_surface_species_observation_pressed(profile: FishSpeciesProfile, bathym
 		if _fish_resource_manager.get_school_render_state(school) != "visual":
 			continue
 		var activity_depth := float(school.get("activity_depth_m", INF))
-		if activity_depth > 6.0:
+		# Keep this observation target inside the water-reveal fade envelope; a
+		# logically visible school at the threshold edge may be too deep to reveal.
+		if activity_depth > maxf(0.0, profile.logical_depth_threshold_m - 0.8):
 			continue
 		var position_data: Array = school.get("world_position", [])
 		if position_data.size() != 3:
 			continue
 		var school_position := Vector3(float(position_data[0]), origin.y, float(position_data[2]))
 		var distance := Vector2(school_position.x - origin.x, school_position.z - origin.z).length()
-		if distance > local_search_radius:
-			continue
 		var activity_state := str(school.get("surface_activity_state", ""))
 		var has_surface_activity := activity_depth <= 2.0 and activity_state in ["near_surface", "ascending", "descending"]
 		var has_clear_surface_activity := activity_depth <= 1.2 and has_surface_activity
@@ -2033,6 +2219,13 @@ func _on_surface_species_observation_pressed(profile: FishSpeciesProfile, bathym
 			activity_rank = 0
 		elif has_surface_activity:
 			activity_rank = 1
+		if distance > local_search_radius:
+			if activity_rank < nearest_remote_rank or (activity_rank == nearest_remote_rank and distance < nearest_remote_distance):
+				nearest_remote_rank = activity_rank
+				nearest_remote_distance = distance
+				nearest_remote_school = school
+				nearest_remote_position = school_position
+			continue
 		# Search local schools first so a distant active group does not displace
 		# a nearby visual group the player can already observe.
 		var distance_rank := 0 if distance <= preferred_search_radius else 1
@@ -2043,11 +2236,15 @@ func _on_surface_species_observation_pressed(profile: FishSpeciesProfile, bathym
 			nearest_school = school
 			target_position = school_position
 	if nearest_school.is_empty():
-		_fish_location_feedback.text = "%.0f km 内没有可观察的%s视觉鱼群；深水逻辑鱼群仍保留在世界资源中。" % [local_search_radius / 1000.0, profile.display_name]
-		return
+		if nearest_remote_school.is_empty():
+			_fish_location_feedback.text = tr("fish.debug.location.no_visible_school") % [local_search_radius / 1000.0, tr(profile.name_key)]
+			return
+		nearest_school = nearest_remote_school
+		nearest_distance = nearest_remote_distance
+		target_position = nearest_remote_position
 	var destination_result := _find_surface_species_observation_position(target_position, origin, bathymetry)
 	if not bool(destination_result.get("valid", false)):
-		_fish_location_feedback.text = "找到了%s视觉鱼群，但鱼群附近没有安全水面位置。" % profile.display_name
+		_fish_location_feedback.text = tr("fish.debug.location.no_safe_surface_approach") % tr(profile.name_key)
 		return
 	var destination: Vector3 = destination_result["position"]
 	_controller.speed_mps = 0.0
@@ -2064,9 +2261,9 @@ func _on_surface_species_observation_pressed(profile: FishSpeciesProfile, bathym
 		_fish_school_renderer.end_observation()
 	_selected_fish_school_id = str(nearest_school.get("school_id", ""))
 	var activity_depth := float(nearest_school.get("activity_depth_m", 0.0))
-	var activity_label := "正在近表层活动" if nearest_rank <= 1 else "位于可见水层"
-	_fish_location_feedback.text = "已到%s%s：船距群中心 %.0f m · 鱼群深度 %.1f m · 海图水深 %.1f m · 群体 %d 条 · 出发点距群 %.1f km。保持船上镜头；需要水下近景时再手动切换。" % [
-		profile.display_name,
+	var activity_label := tr("fish.debug.location.activity_near_surface") if activity_depth <= 2.0 else tr("fish.debug.location.activity_visible_layer")
+	_fish_location_feedback.text = tr("fish.debug.location.arrived_surface") % [
+		tr(profile.name_key),
 		activity_label,
 		float(destination_result.get("school_distance_m", 0.0)),
 		activity_depth,
@@ -2110,12 +2307,12 @@ func _find_surface_species_observation_position(school_position: Vector3, boat_p
 	}
 
 
-func _find_stickleback_overhead_position(school_position: Vector3, boat_position: Vector3, bathymetry: BathymetryManager) -> Dictionary:
+func _find_coastal_overhead_position(school_position: Vector3, boat_position: Vector3, bathymetry: BathymetryManager, profile: FishSpeciesProfile) -> Dictionary:
 	var sample := bathymetry.get_depth_at_world_position(school_position)
 	if not bool(sample.get("valid", false)):
 		return {"valid": false}
 	var depth := float(sample.get("depth_m", 0.0))
-	if depth < 0.85 or depth > 6.0:
+	if depth < profile.minimum_depth_m or depth > profile.maximum_depth_m:
 		return {"valid": false}
 	var destination := Vector3(school_position.x, boat_position.y, school_position.z)
 	return {
@@ -2130,10 +2327,10 @@ func _find_stickleback_overhead_position(school_position: Vector3, boat_position
 func _on_fish_observation_camera_pressed() -> void:
 	if _fish_school_renderer == null or _selected_fish_school_id.is_empty():
 		if _fish_location_feedback != null:
-			_fish_location_feedback.text = "先选择一个鱼种，传送到鱼群后再进入观察视角。"
+			_fish_location_feedback.text = tr("fish.debug.camera.select_school_first")
 		return
 	if not _fish_school_renderer.begin_observation(_selected_fish_school_id) and _fish_location_feedback != null:
-		_fish_location_feedback.text = "所选鱼群当前不在 6 米视觉层或已不可用，请重新选择近表层鱼群。"
+		_fish_location_feedback.text = tr("fish.debug.camera.school_unavailable")
 
 
 func _on_fish_observation_camera_return_pressed() -> void:
@@ -2141,18 +2338,13 @@ func _on_fish_observation_camera_return_pressed() -> void:
 		_fish_school_renderer.end_observation()
 
 
-func _find_safe_fish_observation_position(school_position: Vector3, boat_position: Vector3, school_depth: float, species_id: String, bathymetry: BathymetryManager) -> Dictionary:
+func _find_safe_fish_observation_position(school_position: Vector3, boat_position: Vector3, school_depth: float, profile: FishSpeciesProfile, bathymetry: BathymetryManager) -> Dictionary:
 	var base_direction := Vector2(boat_position.x - school_position.x, boat_position.z - school_position.z)
 	if base_direction.length_squared() < 0.001:
 		var forward := -_controller.global_transform.basis.z
 		base_direction = Vector2(-forward.x, -forward.z)
 	base_direction = base_direction.normalized()
-	var flee_clearance := 12.0
-	match species_id:
-		"needlefish": flee_clearance += 85.0
-		"herring": flee_clearance += 55.0
-		"three_spined_stickleback": flee_clearance += 24.0
-	var preferred_distance := flee_clearance + 5.0
+	var preferred_distance := maxf(18.0, profile.flee_radius_m + 5.0)
 	var best_position := Vector3.ZERO
 	var best_depth := 0.0
 	var best_score := 1.0e30
@@ -2533,6 +2725,24 @@ func _update_hud_layout() -> void:
 		_sailing_panel.custom_minimum_size.y = sailing_height
 		_sailing_panel.offset_top = -sailing_height - 24.0
 		_sailing_panel.offset_bottom = -24.0
+	if _fishing_player_panel != null:
+		var fishing_scale := clampf(ui_scale, 0.9, 1.75)
+		var fishing_width := minf(356.0 * fishing_scale, maxf(230.0, viewport_width - 48.0 * fishing_scale))
+		_fishing_player_panel.offset_left = 24.0 * fishing_scale
+		_fishing_player_panel.offset_top = 205.0 * fishing_scale
+		_fishing_player_panel.offset_right = 24.0 * fishing_scale + fishing_width
+		_fishing_player_panel.offset_bottom = _fishing_player_panel.offset_top + 190.0 * fishing_scale
+		_fishing_player_panel.custom_minimum_size.x = fishing_width
+	if _catch_result_panel != null:
+		var catch_scale := clampf(ui_scale, 0.9, 1.75)
+		var catch_width := minf(336.0 * catch_scale, maxf(220.0, viewport_width - 48.0 * catch_scale))
+		_catch_result_panel.offset_left = -24.0 * catch_scale - catch_width
+		_catch_result_panel.offset_right = -24.0 * catch_scale
+		_catch_result_panel.anchor_top = 0.34
+		_catch_result_panel.anchor_bottom = 0.34
+		_catch_result_panel.offset_top = 0.0
+		_catch_result_panel.offset_bottom = 138.0 * catch_scale
+		_catch_result_panel.custom_minimum_size = Vector2(catch_width, 138.0 * catch_scale)
 	if _polar_panel != null:
 		var polar_width := minf(1160.0, maxf(760.0, viewport_size.x * 0.94))
 		var polar_height := minf(860.0, maxf(560.0, viewport_size.y * 0.92))

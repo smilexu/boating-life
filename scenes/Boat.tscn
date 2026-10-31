@@ -1,4 +1,4 @@
-[gd_scene load_steps=14 format=3 uid="uid://ci27qf2ne77u4"]
+[gd_scene load_steps=20 format=3 uid="uid://ci27qf2ne77u4"]
 
 [ext_resource type="Script" uid="uid://cg2hukghay3us" path="res://scripts/boat_controller.gd" id="1_controller"]
 [ext_resource type="Script" uid="uid://bex2jb3h7jqub" path="res://scripts/boat_follow_camera.gd" id="2_follow_camera"]
@@ -13,6 +13,12 @@
 [ext_resource type="Script" uid="uid://d1ip4einbvys1" path="res://scripts/exhaust_socket_editor_gizmo.gd" id="12_exhaust_socket_gizmo"]
 [ext_resource type="Resource" path="res://resources/audio/powerboat_default_engine.tres" id="13_engine_audio_profile"]
 [ext_resource type="PackedScene" path="res://scenes/boats/SailingBoat8m.tscn" id="14_sailing_boat"]
+[ext_resource type="Script" path="res://scripts/fishing_rod_system.gd" id="15_fishing_rod_system"]
+[ext_resource type="Resource" path="res://resources/fishing/rod_mounts/starter_cargo_boat.tres" id="16_powerboat_rod_mount"]
+[ext_resource type="Resource" path="res://resources/fishing/rod_mounts/nordic28.tres" id="17_sailboat_rod_mount"]
+[ext_resource type="Script" path="res://scripts/fishing_fight_profile.gd" id="18_fight_profile_script"]
+[ext_resource type="Resource" path="res://resources/fishing/fight_profiles/needlefish.tres" id="19_needlefish_fight"]
+[ext_resource type="Resource" path="res://resources/fishing/fight_profiles/sea_trout.tres" id="20_sea_trout_fight"]
 
 [node name="Boat" type="Node3D" unique_id=1227113286]
 
@@ -87,5 +93,11 @@ far = 80000.0
 
 [node name="BoatHUD" type="CanvasLayer" parent="." unique_id=962327329]
 script = ExtResource("3_hud")
+
+[node name="FishingRodSystem" type="Node" parent="."]
+script = ExtResource("15_fishing_rod_system")
+powerboat_mount_profile = ExtResource("16_powerboat_rod_mount")
+sailboat_mount_profile = ExtResource("17_sailboat_rod_mount")
+fight_profiles = Array[ExtResource("18_fight_profile_script")]([ExtResource("19_needlefish_fight"), ExtResource("20_sea_trout_fight")])
 
 [editable path="MotionRoot/VisualRoot/BoatModelFrame/FirstBoatModel"]

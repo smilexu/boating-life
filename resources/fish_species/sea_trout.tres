@@ -1,0 +1,60 @@
+[gd_resource type="Resource" script_class="FishSpeciesProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/fish_species_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+species_id = "sea_trout"
+species_index = 3
+scientific_name = "Salmo trutta"
+name_key = "fish.species.sea_trout.name"
+description_key = "fish.species.sea_trout.description"
+body_length_range_m = Vector2(0.35, 0.8)
+model_path = "res://assets/fishes/seetrout.glb"
+model_forward_axis = 1
+model_head_x = -0.4
+minimum_depth_m = 2.0
+maximum_depth_m = 25.0
+preferred_depth_min_m = 3.0
+preferred_depth_max_m = 12.0
+spawn_chance = 0.015
+population_min = 1
+population_max = 3
+movement_speed_min_mps = 0.4
+movement_speed_max_mps = 1.0
+vertical_layer = "surface"
+behavior_type = "fast_pelagic"
+surface_activity_cycle_enabled = true
+surface_activity_time_share = 0.8
+surface_activity_depth_m = Vector2(0.5, 5.0)
+deep_activity_depth_m = Vector2(6.5, 12.0)
+surface_activity_duration_seconds = Vector2(45.0, 100.0)
+activity_vertical_speed_mps = 0.5
+initial_speed_factor = 0.38
+group_forward_bias = 0.08
+school_wander_radius_m = 5.2
+school_separation_distance_m = 0.48
+school_alignment_radius_m = 1.65
+school_cohesion_strength = 0.13
+school_alignment_strength = 0.1
+flee_radius_m = 15.0
+flee_speed_factor = 2.5
+scatter_radius_extension_factor = 0.85
+escape_acceleration_factor = 1.55
+turn_rate_radians_per_second = 1.7
+ordinary_acceleration_response = 0.6
+logical_depth_threshold_m = 6.0
+target_visual_length_m = 0.58
+visual_length_range_m = Vector2(0.48, 0.68)
+visual_scale_multiplier = 1.0
+visual_roughness = 0.54
+body_wave_amplitude_m = 0.022
+tail_frequency_hz = 1.6
+map_color = Color(0.95, 0.79, 0.38, 1)
+render_budget_share = 0.03
+supported_fishing_methods = PackedStringArray("trolling")
+compatible_lure_tags = PackedStringArray("minnow", "spoon", "small_fish_lure")
+relative_bite_tendency = 0.9
+trolling_speed_optimum_mps = 1.4
+trolling_speed_falloff_mps = 0.8
+estimated_weight_coefficient_kg_per_m3 = 10.5

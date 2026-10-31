@@ -62,9 +62,9 @@ func set_active_schools(schools: Array[Dictionary]) -> void:
 			break
 		var position: Vector3 = school["world_position"]
 		var strength := float(school["strength"])
-		var species_id := str(school["species_id"])
+		var behavior_type := str(school.get("behavior_type", "free_swim"))
 		var population := int(school["population"])
-		var ripple_count := clampi(roundi(float(population) / 12.0), 3, 8) if species_id == "herring" else (2 if species_id == "needlefish" and population >= 6 else 1)
+		var ripple_count := clampi(roundi(float(population) / 12.0), 3, 8) if behavior_type == "schooling_pelagic" else (2 if behavior_type == "fast_pelagic" and population >= 6 else 1)
 		var rng := RandomNumberGenerator.new()
 		rng.seed = str(school["school_id"]).hash()
 		for index in range(ripple_count):

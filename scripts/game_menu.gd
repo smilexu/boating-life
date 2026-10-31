@@ -15,6 +15,7 @@ extends CanvasLayer
 
 const MENU_LAYER := 100
 const GRAPHICS_SETTINGS_PAGE_SCRIPT := preload("res://scripts/graphics_settings_page.gd")
+const SETTINGS_SCROLL_WHEEL_STEP := 96
 
 var _boat: Node3D
 var _camera_rig: Node3D
@@ -22,6 +23,7 @@ var _music_manager: Node
 var _environment_audio_manager: Node
 var _boat_audio_controller: Node
 var _quality_manager: Node
+var _localization_manager: Node
 var _fish_map: Node
 var _port_services: Array[Node] = []
 var _background: ColorRect
@@ -30,6 +32,7 @@ var _main_page: VBoxContainer
 var _settings_page: VBoxContainer
 var _graphics_page: VBoxContainer
 var _music_toggle: CheckButton
+var _language_option: OptionButton
 var _ui_scale_option: OptionButton
 var _navigation_detail_option: OptionButton
 var _mix_sliders: Dictionary = {}
@@ -46,6 +49,7 @@ func _ready() -> void:
 	_environment_audio_manager = get_node_or_null(environment_audio_manager_path)
 	_boat_audio_controller = get_node_or_null(boat_audio_controller_path)
 	_quality_manager = get_node_or_null(quality_manager_path)
+	_localization_manager = get_node_or_null("/root/LocalizationManager")
 	_fish_map = get_node_or_null(fish_map_path)
 	var malmo_services := get_node_or_null(malmo_port_services_path)
 	var copenhagen_services := get_node_or_null(copenhagen_port_services_path)
@@ -85,6 +89,27 @@ func _unhandled_key_input(event: InputEvent) -> void:
 			_show_main_page()
 	else:
 		_close_menu()
+	get_viewport().set_input_as_handled()
+
+
+func _input(event: InputEvent) -> void:
+	if not is_settings_open() or _graphics_open:
+		return
+	var settings_scroll := _settings_page.get_node_or_null("SettingsScroll") as ScrollContainer
+	if settings_scroll == null or not settings_scroll.get_global_rect().has_point(get_viewport().get_mouse_position()):
+		return
+	var scroll_delta := 0.0
+	if event is InputEventMouseButton and event.pressed:
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP:
+			scroll_delta = -SETTINGS_SCROLL_WHEEL_STEP
+		elif event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			scroll_delta = SETTINGS_SCROLL_WHEEL_STEP
+	elif event is InputEventPanGesture:
+		scroll_delta = -event.delta.y
+	if is_zero_approx(scroll_delta):
+		return
+	# Handle scrolling before child controls consume the wheel (for example, an OptionButton).
+	settings_scroll.scroll_vertical += roundi(scroll_delta)
 	get_viewport().set_input_as_handled()
 
 
@@ -259,6 +284,15 @@ func _build_ui() -> void:
 	playlist_hint.add_theme_font_size_override("font_size", 14)
 	playlist_hint.add_theme_color_override("font_color", Color("#9db9b8"))
 	settings_controls.add_child(playlist_hint)
+	var language_options: Array[String] = []
+	if _localization_manager != null and _localization_manager.has_method("get_locale_labels"):
+		for language_label in _localization_manager.call("get_locale_labels"):
+			language_options.append(str(language_label))
+	else:
+		language_options = ["简体中文", "English"]
+	_language_option = _add_settings_option_row(settings_controls, "语言 / Language", language_options)
+	_language_option.name = "LanguageOption"
+	_language_option.item_selected.connect(_on_language_selected)
 	_ui_scale_option = _add_settings_option_row(settings_controls, "界面大小", ["小 · 90%", "标准 · 100%", "大 · 125%", "特大 · 150%", "超大 · 175%"])
 	_ui_scale_option.name = "UIScaleOption"
 	_ui_scale_option.item_selected.connect(_on_ui_scale_selected)
@@ -315,6 +349,12 @@ func _add_settings_option_row(parent: VBoxContainer, label_text: String, options
 
 
 func _sync_interface_settings() -> void:
+	if _language_option != null:
+		if _localization_manager != null and _localization_manager.has_method("get_locale_index"):
+			_language_option.disabled = false
+			_language_option.select(int(_localization_manager.call("get_locale_index")))
+		else:
+			_language_option.disabled = true
 	if _quality_manager == null:
 		if _ui_scale_option != null:
 			_ui_scale_option.disabled = true
@@ -345,6 +385,11 @@ func _update_panel_layout() -> void:
 func _on_ui_scale_selected(index: int) -> void:
 	if _quality_manager != null and _quality_manager.has_method("set_ui_scale_index"):
 		_quality_manager.call("set_ui_scale_index", index)
+
+
+func _on_language_selected(index: int) -> void:
+	if _localization_manager != null and _localization_manager.has_method("set_locale_index"):
+		_localization_manager.call("set_locale_index", index)
 
 
 func _on_navigation_detail_selected(index: int) -> void:

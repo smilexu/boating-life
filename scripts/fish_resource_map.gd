@@ -130,7 +130,7 @@ func _process(delta: float) -> void:
 func _update_summary_label() -> void:
 	if _summary_label == null or _map_canvas == null:
 		return
-	_summary_label.text = "当前筛选：%d 个鱼类资源点 · %d 个海豚群" % [
+	_summary_label.text = tr("fish.map.summary") % [
 		_map_canvas.get_school_count(),
 		_map_canvas.get_dolphin_count(),
 	]
@@ -227,19 +227,19 @@ func _build_ui() -> void:
 	outer.add_child(header)
 	var title := Label.new()
 	title.name = "MapTitle"
-	title.text = "海图与环境数据  ·  ØRESUND"
+	title.text = tr("fish.map.title")
 	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", Color("#dce9dc"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 	_title_label = title
 	var close_button := Button.new()
-	close_button.text = "关闭  ·  F4 / Esc"
+	close_button.text = tr("fish.map.close")
 	close_button.pressed.connect(func() -> void: set_map_open(false))
 	header.add_child(close_button)
 	var subtitle := Label.new()
 	subtitle.name = "MapSubtitle"
-	subtitle.text = "鱼类资源预测与海豚当前位置 · 底图由 EMODnet 水深和 OSM 海岸掩膜约束"
+	subtitle.text = tr("fish.map.subtitle")
 	subtitle.add_theme_color_override("font_color", Color("#9db8b6"))
 	outer.add_child(subtitle)
 	_subtitle_label = subtitle
@@ -278,11 +278,12 @@ func _build_ui() -> void:
 	_map_tabs.tab_changed.connect(_on_map_tab_changed)
 	side.add_child(_map_tabs)
 	var fish_tab := ScrollContainer.new()
-	fish_tab.name = "鱼类资源"
+	fish_tab.name = "FishResourcesTab"
 	fish_tab.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	fish_tab.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	fish_tab.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_map_tabs.add_child(fish_tab)
+	_map_tabs.set_tab_title(_map_tabs.get_tab_count() - 1, tr("fish.map.tab.fish_resources"))
 	var fish_layout := VBoxContainer.new()
 	fish_layout.add_theme_constant_override("separation", 9)
 	fish_layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -311,19 +312,19 @@ func _build_ui() -> void:
 	_map_canvas.set_resource_overlay_enabled(true)
 	_depth_quality_canvas.set_chart_active(false)
 	var species_heading := Label.new()
-	species_heading.text = "鱼种筛选"
+	species_heading.text = tr("fish.map.species_heading")
 	species_heading.add_theme_font_size_override("font_size", 17)
 	species_heading.add_theme_color_override("font_color", Color("#dce9dc"))
 	fish_layout.add_child(species_heading)
 	var fish_hint := Label.new()
-	fish_hint.text = "鱼类追踪默认关闭；海豚群默认显示当前位置。筛选选择会自动保存。"
+	fish_hint.text = tr("fish.map.filter_hint")
 	fish_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	fish_hint.add_theme_color_override("font_color", Color("#9db8b6"))
 	fish_layout.add_child(fish_hint)
 	for profile in _manager.get_species_profiles():
 		var species_id := profile.species_id
 		var check := CheckButton.new()
-		check.text = "%s  ·  %s" % [profile.display_name, profile.english_name]
+		check.text = tr("fish.map.species_filter") % [tr(profile.name_key), profile.scientific_name]
 		check.button_pressed = _selected_species.has(species_id)
 		check.add_theme_color_override("font_color", profile.map_color.lightened(0.18))
 		check.toggled.connect(func(pressed: bool) -> void: _set_species_enabled(species_id, pressed))
@@ -331,7 +332,7 @@ func _build_ui() -> void:
 		_species_buttons[species_id] = check
 	var dolphin_check := CheckButton.new()
 	dolphin_check.name = "DolphinTracking"
-	dolphin_check.text = "海豚群  ·  Dolphin pod"
+	dolphin_check.text = tr("fish.map.dolphin_filter")
 	dolphin_check.button_pressed = _dolphins_enabled
 	dolphin_check.add_theme_color_override("font_color", Color("#a9e5df"))
 	dolphin_check.toggled.connect(_set_dolphins_enabled)
@@ -361,18 +362,21 @@ func _build_ui() -> void:
 			_refresh_route_overlay()
 		)
 	var detail_heading := Label.new()
-	detail_heading.text = "区域信息"
+	detail_heading.text = tr("fish.map.detail_heading")
 	detail_heading.add_theme_font_size_override("font_size", 17)
 	detail_heading.add_theme_color_override("font_color", Color("#dce9dc"))
 	fish_layout.add_child(detail_heading)
 	_details_label = Label.new()
-	_details_label.text = "点击鱼类资源点或海豚群标记查看物种、位置与群体信息。"
+	_details_label.text = tr("fish.map.detail_prompt")
 	_details_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_details_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_details_label.add_theme_color_override("font_color", Color("#b2c5c1"))
 	fish_layout.add_child(_details_label)
 	var legend := Label.new()
-	legend.text = "● 针鱼  ● 鲱鱼  ● 三刺鱼   ◇ 海豚群\n实心：0–6 m 视觉鱼群   ◌ 虚线空心：深水逻辑鱼群\n海豚标记随共享群体位置更新。底图：EMODnet DTM 2024 / LAT"
+	var species_legend := PackedStringArray()
+	for profile in _manager.get_species_profiles():
+		species_legend.append(tr("fish.map.legend.species") % tr(profile.name_key))
+	legend.text = "%s  %s\n%s\n%s" % ["  ".join(species_legend), tr("fish.map.legend.dolphins"), tr("fish.map.legend.visual_logical"), tr("fish.map.legend.depth_source")]
 	legend.add_theme_color_override("font_color", Color("#98b0ae"))
 	fish_layout.add_child(legend)
 	var depth_heading := Label.new()
@@ -463,10 +467,10 @@ func _on_map_tab_changed(tab_index: int) -> void:
 		_depth_quality_canvas.visible = tab_index == 2
 		_depth_quality_canvas.set_chart_active(_map_open and tab_index == 2)
 	if _title_label != null:
-		_title_label.text = ["鱼类资源与海豚  ·  ØRESUND", "航路编辑  ·  ØRESUND", "海图水深与数据质量  ·  ØRESUND"][clampi(tab_index, 0, 2)]
+		_title_label.text = [tr("fish.map.title"), "航路编辑  ·  ØRESUND", "海图水深与数据质量  ·  ØRESUND"][clampi(tab_index, 0, 2)]
 	if _subtitle_label != null:
 		_subtitle_label.text = [
-			"鱼类资源预测与海豚当前位置 · 底图由 EMODnet 水深和 OSM 海岸掩膜约束",
+			tr("fish.map.subtitle"),
 			"查看预设航线与开发者编辑工具。路线数据使用同一 GeoReference。",
 			"完整区域水深底图 · 滚轮缩放 · 按住鼠标左键拖动 · 黄色估算 / 红色仍未知",
 		][clampi(tab_index, 0, 2)]
@@ -513,7 +517,7 @@ func _update_footer_label() -> void:
 	if _map_tabs != null and _map_tabs.current_tab == 2:
 		_footer_label.text = "黄色为邻近水深游戏估算 · 红色为剩余未知水域 · EMODnet DTM 2024 / LAT · 不用于真实航海安全判断"
 	elif _manager != null:
-		_footer_label.text = "%s Authority · Seed %d · Revision %d · 鱼类为预测资源点；勾选海豚群可追踪当前本地权威位置" % [_manager.get_authority_source(), _manager.get_world_seed(), _manager.get_state_revision()]
+		_footer_label.text = tr("fish.map.footer") % [_manager.get_authority_source(), _manager.get_world_seed(), _manager.get_state_revision()]
 
 
 func _load_tracking_preferences() -> void:
@@ -545,7 +549,7 @@ func _save_tracking_preferences() -> void:
 
 func _on_school_selected(school: Dictionary) -> void:
 	if school.is_empty():
-		_details_label.text = "该位置没有当前筛选的预测资源点。"
+		_details_label.text = tr("fish.map.empty_selection")
 		return
 	_update_school_details(school)
 
@@ -576,41 +580,59 @@ func _update_school_details(school: Dictionary) -> void:
 	if profile == null:
 		return
 	var render_state := str(school.get("render_state", "visual"))
-	var surface_species := str(school.get("species_id", "")) in ["needlefish", "herring"]
-	var render_label := ("视觉鱼（0–6 m）" if render_state == "visual" else "逻辑鱼（深于 6 m；不绘制 3D 鱼体）") if surface_species else "生态资源点"
+	var surface_species := profile.surface_activity_cycle_enabled
+	var render_key := "fish.map.render.visual_layer" if render_state == "visual" else "fish.map.render.logical_layer"
+	var render_label := tr(render_key) % profile.logical_depth_threshold_m if surface_species else tr("fish.map.render.resource_point")
 	var position_data: Array = school.get("world_position", [])
-	var gps_text := "位置未知"
-	var behavior_text := str(school.get("movement_state", "unknown"))
-	if surface_species:
-		behavior_text = str(school.get("surface_activity_state", behavior_text))
+	var gps_text := tr("fish.map.position_unknown")
+	var behavior_text := _localized_school_activity(profile, school)
 	var depth_value := float(school.get("activity_depth_m", 0.0)) if surface_species else float(school.get("depth_m", 0.0))
-	var depth_label := "活动深度" if surface_species else "预测水深"
+	var depth_label := tr("fish.map.activity_depth") if surface_species else tr("fish.map.chart_depth")
+	var habitat_text := _localized_habitat(str(school.get("habitat_region", "unknown")))
 	if position_data.size() >= 3 and _georeference != null:
 		var geodetic := _georeference.world_to_geodetic(Vector3(float(position_data[0]), 0.0, float(position_data[2])))
 		gps_text = "GPS %.5f°%s, %.5f°%s" % [absf(geodetic.x), "N" if geodetic.x >= 0.0 else "S", absf(geodetic.y), "E" if geodetic.y >= 0.0 else "W"]
-	_details_label.text = "%s / %s\n%s · %s\n典型生境：%s\n%s：%.1f m · 海图水深：%.1f m\n%s\n群体规模：%s（%d 条模拟个体）\n行为：%s · 资源状态：%s\n预测生态资源点" % [
-		profile.display_name,
-		profile.english_name,
+	_details_label.text = tr("fish.map.details.format") % [
+		tr(profile.name_key),
+		profile.scientific_name,
 		render_label,
-		behavior_text,
-		profile.habitat_description,
+		tr(profile.description_key),
 		depth_label,
 		depth_value,
+		tr("fish.map.chart_depth"),
 		float(school.get("depth_m", 0.0)),
+		tr("fish.map.habitat_label"),
+		habitat_text,
+		tr("fish.map.location_label"),
 		gps_text,
 		_population_band(int(school.get("population", 0))),
 		int(school.get("population", 0)),
-	behavior_text,
-		str(school.get("resource_state", "available")),
+		tr("fish.map.activity_label"),
+		behavior_text,
+		tr("fish.map.resource_label"),
+		tr("fish.map.resource.%s" % str(school.get("resource_state", "available"))),
 	]
+
+
+func _localized_school_activity(profile: FishSpeciesProfile, school: Dictionary) -> String:
+	var state_id := str(school.get("surface_activity_state", "inactive")) if profile.surface_activity_cycle_enabled else str(school.get("movement_state", "cruise"))
+	var key := "fish.map.activity.%s" % state_id
+	var translated := tr(key)
+	return translated if translated != key else tr("fish.map.activity.unknown")
+
+
+func _localized_habitat(habitat_id: String) -> String:
+	var key := "fish.map.habitat.%s" % habitat_id
+	var translated := tr(key)
+	return translated if translated != key else tr("fish.map.habitat.unknown")
 
 
 func _population_band(population: int) -> String:
 	if population < 12:
-		return "小"
+		return tr("fish.map.population.small")
 	if population < 45:
-		return "中"
-	return "大"
+		return tr("fish.map.population.medium")
+	return tr("fish.map.population.large")
 
 
 func _panel_style() -> StyleBoxFlat:

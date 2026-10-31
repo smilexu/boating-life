@@ -18,9 +18,10 @@ func _run() -> void:
 	var state_counts := {
 		"needlefish": {"visual": 0, "logical": 0},
 		"herring": {"visual": 0, "logical": 0},
+		"sea_trout": {"visual": 0, "logical": 0},
 	}
-	var profile_counts := {"needlefish": 0, "herring": 0}
-	var roundtrip_checked := {"needlefish": false, "herring": false}
+	var profile_counts := {"needlefish": 0, "herring": 0, "sea_trout": 0}
+	var roundtrip_checked := {"needlefish": false, "herring": false, "sea_trout": false}
 	for school in schools:
 		var species_id := str(school.get("species_id", ""))
 		if not state_counts.has(species_id):
@@ -36,12 +37,12 @@ func _run() -> void:
 		var render_state := manager.get_school_render_state(school)
 		state_counts[species_id][render_state] = int(state_counts[species_id][render_state]) + 1
 		profile_counts[species_id] += 1
-	_check(profile_counts["needlefish"] > 0 and profile_counts["herring"] > 0, "needlefish and herring remain in the shared authority")
-	for species_id in ["needlefish", "herring"]:
+	_check(profile_counts["needlefish"] > 0 and profile_counts["herring"] > 0 and profile_counts["sea_trout"] > 0, "three surface-cycle species use the shared authority")
+	for species_id in ["needlefish", "herring", "sea_trout"]:
 		_check(int(state_counts[species_id]["visual"]) > 0, "%s authority contains visual-layer schools" % species_id)
 		_check(int(state_counts[species_id]["logical"]) > 0, "%s authority contains deep logical schools" % species_id)
 
-	var map_schools := manager.get_map_distribution(["needlefish", "herring"])
+	var map_schools := manager.get_map_distribution(["needlefish", "herring", "sea_trout"])
 	var map_has_both_states := false
 	var map_states := {"visual": false, "logical": false}
 	for school in map_schools:
@@ -66,7 +67,7 @@ func _run() -> void:
 	var original_boat_transform := boat.global_transform
 	var tried_species := {"needlefish": false, "herring": false}
 	for species_id in ["needlefish", "herring"]:
-		var school_id := _nearest_visual_school_id(schools, species_id, boat.global_position)
+		var school_id := _nearest_visual_school_id(schools, species_id, boat.global_position, manager)
 		if school_id.is_empty():
 			print("[SURFACE_FISH_TEST] skipped F3 %s: no visual school inside the configured search range" % species_id)
 			continue
@@ -88,6 +89,8 @@ func _run() -> void:
 		var unchanged := manager.get_school(selected_id)
 		_check(unchanged["world_position"] == before_position and int(unchanged["population"]) == before_population, "local observation changes no shared fish position or population")
 		var reveal_count := int(bathymetry.water_material.get_shader_parameter("surface_fish_reveal_count"))
+		if reveal_count == 0:
+			print("[SURFACE_FISH_TEST] reveal_debug species=%s school=%s depth=%.3f state=%s population=%d candidates=%d boat_distance=%.1f" % [species_id, selected_id, float(selected.get("activity_depth_m", -1.0)), str(selected.get("surface_activity_state", "")), int(selected.get("population", 0)), renderer._surface_reveal_candidates.size(), boat_distance])
 		_check(reveal_count > 0 and reveal_count <= 8, "a nearby surface school activates the bounded local water reveal")
 		hud.call("_on_fish_observation_camera_pressed")
 		_check(renderer.is_observation_active(), "underwater camera remains an explicit manual action")
@@ -104,14 +107,21 @@ func _run() -> void:
 	quit(0 if _failures == 0 else 1)
 
 
-func _nearest_visual_school_id(schools: Array[Dictionary], species_id: String, origin: Vector3) -> String:
+func _nearest_visual_school_id(schools: Array[Dictionary], species_id: String, origin: Vector3, manager: FishResourceManager) -> String:
 	var nearest_id := ""
 	var nearest_score := INF
+	var profile: FishSpeciesProfile
+	for candidate in manager.get_species_profiles():
+		if candidate.species_id == species_id:
+			profile = candidate
+			break
+	if profile == null:
+		return nearest_id
 	for school in schools:
 		if str(school.get("species_id", "")) != species_id:
 			continue
 		var depth := float(school.get("activity_depth_m", INF))
-		if depth > 6.0:
+		if depth > profile.logical_depth_threshold_m - 0.4:
 			continue
 		var position: Array = school.get("world_position", [])
 		if position.size() != 3:

@@ -30,7 +30,7 @@ const SURFACE_FISH_ACCELERATION_FACTOR := 0.60
 @export_range(8.0, 16.0, 0.25) var stickleback_regroup_max_seconds := 12.0
 @export_range(1.0, 8.0, 0.25) var stickleback_scatter_radius_extension_m := 4.0
 @export var disturbance_source_group := "fish_disturbance_source"
-@export_category("Needlefish and herring disturbance")
+@export_category("Surface fish disturbance")
 @export_range(5.0, 30.0, 1.0) var surface_fish_alert_radius_m := 15.0
 @export_range(4.0, 20.0, 1.0) var surface_fish_scatter_radius_m := 10.0
 @export_range(2.0, 12.0, 1.0) var surface_fish_emergency_radius_m := 5.0
@@ -64,8 +64,8 @@ var _has_authoritative_disturbance_snapshot := false
 var _last_disturbance_positions: Dictionary = {}
 var _school_render_states: Dictionary = {}
 var _surface_school_motion_states: Dictionary = {}
-var _logical_school_counts := {"needlefish": 0, "herring": 0}
-var _visual_school_counts := {"needlefish": 0, "herring": 0}
+var _logical_school_counts: Dictionary = {}
+var _visual_school_counts: Dictionary = {}
 var _near_surface_school_count := 0
 var _surface_activity: Node
 var _surface_school_records: Array[Dictionary] = []
@@ -117,7 +117,8 @@ func begin_observation(school_id: String) -> bool:
 	if school.is_empty():
 		return false
 	var species_id := str(school.get("species_id", ""))
-	if species_id in ["needlefish", "herring"] and float(school.get("activity_depth_m", 99.0)) > 6.0:
+	var profile := _manager.get_species_profile(species_id)
+	if profile != null and profile.surface_activity_cycle_enabled and float(school.get("activity_depth_m", 99.0)) > profile.logical_depth_threshold_m:
 		return false
 	if _observation_camera == null:
 		_return_camera = get_viewport().get_camera_3d()
@@ -200,16 +201,17 @@ func get_school_visual_debug(school_id: String) -> Dictionary:
 		var state: Dictionary = _individual_states[key_variant]
 		fish_count += 1
 		total_visual_length += float(state.get("visual_length_m", profile.target_visual_length_m))
-		var state_name := str(state.get("disturbance_state", state.get("behavior_state", "unknown"))) if profile.species_id == "three_spined_stickleback" else str(state.get("behavior_state", "unknown"))
+		var state_name := str(state.get("disturbance_state", state.get("behavior_state", "unknown"))) if profile.behavior_type == "coastal_benthic" else str(state.get("behavior_state", "unknown"))
 		state_counts[state_name] = int(state_counts.get(state_name, 0)) + 1
 		total_threat_level += float(state.get("threat_level", 0.0))
 		var transform: Transform3D = state.get("visual_to_transform", Transform3D.IDENTITY)
 		total_surface_depth += surface_height - transform.origin.y
 	var visible_in_school := _visible_count_for_school(school_id, str(school.get("species_id", "")))
 	var average_depth := total_surface_depth / float(fish_count) if fish_count > 0 else activity_depth_m
-	if profile.species_id in ["needlefish", "herring"] and fish_count == 0:
+	if profile.surface_activity_cycle_enabled and fish_count == 0:
 		average_depth = activity_depth_m
 	return {
+		"species_id": profile.species_id,
 		"school_population": int(school.get("population", 0)),
 		"visible_fish": visible_in_school,
 		"visualized_fish": fish_count,
@@ -218,8 +220,8 @@ func get_school_visual_debug(school_id: String) -> Dictionary:
 		"bathymetry_depth_m": depth_m,
 		"activity_depth_m": average_depth,
 		"surface_activity_state": str(school.get("surface_activity_state", "unknown")),
-		"activity_label": str(school.get("surface_activity_state", school.get("movement_state", "cruise"))) if profile.species_id in ["needlefish", "herring"] else str(school.get("movement_state", "cruise")),
-		"render_state": _render_state_for_activity_depth(average_depth) if profile.species_id in ["needlefish", "herring"] else "visual",
+		"activity_label": str(school.get("surface_activity_state", school.get("movement_state", "cruise"))) if profile.surface_activity_cycle_enabled else str(school.get("movement_state", "cruise")),
+		"render_state": _render_state_for_activity_depth(average_depth, profile) if profile.surface_activity_cycle_enabled else "visual",
 		"seabed_clearance_m": maxf(0.0, depth_m - average_depth),
 		"behavior_counts": state_counts,
 		"average_threat_level": total_threat_level / float(fish_count) if fish_count > 0 else 0.0,
@@ -241,6 +243,12 @@ func _visible_count_for_school(school_id: String, species_id: String) -> int:
 func get_render_statistics() -> Dictionary:
 	var triangles := 0
 	var visible_fish := 0
+	var school_counts_by_species: Dictionary = {}
+	for profile in _profiles:
+		school_counts_by_species[profile.species_id] = {
+			"visual": int(_visual_school_counts.get(profile.species_id, 0)),
+			"logical": int(_logical_school_counts.get(profile.species_id, 0)),
+		}
 	for record in _species_visuals.values():
 		var renderer: MultiMeshInstance3D = record["renderer"]
 		if not visible or not renderer.is_visible_in_tree():
@@ -264,10 +272,7 @@ func get_render_statistics() -> Dictionary:
 		"visual_update_ms": _last_visual_update_ms,
 		"movement_tick_count": _movement_tick_count,
 		"movement_update_hz": 1.0 / maxf(movement_update_interval, 0.001),
-		"logical_needlefish_schools": int(_logical_school_counts.get("needlefish", 0)),
-		"visual_needlefish_schools": int(_visual_school_counts.get("needlefish", 0)),
-		"logical_herring_schools": int(_logical_school_counts.get("herring", 0)),
-		"visual_herring_schools": int(_visual_school_counts.get("herring", 0)),
+		"school_counts_by_species": school_counts_by_species,
 		"near_surface_schools": _near_surface_school_count,
 		"surface_ripple_count": int(_surface_activity.call("get_active_ripple_count")) if _surface_activity != null else 0,
 		"smooth_motion_enabled": smooth_motion_enabled,
@@ -332,7 +337,7 @@ func _update_observation_camera(school: Dictionary) -> void:
 			bathymetry_depth = float(sample.get("depth_m", bathymetry_depth))
 	var surface_height := _surface_height(school_position)
 	var fish_depth := bathymetry_depth * 0.30 if profile == null else _vertical_depth_offset(profile, bathymetry_depth, 0.0)
-	if str(school.get("species_id", "")) in ["needlefish", "herring"]:
+	if profile != null and profile.surface_activity_cycle_enabled:
 		fish_depth = float(school.get("activity_depth_m", fish_depth))
 	var target := Vector3(school_position.x, surface_height - fish_depth, school_position.z)
 	var state_position_sum := Vector3.ZERO
@@ -349,13 +354,13 @@ func _update_observation_camera(school: Dictionary) -> void:
 		target = state_position_sum / float(state_position_count)
 	var heading := float(school.get("direction_radians", 0.0))
 	var forward := Vector3(cos(heading), 0.0, sin(heading)).normalized()
-	var is_stickleback := str(school.get("species_id", "")) == "three_spined_stickleback"
-	var horizontal_distance := 2.7 if is_stickleback else (8.0 if str(school.get("species_id", "")) == "herring" else 6.5)
-	var camera_lift := 0.35 if is_stickleback else 1.7
-	if is_stickleback:
+	var is_coastal_benthic := profile != null and profile.behavior_type == "coastal_benthic"
+	var horizontal_distance := 2.7 if is_coastal_benthic else (8.0 if profile != null and profile.behavior_type == "schooling_pelagic" else 6.5)
+	var camera_lift := 0.35 if is_coastal_benthic else 1.7
+	if is_coastal_benthic:
 		_observation_camera.fov = 58.0
 	var camera_position: Vector3
-	if is_stickleback:
+	if is_coastal_benthic:
 		# The debug boat now sits over this shallow school. Observe from the side
 		# of its keel so the hull does not fill the underwater view.
 		var side := Vector3(-forward.z, 0.0, forward.x)
@@ -584,7 +589,7 @@ func _build_species_visuals() -> void:
 		fish_material.set_shader_parameter("tail_frequency_hz", profile.tail_frequency_hz)
 		fish_material.set_shader_parameter("surface_roughness", profile.visual_roughness)
 		fish_material.set_shader_parameter("animation_enabled", animation_enabled)
-		if profile.species_id == "three_spined_stickleback":
+		if profile.behavior_type == "coastal_benthic":
 			var mesh_bounds := fish_mesh.get_aabb()
 			fish_material.set_shader_parameter("use_stickleback_body_tones", true)
 			fish_material.set_shader_parameter("dorsal_center_z", mesh_bounds.position.z + mesh_bounds.size.z * 0.5)
@@ -645,8 +650,11 @@ func _update_visible_fish(delta: float) -> void:
 	var depth_sample_cache: Dictionary = {}
 	var surface_sample_cache: Dictionary = {}
 	var remaining_total := maximum_visible_fish
-	_logical_school_counts = {"needlefish": 0, "herring": 0}
-	_visual_school_counts = {"needlefish": 0, "herring": 0}
+	_logical_school_counts.clear()
+	_visual_school_counts.clear()
+	for profile in _profiles:
+		_logical_school_counts[profile.species_id] = 0
+		_visual_school_counts[profile.species_id] = 0
 	_near_surface_school_count = 0
 	_surface_school_records.clear()
 	_surface_reveal_candidates.clear()
@@ -659,12 +667,13 @@ func _update_visible_fish(delta: float) -> void:
 		if not fish_by_species.has(species_id) or not _species_visuals.has(species_id):
 			continue
 		var profile: FishSpeciesProfile = _species_visuals[species_id]["profile"]
-		var surface_layer_fish := species_id in ["needlefish", "herring"]
+		var surface_layer_fish := profile.surface_activity_cycle_enabled
 		var activity_depth := float(school.get("activity_depth_m", _vertical_depth_offset(profile, float(school.get("depth_m", 0.0)), 0.0)))
 		if surface_layer_fish:
 			var school_id := str(school.get("school_id", ""))
-			var was_visual := bool(_school_render_states.get(school_id, activity_depth <= 6.0))
-			var remains_visual := activity_depth <= (6.35 if was_visual else 5.65)
+			var logical_threshold := profile.logical_depth_threshold_m
+			var was_visual := bool(_school_render_states.get(school_id, activity_depth <= logical_threshold))
+			var remains_visual := activity_depth <= (logical_threshold + 0.35 if was_visual else maxf(0.0, logical_threshold - 0.35))
 			_school_render_states[school_id] = remains_visual
 			if remains_visual:
 				_visual_school_counts[species_id] = int(_visual_school_counts[species_id]) + 1
@@ -688,7 +697,7 @@ func _update_visible_fish(delta: float) -> void:
 		array.append_array(fish_records)
 		fish_by_species[species_id] = array
 		remaining_total -= fish_records.size()
-		if surface_layer_fish and not fish_records.is_empty() and activity_depth <= 6.0:
+		if surface_layer_fish and not fish_records.is_empty() and activity_depth <= profile.logical_depth_threshold_m:
 			var school_position := Vector3(float(school["world_position"][0]), 0.0, float(school["world_position"][2]))
 			var school_distance_squared := Vector2(school_position.x - _boat.global_position.x, school_position.z - _boat.global_position.z).length_squared()
 			var reveal_weight := 1.0 - smoothstep(2.0, 5.8, activity_depth)
@@ -705,6 +714,7 @@ func _update_visible_fish(delta: float) -> void:
 				_surface_school_records.append({
 					"school_id": str(school.get("school_id", "")),
 					"species_id": species_id,
+					"behavior_type": profile.behavior_type,
 					"world_position": Vector3(float(school["world_position"][0]), 0.0, float(school["world_position"][2])),
 					"population": int(school.get("population", 0)),
 					"activity_depth_m": activity_depth,
@@ -936,7 +946,7 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 	# wave solve for every individual fish.
 	var school_surface_height := _surface_height(school_position)
 	var habitat_context: Dictionary = {}
-	if profile.species_id == "three_spined_stickleback" and _seabed_manager != null:
+	if profile.behavior_type == "coastal_benthic" and _seabed_manager != null:
 		habitat_context = _seabed_manager.get_fish_habitat_context(school_position, profile.school_activity_radius_m)
 	var local_offsets: Array[Vector2] = []
 	var local_velocities: Array[Vector2] = []
@@ -957,9 +967,9 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 		keys.append(individual_key)
 		phases.append(float(state["phase"]))
 		behavior_states.append(str(state["behavior_state"]))
-	var grid := _build_neighbor_grid(local_offsets) if profile.species_id in ["herring", "three_spined_stickleback"] else {}
+	var grid := _build_neighbor_grid(local_offsets) if profile.behavior_type in ["schooling_pelagic", "coastal_benthic"] else {}
 	var base_speed := float(school["movement_speed_mps"])
-	var forward_bias := 0.20 if profile.species_id == "needlefish" else (0.06 if profile.species_id == "herring" else (0.08 if profile.species_id == "three_spined_stickleback" else 0.0))
+	var forward_bias := profile.group_forward_bias
 	for index in range(count):
 		var individual_key := keys[index]
 		var state: Dictionary = _individual_states[individual_key]
@@ -973,7 +983,7 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 		var disturbance_state := str(state.get("disturbance_state", "cruising"))
 		var is_fleeing := false
 		var threat_level := 0.0
-		if profile.species_id == "three_spined_stickleback":
+		if profile.behavior_type == "coastal_benthic":
 			var fish_world_xz := Vector2(school_position.x + offset.x, school_position.z + offset.y)
 			var incoming_threat := clampf(_disturbance_strength_at(fish_world_xz, active_disturbance_sources) * float(state.get("reaction_sensitivity", 1.0)), 0.0, 1.0)
 			var previous_threat := float(state.get("threat_level", 0.0))
@@ -1010,8 +1020,8 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 				state["peak_threat"] = 0.0
 			if disturbance_state == "cruising" and state_timer <= 0.0:
 				epoch += 1
-				behavior = _choose_behavior(profile.species_id, int(state["random_seed"]), epoch)
-				state_timer = _behavior_duration(profile.species_id, int(state["random_seed"]), epoch)
+				behavior = _choose_behavior(profile, int(state["random_seed"]), epoch)
+				state_timer = _behavior_duration(profile, int(state["random_seed"]), epoch)
 				state["routine_behavior"] = behavior
 				# Small, infrequent depth changes keep ordinary cruising from looking
 				# locked to one horizontal plane. Movement remains gradual below.
@@ -1028,7 +1038,7 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 			state["regroup_remaining"] = regroup_remaining
 			state["regroup_duration"] = regroup_duration
 		else:
-			if profile.species_id in ["needlefish", "herring"]:
+			if profile.surface_activity_cycle_enabled:
 				var fish_world_xz := Vector2(school_position.x + offset.x, school_position.z + offset.y)
 				var threat := _surface_fish_threat(fish_world_xz, active_disturbance_sources)
 				var incoming_threat := clampf(float(threat.get("alert", 0.0)) * float(state.get("reaction_sensitivity", 1.0)), 0.0, 1.0)
@@ -1052,8 +1062,8 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 					recovery_remaining = 0.0
 					if state_timer <= 0.0:
 						epoch += 1
-						behavior = _choose_behavior(profile.species_id, int(state["random_seed"]), epoch)
-						state_timer = _behavior_duration(profile.species_id, int(state["random_seed"]), epoch)
+						behavior = _choose_behavior(profile, int(state["random_seed"]), epoch)
+						state_timer = _behavior_duration(profile, int(state["random_seed"]), epoch)
 				match disturbance_state:
 					"alert": behavior = "alert"
 					"scattering": behavior = "flee"
@@ -1064,49 +1074,51 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 				state["surface_recovery_remaining"] = recovery_remaining
 				state["surface_threat_level"] = threat_level
 			else:
-				is_fleeing = boat_distance < _species_flee_radius(profile.species_id)
+				is_fleeing = boat_distance < profile.flee_radius_m
 				if is_fleeing:
 					behavior = "flee"
 				elif state_timer <= 0.0:
 					epoch += 1
-					behavior = _choose_behavior(profile.species_id, int(state["random_seed"]), epoch)
-					state_timer = _behavior_duration(profile.species_id, int(state["random_seed"]), epoch)
+					behavior = _choose_behavior(profile, int(state["random_seed"]), epoch)
+					state_timer = _behavior_duration(profile, int(state["random_seed"]), epoch)
 		var separation := Vector2.ZERO
 		var alignment := Vector2.ZERO
 		var neighbor_center := Vector2.ZERO
 		var cohesion_neighbor_count := 0
-		if profile.species_id in ["herring", "three_spined_stickleback"]:
-			var search_cells := 2 if profile.species_id == "three_spined_stickleback" and disturbance_state in ["alert", "scattering", "recovering"] else 1
+		if profile.behavior_type in ["schooling_pelagic", "coastal_benthic"]:
+			var search_cells := 2 if profile.behavior_type == "coastal_benthic" and disturbance_state in ["alert", "scattering", "recovering"] else 1
 			var neighbors := _neighbors_for_index(index, local_offsets, local_velocities, grid, search_cells)
 			for neighbor_index in neighbors:
 				if neighbor_index == index:
 					continue
 				var difference := offset - local_offsets[neighbor_index]
 				var distance := difference.length()
-				var separation_distance := 1.7 if profile.species_id == "herring" else (0.32 if profile.species_id == "three_spined_stickleback" else 0.48)
+				var separation_distance := profile.school_separation_distance_m
 				if distance > 0.001 and distance < separation_distance:
 					separation += difference.normalized() * (separation_distance - distance)
-				var alignment_radius := 3.2 if profile.species_id == "three_spined_stickleback" and disturbance_state == "recovering" else (2.3 if profile.species_id == "herring" else 1.65)
+				var alignment_radius := profile.school_alignment_radius_m
+				if profile.behavior_type == "coastal_benthic" and disturbance_state == "recovering":
+					alignment_radius = maxf(alignment_radius, 3.2)
 				if distance < alignment_radius:
 					alignment += local_velocities[neighbor_index]
-				if profile.species_id == "three_spined_stickleback" and disturbance_state in ["alert", "recovering"] and distance < 6.5:
+				if profile.behavior_type == "coastal_benthic" and disturbance_state in ["alert", "recovering"] and distance < 6.5:
 					neighbor_center += local_offsets[neighbor_index]
 					cohesion_neighbor_count += 1
-				elif profile.species_id == "herring" and disturbance_state in ["alert", "recovering"] and distance < 5.5:
+				elif profile.behavior_type == "schooling_pelagic" and disturbance_state in ["alert", "recovering"] and distance < 5.5:
 					neighbor_center += local_offsets[neighbor_index]
 					cohesion_neighbor_count += 1
 			if neighbors.size() > 1:
 				alignment = alignment / float(neighbors.size() - 1)
 		var anchor: Vector2 = state["formation_anchor"]
-		var cohesion_strength := 0.23 if profile.species_id == "herring" else (0.42 if profile.species_id == "three_spined_stickleback" else 0.13)
-		if profile.species_id in ["needlefish", "herring"]:
+		var cohesion_strength := profile.school_cohesion_strength
+		if profile.surface_activity_cycle_enabled:
 			match disturbance_state:
-				"alert": cohesion_strength = 0.14 if profile.species_id == "herring" else 0.08
+				"alert": cohesion_strength = 0.14 if profile.behavior_type == "schooling_pelagic" else 0.08
 				"scattering": cohesion_strength = 0.035
-				"recovering": cohesion_strength = 0.31 if profile.species_id == "herring" else 0.20
+				"recovering": cohesion_strength = 0.31 if profile.behavior_type == "schooling_pelagic" else 0.20
 		var cohesion := (anchor - offset) * cohesion_strength
 		var recovery_progress := 0.0
-		if profile.species_id == "three_spined_stickleback":
+		if profile.behavior_type == "coastal_benthic":
 			if disturbance_state == "alert":
 				cohesion = (anchor - offset) * 0.22
 				if cohesion_neighbor_count > 0:
@@ -1119,14 +1131,14 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 				if cohesion_neighbor_count > 0:
 					cohesion += (neighbor_center / float(cohesion_neighbor_count) - offset) * lerpf(0.28, 0.72, recovery_progress)
 		var acceleration := group_forward * (base_speed * forward_bias) + cohesion + separation * 0.9
-		if profile.species_id == "herring":
-			var alignment_weight := 0.24 if disturbance_state == "cruising" else (0.15 if disturbance_state in ["alert", "scattering"] else 0.34)
+		if profile.behavior_type == "schooling_pelagic":
+			var alignment_weight := profile.school_alignment_strength if disturbance_state == "cruising" else (profile.school_alignment_strength * 0.625 if disturbance_state in ["alert", "scattering"] else profile.school_alignment_strength * 1.42)
 			acceleration += (alignment - velocity) * alignment_weight
 			if disturbance_state == "recovering" and cohesion_neighbor_count > 0:
 				var nearby_center := neighbor_center / float(cohesion_neighbor_count)
 				acceleration += (nearby_center - offset) * 0.22
-		elif profile.species_id == "three_spined_stickleback":
-			var alignment_weight := 0.10 if disturbance_state == "cruising" else (0.20 if disturbance_state == "alert" else (0.34 if disturbance_state == "recovering" else 0.08))
+		elif profile.behavior_type == "coastal_benthic":
+			var alignment_weight := profile.school_alignment_strength if disturbance_state == "cruising" else (profile.school_alignment_strength * 2.0 if disturbance_state == "alert" else (profile.school_alignment_strength * 3.4 if disturbance_state == "recovering" else profile.school_alignment_strength * 0.8))
 			acceleration += (alignment - velocity) * alignment_weight
 			var edge_direction: Vector3 = habitat_context.get("edge_direction", Vector3.ZERO)
 			acceleration += Vector2(edge_direction.x, edge_direction.z) * base_speed * 0.24 * float(habitat_context.get("edge_strength", 0.0))
@@ -1135,7 +1147,7 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 			if disturbance_state == "alert":
 				var alert_direction := _fish_escape_direction(current_world_xz, offset, state, active_disturbance_sources)
 				acceleration += alert_direction * base_speed * threat_level * 0.28
-		if profile.species_id in ["needlefish", "herring"]:
+		if profile.surface_activity_cycle_enabled:
 			var current_world_position := Vector2(school_position.x + offset.x, school_position.z + offset.y)
 			if disturbance_state == "alert":
 				var alert_direction := _surface_fish_escape_direction(current_world_position, offset, state, active_disturbance_sources)
@@ -1143,63 +1155,52 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 			elif disturbance_state == "scattering":
 				var escape_direction := _surface_fish_escape_direction(current_world_position, offset, state, active_disturbance_sources)
 				var individual_spread := (offset.normalized() + Vector2(-velocity.y, velocity.x).normalized() * float(state.get("escape_bias_radians", 0.0))).normalized()
-				var escape_strength := 1.20 if profile.species_id == "herring" else 1.55
-				acceleration += (escape_direction * 0.82 + individual_spread * 0.18).normalized() * base_speed * escape_strength
-			elif disturbance_state == "recovering" and profile.species_id == "needlefish":
+				acceleration += (escape_direction * 0.82 + individual_spread * 0.18).normalized() * base_speed * profile.escape_acceleration_factor
+			elif disturbance_state == "recovering" and profile.behavior_type == "fast_pelagic":
 				acceleration += (anchor - offset) * 0.15
-		if profile.species_id == "three_spined_stickleback" and disturbance_state == "scattering":
+		if profile.behavior_type == "coastal_benthic" and disturbance_state == "scattering":
 			var fish_world_xz := Vector2(school_position.x + offset.x, school_position.z + offset.y)
 			var flee_direction := _fish_escape_direction(fish_world_xz, offset, state, active_disturbance_sources)
 			if flee_direction.length_squared() > 0.01:
 				var dispersal := offset.normalized() * 0.25
 				var flee_acceleration := base_speed * (1.25 + threat_level * 0.85)
 				acceleration += (flee_direction + dispersal).normalized() * flee_acceleration
-		elif is_fleeing and profile.species_id not in ["needlefish", "herring"]:
+		elif is_fleeing and not profile.surface_activity_cycle_enabled:
 			var flee_direction := Vector2(school_position.x - _boat.global_position.x, school_position.z - _boat.global_position.z).normalized()
 			if flee_direction.length_squared() > 0.01:
 				acceleration += flee_direction * base_speed * 2.8
 		if behavior == "turn":
 			acceleration += Vector2(-velocity.y, velocity.x) * float(state["turn_bias"])
-		elif behavior == "burst":
-			acceleration += group_forward * (base_speed * 1.5)
 		elif behavior == "hover" or behavior == "idle":
 			acceleration -= velocity * 0.45
 		var previous_speed := velocity.length()
 		velocity += acceleration * delta
-		if profile.species_id in ["needlefish", "herring"] and not is_fleeing:
+		if profile.surface_activity_cycle_enabled and not is_fleeing:
 			var accelerated_speed := velocity.length()
 			if accelerated_speed > previous_speed and velocity.length_squared() > 0.0001:
-				# Keep ordinary speed increases from the burst and schooling forces
-				# at 60% of their previous per-tick gain. Emergency fleeing remains
-				# unaffected so boat avoidance still has enough response.
-				var reduced_speed := lerpf(previous_speed, accelerated_speed, SURFACE_FISH_ACCELERATION_FACTOR)
+				# Smooth routine swimming acceleration. Emergency fleeing remains
+				# unaffected so startled fish can reach their configured sprint speed.
+				var reduced_speed := lerpf(previous_speed, accelerated_speed, profile.ordinary_acceleration_response)
 				velocity = velocity.normalized() * reduced_speed
 		var speed_limit := base_speed * _behavior_speed_scale(behavior)
-		if behavior == "turn" and profile.species_id in ["needlefish", "herring"]:
-			# Their previous turn cap was 0.75x cruise speed. Keep the turn
-			# readable and reduce that cap to about 60% of its previous value.
-			speed_limit *= SURFACE_FISH_TURN_SPEED_FACTOR
-		elif behavior == "burst" and profile.species_id in ["needlefish", "herring"]:
-			# Burst speed is limited to 60% of the previous burst cap.
-			speed_limit *= SURFACE_FISH_ACCELERATION_FACTOR
 		if is_fleeing:
-			speed_limit = maxf(speed_limit, base_speed * (1.55 + threat_level * 0.80 if profile.species_id == "three_spined_stickleback" else 2.6))
+			speed_limit = maxf(speed_limit, base_speed * profile.flee_speed_factor)
 		if velocity.length() > speed_limit and speed_limit > 0.01:
 			velocity = velocity.normalized() * speed_limit
 		if velocity.length() < base_speed * 0.20 and behavior != "idle" and behavior != "hover":
 			velocity = group_forward * base_speed * 0.3
-		velocity = _limit_velocity_turn(local_velocities[index], velocity, profile.species_id, delta, is_fleeing)
+		velocity = _limit_velocity_turn(local_velocities[index], velocity, profile, delta, is_fleeing)
 		offset += velocity * delta
 		var base_activity_radius := _school_wander_radius(profile)
 		var expansion := 0.0
-		if profile.species_id == "three_spined_stickleback":
+		if profile.behavior_type == "coastal_benthic":
 			if disturbance_state == "scattering":
-				expansion = stickleback_scatter_radius_extension_m * clampf(threat_level, 0.4, 1.0)
+				expansion = stickleback_scatter_radius_extension_m * profile.scatter_radius_extension_factor * clampf(threat_level, 0.4, 1.0)
 			elif disturbance_state == "recovering":
 				expansion = stickleback_scatter_radius_extension_m * clampf(regroup_remaining / maxf(regroup_duration, 0.01), 0.0, 1.0)
-		elif profile.species_id in ["needlefish", "herring"]:
+		elif profile.surface_activity_cycle_enabled:
 			if disturbance_state == "scattering":
-				expansion = surface_fish_scatter_extension_m * (1.25 if profile.species_id == "herring" else 0.85)
+				expansion = surface_fish_scatter_extension_m * profile.scatter_radius_extension_factor
 			elif disturbance_state == "recovering":
 				var remaining_recovery := float(state.get("surface_recovery_remaining", 0.0))
 				expansion = surface_fish_scatter_extension_m * clampf(remaining_recovery / 6.5, 0.0, 1.0) * 0.65
@@ -1221,7 +1222,7 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 			continue
 		var local_depth := float(local_depth_data.get("depth_m", school_depth))
 		var local_surface_height := school_surface_height
-		if profile.species_id == "three_spined_stickleback":
+		if profile.behavior_type == "coastal_benthic":
 			local_surface_height = _get_cached_surface_height(local_water_position, surface_sample_cache)
 		var visual_length_m := float(state.get("visual_length_m", profile.target_visual_length_m))
 		var clearance := minf(0.30, maxf(0.08, visual_length_m * 0.70))
@@ -1229,7 +1230,7 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 			continue
 		var depth_offset := _vertical_depth_offset(profile, local_depth, float(state["depth_variation"]))
 		var position_y: float
-		if profile.species_id == "three_spined_stickleback":
+		if profile.behavior_type == "coastal_benthic":
 			var bottom_clearance := maxf(0.12, visual_length_m * 0.22)
 			var minimum_depth := maxf(0.32, profile.near_surface_depth_m.x)
 			var maximum_swim_depth := local_depth - bottom_clearance
@@ -1243,7 +1244,7 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 			state["swim_depth_m"] = current_depth
 			state["depth_target_m"] = target_depth
 			position_y = local_surface_height - depth_offset
-		elif profile.species_id in ["needlefish", "herring"]:
+		elif profile.surface_activity_cycle_enabled:
 			var bottom_clearance := maxf(0.42, minf(0.9, visual_length_m * 0.30))
 			var maximum_swim_depth := maxf(0.30, local_depth - bottom_clearance)
 			var target_depth := float(school.get("activity_depth_m", depth_offset)) + float(state["depth_variation"]) * 0.16
@@ -1259,8 +1260,8 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 			position_y = local_surface_height - depth_offset + float(state["vertical_offset"])
 			position_y = clampf(position_y, local_surface_height - local_depth + clearance, local_surface_height - clearance)
 		var position := Vector3(world_xz.x, position_y, world_xz.y)
-		var boat_clearance := 0.65 if profile.species_id == "three_spined_stickleback" else boat_exclusion_radius_m
-		if profile.species_id == "three_spined_stickleback" and (is_fleeing or (_observation_school_id == school_id and is_observation_active())):
+		var boat_clearance := 0.65 if profile.behavior_type == "coastal_benthic" else boat_exclusion_radius_m
+		if profile.behavior_type == "coastal_benthic" and (is_fleeing or (_observation_school_id == school_id and is_observation_active())):
 			boat_clearance = 0.0
 		if Vector2(position.x - _boat.global_position.x, position.z - _boat.global_position.z).length() < boat_clearance:
 			continue
@@ -1297,13 +1298,13 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 		state["state_timer"] = state_timer
 		state["behavior_state"] = behavior
 		state["behavior_epoch"] = epoch
-		if profile.species_id == "three_spined_stickleback":
+		if profile.behavior_type == "coastal_benthic":
 			state["routine_behavior"] = str(state.get("routine_behavior", behavior))
 			state["disturbance_state"] = disturbance_state
 			state["threat_level"] = threat_level
 			state["regroup_remaining"] = regroup_remaining
 			state["regroup_duration"] = regroup_duration
-		elif profile.species_id in ["needlefish", "herring"]:
+		elif profile.surface_activity_cycle_enabled:
 			state["disturbance_state"] = disturbance_state
 			state["threat_level"] = threat_level
 		state["depth_variation"] = float(state["depth_variation"])
@@ -1370,7 +1371,7 @@ func _create_individual_state(school_seed: int, index: int, profile: FishSpecies
 	rng.seed = FishLocalAuthority.hash32(school_seed, index, 81231 + profile.species_index * 71)
 	var school_radius := _school_wander_radius(profile)
 	var radius := sqrt(rng.randf()) * school_radius
-	if profile.species_id == "three_spined_stickleback":
+	if profile.behavior_type == "coastal_benthic":
 		var ring_roll := rng.randf()
 		if ring_roll < 0.74:
 			radius = sqrt(rng.randf()) * school_radius * 0.25
@@ -1380,13 +1381,13 @@ func _create_individual_state(school_seed: int, index: int, profile: FishSpecies
 			radius = lerpf(school_radius * 0.48, school_radius * 0.65, rng.randf())
 	var angle := rng.randf_range(-PI, PI)
 	var anchor := Vector2(cos(angle), sin(angle)) * radius
-	var initial_speed := rng.randf_range(profile.movement_speed_min_mps, profile.movement_speed_max_mps) * (0.22 if profile.species_id == "three_spined_stickleback" else 0.38)
+	var initial_speed := rng.randf_range(profile.movement_speed_min_mps, profile.movement_speed_max_mps) * profile.initial_speed_factor
 	var visual_length := _choose_visual_length(profile, rng)
 	var initial_depth := profile.target_visual_length_m
-	if profile.species_id in ["needlefish", "herring"]:
+	if profile.surface_activity_cycle_enabled:
 		initial_depth = maxf(0.3, initial_activity_depth_m if initial_activity_depth_m >= 0.0 else profile.surface_activity_depth_m.x)
-	var initial_behavior := "schooling" if profile.species_id == "herring" else (_choose_behavior(profile.species_id, school_seed + index, 0) if profile.species_id == "three_spined_stickleback" else "cruise")
-	if profile.species_id == "three_spined_stickleback":
+	var initial_behavior := "schooling" if profile.behavior_type == "schooling_pelagic" else (_choose_behavior(profile, school_seed + index, 0) if profile.behavior_type == "coastal_benthic" else "cruise")
+	if profile.behavior_type == "coastal_benthic":
 		initial_depth = _choose_stickleback_depth_target(profile, rng.randi(), 0, false)
 	return {
 		"local_position": anchor,
@@ -1422,19 +1423,10 @@ func _create_individual_state(school_seed: int, index: int, profile: FishSpecies
 
 
 func _choose_visual_length(profile: FishSpeciesProfile, rng: RandomNumberGenerator) -> float:
-	if profile.species_id == "three_spined_stickleback":
-		var roll := rng.randf()
-		if roll < 0.12:
-			return rng.randf_range(0.16, 0.19)
-		if roll < 0.86:
-			return rng.randf_range(0.19, 0.21)
-		return rng.randf_range(0.21, 0.23)
 	var length := profile.target_visual_length_m
 	if profile.visual_length_range_m.x > 0.0 and profile.visual_length_range_m.y > profile.visual_length_range_m.x:
 		length = rng.randf_range(profile.visual_length_range_m.x, profile.visual_length_range_m.y)
-	if profile.species_id in ["needlefish", "herring"]:
-		length *= profile.visual_scale_multiplier
-	return length
+	return length * profile.visual_scale_multiplier
 
 
 func _choose_stickleback_depth_target(profile: FishSpeciesProfile, seed: int, epoch: int, fleeing: bool) -> float:
@@ -1448,9 +1440,7 @@ func _choose_stickleback_depth_target(profile: FishSpeciesProfile, seed: int, ep
 
 
 func _school_wander_radius(profile: FishSpeciesProfile) -> float:
-	if profile.species_id == "three_spined_stickleback":
-		return profile.school_activity_radius_m
-	return 6.5 if profile.species_id == "herring" else (5.2 if profile.species_id == "needlefish" else 2.4)
+	return maxf(profile.school_wander_radius_m, profile.school_activity_radius_m if profile.behavior_type == "coastal_benthic" else 0.0)
 
 
 func _build_neighbor_grid(positions: Array[Vector2]) -> Dictionary:
@@ -1490,62 +1480,46 @@ func _surface_height(position: Vector3) -> float:
 	return float(_wave_sampler.sample_surface(position, time).get("height", 0.0))
 
 
-func _render_state_for_activity_depth(depth_m: float) -> String:
-	return "visual" if depth_m <= 6.0 else "logical"
+func _render_state_for_activity_depth(depth_m: float, profile: FishSpeciesProfile) -> String:
+	return "visual" if depth_m <= profile.logical_depth_threshold_m else "logical"
 
 
 func _species_share(species_id: String) -> float:
-	match species_id:
-		"herring": return 0.57
-		"needlefish": return 0.25
-		_: return 0.18
+	var visual: Dictionary = _species_visuals.get(species_id, {})
+	var profile: FishSpeciesProfile = visual.get("profile")
+	return profile.render_budget_share if profile != null else 0.0
 
 
-func _species_flee_radius(species_id: String) -> float:
-	match species_id:
-		"needlefish": return surface_fish_scatter_radius_m
-		"herring": return surface_fish_scatter_radius_m
-		_: return 24.0
-
-
-func _choose_behavior(species_id: String, seed: int, epoch: int) -> String:
+func _choose_behavior(profile: FishSpeciesProfile, seed: int, epoch: int) -> String:
 	var roll := FishLocalAuthority.hash01(seed, epoch, 5519)
-	if species_id == "herring":
+	if profile.behavior_type == "schooling_pelagic":
 		return "turn" if roll < 0.12 else "schooling"
-	if species_id == "needlefish":
-		if roll < 0.11: return "burst"
-		if roll < 0.25: return "turn"
-		return "cruise"
-	if species_id == "three_spined_stickleback":
+	if profile.behavior_type == "fast_pelagic":
+		return "turn" if roll >= 0.11 and roll < 0.25 else "cruise"
+	if profile.behavior_type == "coastal_benthic":
 		if roll < 0.27: return "hover"
 		if roll < 0.51: return "turn"
-		if roll < 0.57: return "burst"
 		return "cruise"
 	if roll < 0.22: return "idle"
 	if roll < 0.40: return "turn"
-	if roll < 0.49: return "burst"
 	return "cruise"
 
 
-func _behavior_duration(species_id: String, seed: int, epoch: int) -> float:
+func _behavior_duration(profile: FishSpeciesProfile, seed: int, epoch: int) -> float:
 	var value := FishLocalAuthority.hash01(seed, epoch, 947)
-	return lerpf(3.0, 8.0, value) if species_id == "herring" else lerpf(1.3, 6.0, value)
+	return lerpf(3.0, 8.0, value) if profile.behavior_type == "schooling_pelagic" else lerpf(1.3, 6.0, value)
 
 
 func _behavior_speed_scale(state: String) -> float:
 	match state:
 		"idle", "hover": return 0.22
-		"alert": return 1.22
-		"burst", "flee": return 2.15
-		"regrouping": return 1.05
-		"turn": return 0.75
 		_: return 1.0
 
 
-func _limit_velocity_turn(previous_velocity: Vector2, next_velocity: Vector2, species_id: String, delta: float, fleeing: bool) -> Vector2:
+func _limit_velocity_turn(previous_velocity: Vector2, next_velocity: Vector2, profile: FishSpeciesProfile, delta: float, fleeing: bool) -> Vector2:
 	if previous_velocity.length_squared() < 0.0001 or next_velocity.length_squared() < 0.0001:
 		return next_velocity
-	var turn_rate := 1.15 if species_id == "herring" else (1.7 if species_id == "needlefish" else (1.35 if species_id == "three_spined_stickleback" else 2.2))
+	var turn_rate := profile.turn_rate_radians_per_second
 	if fleeing:
 		turn_rate *= 1.8
 	var max_turn := turn_rate * maxf(delta, 0.0)
