@@ -24,6 +24,7 @@ const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 @export_node_path("Node") var wave_sampler_path := NodePath("../../WaveSampler")
 @export_node_path("Node") var quality_manager_path := NodePath("../../QualityManager")
 @export_node_path("Node") var fish_resource_manager_path := NodePath("../../FishResourceManager")
+@export_node_path("Node") var wind_field_path := NodePath("../../WindField")
 @export_node_path("Node3D") var fish_school_renderer_path := NodePath("../../FishResourceManager/FishSchoolRenderer")
 @export_node_path("Node") var dolphin_world_manager_path := NodePath("../../DolphinWorldManager")
 @export_node_path("Node") var navigation_depth_monitor_path := NodePath("../../NavigationDepthMonitor")
@@ -34,6 +35,7 @@ const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 @export_node_path("Node") var game_menu_path := NodePath("../../GameMenu")
 @export_node_path("Node") var fish_map_path := NodePath("../../FishResourceMap")
 @export_node_path("Node") var fishing_rod_system_path := NodePath("../FishingRodSystem")
+@export_node_path("Node") var weather_runtime_authority_path := NodePath("../../WeatherRuntimeAuthority")
 
 var _controller: BoatController
 var _weather_controller: Node
@@ -44,6 +46,7 @@ var _quality_manager: Node
 var _diagnostic_bathymetry: Node
 var _diagnostic_seabed_manager: Node
 var _fish_resource_manager: FishResourceManager
+var _wind_field: Node
 var _fish_school_renderer: FishSchoolRenderer
 var _fish_finder_display: Control
 var _fish_finder_toggle_button: Button
@@ -56,6 +59,7 @@ var _oresund_region: Node
 var _game_menu: Node
 var _fish_map: Node
 var _fishing_rod_system: FishingRodSystem
+var _weather_runtime_authority: Node
 var _fishing_player_panel: FishingPlayerPanel
 var _catch_result_panel: PanelContainer
 var _catch_result_title: Label
@@ -71,6 +75,24 @@ var _selected_fish_school_id := ""
 var _world_time_control: WorldTimeControlPort
 var _status_panel: PanelContainer
 var _status_label: Label
+var _environment_title_label: Label
+var _environment_details_button: Button
+var _environment_detail_panel: PanelContainer
+var _environment_detail_label: Label
+var _activity_button: Button
+var _activity_menu: PanelContainer
+var _navigation_core_panel: PanelContainer
+var _navigation_core_title: Label
+var _navigation_speed_label: Label
+var _navigation_core_detail: Label
+var _navigation_core_extra_detail: Label
+var _navigation_detail_button: Button
+var _navigation_detail_requested := false
+var _environment_detail_requested := false
+var _restore_map_mini_after_finder := false
+var _help_panel: PanelContainer
+var _help_label: Label
+var _map_button: Button
 var _fps_label: Label
 var _depth_label: Label
 var _cargo_task_label: Label
@@ -78,6 +100,7 @@ var _debug_panel: PanelContainer
 var _debug_scroll: TabContainer
 var _debug_layout: VBoxContainer
 var _weather_label: Label
+var _weather_runtime_status_label: Label
 var _sun_label: Label
 var _moon_label: Label
 var _cloud_label: Label
@@ -144,6 +167,8 @@ var _fps_elapsed := 0.0
 var _runtime_elapsed := 0.0
 var _debug_refresh_elapsed := 0.0
 var _autopilot_refresh_elapsed := 0.0
+var _status_refresh_elapsed := 0.0
+var _navigation_refresh_elapsed := 0.0
 var _autopilot_panel: PanelContainer
 var _autopilot_label: Label
 var _peberholm_debug_button: Button
@@ -188,6 +213,7 @@ var _aux_engine_toggle_button: Button
 var _aux_engine_gear_option: OptionButton
 var _aux_engine_throttle_slider: HSlider
 var _aux_engine_feedback_label: Label
+var _aux_engine_feedback_key := "hud.sailing.engine_controls_help"
 var _sailing_navigation_instrument: Control
 var _polar_toggle_button: Button
 var _polar_panel: PanelContainer
@@ -202,6 +228,8 @@ var _manual_trim_notice_until_msec := 0
 var _manual_reef_notice_until_msec := 0
 var _vessel_picker_overlay: Control
 var _vessel_picker_close_button: Button
+var _vessel_picker_title: Label
+var _vessel_picker_note: Label
 var _vessel_picker_cards: Array[Control] = []
 var _vessel_picker_previous_manual_input := true
 
@@ -220,6 +248,7 @@ func _ready() -> void:
 	_diagnostic_seabed_manager = get_node_or_null("../../ShallowSeabedManager")
 	_cache_building_visual_roots()
 	_fish_resource_manager = get_node_or_null(fish_resource_manager_path) as FishResourceManager
+	_wind_field = get_node_or_null(wind_field_path)
 	_fish_school_renderer = get_node_or_null(fish_school_renderer_path) as FishSchoolRenderer
 	_fish_resources_initialized = _fish_resource_manager != null and _fish_resource_manager.is_node_ready()
 	if _fish_resource_manager != null and not _fish_resources_initialized and _fish_resource_manager.has_signal("resources_ready"):
@@ -232,6 +261,9 @@ func _ready() -> void:
 	_oresund_region = get_node_or_null(oresund_region_path)
 	_game_menu = get_node_or_null(game_menu_path)
 	_fish_map = get_node_or_null(fish_map_path)
+	_weather_runtime_authority = get_node_or_null(weather_runtime_authority_path)
+	if _fish_map != null and _fish_map.has_signal("display_mode_changed"):
+		_fish_map.connect("display_mode_changed", _on_map_display_mode_changed)
 	_fishing_rod_system = get_node_or_null(fishing_rod_system_path) as FishingRodSystem
 	for service_path in [
 		NodePath("../../MalmoHarbor/PortServiceController"),
@@ -244,46 +276,65 @@ func _ready() -> void:
 	_world_time_control = LocalTimeControlScript.new(time_manager) as WorldTimeControlPort
 
 	_status_panel = PanelContainer.new()
+	_status_panel.name = "EnvironmentSummaryPanel"
 	_status_panel.position = Vector2(24.0, 24.0)
-	_status_panel.custom_minimum_size = Vector2(470.0, 170.0)
+	_status_panel.custom_minimum_size = Vector2(300.0, 0.0)
 	var panel_style := StyleBoxFlat.new()
 	panel_style.bg_color = Color(0.035, 0.12, 0.16, 0.82)
 	panel_style.set_corner_radius_all(8)
 	panel_style.content_margin_left = 15.0
 	panel_style.content_margin_right = 15.0
-	panel_style.content_margin_top = 10.0
-	panel_style.content_margin_bottom = 10.0
+	panel_style.content_margin_top = 8.0
+	panel_style.content_margin_bottom = 8.0
 	_status_panel.add_theme_stylebox_override("panel", panel_style)
 	var status_layout := VBoxContainer.new()
-	status_layout.add_theme_constant_override("separation", 1)
+	status_layout.add_theme_constant_override("separation", 3)
 	_status_panel.add_child(status_layout)
-
+	var environment_header := HBoxContainer.new()
+	_environment_title_label = Label.new()
+	_environment_title_label.text = tr("hud.environment.title")
+	_environment_title_label.add_theme_color_override("font_color", Color(0.58, 0.83, 0.82))
+	_environment_title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	environment_header.add_child(_environment_title_label)
+	_environment_details_button = Button.new()
+	_environment_details_button.name = "EnvironmentDetailsButton"
+	_environment_details_button.text = tr("hud.environment.details")
+	_environment_details_button.focus_mode = Control.FOCUS_NONE
+	_environment_details_button.pressed.connect(_toggle_environment_details)
+	environment_header.add_child(_environment_details_button)
+	status_layout.add_child(environment_header)
 	_status_label = Label.new()
+	_status_label.name = "EnvironmentSummaryText"
 	_status_label.add_theme_color_override("font_color", Color(0.91, 0.96, 0.94, 1.0))
-	_status_label.add_theme_font_size_override("font_size", 18)
+	_status_label.add_theme_font_size_override("font_size", 14)
 	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	status_layout.add_child(_status_label)
 	_fps_label = Label.new()
+	_fps_label.name = "FPSDisplay"
 	_fps_label.text = "FPS: --"
-	_fps_label.add_theme_color_override("font_color", Color(0.91, 0.96, 0.94, 1.0))
-	_fps_label.add_theme_font_size_override("font_size", 17)
-	var fps_font := SystemFont.new()
-	fps_font.font_names = PackedStringArray(["Menlo", "Consolas", "Courier New", "monospace"])
-	_fps_label.add_theme_font_override("font", fps_font)
+	_fps_label.add_theme_color_override("font_color", Color(0.68, 0.80, 0.79, 1.0))
+	_fps_label.add_theme_font_size_override("font_size", 13)
+	_fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	status_layout.add_child(_fps_label)
 	_depth_label = Label.new()
 	_depth_label.name = "ReferenceDepthStatus"
 	_depth_label.add_theme_color_override("font_color", Color(0.82, 0.93, 0.92, 1.0))
 	_depth_label.add_theme_font_size_override("font_size", 14)
 	_depth_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_depth_label.visible = false
 	status_layout.add_child(_depth_label)
 	_cargo_task_label = Label.new()
 	_cargo_task_label.name = "CargoTaskStatus"
 	_cargo_task_label.add_theme_color_override("font_color", Color(0.84, 0.88, 0.77, 1.0))
 	_cargo_task_label.add_theme_font_size_override("font_size", 14)
 	_cargo_task_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_cargo_task_label.visible = false
 	status_layout.add_child(_cargo_task_label)
 	add_child(_status_panel)
+	_build_environment_detail_panel()
+	_build_activity_menu()
+	_build_navigation_core_panel()
 	_build_autopilot_panel()
 	_build_fish_finder_display()
 	_build_debug_panel()
@@ -293,11 +344,487 @@ func _ready() -> void:
 	_build_catch_result_panel()
 	_build_vessel_picker()
 	_controller.vessel_mode_changed.connect(_on_vessel_mode_changed)
+	var localization_manager := get_node_or_null("/root/LocalizationManager")
+	if localization_manager != null and localization_manager.has_signal("locale_changed"):
+		localization_manager.connect("locale_changed", _on_locale_changed)
 	if _quality_manager != null and _quality_manager.has_signal("settings_changed"):
 		_quality_manager.connect("settings_changed", _on_interface_settings_changed)
 	_update_status()
+	_update_navigation_core_panel()
 	_update_hud_layout()
 	get_viewport().size_changed.connect(_update_hud_layout)
+
+
+func _build_environment_detail_panel() -> void:
+	_environment_detail_panel = PanelContainer.new()
+	_environment_detail_panel.name = "EnvironmentDetailsPanel"
+	_environment_detail_panel.custom_minimum_size = Vector2(340.0, 0.0)
+	_environment_detail_panel.visible = false
+	_environment_detail_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.12, 0.16, 0.91)
+	style.border_color = Color(0.28, 0.52, 0.55, 0.72)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 12.0
+	style.content_margin_right = 12.0
+	style.content_margin_top = 9.0
+	style.content_margin_bottom = 9.0
+	_environment_detail_panel.add_theme_stylebox_override("panel", style)
+	var layout := VBoxContainer.new()
+	_environment_detail_panel.add_child(layout)
+	var header := HBoxContainer.new()
+	var title := Label.new()
+	title.text = tr("hud.environment.details")
+	title.name = "EnvironmentDetailsTitle"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	var close_button := Button.new()
+	close_button.name = "CloseEnvironmentDetails"
+	close_button.text = "×"
+	close_button.tooltip_text = tr("hud.close")
+	close_button.pressed.connect(_toggle_environment_details)
+	header.add_child(close_button)
+	layout.add_child(header)
+	_environment_detail_label = Label.new()
+	_environment_detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(_environment_detail_label)
+	add_child(_environment_detail_panel)
+
+
+func _build_activity_menu() -> void:
+	_activity_button = Button.new()
+	_activity_button.name = "ActivitiesButton"
+	_activity_button.text = tr("hud.activities.title")
+	_activity_button.focus_mode = Control.FOCUS_NONE
+	_activity_button.custom_minimum_size = Vector2(180.0, 42.0)
+	_activity_button.pressed.connect(_toggle_activity_menu)
+	add_child(_activity_button)
+	_activity_menu = PanelContainer.new()
+	_activity_menu.name = "ActivitiesMenu"
+	_activity_menu.visible = false
+	_activity_menu.mouse_filter = Control.MOUSE_FILTER_STOP
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.12, 0.16, 0.91)
+	style.border_color = Color(0.28, 0.52, 0.55, 0.72)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 8.0
+	style.content_margin_right = 8.0
+	style.content_margin_top = 8.0
+	style.content_margin_bottom = 8.0
+	_activity_menu.add_theme_stylebox_override("panel", style)
+	var menu := VBoxContainer.new()
+	menu.add_theme_constant_override("separation", 5)
+	_activity_menu.add_child(menu)
+	var trolling := Button.new()
+	trolling.name = "OpenTrollingActivity"
+	trolling.text = tr("hud.activities.trolling")
+	trolling.pressed.connect(_open_trolling_activity)
+	menu.add_child(trolling)
+	var finder := Button.new()
+	finder.name = "OpenFishFinderTool"
+	finder.text = tr("hud.activities.fish_finder")
+	finder.pressed.connect(_open_fish_finder_tool)
+	menu.add_child(finder)
+	var help := Button.new()
+	help.name = "OpenControlsHelp"
+	help.text = tr("hud.activities.controls_help")
+	help.pressed.connect(_toggle_controls_help)
+	menu.add_child(help)
+	add_child(_activity_menu)
+
+	_map_button = Button.new()
+	_map_button.name = "MapToolButton"
+	_map_button.text = tr("hud.map.open")
+	_map_button.focus_mode = Control.FOCUS_NONE
+	_map_button.custom_minimum_size = Vector2(112.0, 38.0)
+	_map_button.pressed.connect(_open_map_tool)
+	add_child(_map_button)
+	_build_controls_help_panel()
+
+
+func _build_controls_help_panel() -> void:
+	_help_panel = PanelContainer.new()
+	_help_panel.name = "ControlsHelpPanel"
+	_help_panel.visible = false
+	_help_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.12, 0.16, 0.92)
+	style.border_color = Color(0.28, 0.52, 0.55, 0.72)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 12.0
+	style.content_margin_right = 12.0
+	style.content_margin_top = 9.0
+	style.content_margin_bottom = 9.0
+	_help_panel.add_theme_stylebox_override("panel", style)
+	var layout := VBoxContainer.new()
+	var header := HBoxContainer.new()
+	var title := Label.new()
+	title.text = tr("hud.activities.controls_help")
+	title.name = "ControlsHelpTitle"
+	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(title)
+	var close_button := Button.new()
+	close_button.name = "CloseControlsHelp"
+	close_button.text = "×"
+	close_button.tooltip_text = tr("hud.close")
+	close_button.pressed.connect(func() -> void: _help_panel.visible = false)
+	header.add_child(close_button)
+	layout.add_child(header)
+	_help_label = Label.new()
+	_help_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	layout.add_child(_help_label)
+	_help_panel.add_child(layout)
+	add_child(_help_panel)
+	_update_controls_help_text()
+
+
+func _build_navigation_core_panel() -> void:
+	_navigation_core_panel = PanelContainer.new()
+	_navigation_core_panel.name = "NavigationCorePanel"
+	_navigation_core_panel.anchor_left = 1.0
+	_navigation_core_panel.anchor_right = 1.0
+	_navigation_core_panel.anchor_top = 1.0
+	_navigation_core_panel.anchor_bottom = 1.0
+	_navigation_core_panel.offset_left = -330.0
+	_navigation_core_panel.offset_top = -150.0
+	_navigation_core_panel.offset_right = -18.0
+	_navigation_core_panel.offset_bottom = -18.0
+	_navigation_core_panel.custom_minimum_size = Vector2(310.0, 116.0)
+	_navigation_core_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.12, 0.16, 0.88)
+	style.border_color = Color(0.28, 0.52, 0.55, 0.72)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 12.0
+	style.content_margin_right = 12.0
+	style.content_margin_top = 8.0
+	style.content_margin_bottom = 8.0
+	_navigation_core_panel.add_theme_stylebox_override("panel", style)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 2)
+	_navigation_core_panel.add_child(layout)
+	var header := HBoxContainer.new()
+	_navigation_core_title = Label.new()
+	_navigation_core_title.text = tr("hud.navigation.title")
+	_navigation_core_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(_navigation_core_title)
+	_navigation_detail_button = Button.new()
+	_navigation_detail_button.name = "NavigationInstrumentExpandButton"
+	_navigation_detail_button.text = tr("hud.navigation.expand")
+	_navigation_detail_button.focus_mode = Control.FOCUS_NONE
+	_navigation_detail_button.pressed.connect(_toggle_navigation_details)
+	header.add_child(_navigation_detail_button)
+	layout.add_child(header)
+	_navigation_speed_label = Label.new()
+	_navigation_speed_label.add_theme_font_size_override("font_size", 28)
+	_navigation_speed_label.add_theme_color_override("font_color", Color(0.97, 0.99, 0.95))
+	layout.add_child(_navigation_speed_label)
+	_navigation_core_detail = Label.new()
+	_navigation_core_detail.name = "NavigationCoreStatus"
+	_navigation_core_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_navigation_core_detail.add_theme_color_override("font_color", Color(0.72, 0.84, 0.81))
+	_navigation_core_detail.visible = true
+	layout.add_child(_navigation_core_detail)
+	_navigation_core_extra_detail = Label.new()
+	_navigation_core_extra_detail.name = "NavigationCoreExtraStatus"
+	_navigation_core_extra_detail.add_theme_font_size_override("font_size", 12)
+	_navigation_core_extra_detail.add_theme_color_override("font_color", Color(0.62, 0.75, 0.73))
+	_navigation_core_extra_detail.visible = false
+	layout.add_child(_navigation_core_extra_detail)
+	add_child(_navigation_core_panel)
+
+
+func _toggle_activity_menu() -> void:
+	_activity_menu.visible = not _activity_menu.visible
+	if _activity_menu.visible and _help_panel != null:
+		_help_panel.visible = false
+	_update_hud_layout()
+
+
+func _open_trolling_activity() -> void:
+	_activity_menu.visible = false
+	if _fishing_player_panel == null:
+		return
+	_fishing_player_panel.set_collapsed(false)
+	_fishing_player_panel.visible = true
+	_update_hud_layout()
+
+
+func _open_fish_finder_tool() -> void:
+	_activity_menu.visible = false
+	if _fish_map != null and _fish_map.has_method("get_display_mode") and str(_fish_map.call("get_display_mode")) == "mini":
+		_restore_map_mini_after_finder = true
+		_fish_map.call("set_display_mode", "hidden")
+	_prepare_major_tool("finder")
+	if _fish_finder_display != null:
+		_fish_finder_display.call("set_expanded", false)
+		_fish_finder_display.call("open_display")
+	_update_hud_layout()
+
+
+func _open_map_tool() -> void:
+	if _fish_map == null:
+		return
+	_activity_menu.visible = false
+	_prepare_major_tool("map")
+	if _fish_map.has_method("set_display_mode"):
+		_fish_map.call("set_display_mode", "expanded")
+	elif _fish_map.has_method("set_map_open"):
+		_fish_map.call("set_map_open", true)
+	_update_hud_layout()
+
+
+func _toggle_environment_details() -> void:
+	_environment_detail_requested = not _environment_detail_requested
+	_environment_detail_panel.visible = _environment_detail_requested
+	if _environment_detail_requested:
+		_prepare_major_tool("environment")
+		_update_environment_summary()
+	_update_hud_layout()
+
+
+func _toggle_navigation_details() -> void:
+	_navigation_detail_requested = not _navigation_detail_requested
+	_navigation_detail_button.text = tr("hud.navigation.collapse") if _navigation_detail_requested else tr("hud.navigation.expand")
+	if _navigation_detail_requested:
+		_prepare_major_tool("navigation")
+	_update_sailing_panel()
+	_update_navigation_core_panel()
+	_update_hud_layout()
+
+
+func _toggle_controls_help() -> void:
+	_activity_menu.visible = false
+	_help_panel.visible = not _help_panel.visible
+	if _help_panel.visible:
+		_prepare_major_tool("help")
+	_update_controls_help_text()
+	_update_hud_layout()
+
+
+func _prepare_major_tool(tool_name: String) -> void:
+	if tool_name != "environment":
+		_environment_detail_requested = false
+		if _environment_detail_panel != null:
+			_environment_detail_panel.visible = false
+	if tool_name != "map" and _fish_map != null and _fish_map.has_method("set_display_mode"):
+		if str(_fish_map.call("get_display_mode")) == "expanded":
+			_fish_map.call("set_display_mode", "mini")
+	if tool_name != "finder" and _fish_finder_display != null:
+		if str(_fish_finder_display.call("get_display_mode")) != "hidden":
+			_fish_finder_display.call("close_display")
+			if _restore_map_mini_after_finder and tool_name != "map" and _fish_map != null:
+				_fish_map.call("set_display_mode", "mini")
+			_restore_map_mini_after_finder = false
+	if tool_name != "navigation":
+		_navigation_detail_requested = false
+		if _navigation_detail_button != null:
+			_navigation_detail_button.text = tr("hud.navigation.expand")
+	if tool_name != "help" and _help_panel != null:
+		_help_panel.visible = false
+	_update_sailing_panel()
+
+
+func _build_trolling_panel_signals() -> void:
+	if _fishing_player_panel == null:
+		return
+	_fishing_player_panel.close_requested.connect(_on_trolling_configuration_closed)
+	_fishing_player_panel.activity_state_changed.connect(_on_trolling_activity_state_changed)
+
+
+func _on_trolling_configuration_closed() -> void:
+	if _fishing_player_panel != null and not _fishing_player_panel.is_trolling_active():
+		_fishing_player_panel.visible = false
+
+
+func _on_trolling_activity_state_changed(active: bool) -> void:
+	if _fishing_player_panel == null:
+		return
+	_fishing_player_panel.visible = active
+	if active:
+		_fishing_player_panel.set_collapsed(false)
+	_update_hud_layout()
+
+
+func _update_controls_help_text() -> void:
+	if _help_label == null or _controller == null:
+		return
+	if _controller.is_sailing_active():
+		_help_label.text = tr("hud.help.sailboat") % [
+			NAVIGATION_HUD_FORMAT.action_key_hint("boat_turn_left"),
+			NAVIGATION_HUD_FORMAT.action_key_hint("boat_turn_right"),
+			NAVIGATION_HUD_FORMAT.action_key_hint("sailboat_main_trim_ease"),
+			NAVIGATION_HUD_FORMAT.action_key_hint("sailboat_main_trim_out"),
+			NAVIGATION_HUD_FORMAT.action_key_hint("sailboat_toggle_auto_trim"),
+		]
+	else:
+		_help_label.text = tr("hud.help.powerboat") % [
+			NAVIGATION_HUD_FORMAT.action_key_hint("boat_accelerate"),
+			NAVIGATION_HUD_FORMAT.action_key_hint("boat_brake"),
+			NAVIGATION_HUD_FORMAT.action_key_hint("boat_turn_left"),
+			NAVIGATION_HUD_FORMAT.action_key_hint("boat_turn_right"),
+			NAVIGATION_HUD_FORMAT.action_key_hint("boat_toggle_autopilot"),
+		]
+
+
+func _on_locale_changed(_locale_id: String) -> void:
+	if _environment_title_label != null:
+		_environment_title_label.text = tr("hud.environment.title")
+	if _environment_details_button != null:
+		_environment_details_button.text = tr("hud.environment.details")
+		_environment_details_button.tooltip_text = tr("hud.environment.details_tooltip")
+	var environment_title := get_node_or_null("EnvironmentDetailsPanel/VBoxContainer/EnvironmentDetailsTitle") as Label
+	if environment_title != null:
+		environment_title.text = tr("hud.environment.details")
+	var environment_close := get_node_or_null("EnvironmentDetailsPanel/VBoxContainer/HBoxContainer/CloseEnvironmentDetails") as Button
+	if environment_close != null:
+		environment_close.tooltip_text = tr("hud.close")
+	if _activity_button != null:
+		_activity_button.text = tr("hud.activities.title")
+		var menu := _activity_menu.get_child(0) as VBoxContainer
+		if menu != null:
+			(menu.get_node("OpenTrollingActivity") as Button).text = tr("hud.activities.trolling")
+			(menu.get_node("OpenFishFinderTool") as Button).text = tr("hud.activities.fish_finder")
+			(menu.get_node("OpenControlsHelp") as Button).text = tr("hud.activities.controls_help")
+		var help_title := get_node_or_null("ControlsHelpPanel/VBoxContainer/HBoxContainer/ControlsHelpTitle") as Label
+		if help_title != null:
+			help_title.text = tr("hud.activities.controls_help")
+		var help_close := get_node_or_null("ControlsHelpPanel/VBoxContainer/HBoxContainer/CloseControlsHelp") as Button
+		if help_close != null:
+			help_close.tooltip_text = tr("hud.close")
+	if _map_button != null:
+		_map_button.text = tr("hud.map.open")
+	if _fish_finder_toggle_button != null:
+		_fish_finder_toggle_button.text = tr("fish.finder.open")
+	var takeover_button := find_child("ManualTakeoverButton", true, false) as Button
+	if takeover_button != null:
+		takeover_button.text = tr("hud.autopilot.manual_takeover")
+	if _fishing_player_panel != null:
+		_fishing_player_panel.refresh_localized_text()
+	if _fish_finder_display != null and _fish_finder_display.has_method("refresh_localized_text"):
+		_fish_finder_display.call("refresh_localized_text")
+	if _fish_map != null and _fish_map.has_method("refresh_localized_text"):
+		_fish_map.call("refresh_localized_text")
+	if _navigation_detail_button != null:
+		_navigation_detail_button.text = tr("hud.navigation.collapse") if _navigation_detail_requested else tr("hud.navigation.expand")
+	_update_controls_help_text()
+	_update_status()
+	_update_navigation_core_panel()
+	_update_autopilot_panel()
+	_update_sailing_panel()
+	if _compass_widget != null:
+		_compass_widget.queue_redraw()
+	_refresh_sailing_static_text()
+	_refresh_vessel_picker_text()
+	_update_hud_layout()
+
+
+func _refresh_sailing_static_text() -> void:
+	if _polar_toggle_button != null:
+		_polar_toggle_button.text = tr("hud.sailing.polar")
+	if _sailing_auto_toggle != null:
+		_sailing_auto_toggle.text = tr("hud.sailing.auto_trim_toggle")
+	if _auto_reef_toggle != null:
+		_auto_reef_toggle.text = tr("hud.sailing.auto_reef_toggle")
+	if _main_deployment_status != null:
+		var main_title := _main_deployment_status.get_parent().get_child(0) as Label
+		main_title.text = tr("hud.sailing.main_sail_deployment")
+	if _jib_deployment_status != null:
+		var jib_title := _jib_deployment_status.get_parent().get_child(0) as Label
+		jib_title.text = tr("hud.sailing.headsail_deployment")
+	var main_label := find_child("MainSailControlLabel", true, false) as Label
+	if main_label != null:
+		main_label.text = tr("hud.sailing.main_sail_angle")
+	var jib_label := find_child("HeadsailControlLabel", true, false) as Label
+	if jib_label != null:
+		jib_label.text = tr("hud.sailing.headsail_angle")
+	if _aux_engine_gear_option != null and _aux_engine_gear_option.item_count >= 3:
+		_aux_engine_gear_option.set_item_text(0, tr("hud.sailing.gear.reverse"))
+		_aux_engine_gear_option.set_item_text(1, tr("hud.sailing.gear.neutral"))
+		_aux_engine_gear_option.set_item_text(2, tr("hud.sailing.gear.forward"))
+	if _aux_engine_feedback_label != null:
+		_aux_engine_feedback_label.text = tr(_aux_engine_feedback_key)
+	if _polar_panel != null:
+		var polar_title := _polar_panel.find_child("PolarTitle", true, false) as Label
+		if polar_title != null:
+			polar_title.text = tr("hud.sailing.polar_title")
+		var polar_help := _polar_panel.find_child("PolarHelp", true, false) as Label
+		if polar_help != null:
+			polar_help.text = tr("hud.sailing.polar_help")
+		var polar_close := _polar_panel.find_child("CloseNordic28Polar", true, false) as Button
+		if polar_close != null:
+			polar_close.text = tr("hud.close") + "  ×"
+	_update_sailing_panel()
+
+
+func _refresh_vessel_picker_text() -> void:
+	if _vessel_picker_title != null:
+		_vessel_picker_title.text = tr("vessel.picker.title")
+	if _vessel_picker_note != null:
+		_vessel_picker_note.text = tr("vessel.picker.note")
+	if _vessel_picker_close_button != null:
+		_vessel_picker_close_button.text = tr("vessel.picker.close")
+	for card in _vessel_picker_cards:
+		if is_instance_valid(card):
+			card.call("refresh_localized_text")
+
+
+func _update_navigation_core_panel() -> void:
+	if _navigation_core_panel == null or _controller == null:
+		return
+	var knots := absf(_controller.speed_mps) * 1.94384
+	_navigation_speed_label.text = tr("hud.navigation.speed_format") % knots
+	if _controller.is_sailing_active():
+		_navigation_core_title.text = tr("hud.navigation.sailing")
+		var body := _controller.get_sailing_body()
+		var snapshot: Dictionary = body.call("get_navigation_snapshot") if body != null and body.has_method("get_navigation_snapshot") else {}
+		var apparent_valid := bool(snapshot.get("apparent_wind_valid", false))
+		var apparent_speed := float(snapshot.get("apparent_wind_speed_mps", 0.0))
+		var apparent_angle := float(snapshot.get("apparent_wind_from_relative_degrees", 0.0))
+		var deployment: Dictionary = snapshot.get("sail_deployment", {})
+		var sail_percent := float(deployment.get("main_current_deployment", 0.0)) * 100.0
+		_navigation_core_detail.text = tr("hud.navigation.sailing_compact") % [
+			tr("hud.navigation.apparent_wind_format") % [apparent_angle, apparent_speed] if apparent_valid else tr("hud.navigation.wind_unavailable"),
+			tr("hud.navigation.sail_deployment_format") % sail_percent,
+			tr("hud.navigation.auto_trim_on") if bool(snapshot.get("auto_sail_trim_enabled", false)) else tr("hud.navigation.auto_trim_off"),
+		]
+		_navigation_core_extra_detail.visible = false
+	else:
+		_navigation_core_title.text = tr("hud.navigation.powerboat")
+		if _controller.is_autopilot:
+			var autopilot_snapshot: Dictionary = _autopilot_controller.get_status_snapshot() if _autopilot_controller != null and _autopilot_controller.has_method("get_status_snapshot") else {}
+			var target_knots := float(autopilot_snapshot.get("target_speed_mps", 0.0)) * 1.94384
+			_navigation_core_detail.text = tr("hud.navigation.powerboat_autopilot_compact") % target_knots if not autopilot_snapshot.is_empty() else tr("hud.navigation.autopilot_on")
+		else:
+			var throttle := maxf(Input.get_action_strength("boat_accelerate"), Input.get_action_strength("boat_brake")) * 100.0
+			_navigation_core_detail.text = tr("hud.navigation.powerboat_compact") % [tr("hud.navigation.manual"), throttle]
+		_navigation_core_detail.visible = true
+		_navigation_core_extra_detail.visible = _navigation_detail_requested
+		if _navigation_detail_requested:
+			_navigation_core_extra_detail.text = tr("hud.navigation.speed_limits_format") % [
+				_controller.max_speed_mps * 1.94384,
+				_controller.get_reverse_max_speed_mps() * 1.94384,
+			]
+	_navigation_detail_button.text = tr("hud.navigation.collapse") if _navigation_detail_requested else tr("hud.navigation.expand")
+
+
+func _update_environment_summary() -> void:
+	if _controller == null:
+		return
+	var weather_id := str(_weather_state_controller.get("current_weather_id")) if _weather_state_controller != null else str(_weather_controller.get("current_weather_name")) if _weather_controller != null else ""
+	var weather_key := "hud.weather." + weather_id.to_lower().replace(" ", "_")
+	var weather_name := tr(weather_key) if tr(weather_key) != weather_key else str(_weather_controller.get("current_weather_name")) if _weather_controller != null else tr("hud.weather.unknown")
+	var wind_details: Dictionary = _wind_field.call("get_wind_details_at", _controller.global_position) if _wind_field != null and _wind_field.has_method("get_wind_details_at") else {}
+	var wind_speed := float(wind_details.get("instant_speed_mps", -1.0))
+	var wind_direction := float(wind_details.get("instant_wind_from_degrees", -1.0))
+	var wave_scale := float(_wave_sampler.call("get_effective_wave_strength")) if _wave_sampler != null and _wave_sampler.has_method("get_effective_wave_strength") else -1.0
+	_status_label.text = tr("hud.environment.summary_format") % [weather_name, "—" if wind_speed < 0.0 else "%.1f" % wind_speed, "—" if wind_direction < 0.0 else "%03.0f°" % wind_direction, "—" if wave_scale < 0.0 else "%.2f×" % wave_scale]
+	if _environment_detail_label != null:
+		_environment_detail_label.text = tr("hud.environment.detail_format") % [weather_name, "—" if wind_speed < 0.0 else "%.1f m/s" % wind_speed, "—" if wind_direction < 0.0 else "%03.0f°" % wind_direction, "—" if float(wind_details.get("mean_speed_mps", -1.0)) < 0.0 else "%.1f m/s" % float(wind_details.get("mean_speed_mps", -1.0)), "—" if wave_scale < 0.0 else "%.2f×" % wave_scale]
 
 
 func _add_compass_widget() -> void:
@@ -311,16 +838,18 @@ func _add_compass_widget() -> void:
 func _build_fishing_player_panel() -> void:
 	_fishing_player_panel = FISHING_PLAYER_PANEL_SCRIPT.new() as FishingPlayerPanel
 	_fishing_player_panel.name = "FishingPlayerPanel"
-	_fishing_player_panel.anchor_left = 0.0
-	_fishing_player_panel.anchor_right = 0.0
+	_fishing_player_panel.anchor_left = 1.0
+	_fishing_player_panel.anchor_right = 1.0
 	_fishing_player_panel.anchor_top = 0.0
 	_fishing_player_panel.anchor_bottom = 0.0
-	_fishing_player_panel.offset_left = 24.0
-	_fishing_player_panel.offset_top = 205.0
-	_fishing_player_panel.offset_right = 380.0
-	_fishing_player_panel.offset_bottom = 370.0
+	_fishing_player_panel.offset_left = -334.0
+	_fishing_player_panel.offset_top = 72.0
+	_fishing_player_panel.offset_right = -24.0
+	_fishing_player_panel.offset_bottom = 280.0
+	_fishing_player_panel.visible = false
 	add_child(_fishing_player_panel)
 	_fishing_player_panel.configure(_fish_resource_manager, _fishing_rod_system)
+	_build_trolling_panel_signals()
 
 
 func _build_fish_finder_display() -> void:
@@ -345,21 +874,37 @@ func _build_fish_finder_display() -> void:
 	_fish_finder_display.name = "FishFinderDisplay"
 	_fish_finder_display.call("configure", _fish_resource_manager, _controller)
 	_fish_finder_display.connect("close_requested", _on_fish_finder_close_requested)
+	_fish_finder_display.connect("display_mode_changed", _on_fish_finder_mode_changed)
 	add_child(_fish_finder_display)
+	_fish_finder_display.visible = false
 
 
 func _on_fish_finder_open_pressed() -> void:
 	if _fish_finder_display != null and is_instance_valid(_fish_finder_display):
+		_prepare_major_tool("finder")
 		_fish_finder_display.call("open_display")
 		_fish_finder_toggle_button.visible = false
-		_update_hud_layout()
 		_update_hud_layout()
 
 
 func _on_fish_finder_close_requested() -> void:
 	if _fish_finder_toggle_button != null:
-		_fish_finder_toggle_button.visible = true
+		_fish_finder_toggle_button.visible = false
+	if _restore_map_mini_after_finder and _fish_map != null and str(_fish_map.call("get_display_mode")) == "hidden":
+		_fish_map.call("set_display_mode", "mini")
+	_restore_map_mini_after_finder = false
 	_update_hud_layout()
+
+
+func _on_fish_finder_mode_changed(mode: String) -> void:
+	if mode == "expanded":
+		_prepare_major_tool("finder")
+	_update_hud_layout()
+
+
+func _on_map_display_mode_changed(mode: String) -> void:
+	if mode == "expanded":
+		_prepare_major_tool("map")
 	_update_hud_layout()
 
 
@@ -494,7 +1039,7 @@ func _build_sailing_panel() -> void:
 	var heading_row := HBoxContainer.new()
 	heading_row.add_theme_constant_override("separation", 8)
 	var title := Label.new()
-	title.text = "航行仪表"
+	title.text = tr("hud.navigation.instrument_title")
 	title.add_theme_font_size_override("font_size", 18)
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	heading_row.add_child(title)
@@ -505,7 +1050,7 @@ func _build_sailing_panel() -> void:
 	heading_row.add_child(_sailing_mode_label)
 	_polar_toggle_button = Button.new()
 	_polar_toggle_button.name = "OpenNordic28Polar"
-	_polar_toggle_button.text = "速度极曲线"
+	_polar_toggle_button.text = tr("hud.sailing.polar")
 	_polar_toggle_button.custom_minimum_size = Vector2(108.0, 34.0)
 	_polar_toggle_button.pressed.connect(_toggle_polar_panel)
 	heading_row.add_child(_polar_toggle_button)
@@ -525,32 +1070,32 @@ func _build_sailing_panel() -> void:
 	core_data.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	core_data.add_theme_constant_override("separation", 4)
 	core_row.add_child(core_data)
-	_sailing_speed_label = _make_sailing_label("2.3 节", 32, Color(0.97, 0.99, 0.95))
+	_sailing_speed_label = _make_sailing_label("2.3 kn", 32, Color(0.97, 0.99, 0.95))
 	_sailing_speed_label.name = "SailingSpeed"
 	core_data.add_child(_sailing_speed_label)
-	_sailing_heading_label = _make_sailing_label("船首航向 000°", 19, Color(0.9, 0.96, 0.94))
+	_sailing_heading_label = _make_sailing_label(tr("hud.navigation.heading_format") % 0.0, 19, Color(0.9, 0.96, 0.94))
 	_sailing_heading_label.name = "SailingHeading"
 	core_data.add_child(_sailing_heading_label)
-	_sailing_heel_label = _make_sailing_label("横倾角 +0.0°", 16, Color(0.95, 0.77, 0.36))
+	_sailing_heel_label = _make_sailing_label(tr("hud.navigation.heel_format") % 0.0, 16, Color(0.95, 0.77, 0.36))
 	_sailing_heel_label.name = "SailingHeel"
 	core_data.add_child(_sailing_heel_label)
-	_sailing_true_wind_speed_label = _make_sailing_label("真实风速 0.0 m/s", 16, Color(0.22, 0.81, 0.73))
+	_sailing_true_wind_speed_label = _make_sailing_label(tr("hud.sailing.true_wind_speed") % 0.0, 16, Color(0.22, 0.81, 0.73))
 	_sailing_true_wind_speed_label.name = "SailingTrueWindSpeed"
 	core_data.add_child(_sailing_true_wind_speed_label)
-	_sailing_true_wind_direction_label = _make_sailing_label("真实风向 —", 14, Color(0.22, 0.81, 0.73))
+	_sailing_true_wind_direction_label = _make_sailing_label(tr("hud.sailing.true_wind_direction_unknown"), 14, Color(0.22, 0.81, 0.73))
 	_sailing_true_wind_direction_label.name = "SailingTrueWindDirection"
 	_sailing_true_wind_direction_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	core_data.add_child(_sailing_true_wind_direction_label)
-	_sailing_relative_wind_label = _make_sailing_label("相对来风 —", 14, Color(1.0, 0.62, 0.29))
+	_sailing_relative_wind_label = _make_sailing_label(tr("hud.sailing.relative_wind_calm"), 14, Color(1.0, 0.62, 0.29))
 	_sailing_relative_wind_label.name = "SailingRelativeWind"
 	_sailing_relative_wind_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	core_data.add_child(_sailing_relative_wind_label)
 	layout.add_child(core_row)
-	_sailing_status_label = _make_sailing_label("操帆模式：手动操帆", 15, Color(0.86, 0.93, 0.90))
+	_sailing_status_label = _make_sailing_label(tr("hud.sailing.manual_trim"), 15, Color(0.86, 0.93, 0.90))
 	_sailing_status_label.name = "SailingStatus"
 	_sailing_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layout.add_child(_sailing_status_label)
-	_sailing_trim_angles_label = _make_sailing_label("主帆 +0° · 前帆 +0° · 舵角 +0°", 14, Color(0.85, 0.9, 0.88))
+	_sailing_trim_angles_label = _make_sailing_label(tr("hud.sailing.trim_angles_format") % [0.0, tr("hud.sailing.off"), 0.0], 14, Color(0.85, 0.9, 0.88))
 	_sailing_trim_angles_label.name = "SailingTrimAngles"
 	layout.add_child(_sailing_trim_angles_label)
 	_sailing_detail_label = _make_sailing_label("", 13, Color(0.75, 0.85, 0.84))
@@ -560,7 +1105,7 @@ func _build_sailing_panel() -> void:
 	layout.add_child(_sailing_detail_label)
 	_sailing_auto_toggle = CheckButton.new()
 	_sailing_auto_toggle.name = "AutoSailTrimToggle"
-	_sailing_auto_toggle.text = "开启自动操帆"
+	_sailing_auto_toggle.text = tr("hud.sailing.auto_trim_toggle")
 	_sailing_auto_toggle.custom_minimum_size.y = 42.0
 	_sailing_auto_toggle.add_theme_font_size_override("font_size", 16)
 	_sailing_auto_toggle.toggled.connect(_on_sailing_auto_toggled)
@@ -569,10 +1114,11 @@ func _build_sailing_panel() -> void:
 	main_deployment_box.name = "MainSailFurlControl"
 	main_deployment_box.add_theme_constant_override("separation", 2)
 	var main_deployment_header := HBoxContainer.new()
-	var main_deployment_title := _make_sailing_label("主帆展开", 14, Color(0.88, 0.93, 0.90))
+	var main_deployment_title := _make_sailing_label(tr("hud.sailing.main_sail_deployment"), 14, Color(0.88, 0.93, 0.90))
+	main_deployment_title.name = "MainSailDeploymentTitle"
 	main_deployment_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	main_deployment_header.add_child(main_deployment_title)
-	_main_deployment_status = _make_sailing_label("目标 100% · 实际 100% · 17.66 m²", 13, Color(0.69, 0.84, 0.80))
+	_main_deployment_status = _make_sailing_label("", 13, Color(0.69, 0.84, 0.80))
 	main_deployment_header.add_child(_main_deployment_status)
 	main_deployment_box.add_child(main_deployment_header)
 	_main_deployment_slider = HSlider.new()
@@ -589,10 +1135,11 @@ func _build_sailing_panel() -> void:
 	jib_deployment_box.name = "JibFurlControl"
 	jib_deployment_box.add_theme_constant_override("separation", 2)
 	var jib_deployment_header := HBoxContainer.new()
-	var jib_deployment_title := _make_sailing_label("前帆展开", 14, Color(0.88, 0.93, 0.90))
+	var jib_deployment_title := _make_sailing_label(tr("hud.sailing.headsail_deployment"), 14, Color(0.88, 0.93, 0.90))
+	jib_deployment_title.name = "HeadsailDeploymentTitle"
 	jib_deployment_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	jib_deployment_header.add_child(jib_deployment_title)
-	_jib_deployment_status = _make_sailing_label("目标 100% · 实际 100% · 10.32 m²", 13, Color(0.69, 0.84, 0.80))
+	_jib_deployment_status = _make_sailing_label("", 13, Color(0.69, 0.84, 0.80))
 	jib_deployment_header.add_child(_jib_deployment_status)
 	jib_deployment_box.add_child(jib_deployment_header)
 	_jib_deployment_slider = HSlider.new()
@@ -607,19 +1154,19 @@ func _build_sailing_panel() -> void:
 	layout.add_child(jib_deployment_box)
 	_auto_reef_toggle = CheckButton.new()
 	_auto_reef_toggle.name = "AutoReefToggle"
-	_auto_reef_toggle.text = "AUTO REEF 自动缩帆"
+	_auto_reef_toggle.text = tr("hud.sailing.auto_reef_toggle")
 	_auto_reef_toggle.custom_minimum_size.y = 40.0
 	_auto_reef_toggle.add_theme_font_size_override("font_size", 16)
 	_auto_reef_toggle.toggled.connect(_on_auto_reef_toggled)
 	layout.add_child(_auto_reef_toggle)
-	_auto_reef_status = _make_sailing_label("AUTO REEF OFF · 手动控制", 13, Color(0.72, 0.84, 0.81))
+	_auto_reef_status = _make_sailing_label(tr("hud.sailing.auto_reef_off_manual"), 13, Color(0.72, 0.84, 0.81))
 	_auto_reef_status.name = "AutoReefStatus"
 	_auto_reef_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layout.add_child(_auto_reef_status)
 	var main_row := HBoxContainer.new()
 	var main_label := Label.new()
 	main_label.name = "MainSailControlLabel"
-	main_label.text = "主帆角"
+	main_label.text = tr("hud.sailing.main_sail_angle")
 	main_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	main_label.add_theme_font_size_override("font_size", 15)
 	main_row.add_child(main_label)
@@ -629,7 +1176,7 @@ func _build_sailing_panel() -> void:
 	var jib_row := HBoxContainer.new()
 	var jib_label := Label.new()
 	jib_label.name = "HeadsailControlLabel"
-	jib_label.text = "前帆角"
+	jib_label.text = tr("hud.sailing.headsail_angle")
 	jib_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	jib_label.add_theme_font_size_override("font_size", 15)
 	jib_row.add_child(jib_label)
@@ -640,33 +1187,34 @@ func _build_sailing_panel() -> void:
 	_aux_engine_panel.name = "AuxiliaryEnginePanel"
 	_aux_engine_panel.add_theme_constant_override("separation", 5)
 	_aux_engine_panel.add_child(HSeparator.new())
-	var engine_title := _make_sailing_label("辅助柴油机", 15, Color(0.91, 0.96, 0.92))
+	var engine_title := _make_sailing_label(tr("hud.sailing.aux_engine"), 15, Color(0.91, 0.96, 0.92))
+	engine_title.name = "AuxiliaryEngineTitle"
 	_aux_engine_panel.add_child(engine_title)
-	_aux_engine_status_label = _make_sailing_label("发动机：关闭 · 空挡 · 油门 0%", 14, Color(0.86, 0.92, 0.89))
+	_aux_engine_status_label = _make_sailing_label(tr("hud.sailing.engine_status_format") % [tr("hud.sailing.engine_off"), tr("hud.sailing.gear.neutral"), 0.0, 0.0], 14, Color(0.86, 0.92, 0.89))
 	_aux_engine_status_label.name = "AuxiliaryEngineStatus"
 	_aux_engine_panel.add_child(_aux_engine_status_label)
-	_aux_engine_fuel_label = _make_sailing_label("柴油：40 / 40 L · 当前油耗 0.00 L/h", 13, Color(0.72, 0.84, 0.81))
+	_aux_engine_fuel_label = _make_sailing_label(tr("hud.sailing.fuel_format") % [40.0, 40.0, 0.0, 0.0, "", ""], 13, Color(0.72, 0.84, 0.81))
 	_aux_engine_fuel_label.name = "AuxiliaryEngineFuel"
 	_aux_engine_panel.add_child(_aux_engine_fuel_label)
 	var engine_controls := HBoxContainer.new()
 	engine_controls.add_theme_constant_override("separation", 8)
 	_aux_engine_toggle_button = Button.new()
 	_aux_engine_toggle_button.name = "AuxiliaryEngineToggle"
-	_aux_engine_toggle_button.text = "启动发动机"
+	_aux_engine_toggle_button.text = tr("hud.sailing.engine_start")
 	_aux_engine_toggle_button.custom_minimum_size = Vector2(112.0, 38.0)
 	_aux_engine_toggle_button.pressed.connect(_on_aux_engine_toggle_pressed)
 	engine_controls.add_child(_aux_engine_toggle_button)
 	_aux_engine_gear_option = OptionButton.new()
 	_aux_engine_gear_option.name = "AuxiliaryEngineGear"
-	_aux_engine_gear_option.add_item("倒车", -1)
-	_aux_engine_gear_option.add_item("空挡", 0)
-	_aux_engine_gear_option.add_item("前进", 1)
+	_aux_engine_gear_option.add_item(tr("hud.sailing.gear.reverse"), -1)
+	_aux_engine_gear_option.add_item(tr("hud.sailing.gear.neutral"), 0)
+	_aux_engine_gear_option.add_item(tr("hud.sailing.gear.forward"), 1)
 	_aux_engine_gear_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_aux_engine_gear_option.item_selected.connect(_on_aux_engine_gear_selected)
 	engine_controls.add_child(_aux_engine_gear_option)
 	_aux_engine_panel.add_child(engine_controls)
 	var throttle_row := HBoxContainer.new()
-	var throttle_label := _make_sailing_label("油门", 13, Color(0.76, 0.85, 0.82))
+	var throttle_label := _make_sailing_label(tr("hud.sailing.throttle"), 13, Color(0.76, 0.85, 0.82))
 	throttle_label.custom_minimum_size.x = 42.0
 	throttle_row.add_child(throttle_label)
 	_aux_engine_throttle_slider = HSlider.new()
@@ -678,7 +1226,7 @@ func _build_sailing_panel() -> void:
 	_aux_engine_throttle_slider.value_changed.connect(_on_aux_engine_throttle_changed)
 	throttle_row.add_child(_aux_engine_throttle_slider)
 	_aux_engine_panel.add_child(throttle_row)
-	_aux_engine_feedback_label = _make_sailing_label("Y 启停 · U 换档 · W/S 调节油门；换档前先将油门降至 10% 以下。", 12, Color(0.65, 0.79, 0.78))
+	_aux_engine_feedback_label = _make_sailing_label(tr("hud.sailing.engine_controls_help"), 12, Color(0.65, 0.79, 0.78))
 	_aux_engine_feedback_label.name = "AuxiliaryEngineFeedback"
 	_aux_engine_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_aux_engine_panel.add_child(_aux_engine_feedback_label)
@@ -721,19 +1269,21 @@ func _build_polar_panel() -> void:
 	layout.add_theme_constant_override("separation", 8)
 	_polar_panel.add_child(layout)
 	var header := HBoxContainer.new()
-	var title := _make_sailing_label("Nordic 28 · 速度极曲线", 20, Color(0.92, 0.97, 0.95))
+	var title := _make_sailing_label(tr("hud.sailing.polar_title"), 20, Color(0.92, 0.97, 0.95))
+	title.name = "PolarTitle"
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 	var close_button := Button.new()
 	close_button.name = "CloseNordic28Polar"
-	close_button.text = "关闭  ×"
+	close_button.text = tr("hud.close") + "  ×"
 	close_button.custom_minimum_size = Vector2(92.0, 34.0)
 	close_button.pressed.connect(_close_polar_panel)
 	header.add_child(close_button)
 	layout.add_child(header)
-	var subtitle := _make_sailing_label("角度为实际真风角 TWA；半径为船速（节）。缺失和非稳定工况保持断线。", 13, Color(0.65, 0.8, 0.79))
+	var subtitle := _make_sailing_label(tr("hud.sailing.polar_help"), 13, Color(0.65, 0.8, 0.79))
+	subtitle.name = "PolarHelp"
 	layout.add_child(subtitle)
-	_polar_detail_label = _make_sailing_label("等待船舶数据…", 14, Color(0.38, 0.91, 0.99))
+	_polar_detail_label = _make_sailing_label(tr("hud.sailing.waiting_vessel_data"), 14, Color(0.38, 0.91, 0.99))
 	_polar_detail_label.name = "Nordic28PolarCurrentState"
 	_polar_detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	layout.add_child(_polar_detail_label)
@@ -793,22 +1343,22 @@ func _build_vessel_picker() -> void:
 	panel.add_child(layout)
 	var heading := HBoxContainer.new()
 	heading.name = "Heading"
-	var title := Label.new()
-	title.text = "选择船只"
-	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	title.add_theme_font_size_override("font_size", 24)
-	title.add_theme_color_override("font_color", Color(0.95, 0.97, 0.94))
-	heading.add_child(title)
+	_vessel_picker_title = Label.new()
+	_vessel_picker_title.text = tr("vessel.picker.title")
+	_vessel_picker_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_vessel_picker_title.add_theme_font_size_override("font_size", 24)
+	_vessel_picker_title.add_theme_color_override("font_color", Color(0.95, 0.97, 0.94))
+	heading.add_child(_vessel_picker_title)
 	_vessel_picker_close_button = Button.new()
 	_vessel_picker_close_button.name = "CloseButton"
-	_vessel_picker_close_button.text = "关闭  ·  I / Esc"
+	_vessel_picker_close_button.text = tr("vessel.picker.close")
 	_vessel_picker_close_button.pressed.connect(_close_vessel_picker)
 	heading.add_child(_vessel_picker_close_button)
 	layout.add_child(heading)
-	var note := Label.new()
-	note.text = "选择后立即切换。世界时间、天气和海况继续运行。"
-	note.add_theme_color_override("font_color", Color(0.72, 0.82, 0.82))
-	layout.add_child(note)
+	_vessel_picker_note = Label.new()
+	_vessel_picker_note.text = tr("vessel.picker.note")
+	_vessel_picker_note.add_theme_color_override("font_color", Color(0.72, 0.82, 0.82))
+	layout.add_child(_vessel_picker_note)
 	var card_row := HBoxContainer.new()
 	card_row.add_theme_constant_override("separation", 14)
 	card_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
@@ -817,26 +1367,27 @@ func _build_vessel_picker() -> void:
 	var sailboat_body := _controller.get_node_or_null("../SailingBoat8m")
 	var sailboat_source: Node3D = sailboat_body.get_node_or_null("VisualRoot") as Node3D if sailboat_body != null else null
 	var motor_profile: VesselDraftProfile = _controller.draft_profile
-	var motor_name := "初始货运艇" if motor_profile != null else "动力艇"
-	var motor_details := "7.2 m × 2.56 m\n吃水 0.32–0.75 m · 货舱 2 格\n老式动力船 · OM02 发动机"
+	var motor_name_key := "vessel.picker.powerboat.cargo_name" if motor_profile != null else "vessel.picker.powerboat.name"
+	var motor_length_m := float(motor_profile.get("vessel_length_m")) if motor_profile != null else 7.2
+	var motor_beam_m := float(motor_profile.get("vessel_beam_m")) if motor_profile != null else 2.56
+	var motor_empty_draft_m := float(motor_profile.get("empty_draft_m")) if motor_profile != null else 0.32
+	var motor_full_draft_m := float(motor_profile.get("full_load_draft_m")) if motor_profile != null else 0.75
+	var motor_cargo_capacity := int(motor_profile.get("cargo_capacity_space_units")) if motor_profile != null else 0
 	var sail_profile: Resource = sailboat_body.get("profile") as Resource if sailboat_body != null else null
-	var sail_name := "Nordic 28"
+	var sail_name_key := "vessel.picker.sailboat.name"
 	var sail_length_m := float(sail_profile.get("vessel_length_m")) if sail_profile != null else 8.0
 	var sail_draft_m := float(sail_profile.get("draft_m")) if sail_profile != null else 0.9
 	var main_sail_area_m2 := float(sail_profile.get("main_sail_area_m2")) if sail_profile != null else 10.16
 	var headsail_area_m2 := float(sail_profile.get("headsail_area_m2")) if sail_profile != null else 5.16
-	var sail_details := "船长约 %.1f m · 外观宽约 2.75 m · 吃水 %.2f m\n风帆推进 · 主帆 %.2f m² + 前帆 %.2f m²\n主帆/前帆独立操控 · 支持 AUTO 自动操帆\n支持手动船舵 · 适合近海巡航与悠闲航行" % [
-		sail_length_m, sail_draft_m, main_sail_area_m2, headsail_area_m2,
-	]
 	var motor_card := VesselPreviewCardScript.new() as Control
 	motor_card.name = "PowerboatCard"
-	motor_card.call("configure", false, motor_name, "动力艇 · 初始货运船", motor_details, motorboat_source)
+	motor_card.call("configure", false, motor_name_key, "vessel.picker.powerboat.type", "vessel.picker.powerboat.details", [motor_length_m, motor_beam_m, motor_empty_draft_m, motor_full_draft_m, motor_cargo_capacity], motorboat_source)
 	motor_card.connect("vessel_selected", _on_vessel_picker_card_selected)
 	card_row.add_child(motor_card)
 	_vessel_picker_cards.append(motor_card)
 	var sail_card := VesselPreviewCardScript.new() as Control
 	sail_card.name = "SailboatCard"
-	sail_card.call("configure", true, sail_name, "休闲巡航帆船 · 风帆推进", sail_details, sailboat_source)
+	sail_card.call("configure", true, sail_name_key, "vessel.picker.sailboat.type", "vessel.picker.sailboat.details", [sail_length_m, sail_draft_m, main_sail_area_m2, headsail_area_m2], sailboat_source)
 	sail_card.connect("vessel_selected", _on_vessel_picker_card_selected)
 	card_row.add_child(sail_card)
 	_vessel_picker_cards.append(sail_card)
@@ -936,17 +1487,18 @@ func _update_sailing_panel() -> void:
 		return
 	var active := _controller.is_sailing_active()
 	var debug_panel_open := _debug_panel != null and _debug_panel.visible
-	_sailing_panel.visible = active and not debug_panel_open
+	_sailing_panel.visible = active and _navigation_detail_requested and not debug_panel_open
 	if _polar_panel != null:
 		_polar_panel.visible = _polar_requested and active and not debug_panel_open
 	if _compass_widget != null:
-		_compass_widget.visible = not active or debug_panel_open
+		_compass_widget.visible = not debug_panel_open
 	if not active:
 		return
 	var body := _controller.get_sailing_body()
 	if body == null or not body.has_method("get_navigation_snapshot"):
 		return
 	var snapshot: Dictionary = body.call("get_navigation_snapshot")
+	_update_navigation_core_panel()
 	var deployment: Dictionary = snapshot.get("sail_deployment", {})
 	if _polar_chart != null:
 		_polar_chart.call("set_current_state", snapshot)
@@ -957,8 +1509,10 @@ func _update_sailing_panel() -> void:
 		_aux_engine_panel.visible = engine_available
 	if _aux_engine_status_label != null:
 		if engine_available:
-			_aux_engine_status_label.text = "发动机：%s · %s档 · 油门目标/实际 %.0f%% / %.0f%%" % [
-				str(engine.get("state_name", "关闭")), str(engine.get("gear_name", "空挡")),
+			var engine_state_key := "hud.sailing.engine_on" if bool(engine.get("running", false)) else "hud.sailing.engine_off"
+			var gear_key := "hud.sailing.gear.reverse" if int(engine.get("gear", 0)) < 0 else "hud.sailing.gear.forward" if int(engine.get("gear", 0)) > 0 else "hud.sailing.gear.neutral"
+			_aux_engine_status_label.text = tr("hud.sailing.engine_status_format") % [
+				tr(engine_state_key), tr(gear_key),
 				float(engine.get("target_throttle", 0.0)) * 100.0,
 				float(engine.get("actual_throttle", 0.0)) * 100.0,
 			]
@@ -966,10 +1520,10 @@ func _update_sailing_panel() -> void:
 			var remaining := float(tank.get("remaining_l", 0.0))
 			var capacity := float(tank.get("capacity_l", 0.0))
 			var consumption := float(engine.get("consumption_lph", 0.0))
-			var runtime_text := " · 约 %.1f h" % float(engine.get("remaining_runtime_h", 0.0)) if bool(engine.get("runtime_estimate_valid", false)) else ""
-			var fuel_warning := " · 燃油偏低" if bool(tank.get("low_fuel_warning", false)) else " · 燃油耗尽" if bool(tank.get("fuel_depleted", false)) else ""
-			_aux_engine_fuel_label.text = "柴油 %.1f / %.1f L（%.0f%%）· %.2f L/h%s%s" % [remaining, capacity, float(tank.get("fraction", 0.0)) * 100.0, consumption, runtime_text, fuel_warning]
-			_aux_engine_toggle_button.text = "关闭发动机" if bool(engine.get("running", false)) else "启动发动机"
+			var runtime_text := tr("hud.sailing.runtime_format") % float(engine.get("remaining_runtime_h", 0.0)) if bool(engine.get("runtime_estimate_valid", false)) else ""
+			var fuel_warning := tr("hud.sailing.fuel_low") if bool(tank.get("low_fuel_warning", false)) else tr("hud.sailing.fuel_empty") if bool(tank.get("fuel_depleted", false)) else ""
+			_aux_engine_fuel_label.text = tr("hud.sailing.fuel_format") % [remaining, capacity, float(tank.get("fraction", 0.0)) * 100.0, consumption, runtime_text, fuel_warning]
+			_aux_engine_toggle_button.text = tr("hud.sailing.engine_stop") if bool(engine.get("running", false)) else tr("hud.sailing.engine_start")
 			_aux_engine_throttle_slider.set_value_no_signal(float(engine.get("target_throttle", 0.0)))
 			for gear_index in range(_aux_engine_gear_option.item_count):
 				if _aux_engine_gear_option.get_item_id(gear_index) == int(engine.get("gear", 0)):
@@ -982,36 +1536,38 @@ func _update_sailing_panel() -> void:
 		_manual_trim_notice_until_msec = Time.get_ticks_msec() + 2500
 	_last_auto_trim_state = auto_enabled
 	_sailing_auto_toggle.set_pressed_no_signal(auto_enabled)
-	_sailing_auto_toggle.text = "自动操帆 · %s 切换" % NAVIGATION_HUD_FORMAT.action_key_hint("sailboat_toggle_auto_trim")
+	_sailing_auto_toggle.text = tr("hud.sailing.auto_trim_toggle_hint") % NAVIGATION_HUD_FORMAT.action_key_hint("sailboat_toggle_auto_trim")
 	var auto_reef_on := bool(deployment.get("auto_reef_enabled", false))
 	if _last_auto_reef_state and not auto_reef_on:
 		_manual_reef_notice_until_msec = Time.get_ticks_msec() + 2500
 	_last_auto_reef_state = auto_reef_on
 	_auto_reef_toggle.set_pressed_no_signal(auto_reef_on)
-	_auto_reef_toggle.text = "AUTO REEF 自动缩帆 · %s" % ("已开启" if auto_reef_on else "已关闭")
+	_auto_reef_toggle.text = tr("hud.sailing.auto_reef_state") % tr("hud.sailing.on" if auto_reef_on else "hud.sailing.off")
 	_main_deployment_slider.set_value_no_signal(float(deployment.get("main_target_deployment", 1.0)) * 100.0)
 	_jib_deployment_slider.set_value_no_signal(float(deployment.get("jib_target_deployment", 1.0)) * 100.0)
-	_main_deployment_status.text = "目标 %.0f%% · 实际 %.0f%% · %.2f m² · %s" % [
+	_main_deployment_status.text = tr("hud.sailing.deployment_format") % [
 		float(deployment.get("main_target_deployment", 1.0)) * 100.0,
 		float(deployment.get("main_current_deployment", 1.0)) * 100.0,
 		float(deployment.get("main_effective_area_m2", 0.0)),
-		str(deployment.get("main_furling_state", "完全展开")),
+		tr(_sail_deployment_state_key(float(deployment.get("main_target_deployment", 1.0)), float(deployment.get("main_current_deployment", 1.0)))),
 	]
-	_jib_deployment_status.text = "目标 %.0f%% · 实际 %.0f%% · %.2f m² · %s" % [
+	_jib_deployment_status.text = tr("hud.sailing.deployment_format") % [
 		float(deployment.get("jib_target_deployment", 1.0)) * 100.0,
 		float(deployment.get("jib_current_deployment", 1.0)) * 100.0,
 		float(deployment.get("jib_effective_area_m2", 0.0)),
-		str(deployment.get("jib_furling_state", "完全展开")),
+		tr(_sail_deployment_state_key(float(deployment.get("jib_target_deployment", 1.0)), float(deployment.get("jib_current_deployment", 1.0)))),
 	]
-	var reef_state := str(deployment.get("auto_reef_status", "手动控制"))
+	var reef_status_id := str(deployment.get("auto_reef_status_id", "manual"))
+	var reef_action_id := str(deployment.get("auto_reef_action_id", "none"))
+	var reef_state := tr("hud.sailing.reef_status.%s" % reef_status_id) % [float(deployment.get("auto_reef_filtered_heel_deg", 0.0)), tr("hud.sailing.reef_action.%s" % reef_action_id)]
 	if auto_reef_on:
-		_auto_reef_status.text = "AUTO REEF ON · %s" % reef_state
+		_auto_reef_status.text = tr("hud.sailing.auto_reef_on_status") % reef_state
 		_auto_reef_status.add_theme_color_override("font_color", Color(0.43, 0.91, 0.68))
 	elif Time.get_ticks_msec() < _manual_reef_notice_until_msec:
-		_auto_reef_status.text = "AUTO REEF OFF · 已交还手动控制"
+		_auto_reef_status.text = tr("hud.sailing.auto_reef_off_returned")
 		_auto_reef_status.add_theme_color_override("font_color", Color(0.95, 0.83, 0.52))
 	else:
-		_auto_reef_status.text = "AUTO REEF OFF · 手动控制"
+		_auto_reef_status.text = tr("hud.sailing.auto_reef_off_manual")
 		_auto_reef_status.add_theme_color_override("font_color", Color(0.72, 0.84, 0.81))
 	_refresh_sailing_navigation_text(snapshot)
 
@@ -1021,9 +1577,9 @@ func _refresh_sailing_navigation_text(snapshot: Dictionary) -> void:
 	var engine_available := bool(engine_state.get("available", false))
 	var heading := fposmod(float(snapshot.get("heading_degrees", 0.0)), 360.0)
 	var speed_knots := float(snapshot.get("sog_knots", 0.0))
-	_sailing_speed_label.text = "航速 %.1f 节" % speed_knots
-	_sailing_heading_label.text = "船首航向 %03.0f°" % heading
-	_sailing_heel_label.text = "横倾角 %+.1f°" % float(snapshot.get("heel_degrees", 0.0))
+	_sailing_speed_label.text = tr("hud.navigation.speed_format") % speed_knots
+	_sailing_heading_label.text = tr("hud.navigation.heading_format") % heading
+	_sailing_heel_label.text = tr("hud.navigation.heel_format") % float(snapshot.get("heel_degrees", 0.0))
 	var true_valid := bool(snapshot.get("true_wind_valid", false))
 	var true_speed := float(snapshot.get("true_wind_speed_mps", 0.0))
 	var true_bearing := float(snapshot.get("true_wind_from_degrees", 0.0))
@@ -1031,34 +1587,34 @@ func _refresh_sailing_navigation_text(snapshot: Dictionary) -> void:
 	var apparent_valid := bool(snapshot.get("apparent_wind_valid", false))
 	var apparent_speed := float(snapshot.get("apparent_wind_speed_mps", 0.0))
 	var apparent_relative := float(snapshot.get("apparent_wind_from_relative_degrees", 0.0))
-	_sailing_true_wind_speed_label.text = "真实风速 %.1f m/s" % true_speed if true_valid else "真实风速：静风"
-	_sailing_true_wind_direction_label.text = "真实风向 %03.0f°（风从%s吹来）" % [true_bearing, NAVIGATION_HUD_FORMAT.compass_direction_phrase(true_bearing)] if true_valid else "真实风向：无稳定风向"
-	_sailing_relative_wind_label.text = "相对来风（视风）：%s %+.0f°" % [NAVIGATION_HUD_FORMAT.relative_wind_location_phrase(apparent_relative), apparent_relative] if apparent_valid else "相对来风：静风"
+	_sailing_true_wind_speed_label.text = tr("hud.sailing.true_wind_speed") % true_speed if true_valid else tr("hud.sailing.true_wind_calm")
+	_sailing_true_wind_direction_label.text = tr("hud.sailing.true_wind_direction_format") % [true_bearing, NAVIGATION_HUD_FORMAT.compass_direction_phrase(true_bearing)] if true_valid else tr("hud.sailing.true_wind_direction_unknown")
+	_sailing_relative_wind_label.text = tr("hud.sailing.relative_wind_format") % [NAVIGATION_HUD_FORMAT.relative_wind_location_phrase(apparent_relative), apparent_relative] if apparent_valid else tr("hud.sailing.relative_wind_calm")
 	var auto_enabled := bool(snapshot.get("auto_sail_trim_enabled", false))
-	_sailing_mode_label.text = "AUTO · 自动" if auto_enabled else "手动"
+	_sailing_mode_label.text = tr("hud.sailing.mode_auto") if auto_enabled else tr("hud.sailing.mode_manual")
 	_sailing_mode_label.add_theme_color_override("font_color", Color(0.43, 0.91, 0.68) if auto_enabled else Color(0.91, 0.82, 0.53))
 	var now := Time.get_ticks_msec()
 	var trim: Dictionary = snapshot.get("auto_sail_trim", {})
 	if bool(trim.get("no_go", false)):
-		_sailing_status_label.text = "迎风低效（NO-GO）\n当前来风角较小，帆可能难以提供有效推进。尝试调整航向。"
+		_sailing_status_label.text = tr("hud.sailing.no_go_warning")
 		_sailing_status_label.add_theme_color_override("font_color", Color(1.0, 0.68, 0.35))
 	elif now < _manual_trim_notice_until_msec:
-		_sailing_status_label.text = "已切换为手动操帆"
+		_sailing_status_label.text = tr("hud.sailing.manual_trim_notice")
 		_sailing_status_label.add_theme_color_override("font_color", Color(0.95, 0.83, 0.52))
 	else:
-		_sailing_status_label.text = "自动操帆已开启" if auto_enabled else "手动操帆"
+		_sailing_status_label.text = tr("hud.sailing.auto_trim_on") if auto_enabled else tr("hud.sailing.manual_trim")
 		_sailing_status_label.add_theme_color_override("font_color", Color(0.43, 0.91, 0.68) if auto_enabled else Color(0.86, 0.93, 0.90))
 	var main_angle := rad_to_deg(float(snapshot.get("actual_sail_angle_rad", 0.0)))
 	var jib_angle := rad_to_deg(float(snapshot.get("actual_headsail_angle_rad", 0.0)))
 	var rudder_angle := rad_to_deg(float(snapshot.get("actual_rudder_angle_rad", 0.0)))
-	_sailing_trim_angles_label.text = "主帆 %+.0f° · 前帆 %s · 舵角 %+.0f°" % [main_angle, "%+.0f°" % jib_angle if bool(snapshot.get("headsail_enabled", false)) else "关闭", rudder_angle]
+	_sailing_trim_angles_label.text = tr("hud.sailing.trim_angles_format") % [main_angle, "%+.0f°" % jib_angle if bool(snapshot.get("headsail_enabled", false)) else tr("hud.sailing.off"), rudder_angle]
 	var detail_enabled := _quality_manager != null and _quality_manager.has_method("get_navigation_detail_enabled") and bool(_quality_manager.call("get_navigation_detail_enabled"))
 	_sailing_detail_label.visible = detail_enabled
 	if detail_enabled:
-		var cog_text := "%03.0f°" % float(snapshot.get("cog_degrees", 0.0)) if bool(snapshot.get("cog_valid", false)) else "—（方向不可靠）"
-		var true_text := "%.1f m/s · TWA %+.0f°" % [true_speed, true_relative] if true_valid else "静风"
-		var apparent_text := "%.1f m/s · AWA %+.0f°" % [apparent_speed, apparent_relative] if apparent_valid else "静风"
-		_sailing_detail_label.text = "对地航速 SOG：%.2f 节（%.2f m/s）\n实际航迹 COG：%s · 航向 HDG：%03.0f°\n真实风 TWS/TWA：%s · 视风 AWS/AWA：%s\n主帆：%+.0f° / 目标 %+.0f° · 前帆：%s\n船舵：%+.0f° / 目标 %+.0f° · 横倾：%+.1f° · 侧滑：%+.1f°" % [
+		var cog_text := "%03.0f°" % float(snapshot.get("cog_degrees", 0.0)) if bool(snapshot.get("cog_valid", false)) else tr("hud.sailing.direction_unreliable")
+		var true_text := tr("hud.sailing.wind_detail_format") % [true_speed, true_relative] if true_valid else tr("hud.sailing.calm")
+		var apparent_text := tr("hud.sailing.apparent_wind_detail_format") % [apparent_speed, apparent_relative] if apparent_valid else tr("hud.sailing.calm")
+		_sailing_detail_label.text = tr("hud.sailing.detail_format") % [
 			speed_knots,
 			float(snapshot.get("sog_mps", 0.0)),
 			cog_text,
@@ -1067,13 +1623,13 @@ func _refresh_sailing_navigation_text(snapshot: Dictionary) -> void:
 			apparent_text,
 			main_angle,
 			rad_to_deg(float(snapshot.get("target_sail_angle_rad", 0.0))),
-			("%+.0f° / 目标 %+.0f°" % [jib_angle, rad_to_deg(float(snapshot.get("target_headsail_angle_rad", 0.0)))]) if bool(snapshot.get("headsail_enabled", false)) else "关闭",
+			("%+.0f° / %s %+.0f°" % [jib_angle, tr("hud.sailing.target"), rad_to_deg(float(snapshot.get("target_headsail_angle_rad", 0.0)))]) if bool(snapshot.get("headsail_enabled", false)) else tr("hud.sailing.off"),
 			rudder_angle,
 			rad_to_deg(float(snapshot.get("target_rudder_angle_rad", 0.0))),
 			float(snapshot.get("heel_degrees", 0.0)),
 		rad_to_deg(float(snapshot.get("keel_side_slip_angle_rad", 0.0))),
 		]
-	var hint_text := "掌舵 %s/%s · 主帆 %s/%s · 前帆 %s/%s" % [
+	var hint_text := tr("hud.sailing.controls_hint") % [
 		NAVIGATION_HUD_FORMAT.action_key_hint("boat_turn_left"),
 		NAVIGATION_HUD_FORMAT.action_key_hint("boat_turn_right"),
 		NAVIGATION_HUD_FORMAT.action_key_hint("sailboat_main_trim_ease"),
@@ -1081,7 +1637,17 @@ func _refresh_sailing_navigation_text(snapshot: Dictionary) -> void:
 		NAVIGATION_HUD_FORMAT.action_key_hint("sailboat_headsail_trim_ease"),
 		NAVIGATION_HUD_FORMAT.action_key_hint("sailboat_headsail_trim_out"),
 	]
-	_sailing_control_hint_label.text = hint_text + (" · 柴油机 Y 启停 / U 换档 / W-S 油门" if engine_available else "")
+	_sailing_control_hint_label.text = hint_text + (" · " + tr("hud.sailing.engine_key_hint") if engine_available else "")
+
+
+func _sail_deployment_state_key(target: float, current: float) -> String:
+	if absf(target - current) > 0.005:
+		return "hud.sailing.furling.deploying" if target > current else "hud.sailing.furling.retracting"
+	if current >= 0.995:
+		return "hud.sailing.furling.deployed"
+	if current <= 0.005:
+		return "hud.sailing.furling.retracted"
+	return "hud.sailing.furling.partial"
 
 func _on_vessel_mode_changed(sailboat_active: bool) -> void:
 	if _boat_audio_controller != null and _boat_audio_controller.has_method("bind_vessel"):
@@ -1151,7 +1717,8 @@ func _on_aux_engine_gear_selected(index: int) -> void:
 	var gear_value := _aux_engine_gear_option.get_item_id(index)
 	var accepted := bool(body.call("set_auxiliary_engine_gear", gear_value))
 	if _aux_engine_feedback_label != null:
-		_aux_engine_feedback_label.text = "档位已切换。" if accepted else "换档被拒绝：先将油门降至 10% 以下。"
+		_aux_engine_feedback_key = "hud.sailing.gear_changed" if accepted else "hud.sailing.gear_change_rejected"
+		_aux_engine_feedback_label.text = tr(_aux_engine_feedback_key)
 	_update_sailing_panel()
 
 
@@ -1185,7 +1752,14 @@ func _process(delta: float) -> void:
 		_fps_elapsed = fmod(_fps_elapsed, 0.5)
 		_update_fps_display()
 	if _controller != null:
-		_update_status()
+		_status_refresh_elapsed += delta
+		if _status_refresh_elapsed >= 0.5:
+			_status_refresh_elapsed = fmod(_status_refresh_elapsed, 0.5)
+			_update_status()
+		_navigation_refresh_elapsed += delta
+		if _navigation_refresh_elapsed >= 0.1:
+			_navigation_refresh_elapsed = fmod(_navigation_refresh_elapsed, 0.1)
+			_update_navigation_core_panel()
 	_autopilot_refresh_elapsed += delta
 	if _autopilot_refresh_elapsed >= 0.2:
 		_autopilot_refresh_elapsed = fmod(_autopilot_refresh_elapsed, 0.2)
@@ -1267,7 +1841,7 @@ func _build_autopilot_panel() -> void:
 	layout.add_child(_autopilot_label)
 	var takeover := Button.new()
 	takeover.name = "ManualTakeoverButton"
-	takeover.text = "手动接管 · T"
+	takeover.text = tr("hud.autopilot.manual_takeover")
 	takeover.pressed.connect(_on_manual_takeover_pressed)
 	layout.add_child(takeover)
 	add_child(_autopilot_panel)
@@ -1287,32 +1861,54 @@ func _update_autopilot_panel() -> void:
 	_autopilot_panel.visible = active or state == AutopilotController.STATE_COMPLETED or (message_age < 4.0 and not str(snapshot.get("message", "")).is_empty())
 	if not _autopilot_panel.visible:
 		return
+	var state_key: String = {
+		AutopilotController.STATE_ACQUIRING: "hud.autopilot.state.acquiring",
+		AutopilotController.STATE_CRUISING: "hud.autopilot.state.cruising",
+		AutopilotController.STATE_APPROACHING: "hud.autopilot.state.approaching",
+		AutopilotController.STATE_SAFETY_HOLD: "hud.autopilot.state.safety_hold",
+		AutopilotController.STATE_COMPLETED: "hud.autopilot.state.completed",
+		AutopilotController.STATE_DISENGAGED: "hud.autopilot.state.disengaged",
+	}.get(state, "hud.autopilot.state.cruising")
+	var state_text := tr(state_key)
 	if not active and state != AutopilotController.STATE_COMPLETED:
-		_autopilot_label.text = str(snapshot.get("message", ""))
+		_autopilot_label.text = tr("hud.autopilot.recent_status") % state_text
 		return
-	var state_text: String = {
-		AutopilotController.STATE_ACQUIRING: "接入航线",
-		AutopilotController.STATE_CRUISING: "自动巡航中",
-		AutopilotController.STATE_APPROACHING: "接近港外等待点",
-		AutopilotController.STATE_SAFETY_HOLD: "水深/偏航保护",
-		AutopilotController.STATE_COMPLETED: "已到达 · 手动进港",
-	}.get(state, "自动巡航")
-	var origin := _cargo_economy_manager.get_port_display_name(str(snapshot.get("origin_port_id", ""))) if _cargo_economy_manager != null else str(snapshot.get("origin_port_id", ""))
-	var destination := _cargo_economy_manager.get_port_display_name(str(snapshot.get("destination_port_id", ""))) if _cargo_economy_manager != null else str(snapshot.get("destination_port_id", ""))
+	var origin_id := str(snapshot.get("origin_port_id", ""))
+	var destination_id := str(snapshot.get("destination_port_id", ""))
+	var origin := _cargo_economy_manager.get_port_display_name(origin_id) if _cargo_economy_manager != null else origin_id
+	var destination := _cargo_economy_manager.get_port_display_name(destination_id) if _cargo_economy_manager != null else destination_id
+	origin = _localized_autopilot_port(origin_id, origin)
+	destination = _localized_autopilot_port(destination_id, destination)
+	var route_id := str(snapshot.get("route_id", ""))
+	var route_key := "hud.autopilot.route." + route_id
+	var route_name := tr(route_key) if tr(route_key) != route_key else str(snapshot.get("route_name", ""))
+	var target_waypoint_id := str(snapshot.get("target_waypoint_id", ""))
+	var target_key := "hud.autopilot.waypoint." + target_waypoint_id
+	var target_name := tr(target_key) if tr(target_key) != target_key else str(snapshot.get("target_waypoint", tr("hud.autopilot.waiting_point")))
 	var eta_seconds := float(snapshot.get("eta_seconds", -1.0))
 	var eta_minutes := int(round(eta_seconds / 60.0)) if eta_seconds >= 0.0 else -1
-	var eta_text := "%d h %02d min" % [int(eta_minutes / 60), eta_minutes % 60] if eta_minutes >= 60 else "%d min" % eta_minutes if eta_minutes >= 0 else "未知"
-	var cruise_adjustment_hint := " · + / - 临时调速" if OS.has_feature("editor") or OS.has_feature("debug") else ""
-	var route_notice := str(snapshot.get("safety_hold_reason", ""))
-	if route_notice.is_empty():
-		route_notice = str(snapshot.get("depth_notice", ""))
-	_autopilot_label.text = "%s  ·  %s\n%s → %s\n目标：%s  ·  航段 %d/%d\n进度 %.0f%%  ·  剩余 %.1f km\n航速 %.1f / 目标 %.1f m/s%s  ·  预计 %s%s" % [
-		state_text, str(snapshot.get("route_name", "")), origin, destination,
-		str(snapshot.get("target_waypoint", "等待点")), int(snapshot.get("segment_index", 0)), int(snapshot.get("segment_count", 0)),
+	var eta_text := tr("hud.autopilot.eta_hours") % [int(eta_minutes / 60), eta_minutes % 60] if eta_minutes >= 60 else tr("hud.autopilot.eta_minutes") % eta_minutes if eta_minutes >= 0 else tr("hud.unknown")
+	var cruise_adjustment_hint := " · " + tr("hud.autopilot.speed_adjust_hint") if OS.has_feature("editor") or OS.has_feature("debug") else ""
+	var route_notice := tr("hud.autopilot.safety_notice") if state == AutopilotController.STATE_SAFETY_HOLD else tr("hud.autopilot.depth_limit_notice") if not str(snapshot.get("depth_notice", "")).is_empty() else ""
+	_autopilot_label.text = tr("hud.autopilot.status_format") % [
+		state_text, route_name, origin, destination,
+		target_name, int(snapshot.get("segment_index", 0)), int(snapshot.get("segment_count", 0)),
 		float(snapshot.get("progress_fraction", 0.0)) * 100.0, float(snapshot.get("remaining_m", 0.0)) / 1000.0,
 		float(snapshot.get("actual_speed_mps", 0.0)), float(snapshot.get("target_speed_mps", 0.0)), cruise_adjustment_hint, eta_text,
 		"\n" + route_notice if not route_notice.is_empty() else "",
 	]
+
+
+func _localized_autopilot_port(port_id: String, fallback_name: String) -> String:
+	var key := "hud.autopilot.port.malmo" if port_id == "malmo_greybox_v1" else "hud.autopilot.port.copenhagen" if port_id == "kobenhavn_test" else ""
+	return tr(key) if not key.is_empty() else fallback_name
+
+
+func _update_fps_display() -> void:
+	if _fps_label == null:
+		return
+	var fps := Engine.get_frames_per_second()
+	_fps_label.text = "FPS: %d" % fps if _runtime_elapsed >= 1.5 and fps >= 5 else "FPS: --"
 
 
 func _on_manual_takeover_pressed() -> void:
@@ -1384,21 +1980,7 @@ func _unhandled_key_input(event: InputEvent) -> void:
 func _update_status() -> void:
 	if _controller == null:
 		return
-	var knots := _controller.speed_mps * 1.94384
-	var mode_text := "自动巡航" if _controller.is_autopilot else "动力船 · 手动驾驶"
-	if _controller.is_motion_paused:
-		mode_text += " · 已暂停"
-	if _controller.is_sailing_active():
-		var pause_hint := " · 已暂停" if _controller.is_motion_paused else ""
-		_status_label.text = "帆船 · 手动掌舵%s\nI 选择船只 · M 地图 · F3 视觉调试" % pause_hint
-	else:
-		var controls_text := "W 前进  ·  S 减速/倒车  ·  A/D 转向  ·  Space 暂停  ·  T 自动巡航"
-		_status_label.text = "航速  %.1f m/s  ·  %.1f kn\n模式  %s\n%s\n右键观察  ·  O 高视角  ·  I 选择船只  ·  0/1-3 天气  ·  M 地图  ·  F3 视觉调试  ·  F10 水面  ·  R 降雨  ·  F12 风场" % [
-			_controller.speed_mps,
-			knots,
-			mode_text,
-			controls_text
-		]
+	_update_environment_summary()
 	_update_navigation_depth_status()
 	_update_cargo_task_status()
 
@@ -1457,11 +2039,6 @@ func _update_navigation_depth_status() -> void:
 	]
 
 
-func _update_fps_display() -> void:
-	var fps := Engine.get_frames_per_second()
-	_fps_label.text = "FPS: %d" % fps if _runtime_elapsed >= 1.5 and fps >= 5 else "FPS: --"
-
-
 func _build_debug_panel() -> void:
 	_debug_panel = PanelContainer.new()
 	_debug_panel.name = "DebugPanel"
@@ -1510,6 +2087,9 @@ func _build_debug_panel() -> void:
 
 	_weather_label = _make_debug_label()
 	layout.add_child(_weather_label)
+	_weather_runtime_status_label = _make_debug_label()
+	_weather_runtime_status_label.name = "WeatherRuntimeReadout"
+	layout.add_child(_weather_runtime_status_label)
 	var preset_row := HBoxContainer.new()
 	preset_row.add_theme_constant_override("separation", 6)
 	for preset in [["1  晴天", 0], ["2  少云", 1], ["3  阴天", 2]]:
@@ -1630,6 +2210,7 @@ func _build_debug_panel() -> void:
 	_cloud_label = _make_debug_label()
 	_wave_label = _make_debug_label()
 	_performance_label = _make_debug_label()
+	_performance_label.name = "PerformanceReadout"
 	layout.add_child(_sun_label)
 	layout.add_child(_moon_label)
 	layout.add_child(_cloud_label)
@@ -2738,28 +3319,126 @@ func _update_hud_layout() -> void:
 	if _status_panel == null:
 		return
 	var viewport_size := get_viewport().get_visible_rect().size
-	var viewport_width := viewport_size.x
+	var viewport_width := maxf(viewport_size.x, 1.0)
 	var ui_scale := float(_quality_manager.call("get_ui_scale_factor")) if _quality_manager != null and _quality_manager.has_method("get_ui_scale_factor") else 1.0
-	var sailing_active := _controller != null and _controller.is_sailing_active()
-	var detailed := _quality_manager != null and _quality_manager.has_method("get_navigation_detail_enabled") and bool(_quality_manager.call("get_navigation_detail_enabled"))
-	var panel_metrics := sailing_panel_layout_metrics(viewport_size, ui_scale, detailed) if sailing_active else {}
-	var sailing_screen_width := float(panel_metrics.get("screen_width", 0.0))
-	var sailing_width := float(panel_metrics.get("local_width", 420.0))
-	var status_screen_width := minf(470.0 * ui_scale, viewport_width - sailing_screen_width - 72.0 * ui_scale) if sailing_active else minf(470.0 * ui_scale, viewport_width - 48.0 * ui_scale)
-	var panel_width := maxf(240.0, status_screen_width / ui_scale)
-	_status_panel.visible = not sailing_active or viewport_width >= 576.0
-	_status_panel.custom_minimum_size.x = panel_width
-	_status_label.custom_minimum_size.x = maxf(180.0, panel_width - 32.0)
-	_fps_label.custom_minimum_size.x = maxf(180.0, panel_width - 32.0)
-	if _depth_label != null:
-		_depth_label.custom_minimum_size.x = maxf(180.0, panel_width - 32.0)
+	var scale := clampf(ui_scale, 0.9, 1.75)
+	var margin := 18.0 * scale
+	var status_width := minf(300.0 * scale, maxf(220.0 * scale, viewport_width * 0.30))
+	status_width = minf(status_width, maxf(160.0 * scale, viewport_width - margin * 2.0))
+	_status_panel.anchor_left = 0.0
+	_status_panel.anchor_right = 0.0
+	_status_panel.anchor_top = 0.0
+	_status_panel.anchor_bottom = 0.0
+	_status_panel.custom_minimum_size = Vector2(status_width, 0.0)
+	_status_label.custom_minimum_size.x = maxf(120.0 * scale, status_width - 32.0 * scale)
+	var environment_height := maxf(100.0 * scale, _status_panel.get_combined_minimum_size().y)
+	_status_panel.offset_left = margin
+	_status_panel.offset_top = margin
+	_status_panel.offset_right = margin + status_width
+	_status_panel.offset_bottom = margin + environment_height
+	if _activity_button != null:
+		var activity_width := minf(220.0 * scale, maxf(150.0, viewport_width * 0.24))
+		_activity_button.anchor_left = 1.0
+		_activity_button.anchor_right = 1.0
+		_activity_button.anchor_top = 0.0
+		_activity_button.anchor_bottom = 0.0
+		_activity_button.offset_left = -activity_width - margin
+		_activity_button.offset_right = -margin
+		_activity_button.offset_top = margin
+		_activity_button.offset_bottom = margin + 42.0 * scale
+		if _activity_menu != null:
+			_activity_menu.anchor_left = 1.0
+			_activity_menu.anchor_right = 1.0
+			_activity_menu.anchor_top = 0.0
+			_activity_menu.anchor_bottom = 0.0
+			_activity_menu.offset_left = -activity_width - margin
+			_activity_menu.offset_right = -margin
+			var menu_top := margin + 48.0 * scale
+			_activity_menu.offset_top = menu_top
+			_activity_menu.offset_bottom = menu_top + 148.0 * scale
+			_activity_menu.custom_minimum_size.x = activity_width
+	if _fishing_player_panel != null:
+		var fishing_width := minf(310.0 * scale, maxf(220.0, viewport_width * 0.30))
+		_fishing_player_panel.offset_left = -fishing_width - margin
+		_fishing_player_panel.offset_right = -margin
+		var fishing_top := margin + 52.0 * scale
+		if _activity_menu != null and _activity_menu.visible:
+			fishing_top = _activity_menu.offset_bottom + 8.0 * scale
+		_fishing_player_panel.offset_top = fishing_top
+		_fishing_player_panel.offset_bottom = _fishing_player_panel.offset_top + 220.0 * scale
+		_fishing_player_panel.custom_minimum_size.x = fishing_width
+	if _autopilot_panel != null:
+		_autopilot_panel.anchor_left = 1.0
+		_autopilot_panel.anchor_right = 1.0
+		_autopilot_panel.anchor_top = 0.0
+		_autopilot_panel.anchor_bottom = 0.0
+		var top_after_activity := margin + 52.0 * scale
+		if _fishing_player_panel != null and _fishing_player_panel.visible:
+			top_after_activity = _fishing_player_panel.offset_bottom + 8.0 * scale
+		if _activity_menu != null and _activity_menu.visible:
+			top_after_activity = maxf(top_after_activity, _activity_menu.offset_bottom + 8.0 * scale)
+		_autopilot_panel.offset_left = -minf(390.0 * scale, viewport_width * 0.4) - margin
+		_autopilot_panel.offset_right = -margin
+		_autopilot_panel.offset_top = top_after_activity
+		_autopilot_panel.offset_bottom = top_after_activity + 156.0 * scale
+	if _environment_detail_panel != null:
+		_environment_detail_panel.anchor_left = 0.0
+		_environment_detail_panel.anchor_right = 0.0
+		_environment_detail_panel.anchor_top = 0.0
+		_environment_detail_panel.anchor_bottom = 0.0
+		var detail_top := margin + environment_height + 8.0 * scale
+		var detail_height := minf(200.0 * scale, maxf(120.0 * scale, viewport_size.y - detail_top - margin))
+		_environment_detail_panel.offset_left = margin
+		_environment_detail_panel.offset_top = detail_top
+		_environment_detail_panel.offset_right = margin + status_width
+		_environment_detail_panel.offset_bottom = detail_top + detail_height
+		_environment_detail_panel.custom_minimum_size = Vector2(status_width, 0.0)
+	if _help_panel != null:
+		_help_panel.anchor_left = 1.0
+		_help_panel.anchor_right = 1.0
+		_help_panel.anchor_top = 0.0
+		_help_panel.anchor_bottom = 0.0
+		_help_panel.offset_left = -minf(300.0 * scale, viewport_width * 0.34) - margin
+		_help_panel.offset_right = -margin
+		_help_panel.offset_top = 52.0 * scale + margin
+		_help_panel.offset_bottom = 210.0 * scale + margin
+	if _map_button != null:
+		_map_button.anchor_left = 0.0
+		_map_button.anchor_right = 0.0
+		_map_button.anchor_top = 1.0
+		_map_button.anchor_bottom = 1.0
+		_map_button.offset_left = margin
+		_map_button.offset_right = margin + 120.0 * scale
+		_map_button.offset_top = -52.0 * scale - margin
+		_map_button.offset_bottom = -margin
+		_map_button.visible = _fish_map != null and _fish_map.has_method("get_display_mode") and str(_fish_map.call("get_display_mode")) == "hidden" and (_fish_finder_display == null or str(_fish_finder_display.call("get_display_mode")) == "hidden")
+	if _navigation_core_panel != null:
+		var nav_width := minf(310.0 * scale, maxf(230.0 * scale, viewport_width * 0.32))
+		var sail_detail := _controller != null and _controller.is_sailing_active() and _navigation_detail_requested
+		var sailing_active := _controller != null and _controller.is_sailing_active()
+		var nav_height := (150.0 if sailing_active else (136.0 if _navigation_detail_requested else 116.0)) * scale
+		nav_height = minf(nav_height, maxf(96.0 * scale, viewport_size.y - margin * 2.0))
+		_navigation_core_panel.visible = not sail_detail
+		_navigation_core_panel.offset_left = -nav_width - margin
+		_navigation_core_panel.offset_right = -margin
+		_navigation_core_panel.offset_bottom = -margin
+		_navigation_core_panel.offset_top = -nav_height - margin
+		_navigation_core_panel.custom_minimum_size = Vector2(nav_width, nav_height)
+	if _sailing_panel != null:
+		var sailing_width := minf(500.0 * scale, maxf(280.0, viewport_width * 0.46))
+		var sailing_height := minf(590.0 * scale, maxf(280.0, viewport_size.y * 0.82))
+		_sailing_panel.custom_minimum_size = Vector2(sailing_width, sailing_height)
+		_sailing_panel.offset_left = -sailing_width - margin
+		_sailing_panel.offset_right = -margin
+		_sailing_panel.offset_top = -sailing_height - margin
+		_sailing_panel.offset_bottom = -margin
 	if _debug_panel != null:
-		var debug_width := minf(390.0, maxf(280.0, viewport_width - 48.0))
+		var debug_width := minf(390.0 * scale, maxf(280.0, viewport_width - 48.0 * scale))
 		_debug_panel.custom_minimum_size.x = debug_width
-		_debug_panel.offset_left = -debug_width - 24.0
-		_debug_panel.offset_right = -24.0
-		_debug_panel.offset_top = minf(196.0, maxf(80.0, viewport_size.y * 0.2))
-		_debug_panel.offset_bottom = -16.0
+		_debug_panel.offset_left = -debug_width - margin
+		_debug_panel.offset_right = -margin
+		_debug_panel.offset_top = minf(196.0 * scale, maxf(80.0 * scale, viewport_size.y * 0.2))
+		_debug_panel.offset_bottom = -16.0 * scale
 		_debug_panel.custom_minimum_size.y = 0.0
 		_debug_scroll.custom_minimum_size.y = 0.0
 		if _fish_finder_display != null and is_instance_valid(_fish_finder_display) and _fish_finder_display.has_method("set_overlay_obstruction_rect"):
@@ -2770,39 +3449,8 @@ func _update_hud_layout() -> void:
 					Vector2(_debug_panel.offset_right - _debug_panel.offset_left, viewport_size.y + _debug_panel.offset_bottom - _debug_panel.offset_top)
 				)
 			_fish_finder_display.call("set_overlay_obstruction_rect", obstruction)
-	if _fish_finder_toggle_button != null:
-		if _debug_panel != null and _debug_panel.visible:
-			_fish_finder_toggle_button.anchor_left = 0.0
-			_fish_finder_toggle_button.anchor_right = 0.0
-			_fish_finder_toggle_button.offset_left = 18.0
-			_fish_finder_toggle_button.offset_right = 188.0
-		else:
-			_fish_finder_toggle_button.anchor_left = 1.0
-			_fish_finder_toggle_button.anchor_right = 1.0
-			_fish_finder_toggle_button.offset_left = -188.0
-			_fish_finder_toggle_button.offset_right = -18.0
-		_fish_finder_toggle_button.anchor_top = 1.0
-		_fish_finder_toggle_button.anchor_bottom = 1.0
-		_fish_finder_toggle_button.offset_top = -60.0
-		_fish_finder_toggle_button.offset_bottom = -18.0
-	if _sailing_panel != null:
-		_sailing_panel.custom_minimum_size.x = sailing_width
-		_sailing_panel.offset_left = -sailing_width - 24.0
-		_sailing_panel.offset_right = -24.0
-		var sailing_height := float(panel_metrics.get("local_height", 420.0)) if sailing_active else 420.0
-		_sailing_panel.custom_minimum_size.y = sailing_height
-		_sailing_panel.offset_top = -sailing_height - 24.0
-		_sailing_panel.offset_bottom = -24.0
-	if _fishing_player_panel != null:
-		var fishing_scale := clampf(ui_scale, 0.9, 1.75)
-		var fishing_width := minf(356.0 * fishing_scale, maxf(230.0, viewport_width - 48.0 * fishing_scale))
-		_fishing_player_panel.offset_left = 24.0 * fishing_scale
-		_fishing_player_panel.offset_top = 205.0 * fishing_scale
-		_fishing_player_panel.offset_right = 24.0 * fishing_scale + fishing_width
-		_fishing_player_panel.offset_bottom = _fishing_player_panel.offset_top + 190.0 * fishing_scale
-		_fishing_player_panel.custom_minimum_size.x = fishing_width
 	if _catch_result_panel != null:
-		var catch_scale := clampf(ui_scale, 0.9, 1.75)
+		var catch_scale := scale
 		var catch_width := minf(336.0 * catch_scale, maxf(220.0, viewport_width - 48.0 * catch_scale))
 		_catch_result_panel.offset_left = -24.0 * catch_scale - catch_width
 		_catch_result_panel.offset_right = -24.0 * catch_scale
@@ -2849,6 +3497,7 @@ func _refresh_weather_controls() -> void:
 
 func _update_debug_status() -> void:
 	_refresh_world_time_controls()
+	_update_weather_runtime_debug_status()
 	_update_fish_motion_status()
 	_update_dolphin_status()
 	if _weather_controller != null:
@@ -2947,6 +3596,36 @@ func _update_debug_status() -> void:
 	_sync_performance_diagnostic_controls()
 	_refresh_city_lighting_controls()
 	_update_sailing_physics_debug_status()
+
+
+func _update_weather_runtime_debug_status() -> void:
+	if _weather_runtime_status_label == null:
+		return
+	if _weather_runtime_authority == null:
+		_weather_runtime_status_label.text = "Weather runtime authority: unavailable"
+		return
+	var data_source := str(_weather_runtime_authority.get("data_source_status"))
+	var quality := str(_weather_runtime_authority.get("forecast_data_quality"))
+	var mapping := str(_weather_runtime_authority.get("mapping_status"))
+	var refresh := str(_weather_runtime_authority.get("last_refresh_status"))
+	var region := str(_weather_runtime_authority.get("region_id"))
+	var mode := str(_weather_state_controller.call("get_operating_mode_name")) if _weather_state_controller != null and _weather_state_controller.has_method("get_operating_mode_name") else "unknown"
+	var sample: Dictionary = _weather_runtime_authority.get("current_sample")
+	var timeline_wind := "unavailable"
+	if sample.has("mean_wind_speed_mps") and sample.has("wind_from_direction_deg"):
+		timeline_wind = "%.1f m/s · %.0f° from" % [float(sample["mean_wind_speed_mps"]), float(sample["wind_from_direction_deg"])]
+	var effective_wind := "unavailable"
+	var override_state := "formal"
+	if _wind_field != null and _wind_field.has_method("get_effective_wind_settings"):
+		var wind_settings: Dictionary = _wind_field.call("get_effective_wind_settings")
+		effective_wind = "%.1f m/s · %.0f° from" % [float(wind_settings.get("mean_wind_speed_mps", 0.0)), float(wind_settings.get("mean_wind_from_degrees", 0.0))]
+		if _wind_field.has_method("get_debug_override_state"):
+			override_state = str(_wind_field.call("get_debug_override_state"))
+	var provider_error := str(_weather_runtime_authority.get("provider_error"))
+	_weather_runtime_status_label.text = "Weather runtime · %s · %s / %s\nRegion %s · quality %s · mapping %s · refresh %s\nTimeline wind %s · effective wind %s (%s)%s" % [
+		mode, data_source, quality, region, quality, mapping, refresh, timeline_wind, effective_wind, override_state,
+		("\nProvider: " + provider_error.left(96)) if not provider_error.is_empty() else "",
+	]
 
 
 func _update_sailing_physics_debug_status() -> void:

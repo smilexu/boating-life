@@ -275,10 +275,15 @@ var _depth_value_label: Label
 var _speed_value_label: Label
 var _range_value_label: Label
 var _range_title_label: Label
+var _speed_title_label: Label
+var _depth_title_label: Label
+var _gain_title_label: Label
+var _range_setting_title_label: Label
 var _footer_label: Label
 var _title_label: Label
 var _preview_badge: Label
 var _expand_button: Button
+var _close_button: Button
 var _settings_container: VBoxContainer
 var _gain_mode_option: OptionButton
 var _gain_slider: HSlider
@@ -427,6 +432,39 @@ func get_display_settings() -> Dictionary:
 		"display_range_m": _active_display_range_m,
 		"fish_symbols_enabled": _fish_symbols_enabled,
 	}
+
+
+func refresh_localized_text() -> void:
+	if _title_label != null:
+		_title_label.text = tr("fish.finder.title")
+	if _preview_badge != null:
+		_preview_badge.text = tr("fish.finder.debug_preview")
+	if _depth_title_label != null:
+		_depth_title_label.text = tr("fish.finder.depth")
+	if _speed_title_label != null:
+		_speed_title_label.text = tr("fish.finder.speed")
+	if _gain_title_label != null:
+		_gain_title_label.text = tr("fish.finder.gain")
+	if _range_setting_title_label != null:
+		_range_setting_title_label.text = tr("fish.finder.range")
+	if _close_button != null:
+		_close_button.tooltip_text = tr("fish.finder.close")
+	if _gain_mode_option != null:
+		_gain_mode_option.set_item_text(0, tr("fish.finder.mode.auto"))
+		_gain_mode_option.set_item_text(1, tr("fish.finder.mode.manual"))
+	if _range_mode_option != null:
+		_range_mode_option.set_item_text(0, tr("fish.finder.mode.auto"))
+		_range_mode_option.set_item_text(1, tr("fish.finder.mode.manual"))
+	if _manual_range_option != null:
+		for index in range(DEPTH_RANGES_M.size()):
+			_manual_range_option.set_item_text(index, tr("fish.finder.range_option") % float(DEPTH_RANGES_M[index]))
+	if _fish_symbols_check != null:
+		_fish_symbols_check.text = tr("fish.finder.fish_symbols")
+	_update_mode_controls()
+	_sync_setting_controls()
+	_update_labels()
+	if _plot != null:
+		_plot.queue_redraw()
 
 
 func get_diagnostic_snapshot() -> Dictionary:
@@ -719,6 +757,7 @@ func _build_ui() -> void:
 	panel.add_child(layout)
 	var title_row := HBoxContainer.new()
 	_title_label = Label.new()
+	_title_label.name = "FishFinderTitle"
 	_title_label.text = tr("fish.finder.title")
 	_title_label.add_theme_font_size_override("font_size", 15)
 	_title_label.add_theme_color_override("font_color", Color(0.58, 0.83, 0.82))
@@ -736,25 +775,25 @@ func _build_ui() -> void:
 	_expand_button.custom_minimum_size = Vector2(36.0, 28.0)
 	_expand_button.pressed.connect(func() -> void: set_expanded(_display_mode == "mini"))
 	title_row.add_child(_expand_button)
-	var close_button := Button.new()
-	close_button.name = "CloseFishFinderButton"
-	close_button.text = "×"
-	close_button.tooltip_text = tr("fish.finder.close")
-	close_button.focus_mode = Control.FOCUS_NONE
-	close_button.custom_minimum_size = Vector2(32.0, 28.0)
-	close_button.pressed.connect(close_display)
-	title_row.add_child(close_button)
+	_close_button = Button.new()
+	_close_button.name = "CloseFishFinderButton"
+	_close_button.text = "×"
+	_close_button.tooltip_text = tr("fish.finder.close")
+	_close_button.focus_mode = Control.FOCUS_NONE
+	_close_button.custom_minimum_size = Vector2(32.0, 28.0)
+	_close_button.pressed.connect(close_display)
+	title_row.add_child(_close_button)
 	layout.add_child(title_row)
 
 	var status_row := HBoxContainer.new()
 	status_row.add_theme_constant_override("separation", 12)
 	var depth_group := VBoxContainer.new()
 	depth_group.add_theme_constant_override("separation", 0)
-	var depth_title := Label.new()
-	depth_title.text = tr("fish.finder.depth")
-	depth_title.add_theme_font_size_override("font_size", 10)
-	depth_title.add_theme_color_override("font_color", Color(0.57, 0.72, 0.75))
-	depth_group.add_child(depth_title)
+	_depth_title_label = Label.new()
+	_depth_title_label.text = tr("fish.finder.depth")
+	_depth_title_label.add_theme_font_size_override("font_size", 10)
+	_depth_title_label.add_theme_color_override("font_color", Color(0.57, 0.72, 0.75))
+	depth_group.add_child(_depth_title_label)
 	_depth_value_label = Label.new()
 	_depth_value_label.text = "--"
 	_depth_value_label.add_theme_font_size_override("font_size", 22)
@@ -762,6 +801,7 @@ func _build_ui() -> void:
 	depth_group.add_child(_depth_value_label)
 	status_row.add_child(depth_group)
 	var speed_group := _make_status_group(tr("fish.finder.speed"), "-- kn", Color(0.88, 0.94, 0.91))
+	_speed_title_label = speed_group.get_node("Title") as Label
 	_speed_value_label = speed_group.get_node("Value") as Label
 	status_row.add_child(speed_group)
 	var range_group := _make_status_group(tr("fish.finder.range"), "10 m", Color(0.88, 0.94, 0.91))
@@ -812,10 +852,10 @@ func _build_settings_controls(parent: VBoxContainer) -> void:
 
 	var gain_row := HBoxContainer.new()
 	gain_row.add_theme_constant_override("separation", 6)
-	var gain_label := Label.new()
-	gain_label.text = tr("fish.finder.gain")
-	gain_label.custom_minimum_size.x = 46.0
-	gain_row.add_child(gain_label)
+	_gain_title_label = Label.new()
+	_gain_title_label.text = tr("fish.finder.gain")
+	_gain_title_label.custom_minimum_size.x = 46.0
+	gain_row.add_child(_gain_title_label)
 	_gain_mode_option = OptionButton.new()
 	_gain_mode_option.name = "GainModeOption"
 	_gain_mode_option.custom_minimum_size.x = 105.0
@@ -839,10 +879,10 @@ func _build_settings_controls(parent: VBoxContainer) -> void:
 
 	var range_row := HBoxContainer.new()
 	range_row.add_theme_constant_override("separation", 6)
-	var range_label := Label.new()
-	range_label.text = tr("fish.finder.range")
-	range_label.custom_minimum_size.x = 46.0
-	range_row.add_child(range_label)
+	_range_setting_title_label = Label.new()
+	_range_setting_title_label.text = tr("fish.finder.range")
+	_range_setting_title_label.custom_minimum_size.x = 46.0
+	range_row.add_child(_range_setting_title_label)
 	_range_mode_option = OptionButton.new()
 	_range_mode_option.name = "RangeModeOption"
 	_range_mode_option.custom_minimum_size.x = 105.0
@@ -1172,13 +1212,13 @@ static func compute_layout_rect(viewport_size: Vector2, display_mode: String, ob
 			clampf(viewport_size.x * 0.34, minf(300.0, safe_size.x), minf(560.0, safe_size.x)),
 			clampf(viewport_size.y * 0.32, minf(250.0, safe_size.y), minf(400.0, safe_size.y))
 		)
-	var preferred := Rect2(safe_rect.end - target_size, target_size) if not expanded else Rect2((viewport_size - target_size) * 0.5, target_size)
+	var preferred := Rect2(Vector2(safe_rect.position.x, safe_rect.end.y - target_size.y), target_size) if not expanded else Rect2((viewport_size - target_size) * 0.5, target_size)
 	if obstruction.size.x <= 0.0 or obstruction.size.y <= 0.0 or not preferred.intersects(obstruction):
 		return _clamp_layout_rect(preferred, viewport_size)
 	if not expanded:
 		var corner_candidates: Array[Rect2] = [
 			preferred,
-			Rect2(Vector2(safe_rect.position.x, safe_rect.end.y - target_size.y), target_size),
+			Rect2(Vector2(safe_rect.end.x - target_size.x, safe_rect.end.y - target_size.y), target_size),
 			Rect2(Vector2(safe_rect.end.x - target_size.x, safe_rect.position.y), target_size),
 			Rect2(safe_rect.position, target_size),
 		]

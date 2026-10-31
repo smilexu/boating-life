@@ -2,6 +2,7 @@ extends SceneTree
 
 const FORMAT := preload("res://scripts/navigation_hud_format.gd")
 const HUD_LAYOUT := preload("res://scripts/boat_hud.gd")
+const COMPASS_LAYOUT := preload("res://scripts/compass_hud.gd")
 const QUALITY_MANAGER := preload("res://scripts/quality_manager.gd")
 
 var _checks := 0
@@ -43,6 +44,11 @@ func _run() -> void:
 			_expect(panel_left >= map_right - 0.1, "%dx%d at UI %.0f%% keeps the lower-right panel clear of the left chart" % [int(resolution.x), int(resolution.y), float(scale_value) * 100.0])
 			_expect(panel_top >= 0.0 and panel_bottom <= resolution.y + 0.1, "%dx%d at UI %.0f%% keeps the panel vertically on-screen" % [int(resolution.x), int(resolution.y), float(scale_value) * 100.0])
 			_expect(panel_left >= 0.0 and panel_right <= resolution.x + 0.1, "%dx%d at UI %.0f%% keeps the panel horizontally on-screen" % [int(resolution.x), int(resolution.y), float(scale_value) * 100.0])
+			var compass: Rect2 = COMPASS_LAYOUT.compute_layout_rect(resolution, float(scale_value))
+			var top_left_end: float = 18.0 * float(scale_value) + minf(300.0 * float(scale_value), resolution.x * 0.30)
+			var top_right_start: float = resolution.x - 18.0 * float(scale_value) - minf(220.0 * float(scale_value), resolution.x * 0.24)
+			_expect(compass.position.x >= top_left_end - 0.1 and compass.end.x <= top_right_start + 0.1, "%dx%d at UI %.0f%% keeps the compass clear of both top-corner panels" % [int(resolution.x), int(resolution.y), float(scale_value) * 100.0])
+			_expect(compass.position.y >= 0.0 and compass.end.x <= resolution.x + 0.1 and compass.end.y <= resolution.y + 0.1, "%dx%d at UI %.0f%% keeps the compass within the viewport" % [int(resolution.x), int(resolution.y), float(scale_value) * 100.0])
 
 	if _failures.is_empty():
 		print("Navigation HUD formatting/layout tests: %d checks passed." % _checks)

@@ -108,7 +108,7 @@ func _process(delta: float) -> void:
 func _input(event: InputEvent) -> void:
 	if not _map_debug_enabled:
 		return
-	# F4 is a full-screen CanvasLayer UI. The M-map uses _input (before GUI
+	# M opens the full chart. The Shift+M geographic debug map uses _input (before GUI
 	# dispatch) for panning, so it must release mouse events while that UI is open.
 	var fish_map := get_node_or_null("../FishResourceMap")
 	if is_instance_valid(fish_map) and fish_map.has_method("is_map_open") and bool(fish_map.call("is_map_open")):

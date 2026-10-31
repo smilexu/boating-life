@@ -12,6 +12,7 @@ signal route_waypoint_moved(waypoint_index: int, world_position: Vector3, is_ins
 const RASTER_WIDTH := 144
 const RASTER_HEIGHT := 198
 const RASTER_PIXELS_PER_SLICE := 576
+const BOAT_MARKER_REDRAW_INTERVAL_SECONDS := 0.25
 const RESOURCE_CLUSTER_PIXELS := 18.0
 const UNKNOWN_COLOR := Color("#25333b")
 const LAND_COLOR := Color("#9e9b89")
@@ -75,7 +76,6 @@ func configure(manager: FishResourceManager, bathymetry: BathymetryManager, geor
 	_selected_species.clear()
 	for profile in manager.get_species_profiles():
 		_profiles[profile.species_id] = profile
-	refresh_data()
 	queue_redraw()
 	_raster_built = false
 
@@ -182,7 +182,7 @@ func set_species_filter(species_ids: Array[String]) -> void:
 
 func set_dolphins_enabled(enabled: bool) -> void:
 	_dolphins_enabled = enabled
-	if enabled:
+	if enabled and _resource_overlay_enabled and visible:
 		refresh_dolphin_data()
 	else:
 		queue_redraw()
@@ -231,8 +231,8 @@ func _process(_delta: float) -> void:
 	if _boat_pulse_enabled:
 		_boat_pulse_phase = fposmod(_boat_pulse_phase + _delta / 1.8, 1.0)
 		_pulse_redraw_elapsed += _delta
-		if _pulse_redraw_elapsed >= 0.04:
-			_pulse_redraw_elapsed = fmod(_pulse_redraw_elapsed, 0.04)
+		if _pulse_redraw_elapsed >= BOAT_MARKER_REDRAW_INTERVAL_SECONDS:
+			_pulse_redraw_elapsed = fmod(_pulse_redraw_elapsed, BOAT_MARKER_REDRAW_INTERVAL_SECONDS)
 			needs_redraw = true
 	if _raster_building and _raster_build_enabled:
 		var slice_started_usec := Time.get_ticks_usec()

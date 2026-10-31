@@ -73,9 +73,9 @@ func _prepare_main_scene() -> void:
 	if terrain != null:
 		terrain.set("visible", false)
 		terrain.set_process(false)
-	var depth_hud := _main.get_node_or_null("DepthChartHUD")
-	if depth_hud != null:
-		depth_hud.set("visible", false)
+	var fish_map := _main.get_node_or_null("FishResourceMap")
+	if fish_map != null and fish_map.has_method("set_display_mode"):
+		fish_map.call("set_display_mode", "hidden")
 	var boat := _main.get_node("PlayerBoat") as Node3D
 	boat.global_position = Vector3(0.0, 0.0, 29.0)
 	boat.rotation = Vector3.ZERO

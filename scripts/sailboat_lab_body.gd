@@ -1929,6 +1929,8 @@ func get_sail_deployment_snapshot() -> Dictionary:
 		"auto_reef_enabled": auto_reef_enabled,
 		"auto_reef_filtered_heel_deg": float(reef_state.get("filtered_heel_deg", absf(rad_to_deg(_last_roll_rad)))) if auto_reef_enabled else absf(rad_to_deg(_last_roll_rad)),
 		"auto_reef_status": str(reef_state.get("status", "手动控制")),
+		"auto_reef_status_id": str(reef_state.get("status_id", "manual")),
+		"auto_reef_action_id": str(reef_state.get("action_id", "none")),
 	}
 
 

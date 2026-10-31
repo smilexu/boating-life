@@ -214,6 +214,51 @@ func _run() -> void:
 
 	var resource_map := main_root.get_node("FishResourceMap") as FishResourceMap
 	var map_canvas := resource_map.find_child("ResourceDistributionMap", true, false) as FishResourceMapCanvas
+	var depth_map_canvas := resource_map.find_child("DepthQualityMap", true, false) as DepthQualityMapCanvas
+	var sea_chart := main_root.get_node("DepthChartHUD") as CanvasLayer
+	var sea_chart_view := sea_chart.find_child("Chart", true, false) as DepthChartView
+	var chart_clip_rect := Rect2(Vector2(10.0, 8.0), Vector2(80.0, 60.0))
+	var crossing_line := PackedVector2Array([Vector2(-20.0, 30.0), Vector2(120.0, 30.0)])
+	var clipped_crossing := DepthChartView.clip_polyline_to_rect(crossing_line, chart_clip_rect)
+	_check(clipped_crossing.size() == 1 and clipped_crossing[0][0].is_equal_approx(Vector2(10.0, 30.0)) and clipped_crossing[0][1].is_equal_approx(Vector2(90.0, 30.0)), "Sea Chart clips projected coastline and contour segments to the inner map frame")
+	var outside_excursion := PackedVector2Array([Vector2(20.0, 20.0), Vector2(120.0, 20.0), Vector2(20.0, 40.0)])
+	var clipped_excursion := DepthChartView.clip_polyline_to_rect(outside_excursion, chart_clip_rect)
+	_check(clipped_excursion.size() == 2, "Sea Chart does not bridge a polyline excursion outside the map frame")
+	_check(resource_map.get_display_mode() == "mini" and sea_chart.visible and sea_chart_view.visible, "the compact local Sea Chart is shown by default")
+	_check(map_canvas != null and not map_canvas.visible and not map_canvas.is_processing() and depth_map_canvas != null and not depth_map_canvas.visible, "both expanded map canvases remain idle while the local Sea Chart is shown")
+	var sea_chart_stats := sea_chart_view.get_chart_build_statistics()
+	_check(int(sea_chart_stats.get("pixels_total", 0)) == 128 * 92 and int(sea_chart_stats.get("pixels_per_frame_budget", 0)) == 256, "Sea Chart raster sampling has a fixed per-frame budget")
+	var sea_chart_wait_start_usec := Time.get_ticks_usec()
+	while not sea_chart_view.is_chart_ready() and Time.get_ticks_usec() - sea_chart_wait_start_usec < 5000000:
+		await process_frame
+	sea_chart_stats = sea_chart_view.get_chart_build_statistics()
+	_check(sea_chart_view.is_chart_ready() and int(sea_chart_stats.get("texture_uploads_last_build", 0)) == 1, "Sea Chart uploads one completed raster per chart refresh")
+	var chart_map_rect: Rect2 = sea_chart_view.get("_map_rect")
+	var clipped_chart_cache := true
+	for coastline: PackedVector2Array in sea_chart_view.get("_cached_coastline_lines"):
+		for point in coastline:
+			if point.x < chart_map_rect.position.x - 0.01 or point.x > chart_map_rect.end.x + 0.01 or point.y < chart_map_rect.position.y - 0.01 or point.y > chart_map_rect.end.y + 0.01:
+				clipped_chart_cache = false
+	for contour: Dictionary in sea_chart_view.get("_cached_contour_lines"):
+		var contour_points: PackedVector2Array = contour["points"]
+		for point in contour_points:
+			if point.x < chart_map_rect.position.x - 0.01 or point.x > chart_map_rect.end.x + 0.01 or point.y < chart_map_rect.position.y - 0.01 or point.y > chart_map_rect.end.y + 0.01:
+				clipped_chart_cache = false
+	_check(clipped_chart_cache, "cached coastline and contour geometry remains inside the Sea Chart map frame")
+	var sea_chart_uploads_before_hidden_refresh := int(sea_chart_stats.get("texture_uploads_total", 0))
+	sea_chart.set_chart_visible(false)
+	sea_chart_view.request_chart_refresh()
+	for _frame in range(2):
+		await process_frame
+	sea_chart_stats = sea_chart_view.get_chart_build_statistics()
+	_check(not bool(sea_chart_stats.get("building", true)) and int(sea_chart_stats.get("texture_uploads_total", 0)) == sea_chart_uploads_before_hidden_refresh, "hidden Sea Chart does not start or continue raster sampling")
+	sea_chart.set_chart_visible(true)
+	var sea_chart_resume_frames := 0
+	while sea_chart_resume_frames < 200 and (bool(sea_chart_view.get_chart_build_statistics().get("building", false)) or int(sea_chart_view.get_chart_build_statistics().get("texture_uploads_total", 0)) == sea_chart_uploads_before_hidden_refresh):
+		await process_frame
+		sea_chart_resume_frames += 1
+	sea_chart_stats = sea_chart_view.get_chart_build_statistics()
+	_check(int(sea_chart_stats.get("texture_uploads_total", 0)) == sea_chart_uploads_before_hidden_refresh + 1 and int(sea_chart_stats.get("texture_uploads_last_build", 0)) == 1, "Sea Chart resumes with a single texture upload after being shown")
 	var details_label := resource_map.get("_details_label") as Label
 	var sample_by_species: Dictionary = {}
 	for school in manager.get_all_school_snapshots():
@@ -228,14 +273,14 @@ func _run() -> void:
 				continue
 			resource_map.call("_update_school_details", school)
 			var expected_name := TranslationServer.translate(profile.name_key)
-			_check(details_label.text.contains(expected_name), "%s F4 details show the localized %s name" % [locale, profile.species_id])
-			_check(not details_label.text.contains("fish.map.") and not details_label.text.contains("%s"), "%s F4 details resolve species, habitat, activity and format keys" % locale)
+			_check(details_label.text.contains(expected_name), "%s M-chart details show the localized %s name" % [locale, profile.species_id])
+			_check(not details_label.text.contains("fish.map.") and not details_label.text.contains("%s"), "%s M-chart details resolve species, habitat, activity and format keys" % locale)
 	TranslationServer.set_locale(previous_locale)
 	var map_key := InputEventKey.new()
-	map_key.physical_keycode = KEY_F4
+	map_key.physical_keycode = KEY_M
 	map_key.pressed = true
-	manager._unhandled_key_input(map_key)
-	_check(resource_map.is_map_open(), "F4 key toggles the fish resource map")
+	resource_map.call("_unhandled_key_input", map_key)
+	_check(resource_map.is_map_open() and not sea_chart.visible, "M opens the full chart and hides the compact Sea Chart")
 	var raster_wait_start_usec := Time.get_ticks_usec()
 	var raster_frame_max_usec := 0
 	while not map_canvas.is_raster_ready() and Time.get_ticks_usec() - raster_wait_start_usec < 5000000:
@@ -243,14 +288,14 @@ func _run() -> void:
 		await process_frame
 		raster_frame_max_usec = maxi(raster_frame_max_usec, Time.get_ticks_usec() - frame_start_usec)
 	var raster_stats := map_canvas.get_raster_build_statistics()
-	_check(map_canvas.is_raster_ready(), "F4 offline bathymetry raster completes incrementally")
-	_check(float(raster_stats.get("maximum_slice_ms", INF)) < 12.0, "F4 raster work is spread across short frame slices")
+	_check(map_canvas.is_raster_ready(), "M-opened resource chart raster completes incrementally")
+	_check(float(raster_stats.get("maximum_slice_ms", INF)) < 12.0, "resource chart raster work is spread across short frame slices")
 	print("[FISH_TEST] map_raster=%s; waited_ms=%.2f; worst_frame_wait_ms=%.2f" % [raster_stats, float(Time.get_ticks_usec() - raster_wait_start_usec) / 1000.0, float(raster_frame_max_usec) / 1000.0])
 	resource_map.set_map_open(true)
-	_check(resource_map.is_map_open() and map_canvas != null, "F4 fish resource layer opens")
-	_check(map_canvas != null and map_canvas.get_school_count() > 0, "F4 layer reads resource points from FishResourceManager")
-	manager._unhandled_key_input(map_key)
-	_check(not resource_map.is_map_open(), "F4 key closes the fish resource map")
+	_check(resource_map.is_map_open() and map_canvas != null, "expanded chart includes the fish-resource layer")
+	_check(map_canvas != null and map_canvas.get_school_count() > 0, "expanded chart reads resource points from FishResourceManager")
+	resource_map.call("_unhandled_key_input", map_key)
+	_check(not resource_map.is_map_open() and sea_chart.visible and not depth_map_canvas.visible, "M closes the full chart and restores the compact Sea Chart")
 
 	var renderer := main_root.get_node("FishResourceManager/FishSchoolRenderer") as FishSchoolRenderer
 	var authority_population_before_budget_change := 0

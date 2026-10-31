@@ -92,12 +92,12 @@ fish.map.activity.flee,fleeing,逃散
 fish.map.activity.scattering,scattering,散开中
 fish.map.activity.recovering,regrouping,重新聚群
 fish.map.title,Map & Environment · ØRESUND,海图与环境数据 · ØRESUND
-fish.map.close,Close · F4 / Esc,关闭 · F4 / Esc
+fish.map.close,Close · M / Esc,关闭 · M / Esc
 fish.map.subtitle,Predicted fish resources and current dolphin positions · EMODnet bathymetry with OSM coast mask,鱼类资源预测与海豚当前位置 · 底图由 EMODnet 水深和 OSM 海岸掩膜约束
 fish.map.tab.fish_resources,Fish resources,鱼类资源
 fish.map.species_heading,Species filter,鱼种筛选
 fish.map.filter_hint,Fish tracking is off by default; dolphin pods show their current positions. Filter choices are saved.,鱼类追踪默认关闭；海豚群默认显示当前位置。筛选选择会自动保存。
-fish.map.dolphin_filter,Dolphin pods · 海豚群,Dolphin pods · 海豚群
+fish.map.dolphin_filter,Dolphin pods,海豚群
 fish.map.summary,Filtered resources: %d fish schools · %d dolphin pods,当前筛选：%d 个鱼类资源点 · %d 个海豚群
 fish.map.detail_heading,Area details,区域信息
 fish.map.detail_prompt,Select a fish resource point or dolphin pod marker to view species and group details.,点击鱼类资源点或海豚群标记查看物种、位置与群体信息。
@@ -376,3 +376,399 @@ fishing.debug.visual.trolling,trolling,拖钓中
 fishing.debug.visual.hooked,hooked,中鱼
 fishing.debug.visual.reeling,reeling,收线中
 fishing.debug.visual.presentation,catch display,渔获展示
+fishing.ui.close_setup,Close setup,关闭设置
+fishing.ui.collapse_activity,Collapse activity,收起活动面板
+fishing.ui.collapsed_format,%s · %s,%s · %s
+fishing.ui.expand_activity,Expand activity,展开活动面板
+fishing.activity.no_recent_echoes,No recent echoes,近期未见鱼群
+fishing.activity.recent_echo_format,Recent echo: %.1f m deep · %.0f s ago,最近回波：水深 %.1f 米 · %.0f 秒前
+fishing.activity.match_ok,Lure depth matches recent echo,拟饵水层与近期回波匹配
+fishing.activity.match_unknown,Depth match unknown,水层匹配未知
+fishing.activity.lure_too_shallow,Lure is shallower than the recent echo,拟饵比近期回波更浅
+fishing.activity.lure_too_deep,Lure is deeper than the recent echo,拟饵比近期回波更深
+fishing.activity.speed_format,Speed: %s · %.1f kn · %.0f%%,船速：%s · %.1f 节 · %.0f%%
+fishing.activity.speed.suitable,Suitable,适合
+fishing.activity.speed.slow,Slow,偏慢
+fishing.activity.speed.fast,Fast,偏快
+fishing.activity.speed.unavailable,Unavailable,不可用
+hud.close,Close,关闭
+hud.unknown,Unknown,未知
+hud.weather.unknown,Unknown weather,天气未知
+hud.weather.clear,Clear,晴朗
+hud.weather.partlycloudy,Partly cloudy,多云
+hud.weather.overcast,Overcast,阴天
+hud.environment.title,Environment,环境
+hud.environment.details,Details,详情
+hud.environment.details_tooltip,Open environment details,打开环境详情
+hud.environment.summary_format,"%s
+Wind %s m/s · from %s° · Sea %s","%s
+风速 %s 米/秒 · 来向 %s° · 海况 ×%s"
+hud.environment.detail_format,"%s
+Instant wind %s · from %s°
+Mean wind %s · sea intensity %s","%s
+瞬时风速 %s · 来向 %s°
+平均风速 %s · 海况强度 %s"
+hud.activities.title,Activities,活动
+hud.activities.trolling,Trolling,拖钓
+hud.activities.fish_finder,Fish Finder,鱼探仪
+hud.activities.controls_help,Controls help,操作帮助
+hud.map.open,Open chart · M,打开海图 · M
+hud.sea_chart.title,SEA CHART · ØRESUND,海图 · 厄勒海峡
+hud.sea_chart.north,N ↑,北 ↑
+hud.sea_chart.attribution,"EMODnet DTM 2024 · LAT · Estimated chart depth · Not for navigation","EMODnet DTM 2024 · LAT · 估算海图水深 · 不用于航海安全"
+hud.sea_chart.no_depth,-- m,-- 米
+hud.sea_chart.outside_coverage,Outside DTM coverage,超出水深数据范围
+hud.sea_chart.land_no_data,Land / no data,陆地 / 无数据
+hud.sea_chart.data_unavailable,Depth data unavailable,水深数据不可用
+hud.sea_chart.confidence.low,low,低
+hud.sea_chart.confidence.medium,medium,中
+hud.sea_chart.estimated,Estimated nearby depth · %s confidence · LAT,附近估算水深 · %s置信度 · LAT
+hud.sea_chart.interpolated,Estimated depth · DTM interpolation · LAT,估算水深 · DTM 插值 · LAT
+hud.sea_chart.depth_lat,Estimated depth · LAT,估算水深 · LAT
+hud.sea_chart.depth_samples,Estimated depth · %d input values · LAT,估算水深 · %d 个输入值 · LAT
+hud.help.powerboat,"Powerboat
+Throttle %s / brake %s · steer %s / %s
+Autopilot: %s","机动船
+加速 %s / 减速 %s · 转向 %s / %s
+自动巡航：%s"
+hud.help.sailboat,"Sailboat
+Steer %s / %s · main sail ease / trim %s / %s
+Auto sail trim: %s","帆船
+转向 %s / %s · 主帆收 / 放 %s / %s
+自动操帆：%s"
+hud.navigation.title,Navigation,航行
+hud.navigation.instrument_title,Sailing instruments,帆船仪表
+hud.navigation.powerboat,Powerboat,机动船
+hud.navigation.sailing,Sailboat,帆船
+hud.navigation.speed_format,%.1f kn,航速 %.1f 节
+hud.navigation.heading_format,HDG %03.0f°,航向 %03.0f°
+hud.navigation.heel_format,Heel %+.0f°,横倾 %+.0f°
+hud.navigation.expand,Details,展开
+hud.navigation.collapse,Less,收起
+hud.navigation.manual,Manual,手动驾驶
+hud.navigation.autopilot_on,Autopilot,自动巡航
+hud.navigation.powerboat_compact,%s · throttle input %.0f%%,%s · 油门输入 %.0f%%
+hud.navigation.powerboat_autopilot_compact,Autopilot · target %.1f kn,自动巡航 · 目标 %.1f 节
+hud.navigation.speed_limits_format,Limits · ahead %.1f kn / reverse %.1f kn,速度限制 · 前进 %.1f 节 / 倒车 %.1f 节
+hud.navigation.sailing_compact,%s · %s · %s,%s · %s · %s
+hud.navigation.apparent_wind_format,AWA %.0f° · %.1f m/s,视风角 %.0f° · %.1f 米/秒
+hud.navigation.sail_deployment_format,Main %.0f%%,主帆 %.0f%%
+hud.navigation.auto_trim_on,auto trim,自动操帆
+hud.navigation.auto_trim_off,manual trim,手动操帆
+hud.navigation.wind_unavailable,Wind unavailable,风况不可用
+hud.compass.heading_unknown,HDG --°,航向 --°
+hud.compass.heading_format,HDG %03.0f° · %s,航向 %03.0f° · %s
+hud.direction.north,N,北
+hud.direction.east,E,东
+hud.direction.south,S,南
+hud.direction.west,W,西
+hud.direction.northeast,NE,东北
+hud.direction.southeast,SE,东南
+hud.direction.southwest,SW,西南
+hud.direction.northwest,NW,西北
+hud.direction.between_format,%s–%s,%s偏%s
+hud.direction.short.north,N,北
+hud.direction.short.east,E,东
+hud.direction.short.south,S,南
+hud.direction.short.west,W,西
+hud.direction.short.northeast,NE,东北
+hud.direction.short.southeast,SE,东南
+hud.direction.short.southwest,SW,西南
+hud.direction.short.northwest,NW,西北
+hud.wind_relative.bow,ahead,船艏方向
+hud.wind_relative.port_forward,port forward,左前方
+hud.wind_relative.starboard_forward,starboard forward,右前方
+hud.wind_relative.port_beam,port beam,左舷侧
+hud.wind_relative.starboard_beam,starboard beam,右舷正横
+hud.wind_relative.port_aft,port aft,左舷后方
+hud.wind_relative.starboard_aft,starboard aft,右舷后方
+hud.wind_relative.stern,astern,正后方
+hud.input.unbound,unbound,未绑定
+hud.autopilot.state.acquiring,Joining route,接入航线
+hud.autopilot.state.cruising,Cruising,巡航中
+hud.autopilot.state.approaching,Approaching waypoint,接近航路点
+hud.autopilot.state.safety_hold,Safety hold,安全停船
+hud.autopilot.state.completed,Route complete,航线完成
+hud.autopilot.state.disengaged,Autopilot disengaged,自动巡航已退出
+hud.autopilot.recent_status,%s,%s
+hud.autopilot.waiting_point,Waiting point,等待点
+hud.autopilot.eta_hours,%d h %02d min,%d 小时 %02d 分
+hud.autopilot.eta_minutes,%d min,%d 分钟
+hud.autopilot.speed_adjust_hint,debug speed override: +/-,调试速度：按 +/- 调整
+hud.autopilot.status_format,"%s · %s
+%s → %s · next %s (%d/%d)
+Progress %.0f%% · %.1f km left
+Speed %.1f / %.1f m/s%s · ETA %s%s","%s · %s
+%s → %s · 下一点 %s（%d/%d）
+进度 %.0f%% · 剩余 %.1f 千米
+航速 %.1f / %.1f 米/秒%s · 预计 %s%s"
+hud.autopilot.safety_notice,Safety hold: take manual control and check the route.,安全停船：请手动接管并检查航线。
+hud.autopilot.depth_limit_notice,Depth caution: speed is limited; this is not safety navigation.,水深提示：已限制航速；这不属于航海安全导航。
+hud.autopilot.manual_takeover,Take manual control · T,手动接管 · T
+hud.autopilot.route.malmo_to_copenhagen_v1,Malmö → København,马尔默 → 哥本哈根
+hud.autopilot.route.copenhagen_to_malmo_v1,København → Malmö,哥本哈根 → 马尔默
+hud.autopilot.port.malmo,Malmö,马尔默
+hud.autopilot.port.copenhagen,København,哥本哈根
+hud.autopilot.waypoint.oresund_northbound_01,Øresund north waypoint,厄勒海峡北向航点
+hud.autopilot.waypoint.oresund_southbound_01,Øresund south waypoint,厄勒海峡南向航点
+hud.autopilot.waypoint.malmo_arrival_wait_v1,Malmö arrival waiting point,马尔默进港等待点
+hud.autopilot.waypoint.copenhagen_arrival_wait_v1,København arrival waiting point,哥本哈根进港等待点
+hud.autopilot.waypoint.malmo_departure_wait_v1,Malmö departure waiting point,马尔默出港等待点
+hud.autopilot.waypoint.copenhagen_departure_wait_v1,København departure waiting point,哥本哈根出港等待点
+hud.sailing.polar,Polar,极曲线
+hud.sailing.polar_title,Nordic 28 sailing polar,Nordic 28 帆船极曲线
+hud.sailing.polar_help,Reference speed by true wind angle and speed. Game guidance only.,根据真风角和风速显示的参考航速，仅供游戏内参考。
+hud.sailing.waiting_vessel_data,Waiting for vessel data…,等待船舶数据……
+hud.sailing.true_wind_speed,TWS %.1f m/s,真风速 %.1f 米/秒
+hud.sailing.true_wind_direction_format,Wind from %03.0f° · %s,来向 %03.0f° · %s
+hud.sailing.true_wind_direction_unknown,Wind direction unavailable,风向不可用
+hud.sailing.true_wind_calm,True wind: calm,真风：静风
+hud.sailing.relative_wind_format,AWA %s · %+.0f°,视风方向：%s · %+.0f°
+hud.sailing.relative_wind_calm,Apparent wind: calm,视风：静风
+hud.sailing.mode_auto,AUTO trim,自动操帆
+hud.sailing.mode_manual,Manual trim,手动操帆
+hud.sailing.no_go_warning,No-go zone: ease or tack away from the wind.,禁航区：请松帆或转向离开迎风区。
+hud.sailing.manual_trim_notice,Manual trim · use sail controls or press %s to enable AUTO,手动操帆 · 使用帆控调整，或按 %s 启用自动操帆
+hud.sailing.manual_trim,Manual sail trim,手动操帆
+hud.sailing.auto_trim_on,Automatic sail trim active,自动操帆已启用
+hud.sailing.auto_trim_toggle,Automatic sail trim,自动操帆
+hud.sailing.auto_trim_toggle_hint,AUTO sail trim · %s,自动操帆 · %s
+hud.sailing.trim_angles_format,Main %+.0f° · Headsail %s · Rudder %+.0f°,主帆 %+.0f° · 前帆 %s · 舵角 %+.0f°
+hud.sailing.off,off,收起
+hud.sailing.on,on,开启
+hud.sailing.main_sail_deployment,Main sail deployment,主帆展开度
+hud.sailing.headsail_deployment,Headsail deployment,前帆展开度
+hud.sailing.auto_reef_toggle,Automatic reefing,自动缩帆
+hud.sailing.auto_reef_state,AUTO Reef · %s,自动缩帆 · %s
+hud.sailing.auto_reef_off_manual,Manual reefing,手动缩帆
+hud.sailing.auto_reef_off_returned,Automatic reefing off · manual trim resumed,自动缩帆已关闭 · 已恢复手动操帆
+hud.sailing.auto_reef_on_status,AUTO Reef · %s,自动缩帆 · %s
+hud.sailing.gear_changed,Gear changed.,档位已切换。
+hud.sailing.gear_change_rejected,Gear change rejected: lower throttle below 10%% first.,换档被拒绝：请先将油门降至 10%% 以下。
+hud.sailing.main_sail_angle,Main sail angle,主帆角度
+hud.sailing.headsail_angle,Headsail angle,前帆角度
+hud.sailing.aux_engine,Auxiliary engine,辅助发动机
+hud.sailing.engine_status_format,%s · %s gear · target %.0f%% · actual %.0f%%,%s · %s档 · 目标油门 %.0f%% · 当前 %.0f%%
+hud.sailing.engine_off,Engine off,发动机关闭
+hud.sailing.engine_on,Engine running,发动机运行中
+hud.sailing.engine_start,Start engine,启动发动机
+hud.sailing.engine_stop,Stop engine,关闭发动机
+hud.sailing.fuel_format,Diesel %.1f / %.1f L (%.0f%%) · %.1f L/h · %s %s,柴油 %.1f / %.1f 升（%.0f%%）· %.1f 升/小时 · %s %s
+hud.sailing.runtime_format,about %.1f h remaining,预计剩余 %.1f 小时
+hud.sailing.fuel_low,low fuel,燃油偏低
+hud.sailing.fuel_empty,fuel depleted,燃油耗尽
+hud.sailing.gear.reverse,Reverse,倒档
+hud.sailing.gear.neutral,Neutral,空档
+hud.sailing.gear.forward,Forward,前进档
+hud.sailing.throttle,Throttle,油门
+hud.sailing.engine_controls_help,Set neutral before changing direction. Lower throttle below 10%% before shifting.,切换方向前请先挂空档。换档前请将油门降至 10%% 以下。
+hud.sailing.engine_key_hint,Engine: %s,发动机：%s
+hud.sailing.deployment_format,Target %.0f%% · actual %.0f%% · %.1f m² · %s,目标 %.0f%% · 当前 %.0f%% · %.1f 平方米 · %s
+hud.sailing.furling.deploying,deploying,展开中
+hud.sailing.furling.retracting,reefing,收帆中
+hud.sailing.furling.deployed,deployed,已展开
+hud.sailing.furling.retracted,furled,已收起
+hud.sailing.furling.partial,partially deployed,部分展开
+hud.sailing.reef_status.manual,Manual · heel %.1f° · %s,手动 · 横倾 %.1f° · %s
+hud.sailing.reef_status.monitoring,Monitoring · heel %.1f° · %s,监测中 · 横倾 %.1f° · %s
+hud.sailing.reef_status.emergency,Emergency reef · heel %.1f° · %s,紧急缩帆 · 横倾 %.1f° · %s
+hud.sailing.reef_status.high_heel,High heel · %.1f° · %s,横倾较大 · %.1f° · %s
+hud.sailing.reef_status.sustained_heel,Sustained heel · %.1f° · %s,持续横倾 · %.1f° · %s
+hud.sailing.reef_status.recovering,Recovering · heel %.1f° · %s,恢复中 · 横倾 %.1f° · %s
+hud.sailing.reef_status.holding,Holding · heel %.1f° · %s,保持当前帆量 · 横倾 %.1f° · %s
+hud.sailing.reef_status.fully_reefed,Fully reefed · heel %.1f° · %s,帆已完全收起 · 横倾 %.1f° · %s
+hud.sailing.reef_action.none,waiting,等待
+hud.sailing.reef_action.emergency_reduce,emergency reef,紧急缩帆
+hud.sailing.reef_action.continue_reduce,reef further,继续缩帆
+hud.sailing.reef_action.aggressive_reduce,reef actively,积极缩帆
+hud.sailing.reef_action.reef,reef,缩帆
+hud.sailing.reef_action.deploy_main,ease main sail,展开主帆
+hud.sailing.reef_action.deploy_headsail,ease headsail,展开前帆
+hud.sailing.target,target,目标
+hud.sailing.apparent_wind_detail_format,AWA %.1f m/s at %+.0f°,视风 %.1f 米/秒 · %+.0f°
+hud.sailing.wind_detail_format,TWS %.1f m/s at %+.0f°,真风 %.1f 米/秒 · %+.0f°
+hud.sailing.calm,calm,静风
+hud.sailing.direction_unreliable,unreliable,方向不可靠
+hud.sailing.detail_format,"SOG %.1f kn (%.1f m/s) · COG %s · HDG %.0f°
+True wind %s · apparent wind %s
+Main %.0f° (target %.0f°) · headsail %s
+Rudder %.0f° (target %.0f°) · heel %.0f° · leeway %.1f°","对地航速 %.1f 节（%.1f 米/秒）· 航迹 %s · 航向 %.0f°
+真风 %s · 视风 %s
+主帆 %.0f°（目标 %.0f°）· 前帆 %s
+舵角 %.0f°（目标 %.0f°）· 横倾 %.0f° · 侧滑 %.1f°"
+hud.sailing.controls_hint,Steer %s / %s · main ease / trim %s / %s · headsail ease / trim %s / %s,转向 %s / %s · 主帆收 / 放 %s / %s · 前帆收 / 放 %s / %s
+hud.sailing_instrument.title,Sailing instruments,帆船仪表
+hud.sailing_instrument.cog_unreliable,COG unreliable,航迹方向不可靠
+hud.sailing_instrument.heading_format,HDG %.0f° · COG %s,航向 %.0f° · 航迹 %s
+hud.sailing_instrument.speed_heel_format,SOG %.1f kn · speed %.1f m/s · heel %.0f°,对地航速 %.1f 节 · 速度 %.1f 米/秒 · 横倾 %.0f°
+hud.sailing_instrument.bow,BOW,船艏
+hud.sailing_instrument.stern,STERN,船艉
+hud.sailing_instrument.port,PORT,左舷
+hud.sailing_instrument.starboard,STBD,右舷
+hud.sailing_instrument.center,CENTER,中央
+hud.sailing_instrument.sail_format,Main %.0f° · target %.0f°,主帆 %.0f° · 目标 %.0f°
+hud.sailing_instrument.jib_format,Headsail %s · %.0f° / target %.0f°,前帆 %s · %.0f° / 目标 %.0f°
+hud.sailing_instrument.rudder_format,Rudder %.0f° %s · limit %.0f°,舵角 %.0f° %s · 限位 %.0f°
+hud.sailing_instrument.true_wind,TRUE WIND,真风
+hud.sailing_instrument.apparent_wind,APPARENT WIND,视风
+hud.sailing_instrument.wind_calm_format,%s · calm,%s · 静风
+hud.sailing_instrument.wind_format,%s %.1f m/s · from %.0f° · relative %+.0f°,%s %.1f 米/秒 · 来向 %.0f° · 相对 %+.0f°
+hud.sailing_instrument.slip_format,COG offset %+.1f° · leeway %+.1f°,航迹偏差 %+.1f° · 侧滑 %+.1f°
+hud.sailing_instrument.trim_legend,%s · %s,%s · %s
+hud.sailing_instrument.no_go,no-go zone,禁航区
+hud.sailing_instrument.trim_ready,auto trim active,自动操帆已启用
+hud.sailing_instrument.trim_manual,manual trim,手动操帆
+hud.sailing_instrument.legend,Bow up · port left · starboard right,船艏向上 · 左舷在左 · 右舷在右
+hud.sailing_instrument.on,on,开启
+hud.sailing_instrument.off,off,关闭
+menu.game_title,Sea Prototype,航海原型
+menu.game_subtitle,A quiet day on the water,宁静的海上时光
+menu.continue,Continue sailing,继续航行
+menu.settings,Settings,设置
+menu.quit,Quit game,退出游戏
+menu.language,Language,语言
+menu.ui_scale,UI scale,界面缩放
+menu.navigation_detail,Navigation details,航行信息
+menu.graphics,Graphics,画面设置
+menu.weather_audio,Weather audio,天气音量
+menu.ocean_audio,Ocean audio,海浪音量
+menu.engine_audio,Engine audio,发动机音量
+menu.music,Music,音乐
+menu.music_hint,Choose a saved playlist or browse local tracks.,选择已保存的播放列表或浏览本地音乐。
+menu.back,Back,返回
+menu.apply,Apply,应用
+menu.cancel,Cancel,取消
+menu.scale.small,Small · 90%%,小 · 90%%
+menu.scale.standard,Standard · 100%%,标准 · 100%%
+menu.scale.large,Large · 125%%,大 · 125%%
+menu.scale.extra_large,Extra large · 150%%,特大 · 150%%
+menu.scale.maximum,Maximum · 175%%,最大 · 175%%
+menu.detail.compact,Compact,简洁
+menu.detail.detailed,Detailed,详细
+menu.graphics.display,Display,显示
+menu.graphics.display_mode,Window mode,窗口模式
+menu.graphics.windowed,Windowed,窗口
+menu.graphics.borderless,Borderless fullscreen,无边框全屏
+menu.graphics.fullscreen,Fullscreen,全屏
+menu.graphics.vsync,Vertical sync,垂直同步
+menu.graphics.frame_limit,Frame rate limit,帧率上限
+menu.graphics.fps_30,30 FPS,30 帧/秒
+menu.graphics.fps_60,60 FPS,60 帧/秒
+menu.graphics.unlimited,Unlimited,不限
+menu.graphics.render_resolution,Render resolution,渲染分辨率
+menu.graphics.overall_scale,Overall render scale,整体渲染比例
+menu.graphics.resolution.native,Native,原生
+menu.graphics.resolution.high,High · 85%%,高 · 85%%
+menu.graphics.resolution.balanced,Balanced · 70%%,均衡 · 70%%
+menu.graphics.resolution.performance,Performance · 55%%,性能 · 55%%
+menu.graphics.resolution.ultra_performance,Ultra performance · 45%%,极致性能 · 45%%
+menu.graphics.quality,Quality,画质
+menu.graphics.preset,Preset,预设
+menu.graphics.preset.performance,Performance,性能优先
+menu.graphics.preset.balanced,Balanced,均衡
+menu.graphics.preset.high,High,高
+menu.graphics.preset.ultra,Ultra,极高
+menu.graphics.preset.custom,Custom,自定义
+menu.graphics.directional_shadows,Directional shadows,方向光阴影
+menu.graphics.ssr,Screen-space reflections,屏幕空间反射
+menu.graphics.ssao,Ambient occlusion,环境光遮蔽
+menu.graphics.cloud_quality,Cloud quality,云层质量
+menu.graphics.ocean_quality,Ocean quality,海面质量
+menu.graphics.shadow_distance,Shadow distance,阴影距离
+menu.graphics.vegetation_density,Vegetation density,植被密度
+menu.graphics.advanced_open,Advanced settings −,高级设置 −
+menu.graphics.advanced_closed,Advanced settings +,高级设置 +
+menu.graphics.extra_3d_scale,Extra 3D scale,额外 3D 缩放
+menu.graphics.scale.100,100%%,100%%
+menu.graphics.scale.85,85%%,85%%
+menu.graphics.scale.75,75%%,75%%
+menu.graphics.scale.67,67%%,67%%
+menu.graphics.scale.55,55%%,55%%
+menu.graphics.scale.50,50%%,50%%
+menu.graphics.upscaling,Upscaling,超分辨率
+menu.graphics.upscaling.auto,Auto,自动
+menu.graphics.upscaling.fsr2,FSR 2,FSR 2
+menu.graphics.upscaling.fsr1,FSR 1,FSR 1
+menu.graphics.upscaling.bilinear,Bilinear,双线性
+menu.graphics.sharpness,Upscaling sharpness,超分锐度
+menu.graphics.restore_defaults,Restore defaults,恢复默认
+menu.graphics.keep,Keep settings,保留设置
+menu.graphics.revert,Revert,还原
+menu.graphics.applied,Graphics settings applied.,画面设置已应用。
+menu.graphics.defaults_loaded,Default graphics settings restored in this draft.,已在当前草稿中恢复默认画面设置。
+menu.graphics.confirm_display,Keep this display mode? Reverting in %d s,保留此显示模式？%d 秒后自动还原
+menu.graphics.resolution_info,Window %d×%d · root %d×%d · estimated 3D %d×%d,窗口 %d×%d · 根视口 %d×%d · 估算 3D %d×%d
+menu.graphics.resolution_native_note,Using the output resolution for the 3D render.,3D 渲染使用输出分辨率。
+menu.graphics.resolution_scaled_note,3D rendering uses the selected performance scale.,3D 渲染使用所选性能比例。
+menu.graphics.resolution_extra_scale_note, Choose an extra scale below to reduce GPU load further., 可在下方继续降低额外渲染比例以减轻 GPU 负载。
+menu.graphics.upscaler_status,Extra scale %.0f%% · upscaler %s,额外比例 %.0f%% · 超分方式 %s
+menu.graphics.upscaler_double_scale_note,Both render scaling and extra scaling are active.,渲染分辨率与额外缩放同时生效。
+menu.graphics.upscaler_native_note,No extra 3D scaling is active.,未启用额外 3D 缩放。
+menu.graphics.internal_size_info,Estimated internal 3D size: %d×%d,估算 3D 内部尺寸：%d×%d
+fish.map.mini_title,Sea chart · M,海图 · M
+fish.map.route_tab,Routes,航线
+fish.map.depth_tab,Depth quality,水深数据
+fish.map.route_subtitle,Saved routes and active freight route,已保存航线与当前货运航线
+fish.map.depth_subtitle,Bathymetry coverage and data quality,海底地形覆盖范围与数据质量
+fish.map.expand,Expand · M,展开 · M
+fish.map.collapse,Collapse · M,收起 · M
+fish.map.hide,Hide,隐藏
+fish.map.depth_quality_heading,Depth data quality,水深数据质量
+fish.map.depth_quality_instructions,Use this view to inspect where chart depth data is available.,在此查看海图水深数据的覆盖情况。
+fish.map.depth_quality.estimated,Estimated depth,估算水深
+fish.map.depth_quality.unknown,No chart data,无海图数据
+fish.map.depth_quality.note,Chart depths use LAT where available; gaps are not inferred as safe water.,可用海图深度使用 LAT 基准；空白区域不代表水深安全。
+fish.map.depth_quality.summary,Estimated cells: %s · unresolved cells: %s,估算单元：%s · 未解析单元：%s
+fish.map.depth_quality.footer,Depth data coverage · not a navigation safety chart,水深数据覆盖情况 · 不属于航海安全海图
+fish.map.zoom_in,Zoom +,放大 +
+fish.map.zoom_out,Zoom −,缩小 −
+fish.map.reset_view,Reset view,重置视图
+fish.map.route_editor_open,Edit route,编辑航线
+fish.map.route_editor_close,Close route editor,关闭航线编辑器
+fish.map.route.select_tab,Select the routes tab to view the active route.,切换到“航线”标签查看当前航线。
+fish.map.route.none,No route is currently selected.,当前没有选中的航线。
+fish.map.route.no_contract_route,No saved route matches the active freight contract.,没有与当前货运合同对应的已保存航线。
+fish.map.route.validated,Validated for gameplay,已完成游戏内验证
+fish.map.route.unvalidated,Needs review,待复核
+fish.map.route.cruise_eligible,autopilot available,可使用自动巡航
+fish.map.route.cruise_unavailable,autopilot unavailable,不可使用自动巡航
+fish.map.route.summary,"%s · total %.1f km · remaining %.1f km
+Cruise reference %.1f m/s · ETA %s · %s · %s","%s · 全程 %.1f 千米 · 剩余 %.1f 千米
+参考巡航速度 %.1f 米/秒 · 预计 %s · %s · %s"
+fish.map.route.dev_empty,No route selected for editing.,没有选中可编辑的航线。
+fish.map.route.dev_preview,Editing %s · %s · %d waypoints,正在编辑 %s · %s · %d 个航路点
+fish.map.gps_format,"%.3f° %s, %.3f° %s",%.3f°%s，%.3f°%s
+fish.map.dolphin_following,Following the vessel,正在伴随船只
+fish.map.dolphin_not_following,Not following,未伴随船只
+fish.map.dolphin_state.cruise,Cruising,巡游
+fish.map.dolphin_details,"Pod %s · %d dolphins
+%s · %s
+Depth %.1f m · updated %.1f s ago
+%s","海豚群 %s · %d 只
+%s · %s
+深度 %.1f 米 · %.1f 秒前更新
+%s"
+fish.map.unknown,Unknown,未知
+fish.map.duration.hours,%d h %02d min,%d 小时 %02d 分
+fish.map.duration.minutes,%d min,%d 分
+vessel.picker.title,Choose vessel,选择船只
+vessel.picker.close,Close · I / Esc,关闭 · I / Esc
+vessel.picker.note,"Selection switches immediately. World time, weather, and sea conditions keep running.",选择后立即切换。世界时间、天气和海况继续运行。
+vessel.picker.current,Currently sailing,当前驾驶中
+vessel.picker.select,Select this vessel,选择这艘船
+vessel.picker.preview_unavailable,Model preview unavailable,模型预览不可用
+vessel.picker.powerboat.name,Motorboat,动力艇
+vessel.picker.powerboat.cargo_name,Starter cargo boat,初始货运艇
+vessel.picker.powerboat.type,Motorboat · cargo vessel,机动船 · 货运船
+vessel.picker.powerboat.details,"Length %.1f m · beam %.2f m
+Draft %.2f–%.2f m · cargo slots %d
+Traditional motorboat · OM02 engine","船长 %.1f 米 · 船宽 %.2f 米
+吃水 %.2f–%.2f 米 · 货舱 %d 格
+传统动力船 · OM02 发动机"
+vessel.picker.sailboat.name,Nordic 28,Nordic 28
+vessel.picker.sailboat.type,Coastal cruising sailboat · wind propulsion,近海休闲帆船 · 风帆推进
+vessel.picker.sailboat.details,"Length %.1f m · draft %.2f m
+Main %.2f m² + headsail %.2f m²
+Independent sail trim · AUTO sail trim · manual helm","船长 %.1f 米 · 吃水 %.2f 米
+主帆 %.2f 平方米 + 前帆 %.2f 平方米
+主帆与前帆独立操控 · 支持自动操帆与手动操舵"

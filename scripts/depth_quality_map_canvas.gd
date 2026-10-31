@@ -1,11 +1,13 @@
 class_name DepthQualityMapCanvas
 extends Control
 
-## Full-region bathymetry overview for the F4 map. The chart is north-up;
+## Full-region bathymetry overview for the M chart. The chart is north-up;
 ## zooming and panning only change this view and never affect navigation data.
 
-const RASTER_WIDTH := 240
-const RASTER_HEIGHT := 330
+const MINI_RASTER_WIDTH := 96
+const MINI_RASTER_HEIGHT := 132
+const EXPANDED_RASTER_WIDTH := 240
+const EXPANDED_RASTER_HEIGHT := 330
 const RASTER_PIXELS_PER_SLICE := 576
 const UNKNOWN_COLOR := Color("#25333b")
 const LAND_COLOR := Color("#9e9b89")
@@ -25,7 +27,13 @@ var _raster: ImageTexture
 var _raster_image: Image
 var _raster_cursor := 0
 var _raster_building := false
+var _raster_width := 0
+var _raster_height := 0
+var _build_width := 0
+var _build_height := 0
 var _chart_active := false
+var _compact_mode := false
+var _quality_data_loaded := false
 var _dragging := false
 var _last_boat_position := Vector3(INF, INF, INF)
 var _refresh_elapsed := 0.0
@@ -50,9 +58,6 @@ func configure(bathymetry: BathymetryManager, georeference: GeoReference, boat: 
 		_extent = _georeference.region_bounds_east_north()
 		_view_center = _extent.get_center()
 	if _bathymetry != null:
-		var overlay_data := _bathymetry.get_depth_quality_overlay_data()
-		_estimated_points = overlay_data.get("estimated_points", PackedVector2Array())
-		_unresolved_points = overlay_data.get("unresolved_points", PackedVector2Array())
 		var latitude := _georeference.origin_latitude_deg if _georeference != null else 55.7
 		var source_metadata := _bathymetry.get_source_metadata_at(latitude)
 		_cell_size_m = Vector2(
@@ -65,10 +70,41 @@ func configure(bathymetry: BathymetryManager, georeference: GeoReference, boat: 
 func set_chart_active(active: bool) -> void:
 	_chart_active = active
 	if active:
+		if not _compact_mode:
+			_load_quality_overlay_data()
 		ensure_raster()
 		set_process(true)
 	else:
 		set_process(false)
+
+
+func set_compact_mode(compact: bool) -> void:
+	if _compact_mode == compact:
+		return
+	_compact_mode = compact
+	if _compact_mode and _raster_building and _build_width > MINI_RASTER_WIDTH:
+		_raster_image = null
+		_raster_building = false
+	if _chart_active:
+		if not _compact_mode:
+			_load_quality_overlay_data()
+		ensure_raster()
+	queue_redraw()
+
+
+func is_compact_mode() -> bool:
+	return _compact_mode
+
+
+func get_raster_build_statistics() -> Dictionary:
+	var requested_size := _requested_raster_size()
+	return {
+		"ready": _raster != null and _raster_width >= requested_size.x and _raster_height >= requested_size.y,
+		"building": _raster_building,
+		"compact": _compact_mode,
+		"pixels_completed": _raster_cursor,
+		"pixels_total": _build_width * _build_height if _raster_building else requested_size.x * requested_size.y,
+	}
 
 
 func get_estimated_cell_count() -> int:
@@ -94,29 +130,51 @@ func reset_view() -> void:
 
 
 func ensure_raster() -> void:
-	if _raster != null or _raster_building or _bathymetry == null or _georeference == null:
+	if _bathymetry == null or _georeference == null:
 		return
 	if _extent.size.x <= 0.0 or _extent.size.y <= 0.0:
 		return
-	_raster_image = Image.create(RASTER_WIDTH, RASTER_HEIGHT, false, Image.FORMAT_RGBA8)
+	var requested_size := _requested_raster_size()
+	if _raster != null and _raster_width >= requested_size.x and _raster_height >= requested_size.y:
+		return
+	if _raster_building and _build_width >= requested_size.x and _build_height >= requested_size.y:
+		return
+	_build_width = requested_size.x
+	_build_height = requested_size.y
+	_raster_image = Image.create(_build_width, _build_height, false, Image.FORMAT_RGBA8)
 	_raster_cursor = 0
 	_raster_building = true
 	set_process(true)
 	queue_redraw()
 
 
+func _requested_raster_size() -> Vector2i:
+	return Vector2i(MINI_RASTER_WIDTH, MINI_RASTER_HEIGHT) if _compact_mode else Vector2i(EXPANDED_RASTER_WIDTH, EXPANDED_RASTER_HEIGHT)
+
+
+func _load_quality_overlay_data() -> void:
+	if _quality_data_loaded or _bathymetry == null:
+		return
+	var overlay_data := _bathymetry.get_depth_quality_overlay_data()
+	_estimated_points = overlay_data.get("estimated_points", PackedVector2Array())
+	_unresolved_points = overlay_data.get("unresolved_points", PackedVector2Array())
+	_quality_data_loaded = true
+
+
 func _process(delta: float) -> void:
 	var redraw_needed := false
 	if _raster_building and _chart_active:
-		var pixel_count := RASTER_WIDTH * RASTER_HEIGHT
+		var pixel_count := _build_width * _build_height
 		var slice_end := mini(_raster_cursor + RASTER_PIXELS_PER_SLICE, pixel_count)
 		while _raster_cursor < slice_end:
-			var x := _raster_cursor % RASTER_WIDTH
-			var y := int(_raster_cursor / RASTER_WIDTH)
-			_raster_image.set_pixel(x, y, _raster_pixel_color(x, y))
+			var x := _raster_cursor % _build_width
+			var y := int(_raster_cursor / _build_width)
+			_raster_image.set_pixel(x, y, _raster_pixel_color(x, y, _build_width, _build_height))
 			_raster_cursor += 1
 		if _raster_cursor >= pixel_count:
 			_raster = ImageTexture.create_from_image(_raster_image)
+			_raster_width = _build_width
+			_raster_height = _build_height
 			_raster_image = null
 			_raster_building = false
 		redraw_needed = true
@@ -145,20 +203,24 @@ func _draw() -> void:
 		draw_texture_rect(_raster, _get_extent_screen_rect(), false)
 	else:
 		draw_rect(_get_extent_screen_rect(), UNKNOWN_COLOR, true)
-		var progress := 100.0 * float(_raster_cursor) / float(RASTER_WIDTH * RASTER_HEIGHT)
-		var message := "正在构建完整水深图 · %.0f%%" % progress if _raster_building else "选择“水深图”标签以载入离线海图"
-		draw_string(get_theme_default_font(), _map_rect.position + Vector2(16.0, 34.0), message, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 15, Color("#d4e4d6"))
-	_draw_contours()
-	_draw_coastlines()
-	_draw_quality_cells(_estimated_points, ESTIMATED_COLOR)
-	_draw_quality_cells(_unresolved_points, UNRESOLVED_COLOR)
+		if not _compact_mode:
+			var total_pixels := maxi(_build_width * _build_height, 1)
+			var progress := 100.0 * float(_raster_cursor) / float(total_pixels)
+			var message := "正在构建水深图 · %.0f%%" % progress if _raster_building else "选择“水深图”标签以载入离线海图"
+			draw_string(get_theme_default_font(), _map_rect.position + Vector2(16.0, 34.0), message, HORIZONTAL_ALIGNMENT_LEFT, -1.0, 15, Color("#d4e4d6"))
+	if not _compact_mode:
+		_draw_contours()
+		_draw_coastlines()
+		_draw_quality_cells(_estimated_points, ESTIMATED_COLOR)
+		_draw_quality_cells(_unresolved_points, UNRESOLVED_COLOR)
 	_draw_boat_marker()
 	draw_rect(_map_rect, Color(0.67, 0.83, 0.81, 0.82), false, 1.5)
 	var font := get_theme_default_font()
-	draw_string(font, _map_rect.position + Vector2(12.0, 20.0), "EMODnet DTM 2024 · LAT · NORTH UP", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13, Color(0.93, 0.97, 0.92, 0.95))
-	var zoom_text := "%.1f×" % _zoom
-	draw_string(font, _map_rect.position + Vector2(_map_rect.size.x - 16.0, 20.0), zoom_text, HORIZONTAL_ALIGNMENT_RIGHT, -1.0, 13, Color(0.93, 0.97, 0.92, 0.95))
-	_draw_scale_bar(font)
+	if not _compact_mode:
+		draw_string(font, _map_rect.position + Vector2(12.0, 20.0), "EMODnet DTM 2024 · LAT · NORTH UP", HORIZONTAL_ALIGNMENT_LEFT, -1.0, 13, Color(0.93, 0.97, 0.92, 0.95))
+		var zoom_text := "%.1f×" % _zoom
+		draw_string(font, _map_rect.position + Vector2(_map_rect.size.x - 16.0, 20.0), zoom_text, HORIZONTAL_ALIGNMENT_RIGHT, -1.0, 13, Color(0.93, 0.97, 0.92, 0.95))
+		_draw_scale_bar(font)
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -244,9 +306,9 @@ func _clamp_view_center() -> void:
 	_view_center.y = clampf(_view_center.y, min_y, max_y)
 
 
-func _raster_pixel_color(x: int, y: int) -> Color:
-	var east := _extent.position.x + (float(x) + 0.5) / float(RASTER_WIDTH) * _extent.size.x
-	var north := _extent.end.y - (float(y) + 0.5) / float(RASTER_HEIGHT) * _extent.size.y
+func _raster_pixel_color(x: int, y: int, raster_width: int, raster_height: int) -> Color:
+	var east := _extent.position.x + (float(x) + 0.5) / float(raster_width) * _extent.size.x
+	var north := _extent.end.y - (float(y) + 0.5) / float(raster_height) * _extent.size.y
 	if _bathymetry.is_land_at_east_north(east, north):
 		return LAND_COLOR
 	var geodetic := _georeference.world_to_geodetic(Vector3(east, 0.0, -north))

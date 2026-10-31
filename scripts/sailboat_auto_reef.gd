@@ -27,6 +27,8 @@ var _recovery_seconds := 0.0
 var _action_seconds := 0.0
 var _emergency_latched := false
 var _status := "手动控制"
+var _status_id := "manual"
+var _action_id := "none"
 
 
 func configure(profile: Resource) -> void:
@@ -50,6 +52,8 @@ func set_enabled(value: bool, heel_rad: float, main_current: float, jib_current:
 	_action_seconds = 0.0
 	_emergency_latched = false
 	_status = "AUTO Reef 已开启 · 监测横倾" if enabled else "手动控制"
+	_status_id = "monitoring" if enabled else "manual"
+	_action_id = "none"
 
 
 func update(
@@ -65,6 +69,8 @@ func update(
 		"jib_target": clampf(jib_target, 0.0, 1.0),
 		"filtered_heel_deg": filtered_heel_deg,
 		"status": _status,
+		"status_id": _status_id,
+		"action_id": _action_id,
 		"enabled": enabled,
 		"action": "none",
 	}
@@ -81,7 +87,9 @@ func update(
 	var next_main := float(result["main_target"])
 	var next_jib := float(result["jib_target"])
 	var action := "none"
+	var action_id := "none"
 	if filtered_heel_deg > emergency_threshold_deg:
+		_status_id = "emergency"
 		_high_heel_seconds = maxf(_high_heel_seconds, reef_confirm_seconds)
 		_recovery_seconds = 0.0
 		if not _emergency_latched:
@@ -90,14 +98,17 @@ func update(
 			_emergency_latched = true
 			_action_seconds = 0.0
 			action = "紧急缩帆"
+			action_id = "emergency_reduce"
 		elif _action_seconds >= minf(action_interval_seconds * 0.5, 1.5):
 			next_main = maxf(0.0, next_main - 0.15)
 			if next_main <= 0.5:
 				next_jib = maxf(0.0, next_jib - 0.10)
 			_action_seconds = 0.0
 			action = "继续强力缩帆"
+			action_id = "continue_reduce"
 		_status = "强横倾 %.1f° · %s" % [filtered_heel_deg, action if action != "none" else "等待下一步缩帆"]
 	elif filtered_heel_deg > aggressive_threshold_deg:
+		_status_id = "high_heel"
 		_high_heel_seconds += step
 		_recovery_seconds = 0.0
 		if _high_heel_seconds >= reef_confirm_seconds and _action_seconds >= minf(action_interval_seconds * 0.5, 1.5):
@@ -106,8 +117,10 @@ func update(
 				next_jib = maxf(0.0, next_jib - 0.10)
 			_action_seconds = 0.0
 			action = "积极缩帆"
+			action_id = "aggressive_reduce"
 		_status = "横倾 %.1f° · %s" % [filtered_heel_deg, action if action != "none" else "等待调整间隔"]
 	elif filtered_heel_deg > reef_threshold_deg:
+		_status_id = "sustained_heel"
 		_emergency_latched = false
 		_high_heel_seconds += step
 		_recovery_seconds = 0.0
@@ -117,8 +130,10 @@ func update(
 				next_jib = maxf(0.0, next_jib - 0.08)
 			_action_seconds = 0.0
 			action = "逐步缩帆"
+			action_id = "reef"
 		_status = "持续横倾 %.1f° · %s" % [filtered_heel_deg, action if action != "none" else "等待确认"]
 	else:
+		_status_id = "recovering" if filtered_heel_deg < recovery_threshold_deg else "holding"
 		_high_heel_seconds = 0.0
 		_emergency_latched = false
 		if filtered_heel_deg < recovery_threshold_deg:
@@ -127,9 +142,11 @@ func update(
 				if next_main < 0.999:
 					next_main = minf(1.0, next_main + 0.05)
 					action = "缓慢展开主帆"
+					action_id = "deploy_main"
 				elif next_jib < 0.999:
 					next_jib = minf(1.0, next_jib + 0.05)
 					action = "缓慢展开前帆"
+					action_id = "deploy_headsail"
 				_action_seconds = 0.0
 			_status = "横倾 %.1f° · %s" % [filtered_heel_deg, action if action != "none" else "恢复观察"]
 		else:
@@ -138,10 +155,14 @@ func update(
 
 	if is_equal_approx(next_main, main_current) and is_equal_approx(next_jib, jib_current) and action == "none" and main_current <= 0.001 and jib_current <= 0.001 and filtered_heel_deg > reef_threshold_deg:
 		_status = "横倾仍高 · 两片帆已完全收起"
+		_status_id = "fully_reefed"
 	result["main_target"] = clampf(next_main, 0.0, 1.0)
 	result["jib_target"] = clampf(next_jib, 0.0, 1.0)
 	result["filtered_heel_deg"] = filtered_heel_deg
 	result["status"] = _status
+	result["status_id"] = _status_id
+	result["action_id"] = action_id
+	_action_id = action_id
 	result["action"] = action
 	return result
 
@@ -151,6 +172,8 @@ func get_snapshot() -> Dictionary:
 		"enabled": enabled,
 		"filtered_heel_deg": filtered_heel_deg,
 		"status": _status,
+		"status_id": _status_id,
+		"action_id": _action_id,
 		"high_heel_seconds": _high_heel_seconds,
 		"recovery_seconds": _recovery_seconds,
 	}

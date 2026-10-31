@@ -31,10 +31,16 @@ var _panel: PanelContainer
 var _main_page: VBoxContainer
 var _settings_page: VBoxContainer
 var _graphics_page: VBoxContainer
+var _menu_title: Label
+var _menu_subtitle: Label
+var _settings_title: Label
+var _playlist_hint: Label
 var _music_toggle: CheckButton
 var _language_option: OptionButton
 var _ui_scale_option: OptionButton
 var _navigation_detail_option: OptionButton
+var _graphics_settings_button: Button
+var _back_button: Button
 var _mix_sliders: Dictionary = {}
 var _menu_open := false
 var _settings_open := false
@@ -58,10 +64,13 @@ func _ready() -> void:
 	if copenhagen_services != null:
 		_port_services.append(copenhagen_services)
 	_build_ui()
+	if _localization_manager != null and _localization_manager.has_signal("locale_changed"):
+		_localization_manager.connect("locale_changed", _on_locale_changed)
 	get_viewport().size_changed.connect(_update_panel_layout)
 	if _quality_manager != null and _quality_manager.has_signal("settings_changed"):
 		_quality_manager.connect("settings_changed", _sync_interface_settings)
 	_update_panel_layout()
+	_refresh_localized_text()
 	visible = false
 
 
@@ -229,12 +238,16 @@ func _build_ui() -> void:
 	_panel.add_child(pages)
 
 	var title := Label.new()
-	title.text = "航海生活模拟器"
+	title.name = "GameTitle"
+	_menu_title = title
+	title.text = tr("menu.game_title")
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 30)
 	title.add_theme_color_override("font_color", Color("#e5efea"))
 	pages.add_child(title)
 	var subtitle := Label.new()
+	subtitle.name = "GameSubtitle"
+	_menu_subtitle = subtitle
 	subtitle.text = "SEA PROTOTYPE  ·  ØRESUND"
 	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	subtitle.add_theme_font_size_override("font_size", 13)
@@ -247,9 +260,9 @@ func _build_ui() -> void:
 	_main_page.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	pages.add_child(_main_page)
 	_add_page_spacer(_main_page)
-	_add_button(_main_page, "继续游戏", "ContinueButton", _close_menu)
-	_add_button(_main_page, "设置", "SettingsButton", _show_settings_page)
-	_add_button(_main_page, "退出游戏", "ExitButton", func() -> void: get_tree().quit())
+	_add_button(_main_page, tr("menu.continue"), "ContinueButton", _close_menu)
+	_add_button(_main_page, tr("menu.settings"), "SettingsButton", _show_settings_page)
+	_add_button(_main_page, tr("menu.quit"), "ExitButton", func() -> void: get_tree().quit())
 	_add_page_spacer(_main_page)
 
 	_settings_page = VBoxContainer.new()
@@ -259,7 +272,9 @@ func _build_ui() -> void:
 	_settings_page.visible = false
 	pages.add_child(_settings_page)
 	var settings_title := Label.new()
-	settings_title.text = "设置"
+	settings_title.name = "SettingsTitle"
+	_settings_title = settings_title
+	settings_title.text = tr("menu.settings")
 	settings_title.add_theme_font_size_override("font_size", 24)
 	settings_title.add_theme_color_override("font_color", Color("#e5efea"))
 	_settings_page.add_child(settings_title)
@@ -275,12 +290,14 @@ func _build_ui() -> void:
 	settings_scroll.add_child(settings_controls)
 	_music_toggle = CheckButton.new()
 	_music_toggle.name = "MusicEnabledToggle"
-	_music_toggle.text = "背景音乐"
+	_music_toggle.text = tr("menu.music")
 	_music_toggle.add_theme_font_size_override("font_size", 19)
 	_music_toggle.toggled.connect(_on_music_toggled)
 	settings_controls.add_child(_music_toggle)
 	var playlist_hint := Label.new()
-	playlist_hint.text = "bgm1 与 bgm2 按顺序播放"
+	playlist_hint.name = "PlaylistHint"
+	_playlist_hint = playlist_hint
+	playlist_hint.text = tr("menu.music_hint")
 	playlist_hint.add_theme_font_size_override("font_size", 14)
 	playlist_hint.add_theme_color_override("font_color", Color("#9db9b8"))
 	settings_controls.add_child(playlist_hint)
@@ -290,26 +307,80 @@ func _build_ui() -> void:
 			language_options.append(str(language_label))
 	else:
 		language_options = ["简体中文", "English"]
-	_language_option = _add_settings_option_row(settings_controls, "语言 / Language", language_options)
+	_language_option = _add_settings_option_row(settings_controls, tr("menu.language"), language_options)
 	_language_option.name = "LanguageOption"
 	_language_option.item_selected.connect(_on_language_selected)
-	_ui_scale_option = _add_settings_option_row(settings_controls, "界面大小", ["小 · 90%", "标准 · 100%", "大 · 125%", "特大 · 150%", "超大 · 175%"])
+	_ui_scale_option = _add_settings_option_row(settings_controls, tr("menu.ui_scale"), ["Small · 90%", "Standard · 100%", "Large · 125%", "Extra large · 150%", "Maximum · 175%"])
 	_ui_scale_option.name = "UIScaleOption"
 	_ui_scale_option.item_selected.connect(_on_ui_scale_selected)
-	_navigation_detail_option = _add_settings_option_row(settings_controls, "航行信息", ["简洁", "详细"])
+	_navigation_detail_option = _add_settings_option_row(settings_controls, tr("menu.navigation_detail"), ["Compact", "Detailed"])
 	_navigation_detail_option.name = "NavigationDetailOption"
 	_navigation_detail_option.item_selected.connect(_on_navigation_detail_selected)
-	_add_button(settings_controls, "图形设置…", "GraphicsSettingsButton", _show_graphics_page)
-	_add_volume_slider(settings_controls, "天气音效", "weather", 68.0)
-	_add_volume_slider(settings_controls, "海浪与船体音效", "ocean", 72.0)
-	_add_volume_slider(settings_controls, "发动机音量", "engine", 62.0)
-	_add_button(_settings_page, "返回", "BackButton", _show_main_page)
+	_graphics_settings_button = _add_button(settings_controls, tr("menu.graphics"), "GraphicsSettingsButton", _show_graphics_page)
+	_add_volume_slider(settings_controls, tr("menu.weather_audio"), "weather", 68.0)
+	_add_volume_slider(settings_controls, tr("menu.ocean_audio"), "ocean", 72.0)
+	_add_volume_slider(settings_controls, tr("menu.engine_audio"), "engine", 62.0)
+	_back_button = _add_button(_settings_page, tr("menu.back"), "BackButton", _show_main_page)
 
 	_graphics_page = GRAPHICS_SETTINGS_PAGE_SCRIPT.new() as VBoxContainer
 	_graphics_page.visible = false
 	pages.add_child(_graphics_page)
 	_graphics_page.call("setup", _quality_manager)
 	_graphics_page.connect("back_requested", _return_from_graphics_page)
+	_refresh_localized_text()
+
+
+func _on_locale_changed(_locale_id: String) -> void:
+	_refresh_localized_text()
+	_sync_interface_settings()
+	if _graphics_page != null and _graphics_page.has_method("refresh_localized_text"):
+		_graphics_page.call("refresh_localized_text")
+	_update_panel_layout()
+
+
+func _refresh_localized_text() -> void:
+	if _menu_title != null:
+		_menu_title.text = tr("menu.game_title")
+	if _menu_subtitle != null:
+		_menu_subtitle.text = tr("menu.game_subtitle")
+	if _settings_title != null:
+		_settings_title.text = tr("menu.settings")
+	if _music_toggle != null:
+		_music_toggle.text = tr("menu.music")
+	if _playlist_hint != null:
+		_playlist_hint.text = tr("menu.music_hint")
+	if _main_page != null:
+		(_main_page.get_node("ContinueButton") as Button).text = tr("menu.continue")
+		(_main_page.get_node("SettingsButton") as Button).text = tr("menu.settings")
+		(_main_page.get_node("ExitButton") as Button).text = tr("menu.quit")
+	if _settings_page != null:
+		var language_label := _language_option.get_parent().get_child(0) as Label if _language_option != null else null
+		if language_label != null:
+			language_label.text = tr("menu.language")
+		var scale_label := _ui_scale_option.get_parent().get_child(0) as Label if _ui_scale_option != null else null
+		if scale_label != null:
+			scale_label.text = tr("menu.ui_scale")
+		var detail_label := _navigation_detail_option.get_parent().get_child(0) as Label if _navigation_detail_option != null else null
+		if detail_label != null:
+			detail_label.text = tr("menu.navigation_detail")
+		if _ui_scale_option != null:
+			var scales := ["menu.scale.small", "menu.scale.standard", "menu.scale.large", "menu.scale.extra_large", "menu.scale.maximum"]
+			for index in range(mini(scales.size(), _ui_scale_option.item_count)):
+				_ui_scale_option.set_item_text(index, tr(scales[index]))
+		if _navigation_detail_option != null:
+			_navigation_detail_option.set_item_text(0, tr("menu.detail.compact"))
+			_navigation_detail_option.set_item_text(1, tr("menu.detail.detailed"))
+		if _graphics_settings_button != null:
+			_graphics_settings_button.text = tr("menu.graphics")
+		if _back_button != null:
+			_back_button.text = tr("menu.back")
+		for channel in ["weather", "ocean", "engine"]:
+			var key := "menu.weather_audio" if channel == "weather" else "menu.ocean_audio" if channel == "ocean" else "menu.engine_audio"
+			var label := get_node_or_null("GameMenuRoot/GameMenuPanel/SettingsPage/SettingsScroll/SettingsControls/%sVolumeControl/LabelRow" % channel.capitalize())
+			if label != null and label.get_child_count() > 0:
+				(label.get_child(0) as Label).text = tr(key)
+	if _graphics_page != null and _graphics_page.has_method("refresh_localized_text"):
+		_graphics_page.call("refresh_localized_text")
 
 
 func _add_page_spacer(parent: VBoxContainer) -> void:

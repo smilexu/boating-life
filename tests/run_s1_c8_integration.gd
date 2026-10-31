@@ -11,6 +11,12 @@ func _initialize() -> void:
 
 
 func _run() -> void:
+	var localization_manager := root.get_node_or_null("LocalizationManager")
+	var previous_locale := str(localization_manager.get("current_locale_id")) if localization_manager != null else TranslationServer.get_locale()
+	if localization_manager != null and localization_manager.has_method("set_locale_id"):
+		localization_manager.call("set_locale_id", "zh_CN")
+	else:
+		TranslationServer.set_locale("zh_CN")
 	var main_scene := load("res://scenes/main.tscn") as PackedScene
 	_check(main_scene != null, "Main PackedScene loads")
 	if main_scene == null:
@@ -33,6 +39,22 @@ func _run() -> void:
 	var sailboat_name_label := sailboat_card.find_child("VesselNameLabel", true, false) as Label if sailboat_card != null else null
 	var sailboat_type_label := sailboat_card.find_child("VesselTypeLabel", true, false) as Label if sailboat_card != null else null
 	var sailboat_details_label := sailboat_card.find_child("VesselDetailsLabel", true, false) as Label if sailboat_card != null else null
+	var activities_button := vessel_hud.find_child("ActivitiesButton", true, false) as Button if vessel_hud != null else null
+	var activities_menu := vessel_hud.find_child("ActivitiesMenu", true, false) as Control if vessel_hud != null else null
+	var trolling_panel := vessel_hud.find_child("FishingPlayerPanel", true, false) as FishingPlayerPanel if vessel_hud != null else null
+	var fish_finder := vessel_hud.find_child("FishFinderDisplay", true, false) as FishFinderDisplay if vessel_hud != null else null
+	var fish_map := main.find_child("FishResourceMap", true, false) as FishResourceMap
+	var fish_map_instances := main.find_children("FishResourceMap", "CanvasLayer", true, false)
+	var sea_chart := main.get_node_or_null("DepthChartHUD") as CanvasLayer
+	var sea_chart_view := sea_chart.find_child("Chart", true, false) as DepthChartView if sea_chart != null else null
+	var depth_map_canvas := fish_map.find_child("DepthQualityMap", true, false) as DepthQualityMapCanvas if fish_map != null else null
+	var resource_map_canvas := fish_map.find_child("ResourceDistributionMap", true, false) as FishResourceMapCanvas if fish_map != null else null
+	var weather_runtime_diagnostics := main.get_node_or_null("WeatherRuntimeDiagnostics") as CanvasLayer
+	var environment_summary := vessel_hud.find_child("EnvironmentSummaryPanel", true, false) as Control if vessel_hud != null else null
+	var navigation_core_panel := vessel_hud.find_child("NavigationCorePanel", true, false) as Control if vessel_hud != null else null
+	var navigation_core_status := vessel_hud.find_child("NavigationCoreStatus", true, false) as Label if vessel_hud != null else null
+	var weather_runtime_readout := vessel_hud.find_child("WeatherRuntimeReadout", true, false) as Label if vessel_hud != null else null
+	var developer_panel := vessel_hud.find_child("DebugPanel", true, false) as Control if vessel_hud != null else null
 	_check(controller != null, "Main retains its BoatController navigation facade")
 	_check(sailboat != null, "Main has the reusable SailingBoat8m body")
 	_check(vessel_picker != null, "Main HUD has a separate vessel picker outside F3")
@@ -40,8 +62,132 @@ func _run() -> void:
 	_check(sailboat_card != null and motorboat_card != null, "Vessel picker lists both current vessel models")
 	_check(sailboat_preview != null and motorboat_preview != null, "Each vessel card has an isolated 3D preview viewport")
 	_check(sailboat_name_label != null and sailboat_name_label.text == "Nordic 28", "Picker shows the Nordic 28 vessel name")
-	_check(sailboat_type_label != null and sailboat_type_label.text.contains("休闲巡航帆船"), "Picker classifies Nordic 28 as a leisure cruising sailboat")
-	_check(sailboat_details_label != null and sailboat_details_label.text.contains("主帆") and sailboat_details_label.text.contains("前帆") and sailboat_details_label.text.contains("AUTO"), "Picker describes the implemented sailboat equipment and controls")
+	_check(sailboat_type_label != null and sailboat_type_label.text.contains("近海休闲帆船"), "Picker classifies Nordic 28 as a coastal cruising sailboat")
+	_check(sailboat_details_label != null and sailboat_details_label.text.contains("主帆") and sailboat_details_label.text.contains("前帆") and sailboat_details_label.text.contains("自动操帆"), "Picker describes the implemented sailboat equipment and controls")
+	_check(activities_button != null and activities_menu != null and not activities_menu.visible, "Activities entry is visible while its menu starts closed")
+	_check(trolling_panel != null and not trolling_panel.visible and fish_finder != null and not fish_finder.visible, "Trolling and Fish Finder remain hidden until opened")
+	_check(fish_map != null and fish_map.get_display_mode() == "mini" and sea_chart != null and sea_chart.visible, "The local Sea Chart starts in the lower-left corner")
+	_check(sea_chart_view != null and sea_chart_view.visible and resource_map_canvas != null and not resource_map_canvas.visible and depth_map_canvas != null and not depth_map_canvas.visible, "Mini mode shows the local chart and keeps both full-map canvases hidden")
+	var sea_chart_stats := sea_chart_view.get_chart_build_statistics() if sea_chart_view != null else {}
+	_check(sea_chart_view != null and int(sea_chart_stats.get("pixels_total", 0)) == 128 * 92 and int(sea_chart_stats.get("pixels_per_frame_budget", 0)) == 256, "Sea Chart bathymetry sampling uses a bounded per-frame budget")
+	_check(InputMap.has_action("map_toggle") and InputMap.action_get_events("map_toggle").size() == 1, "M is assigned to the chart toggle action")
+	_check(sea_chart != null and fish_map_instances.size() == 1, "Main scene instantiates one compact Sea Chart and one full-map tool")
+	_check(weather_runtime_diagnostics != null and not weather_runtime_diagnostics.visible, "Weather runtime diagnostics stay out of normal HUD while remaining available as a debug node")
+	_check(weather_runtime_readout != null and developer_panel != null and not developer_panel.visible, "Detailed weather runtime data is placed inside the closed F3 panel")
+	if weather_runtime_readout != null and developer_panel != null:
+		developer_panel.visible = true
+		vessel_hud.call("_update_debug_status")
+		_check(weather_runtime_readout.text.contains("Weather runtime") and weather_runtime_readout.text.contains("Timeline wind") and weather_runtime_readout.text.contains("effective wind"), "F3 retains the weather source, quality, timeline and effective wind diagnostics")
+		developer_panel.visible = false
+	_check(environment_summary != null and environment_summary.size.y <= 115.0, "Environment summary uses a compact content-sized height")
+	var fps_display := environment_summary.find_child("FPSDisplay", true, false) as Label if environment_summary != null else null
+	_check(fps_display != null and fps_display.visible and fps_display.text.begins_with("FPS:"), "Environment summary shows a live FPS readout")
+	_check(navigation_core_panel != null and navigation_core_status != null and navigation_core_status.visible and navigation_core_status.text.contains("油门输入"), "Powerboat compact instrument shows the real driving mode and throttle input")
+	_check(navigation_core_panel != null and navigation_core_panel.size.y <= 130.0, "Powerboat compact instrument stays within the compact height target")
+	var map_panel := fish_map.find_child("MapPanel", true, false) as Control if fish_map != null else null
+	_check(map_panel != null, "The single production chart exposes its actual display panel")
+	var original_window_size := root.size
+	for test_size in [Vector2i(1280, 720), Vector2i(1600, 900), Vector2i(1920, 1080), Vector2i(1280, 1024)]:
+		root.size = test_size
+		await process_frame
+		if vessel_hud != null:
+			vessel_hud.call("_update_hud_layout")
+		var viewport_rect := Rect2(Vector2.ZERO, get_root().get_visible_rect().size)
+		var environment_rect := environment_summary.get_global_rect() if environment_summary != null else Rect2()
+		var navigation_rect := navigation_core_panel.get_global_rect() if navigation_core_panel != null else Rect2()
+		_check(environment_summary != null and viewport_rect.encloses(environment_rect), "Environment summary remains inside the viewport at %s" % test_size)
+		_check(navigation_core_panel != null and viewport_rect.encloses(navigation_rect), "Navigation instrument remains inside the viewport at %s" % test_size)
+	root.size = original_window_size
+	await process_frame
+	if vessel_hud != null:
+		vessel_hud.call("_update_hud_layout")
+	if activities_button != null and activities_menu != null and trolling_panel != null:
+		activities_button.pressed.emit()
+		var open_trolling := activities_menu.find_child("OpenTrollingActivity", true, false) as Button
+		if open_trolling != null:
+			open_trolling.pressed.emit()
+		await process_frame
+		_check(trolling_panel.visible and not trolling_panel.is_trolling_active(), "Opening trolling configuration does not start trolling")
+		var trolling_speed_label := trolling_panel.find_child("TrollingSpeedSuitability", true, false) as Label
+		_check(trolling_speed_label != null and trolling_speed_label.text.begins_with("船速：") and trolling_speed_label.text.contains("节"), "Trolling configuration reports speed suitability using P2's speed rules")
+		var close_trolling := trolling_panel.find_child("ConfigurationCloseButton", true, false) as Button
+		if close_trolling != null:
+			close_trolling.pressed.emit()
+		await process_frame
+		_check(not trolling_panel.visible and not trolling_panel.is_trolling_active(), "Cancelling trolling configuration closes it without changing activity state")
+		activities_button.pressed.emit()
+		open_trolling = activities_menu.find_child("OpenTrollingActivity", true, false) as Button
+		if open_trolling != null:
+			open_trolling.pressed.emit()
+		var trolling_action := trolling_panel.find_child("TrollingActionButton", true, false) as Button
+		var collapse_activity := trolling_panel.find_child("ActivityCollapseButton", true, false) as Button
+		if trolling_action != null:
+			trolling_action.pressed.emit()
+		await process_frame
+		_check(trolling_panel.visible and trolling_panel.is_trolling_active(), "Starting trolling opens the status panel from the authoritative activity state")
+		if collapse_activity != null:
+			collapse_activity.pressed.emit()
+		_check(trolling_panel.visible and trolling_panel.is_trolling_active(), "Collapsing the activity panel does not stop trolling")
+		if trolling_action != null:
+			trolling_action.pressed.emit()
+		await process_frame
+		_check(not trolling_panel.visible and not trolling_panel.is_trolling_active(), "Stopping trolling clears the in-progress activity panel")
+		activities_button.pressed.emit()
+		open_trolling = activities_menu.find_child("OpenTrollingActivity", true, false) as Button
+		if open_trolling != null:
+			open_trolling.pressed.emit()
+		var game_menu := main.get_node_or_null("GameMenu")
+		var language_option := game_menu.find_child("LanguageOption", true, false) as OptionButton if game_menu != null else null
+		var lure_option := trolling_panel.find_child("LureSelector", true, false) as OptionButton
+		if game_menu != null:
+			game_menu.call("_open_menu")
+			game_menu.call("_show_settings_page")
+		_check(language_option != null and language_option.item_count == 2, "Settings exposes both supported interface languages")
+		if language_option != null:
+			language_option.select(1)
+			language_option.item_selected.emit(1)
+			await process_frame
+			var english_lure_found := false
+			if lure_option != null:
+				for item_index in range(lure_option.item_count):
+					english_lure_found = english_lure_found or lure_option.get_item_text(item_index).contains("Surface lure")
+			_check(activities_button.text == "Activities" and english_lure_found, "Choosing English immediately translates the HUD and open trolling setup")
+			var saved_locale := ConfigFile.new()
+			var english_locale_persisted := saved_locale.load("user://localization_settings.cfg") == OK and str(saved_locale.get_value("localization", "locale", "")) == "en"
+			_check(english_locale_persisted, "Choosing English persists the language for the next launch")
+			language_option.select(0)
+			language_option.item_selected.emit(0)
+			await process_frame
+			var chinese_lure_found := false
+			if lure_option != null:
+				for item_index in range(lure_option.item_count):
+					chinese_lure_found = chinese_lure_found or lure_option.get_item_text(item_index).contains("表层拟饵")
+			_check(activities_button.text == "活动" and chinese_lure_found, "Choosing Simplified Chinese immediately translates the HUD and open trolling setup")
+		if game_menu != null:
+			game_menu.call("_close_menu")
+		var close_trolling_after_locale := trolling_panel.find_child("ConfigurationCloseButton", true, false) as Button
+		if close_trolling_after_locale != null:
+			close_trolling_after_locale.pressed.emit()
+		await process_frame
+	if activities_button != null and activities_menu != null and fish_finder != null and fish_map != null:
+		activities_button.pressed.emit()
+		var open_finder := activities_menu.find_child("OpenFishFinderTool", true, false) as Button
+		if open_finder != null:
+			open_finder.pressed.emit()
+		await process_frame
+		_check(fish_finder.visible and fish_map.get_display_mode() == "hidden", "Opening Fish Finder temporarily hides the compact chart")
+		var finder_title := fish_finder.find_child("FishFinderTitle", true, false) as Label
+		var sea_chart_title := sea_chart.find_child("SeaChartTitle", true, false) as Label if sea_chart != null else null
+		if localization_manager != null and localization_manager.has_method("set_locale_id"):
+			localization_manager.call("set_locale_id", "en")
+			await process_frame
+			_check(finder_title != null and finder_title.text.begins_with("Fish Finder") and sea_chart_title != null and sea_chart_title.text == "SEA CHART · ØRESUND", "Open Fish Finder and the compact Sea Chart refresh in English at runtime")
+			localization_manager.call("set_locale_id", "zh_CN")
+			await process_frame
+			_check(finder_title != null and finder_title.text.begins_with("鱼探仪") and sea_chart_title != null and sea_chart_title.text == "海图 · 厄勒海峡", "Open Fish Finder and the compact Sea Chart refresh in Chinese at runtime")
+		fish_finder.close_display()
+		await process_frame
+		_check(not fish_finder.visible and fish_map.get_display_mode() == "mini", "Closing Fish Finder restores the compact chart")
 	if controller == null or sailboat == null:
 		quit(1)
 		return
@@ -121,8 +267,15 @@ func _run() -> void:
 	_check(sailboat.get_node_or_null(wave_path) == main.get_node("WaveSampler"), "Sailboat reads Main WaveSampler")
 	_check(str(main.get_node("WindField").call("get_debug_override_state")) == "formal", "Main WindField remains on formal weather with no test override")
 	var sailing_panel := vessel_hud.find_child("SailingControlsPanel", true, false) as Control if vessel_hud != null else null
-	var depth_chart_panel := main.find_child("DepthChartPanel", true, false) as Control
-	_check(sailing_panel != null and sailing_panel.visible, "the combined sailing navigation and controls panel appears for the sailboat")
+	var compact_navigation_panel := vessel_hud.find_child("NavigationCorePanel", true, false) as Control if vessel_hud != null else null
+	var depth_chart_panel := fish_map.find_child("MapPanel", true, false) as Control if fish_map != null else null
+	_check(compact_navigation_panel != null and compact_navigation_panel.visible and sailing_panel != null and not sailing_panel.visible, "the sailboat starts with compact navigation information and hides expanded controls")
+	var navigation_details_button := vessel_hud.find_child("NavigationInstrumentExpandButton", true, false) as Button if vessel_hud != null else null
+	if navigation_details_button != null:
+		navigation_details_button.pressed.emit()
+		await process_frame
+	_check(sailing_panel != null and sailing_panel.visible, "the expanded sailboat instrument and controls open on demand")
+	_check(compact_navigation_panel != null and compact_navigation_panel.size.y >= 140.0, "Sailing compact navigation retains enough height for wind, sail and autopilot state")
 	var engine_snapshot: Dictionary = sailboat.call("get_auxiliary_engine_snapshot")
 	_check(bool(engine_snapshot.get("available", false)), "Nordic 28 exposes its configured auxiliary diesel and fuel tank")
 	_check(str(engine_snapshot.get("state_name", "")) == "关闭" and is_equal_approx(float(engine_snapshot.get("tank", {}).get("remaining_l", 0.0)), 40.0), "auxiliary diesel starts off with the vessel's 40 L tank full")
@@ -147,9 +300,21 @@ func _run() -> void:
 	var detail_label := vessel_hud.find_child("SailingDetails", true, false) as Label if vessel_hud != null else null
 	var hint_label := vessel_hud.find_child("SailingControlHints", true, false) as Label if vessel_hud != null else null
 	_check(speed_label != null and speed_label.text.begins_with("航速 "), "the sailing panel emphasizes speed with a plain-language label")
-	_check(heading_label != null and heading_label.text.begins_with("船首航向 "), "the sailing panel explains heading in Chinese")
-	_check(true_wind_label != null and true_wind_label.text.contains("风从"), "true wind direction is explicitly described as wind-from")
-	_check(hint_label != null and hint_label.text.contains("A/D") and hint_label.text.contains("Z/X") and hint_label.text.contains("J/L"), "displayed sail/rudder prompts are read from actual InputMap actions")
+	_check(heading_label != null and heading_label.text.begins_with("航向 "), "the sailing panel displays heading in Chinese")
+	_check(true_wind_label != null and true_wind_label.text.contains("来向"), "true wind direction is explicitly described as wind-from")
+	var expected_sail_hints := [
+		FORMAT.action_key_hint("boat_turn_left"),
+		FORMAT.action_key_hint("boat_turn_right"),
+		FORMAT.action_key_hint("sailboat_main_trim_ease"),
+		FORMAT.action_key_hint("sailboat_main_trim_out"),
+		FORMAT.action_key_hint("sailboat_headsail_trim_ease"),
+		FORMAT.action_key_hint("sailboat_headsail_trim_out"),
+	]
+	var prompts_match_bindings := hint_label != null
+	if hint_label != null:
+		for expected_hint in expected_sail_hints:
+			prompts_match_bindings = prompts_match_bindings and hint_label.text.contains(str(expected_hint))
+	_check(prompts_match_bindings, "displayed sail/rudder prompts are read from actual InputMap actions")
 	_check(quality_manager != null, "Main has the shared graphics and interface settings manager")
 	if quality_manager != null:
 		var old_ui_scale := quality_manager.get_ui_scale_index()
@@ -161,7 +326,7 @@ func _run() -> void:
 		quality_manager.set_navigation_detail_enabled(true, false)
 		if vessel_hud != null:
 			vessel_hud.call("_update_sailing_panel")
-		_check(detail_label != null and detail_label.visible and detail_label.text.contains("TWS/TWA"), "detailed navigation mode adds SOG/COG, true/apparent wind, sail and rudder details")
+		_check(detail_label != null and detail_label.visible and detail_label.text.contains("真风") and detail_label.text.contains("视风"), "detailed navigation mode adds SOG/COG, true/apparent wind, sail and rudder details")
 		quality_manager.set_navigation_detail_enabled(false, false)
 		if vessel_hud != null:
 			vessel_hud.call("_update_sailing_panel")
@@ -241,6 +406,10 @@ func _run() -> void:
 	_check(main.find_children("SailingBoat8m", "RigidBody3D", true, false).size() == 1, "Repeated switching does not instantiate duplicate sailboat bodies")
 	_check(main.find_children("WindField", "Node", true, false).size() == 1, "Repeated switching keeps one shared WindField")
 	_check(main.find_children("WaveSampler", "Node", true, false).size() == 1, "Repeated switching keeps one shared WaveSampler scene node")
+	if localization_manager != null and localization_manager.has_method("set_locale_id"):
+		localization_manager.call("set_locale_id", previous_locale)
+	else:
+		TranslationServer.set_locale(previous_locale)
 	print("S1-C8 integration checks: %d failed" % _failures.size())
 	for failure in _failures:
 		push_error(failure)

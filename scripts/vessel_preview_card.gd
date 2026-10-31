@@ -18,6 +18,11 @@ var _preview_root: Node3D
 var _select_button: Button
 var _preview_notice: Label
 var _preview_enabled := false
+var _vessel_name_key := ""
+var _vessel_type_key := ""
+var _details_key := ""
+var _details_values: Array = []
+var _current := false
 
 
 func _ready() -> void:
@@ -29,21 +34,28 @@ func _ready() -> void:
 
 func configure(
 	sailing: bool,
-	vessel_name: String,
-	vessel_type: String,
-	details: String,
+	vessel_name_key: String,
+	vessel_type_key: String,
+	details_key: String,
+	details_values: Array,
 	source_root: Node3D
 ) -> void:
 	_is_sailing = sailing
+	_vessel_name_key = vessel_name_key
+	_vessel_type_key = vessel_type_key
+	_details_key = details_key
+	_details_values = details_values.duplicate()
 	_source_root = source_root
 	custom_minimum_size = Vector2(370.0, 440.0)
 	size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_build_card(vessel_name, vessel_type, details)
+	_build_card()
 	_refresh_preview()
+	refresh_localized_text()
 	set_current(false)
 
 
 func set_current(current: bool) -> void:
+	_current = current
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.055, 0.12, 0.15, 0.96) if current else Color(0.075, 0.15, 0.18, 0.96)
 	style.border_color = Color(0.44, 0.76, 0.69, 0.95) if current else Color(0.25, 0.39, 0.42, 0.9)
@@ -56,7 +68,25 @@ func set_current(current: bool) -> void:
 	add_theme_stylebox_override("panel", style)
 	if _select_button != null:
 		_select_button.disabled = current
-		_select_button.text = "当前驾驶中" if current else "选择这艘船"
+		_select_button.text = tr("vessel.picker.current") if current else tr("vessel.picker.select")
+
+
+func refresh_localized_text() -> void:
+	if not is_node_ready() and get_child_count() == 0:
+		return
+	var type_label := get_node_or_null("CardLayout/VesselTypeLabel") as Label
+	var name_label := get_node_or_null("CardLayout/VesselNameLabel") as Label
+	var detail_label := get_node_or_null("CardLayout/VesselDetailsLabel") as Label
+	if type_label != null:
+		type_label.text = tr(_vessel_type_key)
+	if name_label != null:
+		name_label.text = tr(_vessel_name_key)
+	if detail_label != null:
+		detail_label.text = tr(_details_key) % _details_values if not _details_values.is_empty() else tr(_details_key)
+	if _preview_notice != null:
+		_preview_notice.text = tr("vessel.picker.preview_unavailable")
+	if _select_button != null:
+		_select_button.text = tr("vessel.picker.current") if _current else tr("vessel.picker.select")
 
 
 func is_sailing_vessel() -> bool:
@@ -78,7 +108,7 @@ func _process(delta: float) -> void:
 		_preview_root.rotate_y(delta * 0.22)
 
 
-func _build_card(vessel_name: String, vessel_type: String, details: String) -> void:
+func _build_card() -> void:
 	var layout := VBoxContainer.new()
 	layout.name = "CardLayout"
 	layout.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -118,7 +148,7 @@ func _build_card(vessel_name: String, vessel_type: String, details: String) -> v
 	_build_preview_world()
 
 	_preview_notice = Label.new()
-	_preview_notice.text = "模型预览不可用"
+	_preview_notice.text = tr("vessel.picker.preview_unavailable")
 	_preview_notice.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_preview_notice.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_preview_notice.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -128,19 +158,19 @@ func _build_card(vessel_name: String, vessel_type: String, details: String) -> v
 
 	var type_label := Label.new()
 	type_label.name = "VesselTypeLabel"
-	type_label.text = vessel_type
+	type_label.text = tr(_vessel_type_key)
 	type_label.add_theme_font_size_override("font_size", 13)
 	type_label.add_theme_color_override("font_color", Color(0.52, 0.79, 0.75))
 	layout.add_child(type_label)
 	var name_label := Label.new()
 	name_label.name = "VesselNameLabel"
-	name_label.text = vessel_name
+	name_label.text = tr(_vessel_name_key)
 	name_label.add_theme_font_size_override("font_size", 20)
 	name_label.add_theme_color_override("font_color", Color(0.95, 0.97, 0.94))
 	layout.add_child(name_label)
 	var detail_label := Label.new()
 	detail_label.name = "VesselDetailsLabel"
-	detail_label.text = details
+	detail_label.text = tr(_details_key) % _details_values if not _details_values.is_empty() else tr(_details_key)
 	detail_label.custom_minimum_size.y = 84.0
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	detail_label.add_theme_font_size_override("font_size", 14)

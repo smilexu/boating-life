@@ -31,7 +31,7 @@ EMODnet DTM + OSM land mask + GeoReference
        serializable school snapshots
           ┌────┴─────────────┐
           ▼                  ▼
- FishSchoolRenderer     FishResourceMap (F4)
+ FishSchoolRenderer     FishResourceMap (M)
  MultiMesh + local      client-only UI and map
  swimming animation
 ```
@@ -40,7 +40,7 @@ EMODnet DTM + OSM land mask + GeoReference
 
 Initial resource generation took 484.6 ms in the headless logic test. The later 8-second school update advances up to 96 schools per frame; the tested batch completed over 19 frames, with a measured worst budgeted frame of 1.71 ms. Snapshots have schema and layout versions and support serialization/restoration. No network transport or persistent save file is implemented.
 
-The map uses the project GeoReference (WGS84 local ENU: X east, Z south), EMODnet DTM 2024/LAT depth raster, existing OSM land mask and existing shoreline/contour features. Its predicted fish markers come exclusively from `FishResourceManager`. There was no pre-existing F4 menu in the inspected main scene, so this task adds the F4 overlay; the existing M geographic debug controls are untouched.
+The map uses the project GeoReference (WGS84 local ENU: X east, Z south), EMODnet DTM 2024/LAT depth raster, existing OSM land mask and existing shoreline/contour features. Its predicted fish markers come exclusively from `FishResourceManager`. The default lower-left instrument is the separate local Sea Chart (`DepthChartHUD`), showing nearby bathymetry, coastline/contours, boat heading and depth. Press M to open the full-region resource/habitat map. Its optional depth-quality layer is a separate tab, not the Sea Chart. The geographic debug overlay is on Shift+M.
 
 ## Habitat and movement rules
 
@@ -54,9 +54,9 @@ These ranges and spawn weights are game suitability tuning, not fish survey data
 
 The authority migrates resource-school anchors slowly and deterministically, validating each target against the same bathymetry before moving. The renderer keeps individual offsets, steering and behavior state local to the client. It updates movement at 0.16 s intervals; the GLB meshes themselves have no skeleton, so a low-cost vertex shader bends the rear body and tail using each fish's stable phase, speed variation and body-wave amplitude. Fish are drawn in three species MultiMesh batches, with no per-fish scene node or shadow casting. A shared wave-height sample is used per school and DTM validity/depth is cached in 4 m world cells for nearby individuals.
 
-## F4 map and controls
+## M chart and controls
 
-- Press **F4** to open or close the resource map; **Esc** and the close button also close it.
+- Press **M** to open or collapse the full-region resource chart; **Esc** and the close button also collapse it. Returning to mini mode restores the local Sea Chart.
 - Toggle Needlefish, Herring and Three-spined stickleback separately.
 - Click or hover a marker to read species, habitat description, predicted depth, population band and simulated population.
 - The map labels its entire data layer as a **predicted habitat/resource map**, not detected fish or survey observations. There is no exploration/sonar state yet.
@@ -67,7 +67,7 @@ The first map raster build took 75.3 ms of measured slice CPU work over 12,672 p
 
 ## Verification and performance
 
-`godot --headless --path . --script res://tests/test_fish_resources.gd` completed with `failures=0`. It verified deterministic generation/snapshot restore, supported layout version checks, valid water/land filtering and depth suitability, species filters, GLB import/render resources, F4 open/close and map-manager data source, incremental raster completion, three MultiMesh batches, and client fish positions between sampled surface and seabed.
+`godot --headless --path . --script res://tests/test_fish_resources.gd` completed with `failures=0`. It verified deterministic generation/snapshot restore, supported layout version checks, valid water/land filtering and depth suitability, species filters, GLB import/render resources, M open/collapse and map-manager data source, incremental raster completion, three MultiMesh batches, and client fish positions between sampled surface and seabed.
 
 The graphical A/B benchmark used Godot 4.7.2 Forward+/Metal on the plugged-in M2 Pro at 1920×1080. It selected the densest actual resource cluster in a 1,200 m radius: school anchor `herring_v2_1_29`, 12 schools and 550 logical fish at chart depth 23.32 m. Each condition used a 1 s warm-up and three 3 s measurement repeats. The table shows the mean of repeat averages; p95/p99 are the mean of each repeat's percentile; worst is the maximum across repeats.
 
@@ -84,9 +84,9 @@ The FPS difference from renderer-off to renderer-on is small in this run but not
 
 ## Screenshots
 
-F4 predicted-resource map:
+M predicted-resource chart:
 
-![F4 fish resource map](f4_resource_map.png)
+![M fish resource map](f4_resource_map.png)
 
 Nearby school at the regular third-person camera framing (two moments):
 
@@ -122,4 +122,4 @@ The close diagnostic camera is intentionally zoomed in; it is not a normal saili
 - `tests/test_fish_resources.gd`, `tools/capture_fish_resources.gd`, `tools/benchmark_fish_resources.gd`
 - `docs/fish_resources/performance.txt` and the screenshots above
 
-Future server migration is limited to providing a server-backed `FishAuthorityAdapter` that supplies versioned school snapshots and validates population-change requests. The renderer and F4 map can keep their current APIs. Do not synchronize per-fish vertices or tail animation; those remain client-side visuals.
+Future server migration is limited to providing a server-backed `FishAuthorityAdapter` that supplies versioned school snapshots and validates population-change requests. The renderer and M chart can keep their current APIs. Do not synchronize per-fish vertices or tail animation; those remain client-side visuals.

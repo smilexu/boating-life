@@ -36,6 +36,10 @@ var _extra_scale: OptionButton
 var _upscaler: OptionButton
 var _sharpness: HSlider
 var _advanced_info: Label
+var _localized_controls: Dictionary = {}
+var _localized_options: Dictionary = {}
+var _status_key := ""
+var _display_confirmation_seconds := 0
 
 
 func setup(manager: Node) -> void:
@@ -58,6 +62,28 @@ func open_page() -> void:
 		_display_mode.grab_focus()
 
 
+func refresh_localized_text() -> void:
+	for control_variant in _localized_controls.keys():
+		var control := control_variant as Control
+		if is_instance_valid(control):
+			control.set("text", tr(str(_localized_controls[control_variant])))
+	for option_variant in _localized_options.keys():
+		var option := option_variant as OptionButton
+		if not is_instance_valid(option):
+			continue
+		var keys: Array = _localized_options[option_variant]
+		for index in range(mini(option.item_count, keys.size())):
+			option.set_item_text(index, tr(str(keys[index])))
+	if _advanced_button != null:
+		_advanced_button.text = tr("menu.graphics.advanced_open" if _advanced_open else "menu.graphics.advanced_closed")
+	_update_resolution_info()
+	_update_advanced_info()
+	if _status_label != null and not _status_key.is_empty():
+		_status_label.text = tr(_status_key)
+	if _confirmation_label != null and _confirmation_bar.visible:
+		_confirmation_label.text = tr("menu.graphics.confirm_display") % _display_confirmation_seconds
+
+
 func _build_page() -> void:
 	name = "GraphicsSettingsPage"
 	add_theme_constant_override("separation", 8)
@@ -66,13 +92,13 @@ func _build_page() -> void:
 	var header := HBoxContainer.new()
 	add_child(header)
 	var title := Label.new()
-	title.text = "图形设置"
+	_localize_control(title, "menu.graphics")
 	title.add_theme_font_size_override("font_size", 24)
 	title.add_theme_color_override("font_color", Color("#e5efea"))
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 	var back := Button.new()
-	back.text = "返回"
+	_localize_control(back, "menu.back")
 	back.pressed.connect(_cancel_draft)
 	header.add_child(back)
 
@@ -86,39 +112,39 @@ func _build_page() -> void:
 	content.add_theme_constant_override("separation", 8)
 	scroll.add_child(content)
 
-	_add_section_title(content, "显示")
-	_display_mode = _add_option_row(content, "显示模式", _names("get_display_mode_names", ["Windowed", "Borderless Window", "Fullscreen"]))
+	_add_section_title(content, "menu.graphics.display")
+	_display_mode = _add_option_row(content, "menu.graphics.display_mode", ["menu.graphics.windowed", "menu.graphics.borderless", "menu.graphics.fullscreen"])
 	_display_mode.item_selected.connect(_on_display_mode_selected)
 	_vsync = CheckButton.new()
-	_vsync.text = "垂直同步"
+	_localize_control(_vsync, "menu.graphics.vsync")
 	_vsync.toggled.connect(_on_vsync_toggled)
 	content.add_child(_vsync)
-	_frame_limit = _add_option_row(content, "帧率上限", ["30 FPS", "60 FPS", "Unlimited"])
+	_frame_limit = _add_option_row(content, "menu.graphics.frame_limit", ["menu.graphics.fps_30", "menu.graphics.fps_60", "menu.graphics.unlimited"])
 	_frame_limit.item_selected.connect(_on_frame_limit_selected)
 
-	_add_section_title(content, "Render Resolution")
-	_render_resolution = _add_option_row(content, "整体渲染比例", _names("get_render_resolution_names", ["Native — 100%", "High — 85%", "Balanced — 70%", "Performance — 55%", "Ultra Performance — 45%"]))
+	_add_section_title(content, "menu.graphics.render_resolution")
+	_render_resolution = _add_option_row(content, "menu.graphics.overall_scale", ["menu.graphics.resolution.native", "menu.graphics.resolution.high", "menu.graphics.resolution.balanced", "menu.graphics.resolution.performance", "menu.graphics.resolution.ultra_performance"])
 	_render_resolution.item_selected.connect(_on_render_resolution_selected)
 	_resolution_info = _make_info_label()
 	content.add_child(_resolution_info)
 
-	_add_section_title(content, "Graphics Quality")
-	_preset = _add_option_row(content, "画质预设", _names("get_graphics_preset_names", ["Performance", "Balanced", "High", "Ultra", "Custom"]))
+	_add_section_title(content, "menu.graphics.quality")
+	_preset = _add_option_row(content, "menu.graphics.preset", ["menu.graphics.preset.performance", "menu.graphics.preset.balanced", "menu.graphics.preset.high", "menu.graphics.preset.ultra", "menu.graphics.preset.custom"])
 	_preset.item_selected.connect(_on_preset_selected)
-	_shadows = _add_check(content, "方向光阴影", "shadows_enabled")
-	_ssr = _add_check(content, "屏幕空间反射（SSR）", "ssr_enabled")
-	_ssao = _add_check(content, "环境遮蔽（SSAO）", "ssao_enabled")
-	_cloud_quality = _add_option_row(content, "云层质量", _names("get_cloud_quality_names", ["Performance", "Balanced", "High"]))
+	_shadows = _add_check(content, "menu.graphics.directional_shadows", "shadows_enabled")
+	_ssr = _add_check(content, "menu.graphics.ssr", "ssr_enabled")
+	_ssao = _add_check(content, "menu.graphics.ssao", "ssao_enabled")
+	_cloud_quality = _add_option_row(content, "menu.graphics.cloud_quality", ["menu.graphics.preset.performance", "menu.graphics.preset.balanced", "menu.graphics.preset.high"])
 	_cloud_quality.item_selected.connect(_on_cloud_quality_selected)
-	_ocean_quality = _add_option_row(content, "海面网格质量", _names("get_ocean_quality_names", ["Performance", "Balanced", "High"]))
+	_ocean_quality = _add_option_row(content, "menu.graphics.ocean_quality", ["menu.graphics.preset.performance", "menu.graphics.preset.balanced", "menu.graphics.preset.high"])
 	_ocean_quality.item_selected.connect(_on_ocean_quality_selected)
-	_shadow_distance = _add_slider_row(content, "阴影距离", 40.0, 1000.0, 10.0)
+	_shadow_distance = _add_slider_row(content, "menu.graphics.shadow_distance", 40.0, 1000.0, 10.0)
 	_shadow_distance.value_changed.connect(_on_shadow_distance_changed)
-	_vegetation_density = _add_slider_row(content, "植被密度", 0.0, 1.5, 0.05)
+	_vegetation_density = _add_slider_row(content, "menu.graphics.vegetation_density", 0.0, 1.5, 0.05)
 	_vegetation_density.value_changed.connect(_on_vegetation_density_changed)
 
 	_advanced_button = Button.new()
-	_advanced_button.text = "▶ 高级设置"
+	_localize_control(_advanced_button, "menu.graphics.advanced_closed")
 	_advanced_button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_advanced_button.pressed.connect(_toggle_advanced)
 	content.add_child(_advanced_button)
@@ -126,11 +152,11 @@ func _build_page() -> void:
 	_advanced_content.add_theme_constant_override("separation", 8)
 	_advanced_content.visible = false
 	content.add_child(_advanced_content)
-	_extra_scale = _add_option_row(_advanced_content, "Additional 3D Scale", _names("get_extra_3d_scale_names", ["100%", "85%", "75%", "67%", "55%", "50%"]))
+	_extra_scale = _add_option_row(_advanced_content, "menu.graphics.extra_3d_scale", ["menu.graphics.scale.100", "menu.graphics.scale.85", "menu.graphics.scale.75", "menu.graphics.scale.67", "menu.graphics.scale.55", "menu.graphics.scale.50"])
 	_extra_scale.item_selected.connect(_on_extra_scale_selected)
-	_upscaler = _add_option_row(_advanced_content, "3D Upscaling Mode", _names("get_upscaler_names", ["Auto", "FSR2", "FSR1", "Bilinear"]))
+	_upscaler = _add_option_row(_advanced_content, "menu.graphics.upscaling", ["menu.graphics.upscaling.auto", "menu.graphics.upscaling.fsr2", "menu.graphics.upscaling.fsr1", "menu.graphics.upscaling.bilinear"])
 	_upscaler.item_selected.connect(_on_upscaler_selected)
-	_sharpness = _add_slider_row(_advanced_content, "FSR Sharpness", 0.0, 2.0, 0.05)
+	_sharpness = _add_slider_row(_advanced_content, "menu.graphics.sharpness", 0.0, 2.0, 0.05)
 	_sharpness.value_changed.connect(_on_sharpness_changed)
 	_advanced_info = _make_info_label()
 	_advanced_content.add_child(_advanced_info)
@@ -139,16 +165,16 @@ func _build_page() -> void:
 	footer.add_theme_constant_override("separation", 8)
 	add_child(footer)
 	var apply_button := Button.new()
-	apply_button.text = "应用"
+	_localize_control(apply_button, "menu.apply")
 	apply_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	apply_button.pressed.connect(_apply_draft)
 	footer.add_child(apply_button)
 	var defaults_button := Button.new()
-	defaults_button.text = "恢复默认"
+	_localize_control(defaults_button, "menu.graphics.restore_defaults")
 	defaults_button.pressed.connect(_restore_defaults)
 	footer.add_child(defaults_button)
 	var cancel_button := Button.new()
-	cancel_button.text = "取消"
+	_localize_control(cancel_button, "menu.cancel")
 	cancel_button.pressed.connect(_cancel_draft)
 	footer.add_child(cancel_button)
 
@@ -160,11 +186,11 @@ func _build_page() -> void:
 	_confirmation_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_confirmation_bar.add_child(_confirmation_label)
 	var keep_button := Button.new()
-	keep_button.text = "保留"
+	_localize_control(keep_button, "menu.graphics.keep")
 	keep_button.pressed.connect(_keep_display_settings)
 	_confirmation_bar.add_child(keep_button)
 	var revert_button := Button.new()
-	revert_button.text = "恢复"
+	_localize_control(revert_button, "menu.graphics.revert")
 	revert_button.pressed.connect(_revert_display_settings)
 	_confirmation_bar.add_child(revert_button)
 
@@ -172,44 +198,50 @@ func _build_page() -> void:
 	add_child(_status_label)
 
 
-func _add_section_title(parent: VBoxContainer, text_value: String) -> void:
+func _localize_control(control: Control, key: String) -> void:
+	control.set("text", tr(key))
+	_localized_controls[control] = key
+
+
+func _add_section_title(parent: VBoxContainer, key: String) -> void:
 	var label := Label.new()
-	label.text = text_value
+	_localize_control(label, key)
 	label.add_theme_font_size_override("font_size", 17)
 	label.add_theme_color_override("font_color", Color("#91b7b7"))
 	parent.add_child(label)
 
 
-func _add_option_row(parent: VBoxContainer, title_text: String, options: PackedStringArray) -> OptionButton:
+func _add_option_row(parent: VBoxContainer, title_key: String, option_keys: Array[String]) -> OptionButton:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	var title := Label.new()
-	title.text = title_text
+	_localize_control(title, title_key)
 	title.custom_minimum_size.x = 142.0
 	title.add_theme_color_override("font_color", Color("#d8e5e0"))
 	row.add_child(title)
 	var option := OptionButton.new()
 	option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	for item in options:
-		option.add_item(item)
+	for key in option_keys:
+		option.add_item(tr(key))
+	_localized_options[option] = option_keys.duplicate()
 	row.add_child(option)
 	parent.add_child(row)
 	return option
 
 
-func _add_check(parent: VBoxContainer, text_value: String, key: String) -> CheckButton:
+func _add_check(parent: VBoxContainer, text_key: String, setting_key: String) -> CheckButton:
 	var check := CheckButton.new()
-	check.text = text_value
-	check.toggled.connect(_on_visual_toggle.bind(key))
+	_localize_control(check, text_key)
+	check.toggled.connect(_on_visual_toggle.bind(setting_key))
 	parent.add_child(check)
 	return check
 
 
-func _add_slider_row(parent: VBoxContainer, title_text: String, low: float, high: float, step_value: float) -> HSlider:
+func _add_slider_row(parent: VBoxContainer, title_key: String, low: float, high: float, step_value: float) -> HSlider:
 	var group := VBoxContainer.new()
 	group.add_theme_constant_override("separation", 2)
 	var label := Label.new()
-	label.text = title_text
+	_localize_control(label, title_key)
 	label.add_theme_color_override("font_color", Color("#d8e5e0"))
 	group.add_child(label)
 	var slider := HSlider.new()
@@ -244,7 +276,7 @@ func _refresh_from_manager() -> void:
 	_draft = _manager.call("get_graphics_settings")
 	_sync_controls()
 	if _manager.has_method("is_display_confirmation_pending") and bool(_manager.call("is_display_confirmation_pending")):
-		_on_display_confirmation_changed(true, int(_manager.call("get_display_confirmation_seconds_remaining")), "保留这组显示设置？")
+		_on_display_confirmation_changed(true, int(_manager.call("get_display_confirmation_seconds_remaining")), "")
 	else:
 		_on_display_confirmation_changed(false, 0, "")
 
@@ -292,13 +324,13 @@ func _update_resolution_info() -> void:
 	var root_size: Vector2i = preview.get("root_viewport_size", Vector2i.ZERO)
 	var internal_size: Vector2i = preview.get("three_d_internal_size_estimate", Vector2i.ZERO)
 	var render_index := int(_draft.get("render_resolution", 0))
-	_resolution_info.text = "输出区域 %d×%d · 根 Viewport %d×%d · 额外 3D 后约 %d×%d" % [output.x, output.y, root_size.x, root_size.y, internal_size.x, internal_size.y]
+	_resolution_info.text = tr("menu.graphics.resolution_info") % [output.x, output.y, root_size.x, root_size.y, internal_size.x, internal_size.y]
 	if render_index == 0:
-		_resolution_info.text += "\nNative：整体 Viewport 按当前显示区域渲染。"
+		_resolution_info.text += "\n" + tr("menu.graphics.resolution_native_note")
 	else:
-		_resolution_info.text += "\n整体画面（包括 HUD）先以所选 Viewport 尺寸渲染，再铺满输出区域。"
+		_resolution_info.text += "\n" + tr("menu.graphics.resolution_scaled_note")
 		if not _extra_3d_scale_manually_edited and float(_draft.get("extra_3d_scale", 1.0)) >= 0.999:
-			_resolution_info.text += "额外 3D Scale 保持 100%。"
+			_resolution_info.text += tr("menu.graphics.resolution_extra_scale_note")
 
 
 func _update_advanced_info() -> void:
@@ -306,25 +338,25 @@ func _update_advanced_info() -> void:
 		return
 	var scale_value := float(_draft.get("extra_3d_scale", 1.0))
 	var root_scale: float = [1.0, 0.85, 0.70, 0.55, 0.45][clampi(int(_draft.get("render_resolution", 0)), 0, 4)]
-	var text_value := "3D Scale ×%.2f · 自动模式当前为 %s。" % [scale_value, _effective_upscaler_name()]
+	var text_value := tr("menu.graphics.upscaler_status") % [scale_value, _effective_upscaler_name()]
 	var upscaler_index := int(_draft.get("upscaler", 0))
 	if upscaler_index == 0:
 		upscaler_index = 1 if scale_value < 0.999 else 3
 	_sharpness.editable = upscaler_index == 1 or upscaler_index == 2
 	if root_scale < 0.999 and scale_value < 0.999:
-		text_value += "\n注意：整体 Render Resolution 和额外 3D Scale 会连续缩小，随后再放大。"
+		text_value += "\n" + tr("menu.graphics.upscaler_double_scale_note")
 	elif scale_value >= 0.999:
-		text_value += "\n3D Scale 为 100%；选择 FSR2 不会进一步降低渲染尺寸，可能只增加抗锯齿/重建成本。"
+		text_value += "\n" + tr("menu.graphics.upscaler_native_note")
 	var preview: Dictionary = _manager.call("get_render_resolution_preview", int(_draft.get("render_resolution", 0)), scale_value, int(_draft.get("display_mode", 0)))
 	var size: Vector2i = preview.get("three_d_internal_size_estimate", Vector2i.ZERO)
-	_advanced_info.text = text_value + "\n估算 3D 内部尺寸：%d×%d（Sunshine Clouds 工作尺寸依其资源倍率而异）" % [size.x, size.y]
+	_advanced_info.text = text_value + "\n" + (tr("menu.graphics.internal_size_info") % [size.x, size.y])
 
 
 func _effective_upscaler_name() -> String:
 	var index := int(_draft.get("upscaler", 0))
 	if index == 0:
 		index = 1 if float(_draft.get("extra_3d_scale", 1.0)) < 0.999 else 3
-	return ["Auto", "FSR2", "FSR1", "Bilinear"][clampi(index, 0, 3)]
+	return tr(["menu.graphics.upscaling.auto", "menu.graphics.upscaling.fsr2", "menu.graphics.upscaling.fsr1", "menu.graphics.upscaling.bilinear"][clampi(index, 0, 3)])
 
 
 func _on_display_mode_selected(index: int) -> void:
@@ -434,14 +466,15 @@ func _on_sharpness_changed(value: float) -> void:
 func _toggle_advanced() -> void:
 	_advanced_open = not _advanced_open
 	_advanced_content.visible = _advanced_open
-	_advanced_button.text = "▼ 高级设置" if _advanced_open else "▶ 高级设置"
+	_advanced_button.text = tr("menu.graphics.advanced_open" if _advanced_open else "menu.graphics.advanced_closed")
 
 
 func _apply_draft() -> void:
 	if _manager == null:
 		return
 	var result: Dictionary = _manager.call("apply_graphics_settings", _draft)
-	_status_label.text = str(result.get("message", "图形设置已应用。"))
+	_status_key = "menu.graphics.applied"
+	_status_label.text = tr(_status_key)
 	if not bool(result.get("confirmation_required", false)):
 		_refresh_from_manager()
 
@@ -451,7 +484,8 @@ func _restore_defaults() -> void:
 		return
 	_draft = _manager.call("get_default_graphics_settings")
 	_sync_controls()
-	_status_label.text = "默认值已载入草稿；点击应用后生效。"
+	_status_key = "menu.graphics.defaults_loaded"
+	_status_label.text = tr(_status_key)
 
 
 func _cancel_draft() -> void:
@@ -473,11 +507,12 @@ func _revert_display_settings() -> void:
 	_refresh_from_manager()
 
 
-func _on_display_confirmation_changed(active: bool, seconds_remaining: int, message: String) -> void:
+func _on_display_confirmation_changed(active: bool, seconds_remaining: int, _message: String) -> void:
 	if _confirmation_bar == null:
 		return
 	_confirmation_bar.visible = active
-	_confirmation_label.text = "%s %d 秒" % [message, seconds_remaining] if active else message
+	_display_confirmation_seconds = seconds_remaining
+	_confirmation_label.text = (tr("menu.graphics.confirm_display") % seconds_remaining) if active else ""
 
 
 func _on_manager_settings_changed() -> void:

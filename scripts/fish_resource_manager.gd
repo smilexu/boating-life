@@ -84,14 +84,6 @@ func _process(delta: float) -> void:
 			_map_layer.refresh_data()
 
 
-func _unhandled_key_input(event: InputEvent) -> void:
-	if event is not InputEventKey or not event.pressed or event.echo:
-		return
-	if event.physical_keycode == KEY_F4 and _map_layer != null:
-		_map_layer.set_map_open(not _map_layer.is_map_open())
-		get_viewport().set_input_as_handled()
-
-
 func get_species_profiles() -> Array[FishSpeciesProfile]:
 	return species_profiles.duplicate()
 

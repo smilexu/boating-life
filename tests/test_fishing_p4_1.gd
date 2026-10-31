@@ -114,6 +114,8 @@ func _run() -> void:
 	var first_echoes: Array = first_scan.get("echoes", [])
 	var first_school_diagnostics: Array = first_scan.get("school_diagnostics", [])
 	_check(bool(first_scan.get("valid", false)) and first_echoes.size() == 1, "a real-source-shaped school within the downward cone produces one aggregate echo")
+	var expected_query_radius := maxf(float(first_scan.get("maximum_beam_radius_m", -1.0)) + sensor.maximum_school_distribution_radius_m, 16.0)
+	_check(float(first_scan.get("query_radius_m", INF)) < sensor.max_slant_range_m and is_equal_approx(float(first_scan.get("query_radius_m", 0.0)), expected_query_radius), "Authority query uses the maximum downward-beam footprint plus a bounded diagnostic margin, not the full slant-range sphere")
 	_check(not first_school_diagnostics.is_empty() and bool(first_school_diagnostics[0].get("hit", false)) and str(first_school_diagnostics[0].get("rejection_reason", "")) in ["partial_overlap", "school_volume_detected"], "scan diagnostics identify an Authority school volume under the beam")
 	_check(float(first_school_diagnostics[0].get("beam_radius_m", 0.0)) > 0.0 and is_equal_approx(float(first_school_diagnostics[0].get("anchor_horizontal_distance_m", -1.0)), 0.0), "scan diagnostics expose probe-to-anchor distance and depth-specific beam radius")
 	_check(str(first_echoes[0].get("school_id", "")) == "p4_test_school" and int(first_echoes[0].get("group_population", 0)) == 16, "echo uses stable school identity and actual group population")

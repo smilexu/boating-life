@@ -229,12 +229,15 @@ func get_status_snapshot() -> Dictionary:
 	var remaining := maxf(total_distance - route_progress_m, 0.0)
 	var segment_count := _route_world_points.size() - 1 if route != null else 0
 	var target_name := ""
+	var target_waypoint_id := ""
 	if route != null:
 		if current_segment_index < route.waypoints.size():
 			var waypoint := route.waypoints[current_segment_index]
 			target_name = waypoint.display_name if waypoint != null and not waypoint.display_name.is_empty() else str(waypoint.waypoint_id) if waypoint != null else "航路点"
+			target_waypoint_id = str(waypoint.waypoint_id) if waypoint != null else ""
 		else:
 			target_name = route.arrival_display_name
+			target_waypoint_id = str(route.arrival_point_id)
 	var cruise_speed := _get_cruise_speed()
 	var eta_seconds := remaining / maxf(cruise_speed, 0.1) * 1.1 if cruise_speed > 0.0 else -1.0
 	return {
@@ -245,6 +248,7 @@ func get_status_snapshot() -> Dictionary:
 		"origin_port_id": str(route.origin_port_id) if route != null else "",
 		"destination_port_id": str(route.destination_port_id) if route != null else "",
 		"target_waypoint": target_name,
+		"target_waypoint_id": target_waypoint_id,
 		"segment_index": current_segment_index + 1,
 		"segment_count": segment_count,
 		"progress_fraction": clampf(route_progress_m / total_distance, 0.0, 1.0) if total_distance > 0.0 else 0.0,

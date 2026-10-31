@@ -25,6 +25,7 @@ signal scan_completed(result: Dictionary)
 @export_range(0.5, 3.0, 0.05) var maximum_school_vertical_half_thickness_m := 1.5
 
 const MAX_DIAGNOSTIC_SCHOOLS := 16
+const MIN_SCHOOL_DIAGNOSTIC_QUERY_RADIUS_M := 16.0
 const VOLUME_SAMPLE_FRACTIONS := [-1.0, -0.5, 0.0, 0.5, 1.0]
 const VOLUME_SAMPLE_WEIGHTS := [1.0, 4.0, 2.0, 4.0, 1.0]
 const MIN_OVERLAP_FOR_ECHO := 0.0001
@@ -156,8 +157,16 @@ func _perform_scan(scan_runtime_seconds: float) -> Dictionary:
 	if not _manager.has_method("get_schools_near"):
 		result["reason"] = "authority_query_unavailable"
 		return _finish_scan(result)
-	var query_radius := max_slant_range_m + maximum_school_distribution_radius_m
+	# The downward cone is much narrower than the slant-range sphere. Query the
+	# largest possible beam footprint plus the maximum school proxy radius; this
+	# preserves every possible overlap without scanning unrelated nearby schools.
+	var maximum_beam_radius := scan_radius_for_depth(detection_depth_max, beam_half_cone_angle_deg)
+	var query_radius := maxf(
+		maximum_beam_radius + maximum_school_distribution_radius_m,
+		MIN_SCHOOL_DIAGNOSTIC_QUERY_RADIUS_M
+	)
 	result["query_radius_m"] = query_radius
+	result["maximum_beam_radius_m"] = maximum_beam_radius
 	var schools: Array[Dictionary] = _manager.call("get_schools_near", probe_world_position, query_radius)
 	var echoes: Array[Dictionary] = []
 	var school_diagnostics: Array[Dictionary] = []
@@ -200,6 +209,13 @@ func _perform_scan(scan_runtime_seconds: float) -> Dictionary:
 			continue
 		var anchor_horizontal_distance := Vector2(anchor.x - probe_world_position.x, anchor.z - probe_world_position.z).length()
 		diagnostic["anchor_horizontal_distance_m"] = anchor_horizontal_distance
+		var school_radius := _school_horizontal_radius_m(species_id)
+		diagnostic["effective_school_radius_m"] = school_radius
+		if anchor_horizontal_distance > maximum_beam_radius + school_radius:
+			diagnostic["anchor_geometry_reason"] = "outside_beam"
+			diagnostic["rejection_reason"] = "outside_school_volume"
+			_remember_school_diagnostic(school_diagnostics, diagnostic)
+			continue
 		var school_xz := Vector3(anchor.x, 0.0, anchor.z)
 		var school_bathymetry: Dictionary = _bathymetry.call("get_depth_at_world_position", school_xz)
 		if not bool(school_bathymetry.get("valid", false)):
@@ -228,7 +244,6 @@ func _perform_scan(scan_runtime_seconds: float) -> Dictionary:
 		var relative := fish_world_position - probe_world_position
 		var anchor_geometry := diagnose_target_geometry(relative, beam_half_cone_angle_deg, detection_depth_max, max_slant_range_m)
 		var vertical_half_thickness := _school_vertical_half_thickness_m(species_id, activity_depth)
-		var school_radius := _school_horizontal_radius_m(species_id)
 		var surface_depth_below_probe := probe_world_position.y - school_surface
 		var seabed_depth_below_probe := probe_world_position.y - school_seabed_y - seabed_clearance_m
 		var volume := evaluate_school_volume_overlap(

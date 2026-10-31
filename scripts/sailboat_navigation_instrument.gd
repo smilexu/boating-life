@@ -78,7 +78,7 @@ func _draw() -> void:
 		return
 	var width := size.x
 	var label_color := COLOR_TEXT
-	draw_string(font, Vector2(12.0, 24.0), "SAILBOAT NAV · 相对船首", HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 15, label_color)
+	draw_string(font, Vector2(12.0, 24.0), tr("hud.sailing_instrument.title"), HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 15, label_color)
 
 	var heading := float(_snapshot.get("heading_degrees", 0.0))
 	var speed := float(_snapshot.get("sog_mps", 0.0))
@@ -86,9 +86,9 @@ func _draw() -> void:
 	var cog_valid := bool(_snapshot.get("cog_valid", false))
 	var cog := float(_snapshot.get("cog_degrees", 0.0))
 	var cog_delta := float(_snapshot.get("cog_minus_heading_degrees", 0.0)) if cog_valid else 0.0
-	var cog_text := "%03.0f° · %+.0f°" % [cog, cog_delta] if cog_valid else "— · COG 方向不可靠"
-	draw_string(font, Vector2(12.0, 45.0), "HDG %03.0f°    COG %s" % [heading, cog_text], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 13, label_color)
-	draw_string(font, Vector2(12.0, 63.0), "SOG %.2f kn · %.2f m/s    横倾 %+.1f°" % [sog_knots, speed, float(_snapshot.get("heel_degrees", 0.0))], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 12, COLOR_MUTED)
+	var cog_text := "%03.0f° · %+.0f°" % [cog, cog_delta] if cog_valid else tr("hud.sailing_instrument.cog_unreliable")
+	draw_string(font, Vector2(12.0, 45.0), tr("hud.sailing_instrument.heading_format") % [heading, cog_text], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 13, label_color)
+	draw_string(font, Vector2(12.0, 63.0), tr("hud.sailing_instrument.speed_heel_format") % [sog_knots, speed, float(_snapshot.get("heel_degrees", 0.0))], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 12, COLOR_MUTED)
 
 	var center := Vector2(width * 0.5, 190.0)
 	var true_speed := float(_snapshot.get("true_wind_speed_mps", 0.0))
@@ -113,10 +113,10 @@ func _draw() -> void:
 	_draw_sail_and_boom(center)
 	_draw_headsail(center)
 	_draw_rudder(center)
-	draw_string(font, Vector2(center.x - 25.0, center.y - 50.0), "BOW", HORIZONTAL_ALIGNMENT_CENTER, 50.0, 10, COLOR_MUTED)
-	draw_string(font, Vector2(center.x - 29.0, center.y + 58.0), "STERN", HORIZONTAL_ALIGNMENT_CENTER, 58.0, 10, COLOR_MUTED)
-	draw_string(font, Vector2(10.0, center.y + 3.0), "PORT", HORIZONTAL_ALIGNMENT_LEFT, 38.0, 9, COLOR_MUTED)
-	draw_string(font, Vector2(width - 48.0, center.y + 3.0), "STBD", HORIZONTAL_ALIGNMENT_RIGHT, 38.0, 9, COLOR_MUTED)
+	draw_string(font, Vector2(center.x - 25.0, center.y - 50.0), tr("hud.sailing_instrument.bow"), HORIZONTAL_ALIGNMENT_CENTER, 50.0, 10, COLOR_MUTED)
+	draw_string(font, Vector2(center.x - 29.0, center.y + 58.0), tr("hud.sailing_instrument.stern"), HORIZONTAL_ALIGNMENT_CENTER, 58.0, 10, COLOR_MUTED)
+	draw_string(font, Vector2(10.0, center.y + 3.0), tr("hud.sailing_instrument.port"), HORIZONTAL_ALIGNMENT_LEFT, 38.0, 9, COLOR_MUTED)
+	draw_string(font, Vector2(width - 48.0, center.y + 3.0), tr("hud.sailing_instrument.starboard"), HORIZONTAL_ALIGNMENT_RIGHT, 38.0, 9, COLOR_MUTED)
 
 	var sail_angle := rad_to_deg(float(_snapshot.get("actual_sail_angle_rad", 0.0)))
 	var sail_target := rad_to_deg(float(_snapshot.get("target_sail_angle_rad", 0.0)))
@@ -124,19 +124,18 @@ func _draw() -> void:
 	var headsail_target := rad_to_deg(float(_snapshot.get("target_headsail_angle_rad", 0.0)))
 	var rudder_angle := rad_to_deg(float(_snapshot.get("actual_rudder_angle_rad", 0.0)))
 	var rudder_limit := rad_to_deg(float(_snapshot.get("max_rudder_angle_rad", 0.0)))
-	var rudder_side := "STARBOARD" if rudder_angle > 0.05 else "PORT" if rudder_angle < -0.05 else "CENTER"
-	draw_string(font, Vector2(12.0, 292.0), "SAIL %+.1f° / TARGET %+.1f°" % [sail_angle, sail_target], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 12, COLOR_SAIL)
-	draw_string(font, Vector2(12.0, 310.0), "JIB %s %+.1f° / TARGET %+.1f°" % ["ON" if bool(_snapshot.get("headsail_enabled", false)) else "OFF", headsail_angle, headsail_target], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 12, COLOR_HEADSAIL)
-	draw_string(font, Vector2(12.0, 328.0), "RUDDER %+.1f° %s · LIMIT ±%.0f°" % [rudder_angle, rudder_side, rudder_limit], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 12, COLOR_RUDDER)
-	draw_string(font, Vector2(12.0, 350.0), _wind_summary("TRUE WIND", true_valid, true_speed, true_world_bearing, true_relative), HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 11, COLOR_TRUE_WIND)
-	draw_string(font, Vector2(12.0, 368.0), _wind_summary("APPARENT", apparent_valid, apparent_speed, apparent_world_bearing, apparent_relative), HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 11, COLOR_APPARENT_WIND)
+	var rudder_side_key := "hud.sailing_instrument.starboard" if rudder_angle > 0.05 else "hud.sailing_instrument.port" if rudder_angle < -0.05 else "hud.sailing_instrument.center"
+	draw_string(font, Vector2(12.0, 292.0), tr("hud.sailing_instrument.sail_format") % [sail_angle, sail_target], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 12, COLOR_SAIL)
+	draw_string(font, Vector2(12.0, 310.0), tr("hud.sailing_instrument.jib_format") % [tr("hud.sailing_instrument.on") if bool(_snapshot.get("headsail_enabled", false)) else tr("hud.sailing_instrument.off"), headsail_angle, headsail_target], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 12, COLOR_HEADSAIL)
+	draw_string(font, Vector2(12.0, 328.0), tr("hud.sailing_instrument.rudder_format") % [rudder_angle, tr(rudder_side_key), rudder_limit], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 12, COLOR_RUDDER)
+	draw_string(font, Vector2(12.0, 350.0), _wind_summary(tr("hud.sailing_instrument.true_wind"), true_valid, true_speed, true_world_bearing, true_relative), HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 11, COLOR_TRUE_WIND)
+	draw_string(font, Vector2(12.0, 368.0), _wind_summary(tr("hud.sailing_instrument.apparent_wind"), apparent_valid, apparent_speed, apparent_world_bearing, apparent_relative), HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 11, COLOR_APPARENT_WIND)
 	var keel_slip := rad_to_deg(float(_snapshot.get("keel_side_slip_angle_rad", 0.0)))
-	draw_string(font, Vector2(12.0, 389.0), "COG−HDG %+.1f° · 龙骨侧滑 β %+.1f°" % [cog_delta, keel_slip], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 11, COLOR_TEXT if cog_valid else COLOR_MUTED)
+	draw_string(font, Vector2(12.0, 389.0), tr("hud.sailing_instrument.slip_format") % [cog_delta, keel_slip], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 11, COLOR_TEXT if cog_valid else COLOR_MUTED)
 	var trim: Dictionary = _snapshot.get("auto_sail_trim", {})
-	var trim_mode := "AUTO" if bool(_snapshot.get("auto_sail_trim_enabled", false)) else "MANUAL"
-	var selected_side := str(trim.get("selected_side", "舷侧未选"))
-	var trim_status := "NO-GO" if bool(trim.get("no_go", false)) else selected_side
-	draw_string(font, Vector2(12.0, 410.0), "TRIM %s · %s · T/A 箭头指向来风 · 绿箭头 COG" % [trim_mode, trim_status], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 10, COLOR_APPARENT_WIND if bool(trim.get("no_go", false)) else COLOR_MUTED)
+	var trim_mode := tr("hud.navigation.auto_trim_on") if bool(_snapshot.get("auto_sail_trim_enabled", false)) else tr("hud.navigation.auto_trim_off")
+	var trim_status := tr("hud.sailing_instrument.no_go") if bool(trim.get("no_go", false)) else tr("hud.sailing_instrument.trim_ready") if bool(_snapshot.get("auto_sail_trim_enabled", false)) else tr("hud.sailing_instrument.trim_manual")
+	draw_string(font, Vector2(12.0, 410.0), tr("hud.sailing_instrument.trim_legend") % [trim_mode, trim_status], HORIZONTAL_ALIGNMENT_LEFT, width - 24.0, 10, COLOR_APPARENT_WIND if bool(trim.get("no_go", false)) else COLOR_MUTED)
 
 
 func _draw_embedded_instrument() -> void:
@@ -163,7 +162,7 @@ func _draw_embedded_instrument() -> void:
 	_draw_sail_and_boom(center, radius / 66.0)
 	_draw_headsail(center, radius / 66.0)
 	_draw_rudder(center, radius / 66.0)
-	draw_string(font, Vector2(0.0, height - 4.0), "真风 · 橙视风 · 绿航迹", HORIZONTAL_ALIGNMENT_CENTER, width, 11, COLOR_MUTED)
+	draw_string(font, Vector2(0.0, height - 4.0), tr("hud.sailing_instrument.legend"), HORIZONTAL_ALIGNMENT_CENTER, width, 11, COLOR_MUTED)
 
 
 func _draw_wind_arrow(font: Font, center: Vector2, valid: bool, relative_from_degrees: float, radius: float, color: Color, marker: String) -> void:
@@ -243,8 +242,8 @@ func _draw_arrow(start: Vector2, end: Vector2, color: Color, line_width: float) 
 
 func _wind_summary(label: String, valid: bool, speed: float, world_bearing: float, relative_bearing: float) -> String:
 	if not valid:
-		return "%s · CALM / N/A" % label
-	return "%s %.1f m/s · FROM %03.0f° · rel %+.0f°" % [label, speed, world_bearing, relative_bearing]
+		return tr("hud.sailing_instrument.wind_calm_format") % label
+	return tr("hud.sailing_instrument.wind_format") % [label, speed, world_bearing, relative_bearing]
 
 
 func _update_screen_position() -> void:

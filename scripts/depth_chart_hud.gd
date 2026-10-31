@@ -26,6 +26,11 @@ func _ready() -> void:
 	_build_panel()
 	_update_layout()
 	get_viewport().size_changed.connect(_update_layout)
+	var localization_manager := get_node_or_null("/root/LocalizationManager")
+	if localization_manager != null and localization_manager.has_signal("locale_changed"):
+		localization_manager.connect("locale_changed", _on_locale_changed)
+	_refresh_localized_text()
+	set_chart_visible(visible)
 
 
 func _process(delta: float) -> void:
@@ -59,12 +64,14 @@ func _build_panel() -> void:
 	var heading := HBoxContainer.new()
 	layout.add_child(heading)
 	var title := Label.new()
-	title.text = "SEA CHART  ·  ØRESUND"
+	title.name = "SeaChartTitle"
+	title.text = tr("hud.sea_chart.title")
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	title.add_theme_color_override("font_color", Color(0.69, 0.86, 0.83, 1.0))
 	title.add_theme_font_size_override("font_size", 13)
 	heading.add_child(title)
 	var north_tag := Label.new()
+	north_tag.name = "SeaChartNorth"
 	north_tag.text = "N ↑"
 	north_tag.add_theme_color_override("font_color", Color(0.85, 0.91, 0.86, 0.92))
 	north_tag.add_theme_font_size_override("font_size", 12)
@@ -82,6 +89,7 @@ func _build_panel() -> void:
 	_depth_value.add_theme_font_override("font", depth_font)
 	depth_row.add_child(_depth_value)
 	_quality_label = Label.new()
+	_quality_label.name = "SeaChartQuality"
 	_quality_label.text = "估算海图深度 · LAT"
 	_quality_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_quality_label.add_theme_color_override("font_color", Color(0.66, 0.78, 0.78, 1.0))
@@ -94,7 +102,8 @@ func _build_panel() -> void:
 	layout.add_child(_chart_view)
 
 	var attribution := Label.new()
-	attribution.text = "EMODnet DTM 2024 · LAT  |  暖色=邻近估算  |  不作安全导航用途"
+	attribution.name = "SeaChartAttribution"
+	attribution.text = tr("hud.sea_chart.attribution")
 	attribution.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	attribution.add_theme_color_override("font_color", Color(0.60, 0.73, 0.73, 0.9))
 	attribution.add_theme_font_size_override("font_size", 10)
@@ -104,14 +113,32 @@ func _build_panel() -> void:
 func _update_layout() -> void:
 	if _panel == null:
 		return
+	var viewport_size := get_viewport().get_visible_rect().size
+	var panel_width := clampf(viewport_size.x * 0.28, 320.0, 356.0)
+	var panel_height := clampf(viewport_size.y * 0.56, 350.0, 431.0)
+	_panel.custom_minimum_size = Vector2(panel_width, panel_height)
 	_panel.anchor_left = 0.0
 	_panel.anchor_top = 1.0
 	_panel.anchor_right = 0.0
 	_panel.anchor_bottom = 1.0
-	_panel.offset_left = 24.0
-	_panel.offset_top = -431.0
-	_panel.offset_right = 380.0
-	_panel.offset_bottom = -22.0
+	_panel.offset_left = 18.0
+	_panel.offset_top = -18.0 - panel_height
+	_panel.offset_right = 18.0 + panel_width
+	_panel.offset_bottom = -18.0
+	if _chart_view != null:
+		_chart_view.custom_minimum_size = Vector2(panel_width - 32.0, maxf(230.0, panel_height - 150.0))
+
+
+func set_chart_visible(chart_visible: bool) -> void:
+	visible = chart_visible
+	set_process(chart_visible)
+	if _chart_view != null:
+		_chart_view.visible = chart_visible
+		_chart_view.set_process(chart_visible)
+		if chart_visible and (not _chart_view.is_chart_ready() or _chart_view.is_chart_geometry_dirty()):
+			_chart_view.request_chart_refresh()
+	if chart_visible:
+		_update_depth_readout()
 
 
 func _update_depth_readout() -> void:
@@ -119,20 +146,38 @@ func _update_depth_readout() -> void:
 		return
 	var result := _manager.get_depth_at_world_position(_boat.global_position, true)
 	if not bool(result.get("valid", false)):
-		_depth_value.text = "-- m"
+		_depth_value.text = tr("hud.sea_chart.no_depth")
 		var reason := str(result.get("reason", ""))
 		if reason.begins_with("Outside"):
-			_quality_label.text = "OUTSIDE DTM COVERAGE"
+			_quality_label.text = tr("hud.sea_chart.outside_coverage")
 		elif reason.begins_with("Land"):
-			_quality_label.text = "LAND / NO DATA"
+			_quality_label.text = tr("hud.sea_chart.land_no_data")
 		else:
-			_quality_label.text = "DATA UNAVAILABLE"
+			_quality_label.text = tr("hud.sea_chart.data_unavailable")
 		return
 	_depth_value.text = "%.1f m" % float(result["depth_m"])
 	if bool(result.get("estimated", false)):
-		_quality_label.text = "邻近水深估算 · %s 置信度 · LAT" % ("低" if str(result.get("estimate_confidence", "low")) == "low" else "中")
+		var confidence_key := "hud.sea_chart.confidence.low" if str(result.get("estimate_confidence", "low")) == "low" else "hud.sea_chart.confidence.medium"
+		_quality_label.text = tr("hud.sea_chart.estimated") % tr(confidence_key)
 	elif bool(result.get("interpolated", false)):
-		_quality_label.text = "估算值 · DTM 插值 · LAT"
+		_quality_label.text = tr("hud.sea_chart.interpolated")
 	else:
 		var samples := int(result.get("quality", -1.0))
-		_quality_label.text = "估算值 · LAT" if samples < 0 else "估算值 · %d 个输入值 · LAT" % samples
+		_quality_label.text = tr("hud.sea_chart.depth_lat") if samples < 0 else tr("hud.sea_chart.depth_samples") % samples
+
+
+func _on_locale_changed(_locale_id: String) -> void:
+	_refresh_localized_text()
+	_update_depth_readout()
+
+
+func _refresh_localized_text() -> void:
+	var title := find_child("SeaChartTitle", true, false) as Label
+	if title != null:
+		title.text = tr("hud.sea_chart.title")
+	var north_tag := find_child("SeaChartNorth", true, false) as Label
+	if north_tag != null:
+		north_tag.text = tr("hud.sea_chart.north")
+	var attribution := find_child("SeaChartAttribution", true, false) as Label
+	if attribution != null:
+		attribution.text = tr("hud.sea_chart.attribution")

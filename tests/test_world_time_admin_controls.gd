@@ -39,7 +39,10 @@ func _run_ui_flow() -> void:
 	var time_status := _find_node(hud, "WorldTimeStatus") as Label
 	_check(time_status.text.contains("权威来源：Local"), "panel displays Local authority")
 	_check(time_status.text.contains("日期调试覆盖：关闭"), "panel displays calendar override status")
-	_check(hud.get("_fps_label") is Label, "existing FPS label remains in the same HUD")
+	var environment_panel := hud.find_child("EnvironmentSummaryPanel", true, false) as Control
+	var fps_display := environment_panel.find_child("FPSDisplay", true, false) as Label if environment_panel != null else null
+	_check(fps_display != null and fps_display.visible, "environment summary keeps a visible FPS readout")
+	_check(hud.find_child("PerformanceReadout", true, false) is Label, "FPS remains available in the F3 performance readout")
 
 	var quick_6 := _find_node(hud, "QuickTime_06_00") as Button
 	quick_6.pressed.emit()

@@ -49,7 +49,7 @@ func _run() -> void:
 		if school.has("render_state"):
 			map_states[str(school["render_state"])] = true
 	map_has_both_states = bool(map_states["visual"]) and bool(map_states["logical"])
-	_check(map_has_both_states, "F4 data exposes visual and logical schools from the same resource snapshots")
+	_check(map_has_both_states, "map data exposes visual and logical schools from the same resource snapshots")
 	var map_layer := scene.get_node("FishResourceMap") as FishResourceMap
 	map_layer.set_map_open(true)
 	var map_canvas := map_layer.find_child("ResourceDistributionMap", true, false) as FishResourceMapCanvas
@@ -57,7 +57,7 @@ func _run() -> void:
 	var visible_map_states := {"visual": false, "logical": false}
 	for school in map_rows:
 		visible_map_states[str(school.get("render_state", "visual"))] = true
-	_check(map_layer.is_map_open() and bool(visible_map_states["visual"]) and bool(visible_map_states["logical"]), "opening F4 map shows both marker states")
+	_check(map_layer.is_map_open() and bool(visible_map_states["visual"]) and bool(visible_map_states["logical"]), "opening the full M chart shows both marker states")
 	map_layer.set_map_open(false)
 
 	var renderer := scene.get_node("FishResourceManager/FishSchoolRenderer") as FishSchoolRenderer

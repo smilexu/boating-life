@@ -1,6 +1,8 @@
 class_name FishResourceMap
 extends CanvasLayer
 
+signal display_mode_changed(mode: String)
+
 const MAP_CANVAS_SCRIPT := preload("res://scripts/fish_resource_map_canvas.gd")
 const DEPTH_QUALITY_MAP_SCRIPT := preload("res://scripts/depth_quality_map_canvas.gd")
 const ROUTE_EDITOR_SCRIPT := preload("res://scripts/route_editor_panel.gd")
@@ -20,7 +22,15 @@ var _boat: Node3D
 var _dolphin_manager: Node
 var _route_manager: PortRouteManager
 var _economy_manager: CargoEconomyManager
+var _compact_sea_chart: CanvasLayer
 var _root: Control
+var _background: ColorRect
+var _map_panel: PanelContainer
+var _map_outer: VBoxContainer
+var _map_body: HBoxContainer
+var _side_panel: PanelContainer
+var _collapse_button: Button
+var _hide_button: Button
 var _map_host: Control
 var _map_canvas: FishResourceMapCanvas
 var _depth_quality_canvas: DepthQualityMapCanvas
@@ -37,9 +47,23 @@ var _footer_label: Label
 var _title_label: Label
 var _subtitle_label: Label
 var _depth_quality_summary: Label
+var _map_close_button: Button
+var _fish_filter_heading: Label
+var _fish_filter_hint: Label
+var _dolphin_filter_button: CheckButton
+var _detail_heading: Label
+var _map_legend: Label
+var _depth_heading: Label
+var _depth_instructions: Label
+var _depth_note: Label
+var _depth_zoom_in_button: Button
+var _depth_zoom_out_button: Button
+var _depth_reset_button: Button
+var _depth_quality_legend_labels: Array[Label] = []
 var _map_settings := ConfigFile.new()
 var _refresh_elapsed := 0.0
 var _map_open := false
+var _display_mode := "hidden"
 var _route_refresh_elapsed := 0.0
 
 
@@ -49,13 +73,14 @@ func _ready() -> void:
 	_bathymetry = get_node_or_null(bathymetry_path) as BathymetryManager
 	_boat = get_node_or_null(boat_path) as Node3D
 	_dolphin_manager = get_node_or_null("../DolphinWorldManager")
+	_compact_sea_chart = get_node_or_null("../DepthChartHUD") as CanvasLayer
 	_route_manager = get_node_or_null("../PortRouteManager") as PortRouteManager
 	_economy_manager = get_node_or_null("../CargoEconomyManager") as CargoEconomyManager
 	_load_tracking_preferences()
 	if _manager != null:
 		_georeference = _manager.get_georeference()
 		_build_ui()
-	set_map_open(false)
+	set_display_mode("mini")
 
 
 func configure(manager: FishResourceManager, bathymetry: BathymetryManager, georeference: GeoReference, boat: Node3D, dolphin_manager: Node = null) -> void:
@@ -73,36 +98,60 @@ func configure(manager: FishResourceManager, bathymetry: BathymetryManager, geor
 			_map_canvas.set_dolphins_enabled(_dolphins_enabled)
 			if _depth_quality_canvas != null:
 				_depth_quality_canvas.configure(_bathymetry, _georeference, _boat)
-			refresh_data()
+			if _display_mode == "expanded":
+				refresh_data()
 
 
 func is_map_open() -> bool:
-	return _map_open
+	return _display_mode == "expanded"
 
 
 func set_map_open(open: bool) -> void:
-	_map_open = open
-	if not open and _route_editor != null:
+	set_display_mode("expanded" if open else "mini")
+
+
+func get_display_mode() -> String:
+	return _display_mode
+
+
+func set_display_mode(mode: String) -> void:
+	var next_mode := mode if mode in ["hidden", "mini", "expanded"] else "mini"
+	if _display_mode == next_mode and _root != null:
+		_update_layout()
+		return
+	_display_mode = next_mode
+	_map_open = _display_mode == "expanded"
+	if _display_mode == "hidden" and _route_editor != null:
 		_route_editor.set_editor_open(false)
 		if _route_editor_toggle != null:
-			_route_editor_toggle.text = "开发者：打开航线编辑器"
-	set_process(open)
+			_route_editor_toggle.text = tr("fish.map.route_editor_open")
+	set_process(_display_mode == "expanded")
 	if _root != null:
-		_root.visible = open
-	if _map_canvas != null:
-		var resource_map_active := open and (_map_tabs == null or _map_tabs.current_tab != 2)
-		_map_canvas.set_raster_build_enabled(resource_map_active)
-		_map_canvas.set_boat_pulse_enabled(resource_map_active)
-	if _depth_quality_canvas != null:
-		_depth_quality_canvas.set_chart_active(open and _map_tabs != null and _map_tabs.current_tab == 2)
-	if open:
-		if _map_canvas != null and (_map_tabs == null or _map_tabs.current_tab != 2):
-			_map_canvas.ensure_raster()
-		if _depth_quality_canvas != null and _map_tabs != null and _map_tabs.current_tab == 2:
-			_depth_quality_canvas.ensure_raster()
+		_root.visible = _display_mode == "expanded"
+		_root.mouse_filter = Control.MOUSE_FILTER_STOP if _display_mode == "expanded" else Control.MOUSE_FILTER_IGNORE
+	if _background != null:
+		_background.visible = _display_mode == "expanded"
+	if _map_panel != null:
+		_map_panel.mouse_filter = Control.MOUSE_FILTER_STOP if _display_mode == "expanded" else Control.MOUSE_FILTER_IGNORE
+	if _map_body != null:
+		_map_body.mouse_filter = Control.MOUSE_FILTER_PASS
+	if _side_panel != null:
+		_side_panel.visible = _display_mode == "expanded"
+	if _subtitle_label != null:
+		_subtitle_label.visible = _display_mode == "expanded"
+	if _footer_label != null:
+		_footer_label.visible = _display_mode == "expanded"
+	if _collapse_button != null:
+		_collapse_button.text = tr("fish.map.collapse") if _display_mode == "expanded" else tr("fish.map.expand")
+	if _hide_button != null:
+		_hide_button.visible = _display_mode == "expanded"
+	_update_layout()
+	if _display_mode == "expanded":
 		refresh_data()
 		_refresh_route_overlay()
+	if _display_mode == "expanded":
 		get_viewport().set_input_as_handled()
+	display_mode_changed.emit(_display_mode)
 
 
 func refresh_data() -> void:
@@ -116,7 +165,7 @@ func refresh_data() -> void:
 
 
 func _process(delta: float) -> void:
-	if not _map_open:
+	if _display_mode != "expanded":
 		return
 	_route_refresh_elapsed += delta
 	if _route_refresh_elapsed >= 1.0:
@@ -141,19 +190,19 @@ func _refresh_route_overlay() -> void:
 		if _map_canvas != null:
 			_map_canvas.set_route_overlay(null, _georeference)
 		if _route_label != null:
-			_route_label.text = "切换到“航路编辑”标签查看航线。"
+			_route_label.text = tr("fish.map.route.select_tab")
 		return
 	if _route_editor != null and _route_editor.is_editor_open():
 		var edited_route := _route_editor.get_selected_route()
 		_map_canvas.set_route_overlay(edited_route, _georeference)
 		if _route_label != null:
-			_route_label.text = "开发者预览：%s\n%s · %d 个中间航点" % [edited_route.display_name, edited_route.validation_status, edited_route.waypoints.size()] if edited_route != null else "请选择或新建一条开发航线。"
+			_route_label.text = tr("fish.map.route.dev_preview") % [edited_route.display_name, edited_route.validation_status, edited_route.waypoints.size()] if edited_route != null else tr("fish.map.route.dev_empty")
 		return
 	if _map_canvas == null or _route_manager == null or _economy_manager == null:
 		if _map_canvas != null:
 			_map_canvas.set_route_overlay(null, _georeference)
 		if _route_label != null:
-			_route_label.text = "当前没有跨港运输路线。"
+			_route_label.text = tr("fish.map.route.none")
 		return
 	var active_contracts := _economy_manager.get_active_contracts()
 	var chosen_route: RouteDefinition
@@ -168,7 +217,7 @@ func _refresh_route_overlay() -> void:
 	if _route_label == null:
 		return
 	if chosen_route == null:
-		_route_label.text = "当前合同没有已配置的预设航线。"
+		_route_label.text = tr("fish.map.route.no_contract_route")
 		return
 	var cruise_speed := 0.0
 	if _boat is BoatController and _boat.draft_profile != null:
@@ -176,26 +225,37 @@ func _refresh_route_overlay() -> void:
 	var summary := _route_manager.get_route_summary(chosen_route, cruise_speed)
 	var remaining := chosen_route.get_remaining_distance_m(_boat.global_position, _georeference) if _boat != null else float(summary.get("distance_m", 0.0))
 	var eta_seconds := float(summary.get("estimated_seconds", -1.0))
-	var eta_text := "未知" if eta_seconds < 0.0 else _format_duration(eta_seconds)
-	var validation_text := "游戏内已验证" if chosen_route.validation_status == RouteDefinition.STATUS_VALIDATED else "未验证的游戏航线"
-	_route_label.text = "%s\n全程 %.1f km · 剩余约 %.1f km\n巡航参考 %.1f m/s · 预计 %s\n状态：%s%s" % [
-		chosen_route.display_name, float(summary.get("distance_m", 0.0)) / 1000.0,
+	var eta_text := tr("fish.map.unknown") if eta_seconds < 0.0 else _format_duration(eta_seconds)
+	var validation_text := tr("fish.map.route.validated") if chosen_route.validation_status == RouteDefinition.STATUS_VALIDATED else tr("fish.map.route.unvalidated")
+	var route_key := "hud.autopilot.route.%s" % chosen_route.route_id
+	var route_name := tr(route_key) if tr(route_key) != route_key else chosen_route.display_name
+	_route_label.text = tr("fish.map.route.summary") % [
+		route_name, float(summary.get("distance_m", 0.0)) / 1000.0,
 		remaining / 1000.0, cruise_speed, eta_text,
 		validation_text,
-		" · 可自动巡航" if _route_manager.is_route_cruise_eligible(chosen_route) else " · 自动巡航关闭",
+		tr("fish.map.route.cruise_eligible") if _route_manager.is_route_cruise_eligible(chosen_route) else tr("fish.map.route.cruise_unavailable"),
 	]
 
 
 func _format_duration(seconds: float) -> String:
 	var minutes := int(round(seconds / 60.0))
-	return "%d 小时 %02d 分" % [int(minutes / 60), minutes % 60] if minutes >= 60 else "%d 分" % minutes
+	return tr("fish.map.duration.hours") % [int(minutes / 60), minutes % 60] if minutes >= 60 else tr("fish.map.duration.minutes") % minutes
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
-	if not _map_open or event is not InputEventKey or not event.pressed or event.echo:
+	if event is not InputEventKey or not event.pressed or event.echo:
+		return
+	if event.is_action_pressed("map_toggle") and not event.shift_pressed and not event.ctrl_pressed and not event.alt_pressed and not event.meta_pressed:
+		var focus_owner := get_viewport().gui_get_focus_owner()
+		if focus_owner is LineEdit or focus_owner is TextEdit:
+			return
+		set_display_mode("mini" if _display_mode == "expanded" else "expanded")
+		get_viewport().set_input_as_handled()
+		return
+	if _display_mode != "expanded":
 		return
 	if event.physical_keycode == KEY_ESCAPE:
-		set_map_open(false)
+		set_display_mode("mini")
 		get_viewport().set_input_as_handled()
 
 
@@ -206,23 +266,26 @@ func _build_ui() -> void:
 	_root = Control.new()
 	_root.name = "FishResourceMapRoot"
 	_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_root.mouse_filter = Control.MOUSE_FILTER_STOP
+	_root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_root)
-	var background := ColorRect.new()
-	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	background.color = Color(0.025, 0.055, 0.075, 0.94)
-	_root.add_child(background)
-	var panel := PanelContainer.new()
-	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	panel.offset_left = 42.0
-	panel.offset_top = 34.0
-	panel.offset_right = -42.0
-	panel.offset_bottom = -34.0
-	panel.add_theme_stylebox_override("panel", _panel_style())
-	_root.add_child(panel)
+	_background = ColorRect.new()
+	_background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_background.color = Color(0.025, 0.055, 0.075, 0.94)
+	_background.visible = false
+	_root.add_child(_background)
+	_map_panel = PanelContainer.new()
+	_map_panel.name = "MapPanel"
+	_map_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_map_panel.offset_left = 42.0
+	_map_panel.offset_top = 34.0
+	_map_panel.offset_right = -42.0
+	_map_panel.offset_bottom = -34.0
+	_map_panel.add_theme_stylebox_override("panel", _panel_style())
+	_root.add_child(_map_panel)
 	var outer := VBoxContainer.new()
 	outer.add_theme_constant_override("separation", 12)
-	panel.add_child(outer)
+	_map_outer = outer
+	_map_panel.add_child(outer)
 	var header := HBoxContainer.new()
 	outer.add_child(header)
 	var title := Label.new()
@@ -233,10 +296,21 @@ func _build_ui() -> void:
 	title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title)
 	_title_label = title
+	var actions := HBoxContainer.new()
+	_collapse_button = Button.new()
+	_collapse_button.pressed.connect(func() -> void: set_display_mode("mini" if _display_mode == "expanded" else "expanded"))
+	actions.add_child(_collapse_button)
+	_hide_button = Button.new()
+	_hide_button.text = tr("fish.map.hide")
+	_hide_button.pressed.connect(func() -> void: set_display_mode("hidden"))
+	actions.add_child(_hide_button)
 	var close_button := Button.new()
-	close_button.text = tr("fish.map.close")
-	close_button.pressed.connect(func() -> void: set_map_open(false))
-	header.add_child(close_button)
+	_map_close_button = close_button
+	close_button.text = "×"
+	close_button.tooltip_text = tr("fish.map.hide")
+	close_button.pressed.connect(func() -> void: set_display_mode("hidden"))
+	actions.add_child(close_button)
+	header.add_child(actions)
 	var subtitle := Label.new()
 	subtitle.name = "MapSubtitle"
 	subtitle.text = tr("fish.map.subtitle")
@@ -244,6 +318,7 @@ func _build_ui() -> void:
 	outer.add_child(subtitle)
 	_subtitle_label = subtitle
 	var body := HBoxContainer.new()
+	_map_body = body
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	body.add_theme_constant_override("separation", 16)
 	outer.add_child(body)
@@ -265,9 +340,10 @@ func _build_ui() -> void:
 	_depth_quality_canvas.name = "DepthQualityMap"
 	_depth_quality_canvas.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	_depth_quality_canvas.configure(_bathymetry, _georeference, _boat)
-	_depth_quality_canvas.visible = false
+	_depth_quality_canvas.visible = true
 	_map_host.add_child(_depth_quality_canvas)
 	var side := PanelContainer.new()
+	_side_panel = side
 	side.custom_minimum_size = Vector2(318.0, 0.0)
 	side.add_theme_stylebox_override("panel", _side_style())
 	body.add_child(side)
@@ -311,16 +387,16 @@ func _build_ui() -> void:
 	_map_tabs.current_tab = 0
 	_map_canvas.set_resource_overlay_enabled(true)
 	_depth_quality_canvas.set_chart_active(false)
-	var species_heading := Label.new()
-	species_heading.text = tr("fish.map.species_heading")
-	species_heading.add_theme_font_size_override("font_size", 17)
-	species_heading.add_theme_color_override("font_color", Color("#dce9dc"))
-	fish_layout.add_child(species_heading)
-	var fish_hint := Label.new()
-	fish_hint.text = tr("fish.map.filter_hint")
-	fish_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	fish_hint.add_theme_color_override("font_color", Color("#9db8b6"))
-	fish_layout.add_child(fish_hint)
+	_fish_filter_heading = Label.new()
+	_fish_filter_heading.text = tr("fish.map.species_heading")
+	_fish_filter_heading.add_theme_font_size_override("font_size", 17)
+	_fish_filter_heading.add_theme_color_override("font_color", Color("#dce9dc"))
+	fish_layout.add_child(_fish_filter_heading)
+	_fish_filter_hint = Label.new()
+	_fish_filter_hint.text = tr("fish.map.filter_hint")
+	_fish_filter_hint.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_fish_filter_hint.add_theme_color_override("font_color", Color("#9db8b6"))
+	fish_layout.add_child(_fish_filter_hint)
 	for profile in _manager.get_species_profiles():
 		var species_id := profile.species_id
 		var check := CheckButton.new()
@@ -330,13 +406,13 @@ func _build_ui() -> void:
 		check.toggled.connect(func(pressed: bool) -> void: _set_species_enabled(species_id, pressed))
 		fish_layout.add_child(check)
 		_species_buttons[species_id] = check
-	var dolphin_check := CheckButton.new()
-	dolphin_check.name = "DolphinTracking"
-	dolphin_check.text = tr("fish.map.dolphin_filter")
-	dolphin_check.button_pressed = _dolphins_enabled
-	dolphin_check.add_theme_color_override("font_color", Color("#a9e5df"))
-	dolphin_check.toggled.connect(_set_dolphins_enabled)
-	fish_layout.add_child(dolphin_check)
+	_dolphin_filter_button = CheckButton.new()
+	_dolphin_filter_button.name = "DolphinTracking"
+	_dolphin_filter_button.text = tr("fish.map.dolphin_filter")
+	_dolphin_filter_button.button_pressed = _dolphins_enabled
+	_dolphin_filter_button.add_theme_color_override("font_color", Color("#a9e5df"))
+	_dolphin_filter_button.toggled.connect(_set_dolphins_enabled)
+	fish_layout.add_child(_dolphin_filter_button)
 	_summary_label = Label.new()
 	_summary_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_summary_label.add_theme_color_override("font_color", Color("#a6c1bc"))
@@ -344,11 +420,11 @@ func _build_ui() -> void:
 	_route_label = Label.new()
 	_route_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_route_label.add_theme_color_override("font_color", Color("#f0d39a"))
-	_route_label.text = "切换到“航路编辑”标签查看航线。"
+	_route_label.text = tr("fish.map.route.select_tab")
 	route_layout.add_child(_route_label)
 	if _route_manager != null and (OS.has_feature("editor") or OS.has_feature("debug")):
 		_route_editor_toggle = Button.new()
-		_route_editor_toggle.text = "开发者：打开航线编辑器"
+		_route_editor_toggle.text = tr("fish.map.route_editor_open")
 		route_layout.add_child(_route_editor_toggle)
 		_route_editor = ROUTE_EDITOR_SCRIPT.new() as RouteEditorPanel
 		_route_editor.name = "RouteEditorPanel"
@@ -358,64 +434,67 @@ func _build_ui() -> void:
 		route_layout.add_child(_route_editor)
 		_route_editor_toggle.pressed.connect(func() -> void:
 			_route_editor.set_editor_open(not _route_editor.is_editor_open())
-			_route_editor_toggle.text = "开发者：关闭航线编辑器" if _route_editor.is_editor_open() else "开发者：打开航线编辑器"
+			_route_editor_toggle.text = tr("fish.map.route_editor_close") if _route_editor.is_editor_open() else tr("fish.map.route_editor_open")
 			_refresh_route_overlay()
 		)
-	var detail_heading := Label.new()
-	detail_heading.text = tr("fish.map.detail_heading")
-	detail_heading.add_theme_font_size_override("font_size", 17)
-	detail_heading.add_theme_color_override("font_color", Color("#dce9dc"))
-	fish_layout.add_child(detail_heading)
+	_detail_heading = Label.new()
+	_detail_heading.text = tr("fish.map.detail_heading")
+	_detail_heading.add_theme_font_size_override("font_size", 17)
+	_detail_heading.add_theme_color_override("font_color", Color("#dce9dc"))
+	fish_layout.add_child(_detail_heading)
 	_details_label = Label.new()
 	_details_label.text = tr("fish.map.detail_prompt")
 	_details_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_details_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	_details_label.add_theme_color_override("font_color", Color("#b2c5c1"))
 	fish_layout.add_child(_details_label)
-	var legend := Label.new()
+	_map_legend = Label.new()
 	var species_legend := PackedStringArray()
 	for profile in _manager.get_species_profiles():
 		species_legend.append(tr("fish.map.legend.species") % tr(profile.name_key))
-	legend.text = "%s  %s\n%s\n%s" % ["  ".join(species_legend), tr("fish.map.legend.dolphins"), tr("fish.map.legend.visual_logical"), tr("fish.map.legend.depth_source")]
-	legend.add_theme_color_override("font_color", Color("#98b0ae"))
-	fish_layout.add_child(legend)
-	var depth_heading := Label.new()
-	depth_heading.text = "海图数据质量"
-	depth_heading.add_theme_font_size_override("font_size", 17)
-	depth_heading.add_theme_color_override("font_color", Color("#dce9dc"))
-	depth_layout.add_child(depth_heading)
-	var depth_instructions := Label.new()
-	depth_instructions.text = "完整 Øresund 水深图。滚轮缩放，按住鼠标左键拖动。点击“重置”回到全图。"
-	depth_instructions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	depth_instructions.add_theme_color_override("font_color", Color("#b2c5c1"))
-	depth_layout.add_child(depth_instructions)
+	_map_legend.text = "%s  %s\n%s\n%s" % ["  ".join(species_legend), tr("fish.map.legend.dolphins"), tr("fish.map.legend.visual_logical"), tr("fish.map.legend.depth_source")]
+	_map_legend.add_theme_color_override("font_color", Color("#98b0ae"))
+	fish_layout.add_child(_map_legend)
+	_depth_heading = Label.new()
+	_depth_heading.text = tr("fish.map.depth_quality_heading")
+	_depth_heading.add_theme_font_size_override("font_size", 17)
+	_depth_heading.add_theme_color_override("font_color", Color("#dce9dc"))
+	depth_layout.add_child(_depth_heading)
+	_depth_instructions = Label.new()
+	_depth_instructions.text = tr("fish.map.depth_quality_instructions")
+	_depth_instructions.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_depth_instructions.add_theme_color_override("font_color", Color("#b2c5c1"))
+	depth_layout.add_child(_depth_instructions)
 	_depth_quality_summary = Label.new()
 	_depth_quality_summary.name = "DepthQualitySummary"
 	_depth_quality_summary.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_depth_quality_summary.add_theme_color_override("font_color", Color("#dce9dc"))
 	depth_layout.add_child(_depth_quality_summary)
-	depth_layout.add_child(_quality_legend_row(Color("#ffd166"), "黄色：邻近水深估算回填"))
-	depth_layout.add_child(_quality_legend_row(Color("#ff5964"), "红色：仍未知，无法可靠估算"))
-	var depth_note := Label.new()
-	depth_note.text = "暖色标记代表水深数据质量，不是水深危险边界。黄色值是游戏估算，不是原始测量；红色单元仍没有可用水深。底图基准 LAT，DTM 分辨率约 66 × 116 m，不用于真实航海安全判断。"
-	depth_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	depth_note.add_theme_color_override("font_color", Color("#9db8b6"))
-	depth_layout.add_child(depth_note)
+	depth_layout.add_child(_quality_legend_row(Color("#ffd166"), "fish.map.depth_quality.estimated"))
+	depth_layout.add_child(_quality_legend_row(Color("#ff5964"), "fish.map.depth_quality.unknown"))
+	_depth_note = Label.new()
+	_depth_note.text = tr("fish.map.depth_quality.note")
+	_depth_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_depth_note.add_theme_color_override("font_color", Color("#9db8b6"))
+	depth_layout.add_child(_depth_note)
 	var depth_controls := HBoxContainer.new()
 	depth_controls.add_theme_constant_override("separation", 6)
 	depth_layout.add_child(depth_controls)
 	var zoom_in_button := Button.new()
-	zoom_in_button.text = "+ 放大"
+	_depth_zoom_in_button = zoom_in_button
+	zoom_in_button.text = tr("fish.map.zoom_in")
 	zoom_in_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	zoom_in_button.pressed.connect(func() -> void: _depth_quality_canvas.zoom_in())
 	depth_controls.add_child(zoom_in_button)
 	var zoom_out_button := Button.new()
-	zoom_out_button.text = "− 缩小"
+	_depth_zoom_out_button = zoom_out_button
+	zoom_out_button.text = tr("fish.map.zoom_out")
 	zoom_out_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	zoom_out_button.pressed.connect(func() -> void: _depth_quality_canvas.zoom_out())
 	depth_controls.add_child(zoom_out_button)
 	var reset_button := Button.new()
-	reset_button.text = "重置全图"
+	_depth_reset_button = reset_button
+	reset_button.text = tr("fish.map.reset_view")
 	reset_button.pressed.connect(func() -> void: _depth_quality_canvas.reset_view())
 	depth_controls.add_child(reset_button)
 	_footer_label = Label.new()
@@ -423,17 +502,151 @@ func _build_ui() -> void:
 	outer.add_child(_footer_label)
 	get_viewport().size_changed.connect(_update_layout)
 	_update_layout()
-	refresh_data()
+	set_display_mode("mini")
 	_update_depth_quality_summary()
 
 
 func _update_layout() -> void:
 	if _root != null:
 		_root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	if _map_canvas != null:
+	if _map_panel != null and get_viewport() != null:
+		if _display_mode == "expanded":
+			_map_panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+			_map_panel.offset_left = 42.0
+			_map_panel.offset_top = 34.0
+			_map_panel.offset_right = -42.0
+			_map_panel.offset_bottom = -34.0
+			_map_panel.custom_minimum_size = Vector2.ZERO
+			if _map_outer != null:
+				_map_outer.add_theme_constant_override("separation", 12)
+			if _map_canvas != null:
+				_map_canvas.custom_minimum_size = Vector2(640.0, 480.0)
+			if _depth_quality_canvas != null:
+				_depth_quality_canvas.custom_minimum_size = Vector2(640.0, 480.0)
+		else:
+			var viewport_size := get_viewport().get_visible_rect().size
+			var mini_width := minf(360.0, maxf(260.0, viewport_size.x * 0.31))
+			var mini_height := minf(252.0, maxf(190.0, viewport_size.y * 0.34))
+			_map_panel.anchor_left = 0.0
+			_map_panel.anchor_right = 0.0
+			_map_panel.anchor_top = 1.0
+			_map_panel.anchor_bottom = 1.0
+			_map_panel.offset_left = 18.0
+			_map_panel.offset_right = 18.0 + mini_width
+			_map_panel.offset_top = -18.0 - mini_height
+			_map_panel.offset_bottom = -18.0
+			_map_panel.custom_minimum_size = Vector2(mini_width, mini_height)
+			if _map_outer != null:
+				_map_outer.add_theme_constant_override("separation", 4)
+			if _map_canvas != null:
+				_map_canvas.custom_minimum_size = Vector2.ZERO
+			if _depth_quality_canvas != null:
+				_depth_quality_canvas.custom_minimum_size = Vector2.ZERO
+		if _map_body != null:
+			_map_body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+			_map_body.add_theme_constant_override("separation", 6 if _display_mode == "mini" else 16)
+		if _map_host != null:
+			_map_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			_map_host.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	if _title_label != null:
+		_title_label.text = tr("fish.map.title") if _display_mode == "expanded" else tr("fish.map.mini_title")
+	if _collapse_button != null:
+		_collapse_button.text = tr("fish.map.collapse") if _display_mode == "expanded" else tr("fish.map.expand")
+	_sync_compact_sea_chart()
+	_sync_canvas_activity()
+	if _map_canvas != null and _map_canvas.visible:
 		_map_canvas.queue_redraw()
-	if _depth_quality_canvas != null:
+	if _depth_quality_canvas != null and _depth_quality_canvas.visible:
 		_depth_quality_canvas.queue_redraw()
+
+
+func _sync_canvas_activity() -> void:
+	var tab_index := _map_tabs.current_tab if _map_tabs != null else 0
+	var expanded := _display_mode == "expanded"
+	var resource_map_active := expanded and tab_index != 2
+	var depth_chart_active := expanded and tab_index == 2
+	if _map_canvas != null:
+		_map_canvas.set_raster_build_enabled(false)
+		_map_canvas.set_boat_pulse_enabled(false)
+		_map_canvas.visible = resource_map_active
+		_map_canvas.set_resource_overlay_enabled(resource_map_active and tab_index == 0)
+		_map_canvas.set_raster_build_enabled(resource_map_active)
+		_map_canvas.set_boat_pulse_enabled(resource_map_active)
+		if resource_map_active:
+			_map_canvas.ensure_raster()
+	if _depth_quality_canvas != null:
+		_depth_quality_canvas.set_chart_active(false)
+		_depth_quality_canvas.visible = depth_chart_active
+		_depth_quality_canvas.mouse_filter = Control.MOUSE_FILTER_STOP if expanded else Control.MOUSE_FILTER_IGNORE
+		_depth_quality_canvas.set_compact_mode(_display_mode == "mini")
+		_depth_quality_canvas.set_chart_active(depth_chart_active)
+
+
+func _sync_compact_sea_chart() -> void:
+	if _compact_sea_chart == null:
+		return
+	var chart_visible := _display_mode == "mini"
+	_compact_sea_chart.visible = chart_visible
+	_compact_sea_chart.set_process(chart_visible)
+	var chart_view := _compact_sea_chart.find_child("Chart", true, false) as Control
+	if chart_view != null:
+		chart_view.set_process(chart_visible)
+
+
+func refresh_localized_text() -> void:
+	if _map_tabs != null:
+		_map_tabs.set_tab_title(0, tr("fish.map.tab.fish_resources"))
+		_map_tabs.set_tab_title(1, tr("fish.map.route_tab"))
+		_map_tabs.set_tab_title(2, tr("fish.map.depth_tab"))
+	if _title_label != null:
+		_title_label.text = tr("fish.map.title") if _display_mode == "expanded" else tr("fish.map.mini_title")
+	if _collapse_button != null:
+		_collapse_button.text = tr("fish.map.collapse") if _display_mode == "expanded" else tr("fish.map.expand")
+	if _hide_button != null:
+		_hide_button.text = tr("fish.map.hide")
+	if _map_close_button != null:
+		_map_close_button.tooltip_text = tr("fish.map.hide")
+	if _subtitle_label != null:
+		_subtitle_label.text = _localized_map_subtitle(_map_tabs.current_tab if _map_tabs != null else 0)
+	if _fish_filter_heading != null:
+		_fish_filter_heading.text = tr("fish.map.species_heading")
+	if _fish_filter_hint != null:
+		_fish_filter_hint.text = tr("fish.map.filter_hint")
+	if _dolphin_filter_button != null:
+		_dolphin_filter_button.text = tr("fish.map.dolphin_filter")
+	if _manager != null:
+		for profile in _manager.get_species_profiles():
+			var species_button := _species_buttons.get(profile.species_id) as CheckButton
+			if species_button != null:
+				species_button.text = tr("fish.map.species_filter") % [tr(profile.name_key), profile.scientific_name]
+	if _detail_heading != null:
+		_detail_heading.text = tr("fish.map.detail_heading")
+	if _map_legend != null:
+		var species_legend := PackedStringArray()
+		for profile in _manager.get_species_profiles():
+			species_legend.append(tr("fish.map.legend.species") % tr(profile.name_key))
+		_map_legend.text = "%s  %s\n%s\n%s" % ["  ".join(species_legend), tr("fish.map.legend.dolphins"), tr("fish.map.legend.visual_logical"), tr("fish.map.legend.depth_source")]
+	if _depth_heading != null:
+		_depth_heading.text = tr("fish.map.depth_quality_heading")
+	if _depth_instructions != null:
+		_depth_instructions.text = tr("fish.map.depth_quality_instructions")
+	if _depth_note != null:
+		_depth_note.text = tr("fish.map.depth_quality.note")
+	if _depth_quality_legend_labels.size() >= 2:
+		_depth_quality_legend_labels[0].text = tr("fish.map.depth_quality.estimated")
+		_depth_quality_legend_labels[1].text = tr("fish.map.depth_quality.unknown")
+	if _depth_zoom_in_button != null:
+		_depth_zoom_in_button.text = tr("fish.map.zoom_in")
+	if _depth_zoom_out_button != null:
+		_depth_zoom_out_button.text = tr("fish.map.zoom_out")
+	if _depth_reset_button != null:
+		_depth_reset_button.text = tr("fish.map.reset_view")
+	if _route_editor_toggle != null:
+		_route_editor_toggle.text = tr("fish.map.route_editor_close") if _route_editor != null and _route_editor.is_editor_open() else tr("fish.map.route_editor_open")
+	_update_footer_label()
+	_update_summary_label()
+	_refresh_route_overlay()
+	_update_depth_quality_summary()
 
 
 func _set_species_enabled(species_id: String, enabled: bool) -> void:
@@ -454,36 +667,28 @@ func _set_dolphins_enabled(enabled: bool) -> void:
 
 
 func _on_map_tab_changed(tab_index: int) -> void:
-	if _map_canvas != null:
-		_map_canvas.visible = tab_index != 2
-	if _map_canvas != null:
-		_map_canvas.set_resource_overlay_enabled(tab_index == 0)
-		var resource_map_active := _map_open and tab_index != 2
-		_map_canvas.set_raster_build_enabled(resource_map_active)
-		_map_canvas.set_boat_pulse_enabled(resource_map_active)
-		if resource_map_active:
-			_map_canvas.ensure_raster()
-	if _depth_quality_canvas != null:
-		_depth_quality_canvas.visible = tab_index == 2
-		_depth_quality_canvas.set_chart_active(_map_open and tab_index == 2)
+	_sync_canvas_activity()
 	if _title_label != null:
-		_title_label.text = [tr("fish.map.title"), "航路编辑  ·  ØRESUND", "海图水深与数据质量  ·  ØRESUND"][clampi(tab_index, 0, 2)]
+		_title_label.text = [tr("fish.map.title"), tr("fish.map.route_tab"), tr("fish.map.depth_tab")][clampi(tab_index, 0, 2)]
 	if _subtitle_label != null:
-		_subtitle_label.text = [
-			tr("fish.map.subtitle"),
-			"查看预设航线与开发者编辑工具。路线数据使用同一 GeoReference。",
-			"完整区域水深底图 · 滚轮缩放 · 按住鼠标左键拖动 · 黄色估算 / 红色仍未知",
-		][clampi(tab_index, 0, 2)]
+		_subtitle_label.text = _localized_map_subtitle(tab_index)
 	if tab_index != 1 and _route_editor != null and _route_editor.is_editor_open():
 		_route_editor.set_editor_open(false)
 		if _route_editor_toggle != null:
-			_route_editor_toggle.text = "开发者：打开航线编辑器"
+			_route_editor_toggle.text = tr("fish.map.route_editor_open")
 	_refresh_route_overlay()
 	_update_footer_label()
 	_update_depth_quality_summary()
 
 
-func _quality_legend_row(color: Color, text: String) -> HBoxContainer:
+func _localized_map_subtitle(tab_index: int) -> String:
+	match clampi(tab_index, 0, 2):
+		1: return tr("fish.map.route_subtitle")
+		2: return tr("fish.map.depth_subtitle")
+	return tr("fish.map.subtitle")
+
+
+func _quality_legend_row(color: Color, key: String) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	var swatch := ColorRect.new()
@@ -491,17 +696,18 @@ func _quality_legend_row(color: Color, text: String) -> HBoxContainer:
 	swatch.custom_minimum_size = Vector2(15.0, 15.0)
 	row.add_child(swatch)
 	var label := Label.new()
-	label.text = text
+	label.text = tr(key)
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.add_theme_color_override("font_color", color.lightened(0.2))
 	row.add_child(label)
+	_depth_quality_legend_labels.append(label)
 	return row
 
 
 func _update_depth_quality_summary() -> void:
 	if _depth_quality_summary == null or _depth_quality_canvas == null:
 		return
-	_depth_quality_summary.text = "黄色估算单元：%s 个\n红色仍未知单元：%s 个" % [
+	_depth_quality_summary.text = tr("fish.map.depth_quality.summary") % [
 		_format_count(_depth_quality_canvas.get_estimated_cell_count()),
 		_format_count(_depth_quality_canvas.get_unresolved_cell_count()),
 	]
@@ -515,7 +721,7 @@ func _update_footer_label() -> void:
 	if _footer_label == null:
 		return
 	if _map_tabs != null and _map_tabs.current_tab == 2:
-		_footer_label.text = "黄色为邻近水深游戏估算 · 红色为剩余未知水域 · EMODnet DTM 2024 / LAT · 不用于真实航海安全判断"
+		_footer_label.text = tr("fish.map.depth_quality.footer")
 	elif _manager != null:
 		_footer_label.text = tr("fish.map.footer") % [_manager.get_authority_source(), _manager.get_world_seed(), _manager.get_state_revision()]
 
@@ -562,15 +768,15 @@ func _on_school_hovered(school: Dictionary) -> void:
 func _update_school_details(school: Dictionary) -> void:
 	if bool(school.get("is_dolphin", false)):
 		var position_data: Array = school.get("world_position", [])
-		var gps_text := "位置未知"
+		var gps_text := tr("fish.map.position_unknown")
 		if position_data.size() >= 3 and _georeference != null:
 			var geodetic := _georeference.world_to_geodetic(Vector3(float(position_data[0]), 0.0, float(position_data[2])))
-			gps_text = "GPS %.5f°%s, %.5f°%s" % [absf(geodetic.x), "N" if geodetic.x >= 0.0 else "S", absf(geodetic.y), "E" if geodetic.y >= 0.0 else "W"]
-		_details_label.text = "海豚群 · Dolphin pod\n固定世界 pod：%s\n群体数量：%d 只\n活动状态：%s%s\n平均活动深度：%.1f m\n状态更新时间：本地模拟 %.1f s\n%s\nLocal Authority · F3 可召唤调试伴游" % [
+			gps_text = tr("fish.map.gps_format") % [absf(geodetic.x), tr("hud.direction.short.north") if geodetic.x >= 0.0 else tr("hud.direction.short.south"), absf(geodetic.y), tr("hud.direction.short.east") if geodetic.y >= 0.0 else tr("hud.direction.short.west")]
+		_details_label.text = tr("fish.map.dolphin_details") % [
 			str(school.get("pod_id", "")),
 			int(school.get("population", 0)),
-			str(school.get("movement_state", "巡游")),
-			" · 正在伴游" if bool(school.get("is_following", false)) else "",
+			tr("fish.map.dolphin_following") if bool(school.get("is_following", false)) else tr("fish.map.dolphin_not_following"),
+			tr("fish.map.dolphin_state.%s" % str(school.get("movement_state_id", "cruise"))),
 			float(school.get("activity_depth_m", 0.0)),
 			float(school.get("last_updated", 0.0)),
 			gps_text,
@@ -591,7 +797,7 @@ func _update_school_details(school: Dictionary) -> void:
 	var habitat_text := _localized_habitat(str(school.get("habitat_region", "unknown")))
 	if position_data.size() >= 3 and _georeference != null:
 		var geodetic := _georeference.world_to_geodetic(Vector3(float(position_data[0]), 0.0, float(position_data[2])))
-		gps_text = "GPS %.5f°%s, %.5f°%s" % [absf(geodetic.x), "N" if geodetic.x >= 0.0 else "S", absf(geodetic.y), "E" if geodetic.y >= 0.0 else "W"]
+		gps_text = tr("fish.map.gps_format") % [absf(geodetic.x), tr("hud.direction.short.north") if geodetic.x >= 0.0 else tr("hud.direction.short.south"), absf(geodetic.y), tr("hud.direction.short.east") if geodetic.y >= 0.0 else tr("hud.direction.short.west")]
 	_details_label.text = tr("fish.map.details.format") % [
 		tr(profile.name_key),
 		profile.scientific_name,

@@ -8,7 +8,7 @@ class_name WeatherRuntimeDiagnostics
 @export_node_path("Node") var weather_state_controller_path := NodePath("../WeatherStateController")
 @export_node_path("Node") var wind_field_path := NodePath("../WindField")
 @export_node_path("Node") var wind_field_debug_panel_path := NodePath("../WindFieldDebugPanel")
-@export var show_in_debug_builds := true
+@export var show_in_debug_builds := false
 
 var _authority: Node
 var _world_time_manager: Node
