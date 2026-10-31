@@ -1,0 +1,140 @@
+{
+	"baseline_camera": {
+		"far": 80000.0,
+		"fov_degrees": 58.0,
+		"near": 0.0500000007450581,
+		"position": "(12237.46, 4.758923, 10059.0)",
+		"rotation_degrees": "(-15.99961, 90.0, 0.0)"
+	},
+	"baseline_note": "Unmodified scene state: no boat hiding, pause, camera lock, wave freeze, or uniform override.",
+	"baseline_shader_parameters": {
+		"WaveTime": 1.16141933333333,
+		"bathymetry_bounds_east_north": "(-31717.53, -38992.2, 29842.47, 44647.8)",
+		"bathymetry_texture_size": "(2052.0, 2788.0)",
+		"depth_color_strength": 0.6,
+		"enable_depth_color": true,
+		"freeze_time": false,
+		"metallic": 0.04,
+		"shallow_transparency_enabled": true,
+		"specular": 0.18,
+		"water_diagnostic_mode": 0,
+		"water_roughness_far": 0.29,
+		"water_roughness_near": 0.075,
+		"wave_normal_strength": 0.45
+	},
+	"bathymetry_bounds_east_north": "(-31717.53, -38992.2, 29842.47, 44647.8)",
+	"bathymetry_loaded": true,
+	"bathymetry_texture_size": "(2052, 2788)",
+	"candidate_malmo_shallow_approach": {
+		"camera": {
+			"far": 80000.0,
+			"fov_degrees": 58.0,
+			"near": 0.0500000007450581,
+			"position": "(13865.74, 5.0, 10458.02)",
+			"rotation_degrees": "(-16.03994, -90.00001, 0.0)"
+		},
+		"note": "Candidate camera override; boat, wave clock, bathymetry, and water uniforms remain live.",
+		"reference_depth_m": 0.75,
+		"target": "(14065.74, -52.5, 10458.02)"
+	},
+	"candidate_malmo_start_coast": {
+		"camera": {
+			"far": 80000.0,
+			"fov_degrees": 58.0,
+			"near": 0.0500000007450581,
+			"position": "(13424.56, 5.0, 10459.39)",
+			"rotation_degrees": "(-16.03994, -90.00001, 0.0)"
+		},
+		"note": "Candidate camera override; boat, wave clock, bathymetry, and water uniforms remain live.",
+		"reference_depth_m": 2.24,
+		"target": "(13624.56, -52.5, 10459.39)"
+	},
+	"capture_size": "(1920.0, 1080.0)",
+	"captures": [
+		{
+			"camera": {
+				"far": 80000.0,
+				"fov_degrees": 58.0,
+				"near": 0.0500000007450581,
+				"position": "(12237.46, 4.758923, 10059.0)",
+				"rotation_degrees": "(-15.99961, 90.0, 0.0)"
+			},
+			"file": "baseline_original.png",
+			"note": "Original startup camera and live scene state",
+			"shader_parameters": {
+				"WaveTime": 1.17141933333333,
+				"bathymetry_bounds_east_north": "(-31717.53, -38992.2, 29842.47, 44647.8)",
+				"bathymetry_texture_size": "(2052.0, 2788.0)",
+				"depth_color_strength": 0.6,
+				"enable_depth_color": true,
+				"freeze_time": false,
+				"metallic": 0.04,
+				"shallow_transparency_enabled": true,
+				"specular": 0.18,
+				"water_diagnostic_mode": 0,
+				"water_roughness_far": 0.29,
+				"water_roughness_near": 0.075,
+				"wave_normal_strength": 0.45
+			},
+			"size": "(1920, 1080)"
+		},
+		{
+			"camera": {
+				"far": 80000.0,
+				"fov_degrees": 58.0,
+				"near": 0.0500000007450581,
+				"position": "(13424.56, 5.0, 10459.39)",
+				"rotation_degrees": "(-16.03994, -90.00001, 0.0)"
+			},
+			"file": "candidate_malmo_start_coast.png",
+			"note": "Candidate shallow-water view; manual grid confirmation required",
+			"shader_parameters": {
+				"WaveTime": 1.58149366666667,
+				"bathymetry_bounds_east_north": "(-31717.53, -38992.2, 29842.47, 44647.8)",
+				"bathymetry_texture_size": "(2052.0, 2788.0)",
+				"depth_color_strength": 0.6,
+				"enable_depth_color": true,
+				"freeze_time": false,
+				"metallic": 0.04,
+				"shallow_transparency_enabled": true,
+				"specular": 0.18,
+				"water_diagnostic_mode": 0,
+				"water_roughness_far": 0.29,
+				"water_roughness_near": 0.075,
+				"wave_normal_strength": 0.45
+			},
+			"size": "(1920, 1080)"
+		},
+		{
+			"camera": {
+				"far": 80000.0,
+				"fov_degrees": 58.0,
+				"near": 0.0500000007450581,
+				"position": "(13865.74, 5.0, 10458.02)",
+				"rotation_degrees": "(-16.03994, -90.00001, 0.0)"
+			},
+			"file": "candidate_malmo_shallow_approach.png",
+			"note": "Candidate shallow-water view; manual grid confirmation required",
+			"shader_parameters": {
+				"WaveTime": 1.984965,
+				"bathymetry_bounds_east_north": "(-31717.53, -38992.2, 29842.47, 44647.8)",
+				"bathymetry_texture_size": "(2052.0, 2788.0)",
+				"depth_color_strength": 0.6,
+				"enable_depth_color": true,
+				"freeze_time": false,
+				"metallic": 0.04,
+				"shallow_transparency_enabled": true,
+				"specular": 0.18,
+				"water_diagnostic_mode": 0,
+				"water_roughness_far": 0.29,
+				"water_roughness_near": 0.075,
+				"wave_normal_strength": 0.45
+			},
+			"size": "(1920, 1080)"
+		}
+	],
+	"finished_at_runtime_usec": 3725335,
+	"renderer": "Read from Godot output; expected graphical Forward+ run",
+	"scene": "res://tests/water_minimal/water_minimal.tscn",
+	"startup_wait_frames": 90
+}

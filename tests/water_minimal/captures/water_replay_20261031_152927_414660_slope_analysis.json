@@ -1,0 +1,382 @@
+{
+  "roi": [
+    0,
+    700,
+    1920,
+    1080
+  ],
+  "pixels": 729600,
+  "blue_clipping_pixels": 0,
+  "estimated_gpu_slope_min": [
+    -0.16105579200818543,
+    -0.14206974994305038
+  ],
+  "estimated_gpu_slope_max": [
+    0.11152756446098466,
+    0.1379111091587118
+  ],
+  "notes": "PNG values have 8-bit/display quantization. Offline ray intersections include continuous surface and central 1m mesh reconstruction; no GPU coordinate buffer was read. Float32 hash expression variants demonstrate sensitivity, not actual GPU instruction selection.",
+  "edge_samples": [
+    {
+      "pixel": [
+        1698,
+        751
+      ],
+      "approx_continuous_surface_world": [
+        12231.138879994933,
+        -0.18499855829827005,
+        10053.845614495462
+      ],
+      "source_xz": [
+        12231.106471542633,
+        10053.922670073298
+      ],
+      "cpu_slope": [
+        -0.03997348994016647,
+        0.04919574782252312
+      ],
+      "triangulated_world": [
+        12231.139399285481,
+        -0.18484452333828938,
+        10053.846045012218
+      ],
+      "triangle": [
+        12231,
+        10053,
+        [
+          0,
+          2,
+          3
+        ]
+      ],
+      "triangulated_cpu_slope": [
+        -0.040116824209690094,
+        0.0492597371339798
+      ],
+      "high_a_noise_coordinate": [
+        5271.5322265625,
+        9770.0107421875
+      ],
+      "gpu_slope_from_png": [
+        -0.04105746457593126,
+        0.04860089418188168
+      ]
+    },
+    {
+      "pixel": [
+        1699,
+        751
+      ],
+      "approx_continuous_surface_world": [
+        12231.139077944192,
+        -0.1850166663658469,
+        10053.838251094117
+      ],
+      "source_xz": [
+        12231.106625388813,
+        10053.915478939914
+      ],
+      "cpu_slope": [
+        -0.04035608097910881,
+        0.04928986355662346
+      ],
+      "triangulated_world": [
+        12231.139629110086,
+        -0.18485317014162717,
+        10053.838708646028
+      ],
+      "triangle": [
+        12231,
+        10053,
+        [
+          0,
+          2,
+          3
+        ]
+      ],
+      "triangulated_cpu_slope": [
+        -0.04043159633874893,
+        0.049354225397109985
+      ],
+      "high_a_noise_coordinate": [
+        5271.53369140625,
+        9770.0068359375
+      ],
+      "gpu_slope_from_png": [
+        -0.04105746457593126,
+        0.04860089418188168
+      ]
+    },
+    {
+      "pixel": [
+        1700,
+        751
+      ],
+      "approx_continuous_surface_world": [
+        12231.139276591577,
+        -0.18503456871265744,
+        10053.830888138194
+      ],
+      "source_xz": [
+        12231.106779981463,
+        10053.90828825874
+      ],
+      "cpu_slope": [
+        -0.04079344868659973,
+        0.0494498573243618
+      ],
+      "triangulated_world": [
+        12231.139858936662,
+        -0.18486181701896132,
+        10053.831372217055
+      ],
+      "triangle": [
+        12231,
+        10053,
+        [
+          0,
+          2,
+          3
+        ]
+      ],
+      "triangulated_cpu_slope": [
+        -0.04079344868659973,
+        0.0494498573243618
+      ],
+      "high_a_noise_coordinate": [
+        5271.53564453125,
+        9770.0009765625
+      ],
+      "gpu_slope_from_png": [
+        -0.04105746457593126,
+        0.04860089418188168
+      ]
+    },
+    {
+      "pixel": [
+        1701,
+        751
+      ],
+      "approx_continuous_surface_world": [
+        12231.139475936841,
+        -0.1850522653885478,
+        10053.823525629783
+      ],
+      "source_xz": [
+        12231.106935320498,
+        10053.901098031503
+      ],
+      "cpu_slope": [
+        -0.041219476610422134,
+        0.04956802353262901
+      ],
+      "triangulated_world": [
+        12231.140088765202,
+        -0.18487046397029316,
+        10053.824035725298
+      ],
+      "triangle": [
+        12231,
+        10053,
+        [
+          0,
+          2,
+          3
+        ]
+      ],
+      "triangulated_cpu_slope": [
+        -0.0411088690161705,
+        0.049530163407325745
+      ],
+      "high_a_noise_coordinate": [
+        5271.537109375,
+        9769.9970703125
+      ],
+      "gpu_slope_from_png": [
+        -0.12090857353920209,
+        0.08269364914113603
+      ]
+    },
+    {
+      "pixel": [
+        1702,
+        751
+      ],
+      "approx_continuous_surface_world": [
+        12231.13967597973,
+        -0.18506975644460238,
+        10053.816163570975
+      ],
+      "source_xz": [
+        12231.10709140584,
+        10053.89390825992
+      ],
+      "cpu_slope": [
+        -0.04159124940633774,
+        0.049672555178403854
+      ],
+      "triangulated_world": [
+        12231.140318595708,
+        -0.18487911099562315,
+        10053.816699170759
+      ],
+      "triangle": [
+        12231,
+        10053,
+        [
+          0,
+          2,
+          3
+        ]
+      ],
+      "triangulated_cpu_slope": [
+        -0.041663024574518204,
+        0.04972999542951584
+      ],
+      "high_a_noise_coordinate": [
+        5271.5400390625,
+        9769.9931640625
+      ],
+      "gpu_slope_from_png": [
+        -0.12090857353920209,
+        0.08269364914113603
+      ]
+    },
+    {
+      "pixel": [
+        1703,
+        751
+      ],
+      "approx_continuous_surface_world": [
+        12231.139876719992,
+        -0.1850870419329576,
+        10053.808801963853
+      ],
+      "source_xz": [
+        12231.107248237402,
+        10053.886718945718
+      ],
+      "cpu_slope": [
+        -0.04199147969484329,
+        0.049785371869802475
+      ],
+      "triangulated_world": [
+        12231.140548428182,
+        -0.18488775809495306,
+        10053.809362553435
+      ],
+      "triangle": [
+        12231,
+        10053,
+        [
+          0,
+          2,
+          3
+        ]
+      ],
+      "triangulated_cpu_slope": [
+        -0.042053256183862686,
+        0.04982294514775276
+      ],
+      "high_a_noise_coordinate": [
+        5271.5419921875,
+        9769.9873046875
+      ],
+      "gpu_slope_from_png": [
+        -0.12090857353920209,
+        0.08269364914113603
+      ]
+    }
+  ],
+  "shared_corner_hash_variants": [
+    {
+      "corner": [
+        5271,
+        9770
+      ],
+      "offset": 0,
+      "evaluation": "materialized",
+      "prefract_product": 6127.33984375,
+      "hash": 0.33984375
+    },
+    {
+      "corner": [
+        5271,
+        9770
+      ],
+      "offset": 0,
+      "evaluation": "distributed",
+      "prefract_product": 6127.33984375,
+      "hash": 0.33984375
+    },
+    {
+      "corner": [
+        5271,
+        9770
+      ],
+      "offset": 1,
+      "evaluation": "materialized",
+      "prefract_product": 6127.33984375,
+      "hash": 0.33984375
+    },
+    {
+      "corner": [
+        5271,
+        9770
+      ],
+      "offset": 1,
+      "evaluation": "distributed",
+      "prefract_product": 6127.8115234375,
+      "hash": 0.8115234375
+    },
+    {
+      "corner": [
+        5272,
+        9770
+      ],
+      "offset": 0,
+      "evaluation": "materialized",
+      "prefract_product": 7764.5498046875,
+      "hash": 0.5498046875
+    },
+    {
+      "corner": [
+        5272,
+        9770
+      ],
+      "offset": 0,
+      "evaluation": "distributed",
+      "prefract_product": 7764.5498046875,
+      "hash": 0.5498046875
+    },
+    {
+      "corner": [
+        5272,
+        9770
+      ],
+      "offset": 1,
+      "evaluation": "materialized",
+      "prefract_product": 7764.5498046875,
+      "hash": 0.5498046875
+    },
+    {
+      "corner": [
+        5272,
+        9770
+      ],
+      "offset": 1,
+      "evaluation": "distributed",
+      "prefract_product": 7765.0830078125,
+      "hash": 0.0830078125
+    }
+  ],
+  "predicted_world_slope_jump": [
+    -0.07920952141284943,
+    0.032559461891651154
+  ],
+  "observed_world_slope_jump": [
+    -0.07985110896327083,
+    0.034092754959254346
+  ],
+  "jump_difference_norm": 0.0016621137795036
+}

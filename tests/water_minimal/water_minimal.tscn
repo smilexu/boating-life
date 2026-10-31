@@ -1,0 +1,92 @@
+[gd_scene load_steps=16 format=3]
+
+[ext_resource type="Script" path="res://addons/boujie_water_shader/types/ocean.gd" id="1_ocean"]
+[ext_resource type="Script" path="res://addons/boujie_water_shader/types/camera_follower_3d.gd" id="2_follower"]
+[ext_resource type="Script" path="res://scripts/wave_sampler.gd" id="3_wave_sampler"]
+[ext_resource type="Resource" path="res://resources/sea_waves.tres" id="4_waves"]
+[ext_resource type="ShaderMaterial" path="res://materials/sea_water_material.tres" id="5_water_material"]
+[ext_resource type="Environment" path="res://resources/sea_environment.tres" id="6_environment"]
+[ext_resource type="Script" path="res://scripts/boat_controller.gd" id="7_boat_controller"]
+[ext_resource type="Script" path="res://scripts/boat_buoyancy.gd" id="8_buoyancy"]
+[ext_resource type="PackedScene" path="res://assets/boats/first_boat_optimized.glb" id="9_boat_model"]
+[ext_resource type="Resource" path="res://resources/vessels/starter_cargo_boat_draft.tres" id="10_draft"]
+[ext_resource type="Script" path="res://scripts/boat_follow_camera.gd" id="11_follow_camera"]
+[ext_resource type="Script" path="res://scripts/bathymetry_manager.gd" id="12_bathymetry_manager"]
+[ext_resource type="Resource" path="res://resources/oresund_georeference.tres" id="13_georeference"]
+[ext_resource type="Script" path="res://tests/water_minimal/bathymetry_visual_toggle.gd" id="14_bathymetry_toggle"]
+[ext_resource type="Script" path="res://tests/water_minimal/water_grid_capture_runner.gd" id="15_capture_runner"]
+
+[node name="WaterMinimal" type="Node3D"]
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = ExtResource("6_environment")
+
+[node name="Sunlight" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-12, 180, 0)
+light_color = Color(1, 0.91, 0.77, 1)
+light_energy = 1.18
+light_angular_distance = 0.85
+shadow_enabled = true
+directional_shadow_mode = 1
+directional_shadow_max_distance = 260.0
+
+[node name="Ocean" type="Node3D" parent="."]
+script = ExtResource("1_ocean")
+material = ExtResource("5_water_material")
+outermost_resolution = 12
+levels_of_detail = 4
+unit_size = 1.0
+far_edge = 60000.0
+
+[node name="OceanCameraFollower" type="Node3D" parent="."]
+script = ExtResource("2_follower")
+target_path = NodePath("../Ocean")
+follow_axes = 5
+snap = true
+snap_unit = 8.0
+
+[node name="WaveSampler" type="Node" parent="."]
+script = ExtResource("3_wave_sampler")
+wave_settings = ExtResource("4_waves")
+water_material = ExtResource("5_water_material")
+wave_strength = 1.05
+ocean_path = NodePath("../Ocean")
+
+[node name="BathymetryManager" type="Node" parent="."]
+script = ExtResource("12_bathymetry_manager")
+georeference = ExtResource("13_georeference")
+water_material = ExtResource("5_water_material")
+
+[node name="BathymetryVisualToggle" type="Node" parent="."]
+script = ExtResource("14_bathymetry_toggle")
+
+[node name="WaterGridCaptureRunner" type="Node" parent="."]
+script = ExtResource("15_capture_runner")
+
+[node name="PlayerBoat" type="Node3D" parent="."]
+position = Vector3(12224, 0, 10059)
+rotation_degrees = Vector3(0, 90, 0)
+
+[node name="MotionRoot" type="Node3D" parent="PlayerBoat"]
+script = ExtResource("7_boat_controller")
+draft_profile = ExtResource("10_draft")
+propulsion_type = 1
+
+[node name="VisualRoot" type="Node3D" parent="PlayerBoat/MotionRoot"]
+script = ExtResource("8_buoyancy")
+fore_sample_distance = 2.7
+aft_sample_distance = 2.7
+half_beam = 1.1
+
+[node name="BoatModelFrame" type="Node3D" parent="PlayerBoat/MotionRoot/VisualRoot"]
+transform = Transform3D(5.018633e-07, 0, 6.647381, 0, 6.647381, 0, -6.647381, 0, 5.018633e-07, 0, -0.32, -0.293)
+
+[node name="BoatModel" parent="PlayerBoat/MotionRoot/VisualRoot/BoatModelFrame" instance=ExtResource("9_boat_model")]
+
+[node name="FollowCameraRig" type="Node3D" parent="PlayerBoat"]
+script = ExtResource("11_follow_camera")
+
+[node name="Camera3D" type="Camera3D" parent="PlayerBoat/FollowCameraRig"]
+current = true
+fov = 58.0
+far = 80000.0

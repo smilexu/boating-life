@@ -30,6 +30,18 @@ uniform float metallic : hint_range(0.0, 1.0) = 0.0;
 uniform float ripple_scale : hint_range(0.02, 0.5) = 0.17;
 uniform float ripple_speed : hint_range(0.0, 1.0) = 0.08;
 uniform vec2 ripple_direction = vec2(0.87, 0.49);
+// Reversible test candidate for the shading-only normal field. Production stays legacy by default.
+uniform bool detail_noise_candidate_enabled = false;
+// Integer lattice hashing avoids float operation-order differences at shared value-noise corners.
+// Set false to reproduce the original floating-point lattice hash for A/B diagnostics.
+uniform bool detail_integer_hash_enabled = true;
+// Test-only frequency isolation: 0=all, 1=low, 2=mid, 3=high, 4=exclude low.
+uniform int detail_noise_layer_test = 0;
+// Test-only low layer spatial scale: 0=legacy, 1=2/3 feature size, 2=1/2 feature size.
+uniform int detail_noise_low_scale_test = 0;
+// Test-only geometric composition of procedural height slopes with the base normal.
+uniform bool detail_normal_slope_composition_candidate = false;
+uniform bool gerstner_geometry_normal_candidate = false;
 // Shading-only normal blend; vertex displacement and CPU WaveSampler stay unchanged.
 uniform float wave_normal_strength : hint_range(0.0, 1.0) = 0.45;
 uniform float detail_wave_fade_start : hint_range(0.0, 5000.0) = 80.0;
@@ -138,7 +150,10 @@ uniform float shallow_wave_max_trough_excursion_m = 0.0;
 // 6=depth validity, 7=diffuse/shadows only, 8=specular/reflection only,
 // 9=diffuse with flat normal, 10=specular with flat normal, 11=full with flat normal,
 // 12=flat color while preserving the configured alpha fades,
-// 13=shallow-transmission weight (red) and valid bathymetry (green).
+// 13=shallow-transmission weight (red) and valid bathymetry (green),
+// 15=Gerstner lighting normal only, 16=detail lighting normal only,
+// 17/18/19=detail-normal contribution weight 0/0.5/1,
+// 21/22/23=normal+Fresnel, mixed light/Gerstner Fresnel, Gerstner light/mixed Fresnel.
 uniform int water_diagnostic_mode = 0;
 group_uniforms;
 
@@ -455,6 +470,23 @@ void vertex() {
 	if (WaveCount > 0) {
 		NORMAL = normalize(normalWave);
 	}
+	// This candidate covers the constant-envelope world-XZ surface only.
+	// Varying fade/depth envelopes require their spatial derivatives as well.
+	if (gerstner_geometry_normal_candidate && WaveCount > 0 && !vertex_displace_from_mesh_normal
+			&& !shallow_wave_constraint_enabled && vertex_fade_alpha == 1.0) {
+		vec3 dx = vec3(1.0, 0.0, 0.0);
+		vec3 dz = vec3(0.0, 0.0, 1.0);
+		for (int i = 0; i < WaveCount; i++) {
+			vec2 d = vec2(sin(radians(WaveDirectionsDegrees[i])), cos(radians(WaveDirectionsDegrees[i])));
+			float k = TAU * WaveFrequencies[i];
+			float theta = k * dot(d, wave_coords) + WaveSpeeds[i] * (time + radians(WavePhases[i]));
+			float s = WaveSteepnesses[i] * shallow_wave_scale;
+			vec3 derivative = vec3(-s * WaveAmplitudes[i] * d.x * sin(theta), s * cos(theta), -s * WaveAmplitudes[i] * d.y * sin(theta));
+			dx += derivative * (k * d.x * vertex_fade_alpha / float(WaveCount));
+			dz += derivative * (k * d.y * vertex_fade_alpha / float(WaveCount));
+		}
+		NORMAL = normalize(cross(dz, dx));
+	}
 #endif
 
 	// DEBUG: increase vertex height based on distance from center
@@ -478,6 +510,18 @@ float water_hash(vec2 p) {
 	return fract((p3.x + p3.y) * p3.z);
 }
 
+float water_integer_lattice_hash(ivec2 lattice) {
+	uint hash_value = uint(lattice.x) * 0x8da6b343u;
+	hash_value = hash_value ^ (uint(lattice.y) * 0xd8163841u);
+	hash_value = hash_value ^ 0xcb1ab31fu;
+	hash_value = hash_value ^ (hash_value >> 16u);
+	hash_value = hash_value * 0x7feb352du;
+	hash_value = hash_value ^ (hash_value >> 15u);
+	hash_value = hash_value * 0x846ca68bu;
+	hash_value = hash_value ^ (hash_value >> 16u);
+	return float(hash_value >> 8u) * (1.0 / 16777216.0);
+}
+
 // Non-periodic value noise plus its analytic X/Y gradient. The quintic
 // interpolation keeps cell boundaries smooth without a tiled normal texture.
 vec3 water_value_noise_gradient(vec2 p) {
@@ -498,13 +542,125 @@ vec3 water_value_noise_gradient(vec2 p) {
 	return vec3(value, gradient_x, gradient_y);
 }
 
+vec3 water_value_noise_gradient_integer(vec2 p) {
+	vec2 cell = floor(p);
+	ivec2 integer_cell = ivec2(cell);
+	vec2 f = fract(p);
+	vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+	vec2 du = 30.0 * f * f * (f - 1.0) * (f - 1.0);
+
+	float n00 = water_integer_lattice_hash(integer_cell);
+	float n10 = water_integer_lattice_hash(integer_cell + ivec2(1, 0));
+	float n01 = water_integer_lattice_hash(integer_cell + ivec2(0, 1));
+	float n11 = water_integer_lattice_hash(integer_cell + ivec2(1, 1));
+	float row0 = mix(n00, n10, u.x);
+	float row1 = mix(n01, n11, u.x);
+	float value = mix(row0, row1, u.y);
+	float gradient_x = mix((n10 - n00) * du.x, (n11 - n01) * du.x, u.y);
+	float gradient_y = (row1 - row0) * du.y;
+	return vec3(value, gradient_x, gradient_y);
+}
+
+vec2 water_simplex_corner_gradient(vec2 lattice) {
+	vec2 gradient = vec2(
+		water_hash(lattice) * 2.0 - 1.0,
+		water_hash(lattice + vec2(19.19, 73.73)) * 2.0 - 1.0
+	);
+	return normalize(gradient);
+}
+
+// 2D simplex noise with the analytical derivative of each compact-support
+// corner contribution. The scale matches the legacy value-noise gradient RMS.
+vec3 water_simplex_noise_gradient(vec2 p) {
+	const float F2 = 0.3660254037844386;
+	const float G2 = 0.21132486540518713;
+	const float MATCH_LEGACY_GRADIENT_RMS = 0.2387;
+	vec2 skewed = p + vec2(dot(p, vec2(F2)));
+	vec2 lattice = floor(skewed);
+	vec2 unskew = vec2(dot(lattice, vec2(G2)));
+	vec2 x0 = p - lattice + unskew;
+	vec2 i1 = x0.x > x0.y ? vec2(1.0, 0.0) : vec2(0.0, 1.0);
+	vec2 x1 = x0 - i1 + vec2(G2);
+	vec2 x2 = x0 - vec2(1.0) + vec2(2.0 * G2);
+	vec2 i0 = lattice;
+	vec2 i2 = lattice + vec2(1.0);
+	vec2 g0 = water_simplex_corner_gradient(i0);
+	vec2 g1 = water_simplex_corner_gradient(i0 + i1);
+	vec2 g2 = water_simplex_corner_gradient(i2);
+	float t0 = max(0.5 - dot(x0, x0), 0.0);
+	float t1 = max(0.5 - dot(x1, x1), 0.0);
+	float t2 = max(0.5 - dot(x2, x2), 0.0);
+	float d0 = dot(g0, x0);
+	float d1 = dot(g1, x1);
+	float d2 = dot(g2, x2);
+	float t0_2 = t0 * t0;
+	float t1_2 = t1 * t1;
+	float t2_2 = t2 * t2;
+	float value = 70.0 * (t0_2 * t0_2 * d0 + t1_2 * t1_2 * d1 + t2_2 * t2_2 * d2);
+	vec2 gradient = vec2(0.0);
+	gradient += t0_2 * t0_2 * g0 - 8.0 * t0_2 * t0 * d0 * x0;
+	gradient += t1_2 * t1_2 * g1 - 8.0 * t1_2 * t1 * d1 * x1;
+	gradient += t2_2 * t2_2 * g2 - 8.0 * t2_2 * t2 * d2 * x2;
+	return vec3(0.5 + value * MATCH_LEGACY_GRADIENT_RMS, gradient * (70.0 * MATCH_LEGACY_GRADIENT_RMS));
+}
+
+vec3 water_detail_noise_gradient(vec2 p) {
+	if (detail_noise_candidate_enabled) {
+		return water_simplex_noise_gradient(p);
+	}
+	if (detail_integer_hash_enabled) {
+		return water_value_noise_gradient_integer(p);
+	}
+	return water_value_noise_gradient(p);
+}
+
 vec3 water_detail_fbm(vec2 p) {
-	vec3 layer_a = water_value_noise_gradient(p);
-	vec3 layer_b = water_value_noise_gradient(p * 2.03 + vec2(17.1, 9.2));
-	vec3 layer_c = water_value_noise_gradient(p * 4.11 + vec2(37.7, 23.4));
-	float value = (layer_a.x - 0.5) * 0.62 + (layer_b.x - 0.5) * 0.27 + (layer_c.x - 0.5) * 0.11;
-	vec2 gradient = layer_a.yz * 0.62 + layer_b.yz * (0.27 * 2.03) + layer_c.yz * (0.11 * 4.11);
+	float low_layer_frequency = 1.0;
+	if (detail_noise_low_scale_test == 1) {
+		low_layer_frequency = 1.5;
+	} else if (detail_noise_low_scale_test == 2) {
+		low_layer_frequency = 2.0;
+	}
+	vec3 layer_a = water_detail_noise_gradient(p * low_layer_frequency);
+	vec3 layer_b = water_detail_noise_gradient(p * 2.03 + vec2(17.1, 9.2));
+	vec3 layer_c = water_detail_noise_gradient(p * 4.11 + vec2(37.7, 23.4));
+	if (detail_noise_layer_test == 0 && detail_noise_low_scale_test == 0) {
+		float full_value = (layer_a.x - 0.5) * 0.62 + (layer_b.x - 0.5) * 0.27 + (layer_c.x - 0.5) * 0.11;
+		vec2 full_gradient = layer_a.yz * 0.62 + layer_b.yz * (0.27 * 2.03) + layer_c.yz * (0.11 * 4.11);
+		return vec3(full_value, full_gradient);
+	}
+	float include_a = 1.0;
+	float include_b = 1.0;
+	float include_c = 1.0;
+	if (detail_noise_layer_test == 1) {
+		include_b = 0.0;
+		include_c = 0.0;
+	} else if (detail_noise_layer_test == 2) {
+		include_a = 0.0;
+		include_c = 0.0;
+	} else if (detail_noise_layer_test == 3) {
+		include_a = 0.0;
+		include_b = 0.0;
+	} else if (detail_noise_layer_test == 4) {
+		include_a = 0.0;
+	}
+	float value = (layer_a.x - 0.5) * (0.62 * include_a)
+		+ (layer_b.x - 0.5) * (0.27 * include_b)
+		+ (layer_c.x - 0.5) * (0.11 * include_c);
+	// Inverse frequency compensation keeps the low layer's gradient RMS near
+	// Legacy while changing only its spatial feature size.
+	vec2 gradient = layer_a.yz * ((0.62 / low_layer_frequency) * include_a)
+		+ layer_b.yz * (0.27 * 2.03 * include_b)
+		+ layer_c.yz * (0.11 * 4.11 * include_c);
 	return vec3(value, gradient);
+}
+
+// Diagnostic only: mark the same integer lattice boundaries used by the
+// value-noise FBM layers. This does not participate in normal generation.
+float water_noise_cell_edge(vec2 p, float half_width) {
+	vec2 cell_fraction = fract(p);
+	vec2 edge_distance = min(cell_fraction, vec2(1.0) - cell_fraction);
+	return 1.0 - smoothstep(0.0, half_width, min(edge_distance.x, edge_distance.y));
 }
 
 // Sparse, short-lived ripples are one layer of rain detail. Their random radius
@@ -687,6 +843,14 @@ void fragment() {
 	// space so this changes lighting/reflection response only, not wave geometry.
 	vec3 flat_water_normal_view = normalize((VIEW_MATRIX * vec4(0.0, 1.0, 0.0, 0.0)).xyz);
 	NORMAL = normalize(mix(flat_water_normal_view, NORMAL, wave_normal_strength));
+	vec3 gerstner_lighting_normal_view = NORMAL;
+	vec3 detail_lighting_normal_offset_view = vec3(0.0);
+	float diagnostic_detail_normal_weight = 1.0;
+	if (water_diagnostic_mode == 17) {
+		diagnostic_detail_normal_weight = 0.0;
+	} else if (water_diagnostic_mode == 18) {
+		diagnostic_detail_normal_weight = 0.5;
+	}
 	float detail_time = WaveTime * float(!freeze_time);
 	vec2 detail_position = world_coordinates.xz;
 	float rain_world_pixel_footprint = 0.0;
@@ -711,7 +875,24 @@ void fragment() {
 	vec2 gradient_b = rotate_water_vector(detail_b.yz, -rotation_b) * (ripple_scale * 0.79);
 	vec2 micro_slope = gradient_a * 0.64 + gradient_b * 0.36;
 	vec3 micro_normal_offset_world = vec3(-micro_slope.x, 0.0, -micro_slope.y) * detail_strength * sun_glitter_intensity;
-	NORMAL = normalize(NORMAL + (VIEW_MATRIX * vec4(micro_normal_offset_world, 0.0)).xyz);
+	vec3 micro_normal_offset_view = (VIEW_MATRIX * vec4(micro_normal_offset_world, 0.0)).xyz;
+	detail_lighting_normal_offset_view += micro_normal_offset_view;
+	if (detail_normal_slope_composition_candidate) {
+		// Combine world-XZ height slopes, then rebuild the view-space shading normal.
+		// For N=(-dh/dx, 1, -dh/dz), adding detail slope d gives
+		// N'=(N.x-N.y*d.x, N.y, N.z-N.y*d.y), up to normalization.
+		vec3 base_normal_world = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+		vec2 detail_height_slope = micro_slope * detail_strength * sun_glitter_intensity
+			* diagnostic_detail_normal_weight;
+		vec3 composed_normal_world = normalize(vec3(
+			base_normal_world.x - base_normal_world.y * detail_height_slope.x,
+			base_normal_world.y,
+			base_normal_world.z - base_normal_world.y * detail_height_slope.y
+		));
+		NORMAL = normalize((VIEW_MATRIX * vec4(composed_normal_world, 0.0)).xyz);
+	} else {
+		NORMAL = normalize(NORMAL + micro_normal_offset_view * diagnostic_detail_normal_weight);
+	}
 	float rain_micro_activity = 0.0;
 	float rain_micro_core_activity = 0.0;
 	float rain_micro_rim_activity = 0.0;
@@ -738,7 +919,9 @@ void fragment() {
 		vec2 combined_rain_slope = ring_slope * ring_fade + micro_detail.xy * micro_fade;
 		vec3 rain_normal_offset_world = vec3(-combined_rain_slope.x, 0.0, -combined_rain_slope.y)
 			* rain_impact_strength;
-		NORMAL = normalize(NORMAL + (VIEW_MATRIX * vec4(rain_normal_offset_world, 0.0)).xyz);
+		vec3 rain_normal_offset_view = (VIEW_MATRIX * vec4(rain_normal_offset_world, 0.0)).xyz;
+		detail_lighting_normal_offset_view += rain_normal_offset_view;
+		NORMAL = normalize(NORMAL + rain_normal_offset_view * diagnostic_detail_normal_weight);
 		ROUGHNESS = clamp(ROUGHNESS + rain_impact_strength * ring_fade * 0.035 + rain_micro_activity * rain_impact_strength * 0.09, 0.0, 1.0);
 		SPECULAR = clamp(SPECULAR + micro_detail.w * micro_fade * rain_impact_strength * 0.08, 0.0, 1.0);
 	}
@@ -751,13 +934,21 @@ void fragment() {
 #endif
 	float albedo_detail_fade = 1.0 - smoothstep(albedo_detail_fade_start, albedo_detail_fade_end, distance_from_camera);
 	vec3 albedo_detail = mix(vec3(1.0), albedo_tex.rgb, albedo_detail_fade);
-	if (water_diagnostic_mode == 2 || water_diagnostic_mode == 3) {
+	if (water_diagnostic_mode == 2 || water_diagnostic_mode == 3
+			|| water_diagnostic_mode == 15 || water_diagnostic_mode == 16
+			|| water_diagnostic_mode == 17 || water_diagnostic_mode == 18 || water_diagnostic_mode == 19
+			|| water_diagnostic_mode == 20 || water_diagnostic_mode == 21
+			|| water_diagnostic_mode == 22 || water_diagnostic_mode == 23) {
 		albedo_detail = vec3(1.0);
 	}
 
 	float final_refraction_opacity = refraction_opacity;
 #ifdef FRESNEL
-	float fresnel_factor = fresnel(3.0, NORMAL, VIEW);
+	vec3 fresnel_input_normal = NORMAL;
+	if (water_diagnostic_mode == 22) {
+		fresnel_input_normal = gerstner_lighting_normal_view;
+	}
+	float fresnel_factor = fresnel(3.0, fresnel_input_normal, VIEW);
 	vec4 surface_color = mix(albedo, albedo_fresnel, fresnel_factor);
 #else
 	vec4 surface_color = albedo;
@@ -787,7 +978,11 @@ void fragment() {
 		bathymetry_depth_m = bathymetry.x;
 		bathymetry_validity = smoothstep(valid_coverage_min, valid_coverage_max, bathymetry.y);
 	}
-	if (water_diagnostic_mode == 1 || water_diagnostic_mode == 2) {
+	if (water_diagnostic_mode == 1 || water_diagnostic_mode == 2
+			|| water_diagnostic_mode == 15 || water_diagnostic_mode == 16
+			|| water_diagnostic_mode == 17 || water_diagnostic_mode == 18 || water_diagnostic_mode == 19
+			|| water_diagnostic_mode == 20 || water_diagnostic_mode == 21
+			|| water_diagnostic_mode == 22 || water_diagnostic_mode == 23) {
 		use_depth_color = false;
 	} else if (water_diagnostic_mode == 3) {
 		use_depth_color = true;
@@ -1023,6 +1218,54 @@ void fragment() {
 		// Visual validation for depth and depth-buffer gating; no scene color changes.
 		ALBEDO = vec3(0.0);
 		EMISSION = vec3(shallow_transmission_weight, bathymetry_validity, 1.0 - shallow_transmission_weight);
+		METALLIC = 0.0;
+		ROUGHNESS = 1.0;
+		SPECULAR = 0.0;
+		ALPHA = 1.0;
+	} else if (water_diagnostic_mode == 15) {
+		// Change only the final lighting normal; keep mode-2 colors and material response.
+		NORMAL = gerstner_lighting_normal_view;
+	} else if (water_diagnostic_mode == 16) {
+		// Keep procedural/rain detail slopes over a flat base lighting normal.
+		NORMAL = normalize(flat_water_normal_view + detail_lighting_normal_offset_view);
+	} else if (water_diagnostic_mode == 20) {
+		// RGB marks integer-cell boundaries for the exact six FBM input lattices.
+		float edge_a = max(
+			water_noise_cell_edge(position_a, 0.035),
+			water_noise_cell_edge(position_b, 0.035));
+		float edge_b = max(
+			water_noise_cell_edge(position_a * 2.03 + vec2(17.1, 9.2), 0.035),
+			water_noise_cell_edge(position_b * 2.03 + vec2(17.1, 9.2), 0.035));
+		float edge_c = max(
+			water_noise_cell_edge(position_a * 4.11 + vec2(37.7, 23.4), 0.035),
+			water_noise_cell_edge(position_b * 4.11 + vec2(37.7, 23.4), 0.035));
+		NORMAL = flat_water_normal_view;
+		ALBEDO = vec3(edge_a, edge_b, edge_c);
+		EMISSION = vec3(edge_a, edge_b, edge_c);
+		METALLIC = 0.0;
+		ROUGHNESS = 1.0;
+		SPECULAR = 0.0;
+		ALPHA = 1.0;
+	} else if (water_diagnostic_mode == 23) {
+		// Fresnel has already used the mixed normal; only the final light normal changes.
+		NORMAL = gerstner_lighting_normal_view;
+	} else if (water_diagnostic_mode == 24 || water_diagnostic_mode == 25) {
+		// The minimal-scene runner uses an unshaded, fog-disabled copy of this
+		// shader for these outputs, preserving every material uniform.
+		vec3 diagnostic_color;
+		if (water_diagnostic_mode == 24) {
+			// Fixed symmetric +/-0.25 slope range; blue marks any clipping.
+			vec2 encoded_slope = vec2(0.5) + micro_slope / 0.5;
+			float clipped = max(abs(micro_slope.x), abs(micro_slope.y)) > 0.25 ? 1.0 : 0.0;
+			diagnostic_color = vec3(clamp(encoded_slope, vec2(0.0), vec2(1.0)), clipped);
+		} else {
+			vec3 normal_world = normalize((INV_VIEW_MATRIX * vec4(NORMAL, 0.0)).xyz);
+			float lambert = max(dot(normal_world, normalize(vec3(0.7, 0.35, 0.62))), 0.0);
+			diagnostic_color = vec3(lambert);
+		}
+		ALBEDO = vec3(0.0);
+		ALBEDO = diagnostic_color;
+		EMISSION = vec3(0.0);
 		METALLIC = 0.0;
 		ROUGHNESS = 1.0;
 		SPECULAR = 0.0;
