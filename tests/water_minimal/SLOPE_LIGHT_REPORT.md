@@ -61,6 +61,6 @@ A 组最高频输入恰好由 `(5271.5356,9770.0010)` 跨到 `(5271.5371,9769.99
 
 ## 建议
 
-下一项最小修复应仅替换细节噪声的格点哈希：使用整数格点和确定的 uint 混合，保持 quintic 插值、解析梯度、FBM 参数及法线混合不变。避免继续替换整套噪声、调强度或增加模糊。这样针对的是共享格点一致性，无需平台分支。本轮依照限制没有实施该修复。
+后续已按此建议实施整数格点哈希，并通过相同 F9 状态完成 Legacy/Fixed Windows Vulkan 对照。结果、实现细节和证据边界记录在[根因与修复记录](../../docs/SEA_WATER_GRID_HASH_ROOT_CAUSE.md)。
 
-可用 `py tests/water_minimal/analyze_slope_capture.py` 重算离线证据。捕获命令在现有 F9 replay 参数后增加 `--water-grid-confirmed --water-grid-slope-light`。本次无 Shader 编译失败；有既有 shader_rd 缓存写入错误、日志/证书和退出清理警告。未做 Mac、性能扫描或完整游戏测试。
+本报告中的坡度/光照阶段隔离仍是原始诊断记录；最终修复对照截图使用报告所链接的新记录。Windows 渲染有 shader_rd 缓存写入错误及日志/证书读取问题，但没有观察到 Shader 编译失败。macOS、性能和完整游戏回归未验证。

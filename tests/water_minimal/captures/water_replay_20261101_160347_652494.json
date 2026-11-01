@@ -1,0 +1,636 @@
+{
+	"captures": [
+		{
+			"camera": {
+				"far": 80000.0,
+				"fov_degrees": 58.0,
+				"near": 0.0500000007450581,
+				"world_position": [
+					12237.9521484375,
+					1.83599233627319,
+					10059.494140625
+				],
+				"world_rotation_degrees": [
+					-3.83559155464172,
+					87.9716033935547,
+					0.0
+				]
+			},
+			"file": "water_replay_20261101_160347_652494_normal.png",
+			"note": "Restored F9 state with the fixed integer detail hash",
+			"shader_parameters": {
+				"WaveAmplitudes": [
+					2.30999994277954,
+					1.88999998569489,
+					1.04999995231628,
+					0.944999992847443,
+					0.71399998664856
+				],
+				"WaveCount": 5.0,
+				"WaveDirectionsDegrees": [
+					20.0,
+					104.0,
+					156.0,
+					238.0,
+					322.0
+				],
+				"WaveFrequencies": [
+					0.0120000001043081,
+					0.0189999993890524,
+					0.0410000011324883,
+					0.0579999983310699,
+					0.0710000023245811
+				],
+				"WavePhases": [
+					0.0,
+					76.0,
+					205.0,
+					318.0,
+					131.0
+				],
+				"WaveSpeeds": [
+					0.720000028610229,
+					0.879999995231628,
+					1.08000004291534,
+					1.26999998092651,
+					1.45000004768372
+				],
+				"WaveSteepnesses": [
+					0.483000010251999,
+					0.325500011444092,
+					0.220500007271767,
+					0.17849999666214,
+					0.0944999977946281
+				],
+				"WaveTime": 9.62876199999985,
+				"bathymetry_bounds_east_north": [
+					-31717.533203125,
+					-38992.203125,
+					29842.466796875,
+					44647.796875
+				],
+				"bathymetry_texture_size": [
+					2052.0,
+					2788.0
+				],
+				"depth_color_strength": 0.6,
+				"detail_normal_strength_far": 0.0,
+				"detail_normal_strength_near": 0.8,
+				"detail_wave_fade_end": 950.0,
+				"detail_wave_fade_start": 140.0,
+				"enable_depth_color": true,
+				"freeze_time": false,
+				"metallic": 0.04,
+				"ripple_direction": [
+					0.870000004768372,
+					0.490000009536743
+				],
+				"ripple_scale": 0.17,
+				"ripple_speed": 0.08,
+				"shallow_transparency_enabled": true,
+				"shallow_wave_constraint_enabled": false,
+				"shallow_wave_full_depth_m": 30.0,
+				"shallow_wave_max_trough_excursion_m": 0.2604,
+				"shallow_wave_min_amplitude_scale": 0.4,
+				"shallow_wave_safe_depth_ratio": 0.2,
+				"specular": 0.18,
+				"water_diagnostic_mode": 0,
+				"water_roughness_far": 0.29,
+				"water_roughness_near": 0.075,
+				"water_specular_far_multiplier": 0.62,
+				"water_specular_near_multiplier": 0.72,
+				"wave_normal_strength": 0.45
+			},
+			"size": [
+				1920,
+				1080
+			]
+		},
+		{
+			"camera": {
+				"far": 80000.0,
+				"fov_degrees": 58.0,
+				"near": 0.0500000007450581,
+				"world_position": [
+					12237.9521484375,
+					1.83599233627319,
+					10059.494140625
+				],
+				"world_rotation_degrees": [
+					-3.83559155464172,
+					87.9716033935547,
+					0.0
+				]
+			},
+			"file": "water_replay_20261101_160347_652494_mode2.png",
+			"note": "Confirmed replay diagnostic mode 2",
+			"shader_parameters": {
+				"WaveAmplitudes": [
+					2.30999994277954,
+					1.88999998569489,
+					1.04999995231628,
+					0.944999992847443,
+					0.71399998664856
+				],
+				"WaveCount": 5.0,
+				"WaveDirectionsDegrees": [
+					20.0,
+					104.0,
+					156.0,
+					238.0,
+					322.0
+				],
+				"WaveFrequencies": [
+					0.0120000001043081,
+					0.0189999993890524,
+					0.0410000011324883,
+					0.0579999983310699,
+					0.0710000023245811
+				],
+				"WavePhases": [
+					0.0,
+					76.0,
+					205.0,
+					318.0,
+					131.0
+				],
+				"WaveSpeeds": [
+					0.720000028610229,
+					0.879999995231628,
+					1.08000004291534,
+					1.26999998092651,
+					1.45000004768372
+				],
+				"WaveSteepnesses": [
+					0.483000010251999,
+					0.325500011444092,
+					0.220500007271767,
+					0.17849999666214,
+					0.0944999977946281
+				],
+				"WaveTime": 9.62876199999985,
+				"bathymetry_bounds_east_north": [
+					-31717.533203125,
+					-38992.203125,
+					29842.466796875,
+					44647.796875
+				],
+				"bathymetry_texture_size": [
+					2052.0,
+					2788.0
+				],
+				"depth_color_strength": 0.6,
+				"detail_normal_strength_far": 0.0,
+				"detail_normal_strength_near": 0.8,
+				"detail_wave_fade_end": 950.0,
+				"detail_wave_fade_start": 140.0,
+				"enable_depth_color": true,
+				"freeze_time": false,
+				"metallic": 0.04,
+				"ripple_direction": [
+					0.870000004768372,
+					0.490000009536743
+				],
+				"ripple_scale": 0.17,
+				"ripple_speed": 0.08,
+				"shallow_transparency_enabled": true,
+				"shallow_wave_constraint_enabled": false,
+				"shallow_wave_full_depth_m": 30.0,
+				"shallow_wave_max_trough_excursion_m": 0.2604,
+				"shallow_wave_min_amplitude_scale": 0.4,
+				"shallow_wave_safe_depth_ratio": 0.2,
+				"specular": 0.18,
+				"water_diagnostic_mode": 2,
+				"water_roughness_far": 0.29,
+				"water_roughness_near": 0.075,
+				"water_specular_far_multiplier": 0.62,
+				"water_specular_near_multiplier": 0.72,
+				"wave_normal_strength": 0.45
+			},
+			"size": [
+				1920,
+				1080
+			]
+		},
+		{
+			"camera": {
+				"far": 80000.0,
+				"fov_degrees": 58.0,
+				"near": 0.0500000007450581,
+				"world_position": [
+					12237.9521484375,
+					1.83599233627319,
+					10059.494140625
+				],
+				"world_rotation_degrees": [
+					-3.83559155464172,
+					87.9716033935547,
+					0.0
+				]
+			},
+			"file": "water_replay_20261101_160347_652494_mode9.png",
+			"note": "Confirmed replay diagnostic mode 9",
+			"shader_parameters": {
+				"WaveAmplitudes": [
+					2.30999994277954,
+					1.88999998569489,
+					1.04999995231628,
+					0.944999992847443,
+					0.71399998664856
+				],
+				"WaveCount": 5.0,
+				"WaveDirectionsDegrees": [
+					20.0,
+					104.0,
+					156.0,
+					238.0,
+					322.0
+				],
+				"WaveFrequencies": [
+					0.0120000001043081,
+					0.0189999993890524,
+					0.0410000011324883,
+					0.0579999983310699,
+					0.0710000023245811
+				],
+				"WavePhases": [
+					0.0,
+					76.0,
+					205.0,
+					318.0,
+					131.0
+				],
+				"WaveSpeeds": [
+					0.720000028610229,
+					0.879999995231628,
+					1.08000004291534,
+					1.26999998092651,
+					1.45000004768372
+				],
+				"WaveSteepnesses": [
+					0.483000010251999,
+					0.325500011444092,
+					0.220500007271767,
+					0.17849999666214,
+					0.0944999977946281
+				],
+				"WaveTime": 9.62876199999985,
+				"bathymetry_bounds_east_north": [
+					-31717.533203125,
+					-38992.203125,
+					29842.466796875,
+					44647.796875
+				],
+				"bathymetry_texture_size": [
+					2052.0,
+					2788.0
+				],
+				"depth_color_strength": 0.6,
+				"detail_normal_strength_far": 0.0,
+				"detail_normal_strength_near": 0.8,
+				"detail_wave_fade_end": 950.0,
+				"detail_wave_fade_start": 140.0,
+				"enable_depth_color": true,
+				"freeze_time": false,
+				"metallic": 0.04,
+				"ripple_direction": [
+					0.870000004768372,
+					0.490000009536743
+				],
+				"ripple_scale": 0.17,
+				"ripple_speed": 0.08,
+				"shallow_transparency_enabled": true,
+				"shallow_wave_constraint_enabled": false,
+				"shallow_wave_full_depth_m": 30.0,
+				"shallow_wave_max_trough_excursion_m": 0.2604,
+				"shallow_wave_min_amplitude_scale": 0.4,
+				"shallow_wave_safe_depth_ratio": 0.2,
+				"specular": 0.18,
+				"water_diagnostic_mode": 9,
+				"water_roughness_far": 0.29,
+				"water_roughness_near": 0.075,
+				"water_specular_far_multiplier": 0.62,
+				"water_specular_near_multiplier": 0.72,
+				"wave_normal_strength": 0.45
+			},
+			"size": [
+				1920,
+				1080
+			]
+		},
+		{
+			"camera": {
+				"far": 80000.0,
+				"fov_degrees": 58.0,
+				"near": 0.0500000007450581,
+				"world_position": [
+					12237.9521484375,
+					1.83599233627319,
+					10059.494140625
+				],
+				"world_rotation_degrees": [
+					-3.83559155464172,
+					87.9716033935547,
+					0.0
+				]
+			},
+			"file": "water_replay_20261101_160347_652494_mode10.png",
+			"note": "Confirmed replay diagnostic mode 10",
+			"shader_parameters": {
+				"WaveAmplitudes": [
+					2.30999994277954,
+					1.88999998569489,
+					1.04999995231628,
+					0.944999992847443,
+					0.71399998664856
+				],
+				"WaveCount": 5.0,
+				"WaveDirectionsDegrees": [
+					20.0,
+					104.0,
+					156.0,
+					238.0,
+					322.0
+				],
+				"WaveFrequencies": [
+					0.0120000001043081,
+					0.0189999993890524,
+					0.0410000011324883,
+					0.0579999983310699,
+					0.0710000023245811
+				],
+				"WavePhases": [
+					0.0,
+					76.0,
+					205.0,
+					318.0,
+					131.0
+				],
+				"WaveSpeeds": [
+					0.720000028610229,
+					0.879999995231628,
+					1.08000004291534,
+					1.26999998092651,
+					1.45000004768372
+				],
+				"WaveSteepnesses": [
+					0.483000010251999,
+					0.325500011444092,
+					0.220500007271767,
+					0.17849999666214,
+					0.0944999977946281
+				],
+				"WaveTime": 9.62876199999985,
+				"bathymetry_bounds_east_north": [
+					-31717.533203125,
+					-38992.203125,
+					29842.466796875,
+					44647.796875
+				],
+				"bathymetry_texture_size": [
+					2052.0,
+					2788.0
+				],
+				"depth_color_strength": 0.6,
+				"detail_normal_strength_far": 0.0,
+				"detail_normal_strength_near": 0.8,
+				"detail_wave_fade_end": 950.0,
+				"detail_wave_fade_start": 140.0,
+				"enable_depth_color": true,
+				"freeze_time": false,
+				"metallic": 0.04,
+				"ripple_direction": [
+					0.870000004768372,
+					0.490000009536743
+				],
+				"ripple_scale": 0.17,
+				"ripple_speed": 0.08,
+				"shallow_transparency_enabled": true,
+				"shallow_wave_constraint_enabled": false,
+				"shallow_wave_full_depth_m": 30.0,
+				"shallow_wave_max_trough_excursion_m": 0.2604,
+				"shallow_wave_min_amplitude_scale": 0.4,
+				"shallow_wave_safe_depth_ratio": 0.2,
+				"specular": 0.18,
+				"water_diagnostic_mode": 10,
+				"water_roughness_far": 0.29,
+				"water_roughness_near": 0.075,
+				"water_specular_far_multiplier": 0.62,
+				"water_specular_near_multiplier": 0.72,
+				"wave_normal_strength": 0.45
+			},
+			"size": [
+				1920,
+				1080
+			]
+		},
+		{
+			"camera": {
+				"far": 80000.0,
+				"fov_degrees": 58.0,
+				"near": 0.0500000007450581,
+				"world_position": [
+					12237.9521484375,
+					1.83599233627319,
+					10059.494140625
+				],
+				"world_rotation_degrees": [
+					-3.83559155464172,
+					87.9716033935547,
+					0.0
+				]
+			},
+			"file": "water_replay_20261101_160347_652494_mode6.png",
+			"note": "Confirmed replay diagnostic mode 6",
+			"shader_parameters": {
+				"WaveAmplitudes": [
+					2.30999994277954,
+					1.88999998569489,
+					1.04999995231628,
+					0.944999992847443,
+					0.71399998664856
+				],
+				"WaveCount": 5.0,
+				"WaveDirectionsDegrees": [
+					20.0,
+					104.0,
+					156.0,
+					238.0,
+					322.0
+				],
+				"WaveFrequencies": [
+					0.0120000001043081,
+					0.0189999993890524,
+					0.0410000011324883,
+					0.0579999983310699,
+					0.0710000023245811
+				],
+				"WavePhases": [
+					0.0,
+					76.0,
+					205.0,
+					318.0,
+					131.0
+				],
+				"WaveSpeeds": [
+					0.720000028610229,
+					0.879999995231628,
+					1.08000004291534,
+					1.26999998092651,
+					1.45000004768372
+				],
+				"WaveSteepnesses": [
+					0.483000010251999,
+					0.325500011444092,
+					0.220500007271767,
+					0.17849999666214,
+					0.0944999977946281
+				],
+				"WaveTime": 9.62876199999985,
+				"bathymetry_bounds_east_north": [
+					-31717.533203125,
+					-38992.203125,
+					29842.466796875,
+					44647.796875
+				],
+				"bathymetry_texture_size": [
+					2052.0,
+					2788.0
+				],
+				"depth_color_strength": 0.6,
+				"detail_normal_strength_far": 0.0,
+				"detail_normal_strength_near": 0.8,
+				"detail_wave_fade_end": 950.0,
+				"detail_wave_fade_start": 140.0,
+				"enable_depth_color": true,
+				"freeze_time": false,
+				"metallic": 0.04,
+				"ripple_direction": [
+					0.870000004768372,
+					0.490000009536743
+				],
+				"ripple_scale": 0.17,
+				"ripple_speed": 0.08,
+				"shallow_transparency_enabled": true,
+				"shallow_wave_constraint_enabled": false,
+				"shallow_wave_full_depth_m": 30.0,
+				"shallow_wave_max_trough_excursion_m": 0.2604,
+				"shallow_wave_min_amplitude_scale": 0.4,
+				"shallow_wave_safe_depth_ratio": 0.2,
+				"specular": 0.18,
+				"water_diagnostic_mode": 6,
+				"water_roughness_far": 0.29,
+				"water_roughness_near": 0.075,
+				"water_specular_far_multiplier": 0.62,
+				"water_specular_near_multiplier": 0.72,
+				"wave_normal_strength": 0.45
+			},
+			"size": [
+				1920,
+				1080
+			]
+		}
+	],
+	"detail_hash": "integer lattice hash",
+	"manual_grid_confirmation_flag": true,
+	"replay_state_json": "C:/dev/boating-life/tests/water_minimal/captures/water_repro_20261031_143746_684620.json",
+	"replayed_camera": {
+		"far": 80000.0,
+		"fov_degrees": 58.0,
+		"near": 0.0500000007450581,
+		"world_position": [
+			12237.9521484375,
+			1.83599233627319,
+			10059.494140625
+		],
+		"world_rotation_degrees": [
+			-3.83559155464172,
+			87.9716033935547,
+			0.0
+		]
+	},
+	"replayed_shader_parameters": {
+		"WaveAmplitudes": [
+			2.30999994277954,
+			1.88999998569489,
+			1.04999995231628,
+			0.944999992847443,
+			0.71399998664856
+		],
+		"WaveCount": 5.0,
+		"WaveDirectionsDegrees": [
+			20.0,
+			104.0,
+			156.0,
+			238.0,
+			322.0
+		],
+		"WaveFrequencies": [
+			0.0120000001043081,
+			0.0189999993890524,
+			0.0410000011324883,
+			0.0579999983310699,
+			0.0710000023245811
+		],
+		"WavePhases": [
+			0.0,
+			76.0,
+			205.0,
+			318.0,
+			131.0
+		],
+		"WaveSpeeds": [
+			0.720000028610229,
+			0.879999995231628,
+			1.08000004291534,
+			1.26999998092651,
+			1.45000004768372
+		],
+		"WaveSteepnesses": [
+			0.483000010251999,
+			0.325500011444092,
+			0.220500007271767,
+			0.17849999666214,
+			0.0944999977946281
+		],
+		"WaveTime": 9.62876199999985,
+		"bathymetry_bounds_east_north": [
+			-31717.533203125,
+			-38992.203125,
+			29842.466796875,
+			44647.796875
+		],
+		"bathymetry_texture_size": [
+			2052.0,
+			2788.0
+		],
+		"depth_color_strength": 0.6,
+		"detail_normal_strength_far": 0.0,
+		"detail_normal_strength_near": 0.8,
+		"detail_wave_fade_end": 950.0,
+		"detail_wave_fade_start": 140.0,
+		"enable_depth_color": true,
+		"freeze_time": false,
+		"metallic": 0.04,
+		"ripple_direction": [
+			0.870000004768372,
+			0.490000009536743
+		],
+		"ripple_scale": 0.17,
+		"ripple_speed": 0.08,
+		"shallow_transparency_enabled": true,
+		"shallow_wave_constraint_enabled": false,
+		"shallow_wave_full_depth_m": 30.0,
+		"shallow_wave_max_trough_excursion_m": 0.2604,
+		"shallow_wave_min_amplitude_scale": 0.4,
+		"shallow_wave_safe_depth_ratio": 0.2,
+		"specular": 0.18,
+		"water_diagnostic_mode": 0.0,
+		"water_roughness_far": 0.29,
+		"water_roughness_near": 0.075,
+		"water_specular_far_multiplier": 0.62,
+		"water_specular_near_multiplier": 0.72,
+		"wave_normal_strength": 0.45
+	},
+	"schema_version": 1
+}

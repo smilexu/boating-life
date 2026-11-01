@@ -3,10 +3,9 @@
 importer="texture"
 type="CompressedTexture2D"
 uid="uid://dsniji2bbjnma"
-path.s3tc="res://.godot/imported/sundaze_240_texture_pbr_20250901_metallic-texture_pbr_20250901_roughness.png-bf76abc25d971607f5fb07566ae7346f.s3tc.ctex"
+path="res://.godot/imported/sundaze_240_texture_pbr_20250901_metallic-texture_pbr_20250901_roughness.png-bf76abc25d971607f5fb07566ae7346f.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
-"vram_texture": true
+"vram_texture": false
 }
 generator_parameters={
 "md5": "629ee128659da04bf3760e0f289e60d9"
@@ -15,11 +14,11 @@ generator_parameters={
 [deps]
 
 source_file="res://assets/boats/seabreeze/sundaze_240_texture_pbr_20250901_metallic-texture_pbr_20250901_roughness.png"
-dest_files=["res://.godot/imported/sundaze_240_texture_pbr_20250901_metallic-texture_pbr_20250901_roughness.png-bf76abc25d971607f5fb07566ae7346f.s3tc.ctex"]
+dest_files=["res://.godot/imported/sundaze_240_texture_pbr_20250901_metallic-texture_pbr_20250901_roughness.png-bf76abc25d971607f5fb07566ae7346f.ctex"]
 
 [params]
 
-compress/mode=2
+compress/mode=0
 compress/high_quality=false
 compress/lossy_quality=0.7
 compress/uastc_level=0
@@ -41,4 +40,4 @@ process/normal_map_invert_y=false
 process/hdr_as_srgb=false
 process/hdr_clamp_exposure=false
 process/size_limit=0
-detect_3d/compress_to=0
+detect_3d/compress_to=1

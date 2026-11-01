@@ -12,40 +12,6 @@ const DIAGNOSTIC_MODES := [
 	{"name": "mode10", "mode": 10},
 	{"name": "mode6", "mode": 6},
 ]
-const NORMAL_SOURCE_MODES := [
-	{"name": "mode2", "mode": 2},
-	{"name": "N1_gerstner_only", "mode": 15},
-	{"name": "N2_detail_only", "mode": 16},
-]
-const DETAIL_WEIGHT_MODES := [
-	{"name": "detail_weight_0", "mode": 17},
-	{"name": "detail_weight_05", "mode": 18},
-	{"name": "detail_weight_1", "mode": 19},
-]
-const NOISE_CELL_MODES := [
-	{"name": "noise_cell_boundaries", "mode": 20},
-]
-const FRESNEL_ISOLATION_MODES := [
-	{"name": "B_mixed_lighting_gerstner_fresnel", "mode": 22},
-	{"name": "C_gerstner_lighting_mixed_fresnel", "mode": 23},
-]
-const FREQUENCY_LAYER_CASES := [
-	{"name": "B_low_frequency_only", "layer": 1},
-	{"name": "C_mid_frequency_only", "layer": 2},
-	{"name": "D_high_frequency_only", "layer": 3},
-	{"name": "E_excluding_low_frequency", "layer": 4},
-]
-const LOW_FREQUENCY_SCALE_CASES := [
-	{"name": "B_candidate_low_scale_two_thirds", "scale": 1},
-	{"name": "C_candidate_low_scale_one_half", "scale": 2},
-]
-const NORMAL_COMPOSITION_CASES := [
-	{"name": "B_slope_composition_candidate", "candidate": true},
-]
-const SLOPE_LIGHT_CASES := [
-	{"name": "S_raw_micro_slope", "mode": 24},
-	{"name": "L_fixed_lambert", "mode": 25},
-]
 const CAPTURED_SHADER_PARAMETERS := [
 	"water_diagnostic_mode", "enable_depth_color", "shallow_transparency_enabled",
 	"freeze_time", "WaveTime", "WaveCount", "WaveSteepnesses", "WaveAmplitudes",
@@ -53,12 +19,6 @@ const CAPTURED_SHADER_PARAMETERS := [
 	"depth_color_strength", "wave_normal_strength", "specular", "metallic",
 	"water_roughness_near", "water_roughness_far", "water_specular_near_multiplier",
 	"water_specular_far_multiplier", "ripple_scale", "ripple_speed", "ripple_direction",
-	"detail_noise_candidate_enabled",
-	"detail_integer_hash_enabled",
-	"detail_noise_layer_test",
-	"detail_noise_low_scale_test",
-	"detail_normal_slope_composition_candidate",
-	"gerstner_geometry_normal_candidate",
 	"detail_wave_fade_start", "detail_wave_fade_end", "detail_normal_strength_near",
 	"detail_normal_strength_far", "shallow_wave_constraint_enabled",
 	"shallow_wave_full_depth_m", "shallow_wave_min_amplitude_scale",
@@ -253,29 +213,7 @@ func _run_replay(replay_path: String) -> void:
 		_boat_visual.set_physics_process(false)
 		_restore_node_transform(_boat_visual, state.get("boat_visual_transform", {}))
 	_restore_sunlight(state.get("sunlight", {}))
-	if "--water-grid-no-sun-shadows" in OS.get_cmdline_user_args() and _sunlight != null:
-		_sunlight.shadow_enabled = false
 	_restore_shader_parameters(state.get("water_shader_parameters", {}))
-	var frequency_layer_test := "--water-grid-frequency-layers" in OS.get_cmdline_user_args()
-	var low_scale_test := "--water-grid-low-frequency-scale" in OS.get_cmdline_user_args()
-	var normal_composition_test := "--water-grid-normal-composition" in OS.get_cmdline_user_args()
-	var slope_light_test := "--water-grid-slope-light" in OS.get_cmdline_user_args()
-	var hash_compare := _user_arg_value("--water-grid-hash-compare=")
-	if not hash_compare.is_empty() and hash_compare not in ["legacy", "fixed"]:
-		push_error("Unknown water hash comparison variant: %s (expected legacy or fixed)." % hash_compare)
-		get_tree().quit(2)
-		return
-	var use_candidate_noise := not (frequency_layer_test or low_scale_test or normal_composition_test or slope_light_test or not hash_compare.is_empty()) and "--water-grid-noise-candidate" in OS.get_cmdline_user_args()
-	_water.set_shader_parameter("detail_noise_candidate_enabled", use_candidate_noise)
-	if not hash_compare.is_empty():
-		_water.set_shader_parameter("detail_integer_hash_enabled", hash_compare == "fixed")
-	_water.set_shader_parameter("detail_noise_layer_test", 0)
-	_water.set_shader_parameter("detail_noise_low_scale_test", 0)
-	_water.set_shader_parameter("detail_normal_slope_composition_candidate", false)
-	_water.set_shader_parameter("gerstner_geometry_normal_candidate", "--water-grid-gerstner-candidate" in OS.get_cmdline_user_args())
-	if slope_light_test:
-		_water.set_shader_parameter("gerstner_geometry_normal_candidate", false)
-		_water.set_shader_parameter("water_diagnostic_mode", 0)
 	_wave_sampler.set("wave_time_seconds", float(state.get("wave_time_seconds", 0.0)))
 	var camera_data: Dictionary = state.get("camera", {})
 	_camera.global_position = _vector3_from_json(camera_data.get("world_position", []))
@@ -295,103 +233,21 @@ func _run_replay(replay_path: String) -> void:
 		"manual_grid_confirmation_flag": "--water-grid-confirmed" in OS.get_cmdline_user_args(),
 		"replayed_camera": _camera_snapshot(),
 		"replayed_shader_parameters": _current_shader_snapshot(),
-		"detail_noise_variant": "candidate" if use_candidate_noise else "legacy",
-		"detail_hash_variant": hash_compare if not hash_compare.is_empty() else "material-default",
-		"frequency_layer_test": frequency_layer_test,
-		"low_frequency_scale_test": low_scale_test,
-		"normal_composition_test": normal_composition_test,
-		"slope_light_test": slope_light_test,
-		"slope_encoding_range": [-0.25, 0.25],
-		"slope_clipping_channel": "blue=1 if either slope component clips",
-		"lambert_world_light_direction_before_normalization": [0.7, 0.35, 0.62],
-		"slope_light_output_pipeline": "S/L only: unshaded, fog disabled, linear tonemap; glow/SSAO/SSR disabled on a runtime Environment copy",
+		"detail_hash": "integer lattice hash",
 		"captures": [],
 	}
-	var fresnel_isolation := "--water-grid-fresnel-isolation" in OS.get_cmdline_user_args()
-	if not hash_compare.is_empty():
-		_water.set_shader_parameter("water_diagnostic_mode", 0)
-		await _settle_capture_state()
-		await _save_replay_capture(
-			run_id + "_" + ("Fixed" if hash_compare == "fixed" else "Legacy") + "_normal",
-			"Normal water render with %s integer value-noise hash" % ("fixed" if hash_compare == "fixed" else "legacy"),
-			report
-		)
-	elif normal_composition_test:
-		_water.set_shader_parameter("water_diagnostic_mode", 0)
-		await _settle_capture_state()
-		await _save_replay_capture(run_id + "_A_legacy_normal_composition", "A: Legacy normal composition", report)
-	elif low_scale_test:
-		_water.set_shader_parameter("water_diagnostic_mode", 0)
-		await _settle_capture_state()
-		await _save_replay_capture(run_id + "_A_legacy_low_scale", "A: Legacy low-frequency scale", report)
-	elif frequency_layer_test:
-		_water.set_shader_parameter("water_diagnostic_mode", 0)
-		await _settle_capture_state()
-		await _save_replay_capture(run_id + "_A_all_frequency_layers", "A: all Legacy Value Noise FBM layers", report)
-	elif fresnel_isolation:
-		_water.set_shader_parameter("water_diagnostic_mode", 21)
-		for _frame in range(4):
-			await get_tree().process_frame
-		await RenderingServer.frame_post_draw
-		await _save_replay_capture(run_id + "_A_mixed_light_and_fresnel", "A: mixed normal for lighting and Fresnel", report)
-	else:
-		var noise_variant := "candidate" if use_candidate_noise else "legacy"
-		await _save_replay_capture(
-			run_id + "_" + noise_variant,
-			"Restored F9 state, normal shader mode, detail noise: %s" % noise_variant,
-			report
-		)
+	_water.set_shader_parameter("water_diagnostic_mode", 0)
+	await _settle_capture_state()
+	await _save_replay_capture(run_id + "_normal", "Restored F9 state with the fixed integer detail hash", report)
 	if "--water-grid-confirmed" in OS.get_cmdline_user_args():
-		var modes_to_capture: Array = DIAGNOSTIC_MODES
-		if not hash_compare.is_empty():
-			modes_to_capture = [{"name": "S_raw_micro_slope", "mode": 24}]
-			_use_unshaded_water_diagnostics()
-		elif slope_light_test:
-			modes_to_capture = SLOPE_LIGHT_CASES
-			_use_unshaded_water_diagnostics()
-		elif normal_composition_test:
-			modes_to_capture = NORMAL_COMPOSITION_CASES
-		elif low_scale_test:
-			modes_to_capture = LOW_FREQUENCY_SCALE_CASES
-		elif frequency_layer_test:
-			modes_to_capture = FREQUENCY_LAYER_CASES
-		elif fresnel_isolation:
-			modes_to_capture = FRESNEL_ISOLATION_MODES
-		elif "--water-grid-detail-weight-sweep" in OS.get_cmdline_user_args():
-			modes_to_capture = DETAIL_WEIGHT_MODES
-		elif "--water-grid-noise-cells" in OS.get_cmdline_user_args():
-			modes_to_capture = NOISE_CELL_MODES
-		elif "--water-grid-normal-source" in OS.get_cmdline_user_args():
-			modes_to_capture = NORMAL_SOURCE_MODES
-		for test_case: Dictionary in modes_to_capture:
-			if normal_composition_test:
-				_water.set_shader_parameter("water_diagnostic_mode", 0)
-				_water.set_shader_parameter("detail_noise_candidate_enabled", false)
-				_water.set_shader_parameter("detail_noise_layer_test", 0)
-				_water.set_shader_parameter("detail_noise_low_scale_test", 0)
-				_water.set_shader_parameter(
-					"detail_normal_slope_composition_candidate",
-					bool(test_case["candidate"])
-				)
-			elif low_scale_test:
-				_water.set_shader_parameter("water_diagnostic_mode", 0)
-				_water.set_shader_parameter("detail_noise_layer_test", 0)
-				_water.set_shader_parameter("detail_noise_low_scale_test", int(test_case["scale"]))
-			elif frequency_layer_test:
-				_water.set_shader_parameter("water_diagnostic_mode", 0)
-				_water.set_shader_parameter("detail_noise_layer_test", int(test_case["layer"]))
-			else:
-				_water.set_shader_parameter("water_diagnostic_mode", int(test_case["mode"]))
+		for test_case: Dictionary in DIAGNOSTIC_MODES:
+			_water.set_shader_parameter("water_diagnostic_mode", int(test_case["mode"]))
 			for _frame in range(4):
 				await get_tree().process_frame
 			await RenderingServer.frame_post_draw
 			await _save_replay_capture(
-				run_id + "_" + ("Fixed" if hash_compare == "fixed" else "Legacy") + "_S_raw_micro_slope"
-				if not hash_compare.is_empty() else run_id + "_%s" % test_case["name"],
-				("Slope composition candidate" if bool(test_case["candidate"]) else "Legacy normal composition")
-				if normal_composition_test else ("Low frequency spatial scale candidate %d" % int(test_case["scale"]))
-				if low_scale_test else ("Frequency layer isolation %d" % int(test_case["layer"]))
-				if frequency_layer_test else "Confirmed replay diagnostic mode %d" % int(test_case["mode"]),
+				run_id + "_" + String(test_case["name"]),
+				"Confirmed replay diagnostic mode %d" % int(test_case["mode"]),
 				report
 			)
 	var report_path := output_dir.path_join(run_id + ".json")
@@ -425,31 +281,6 @@ func _settle_capture_state() -> void:
 	for _frame in range(4):
 		await get_tree().process_frame
 	await RenderingServer.frame_post_draw
-
-
-func _use_unshaded_water_diagnostics() -> void:
-	# Diagnostic colors encode data: keep display conversion fixed and remove
-	# post effects that could mix channels or spread pixels. Production capture
-	# has already been saved with the original environment.
-	var world_environment := get_parent().get_node_or_null("WorldEnvironment") as WorldEnvironment
-	if world_environment != null and world_environment.environment != null:
-		var diagnostic_environment := world_environment.environment.duplicate() as Environment
-		diagnostic_environment.tonemap_mode = Environment.TONE_MAPPER_LINEAR
-		diagnostic_environment.glow_enabled = false
-		diagnostic_environment.ssao_enabled = false
-		diagnostic_environment.ssr_enabled = false
-		world_environment.environment = diagnostic_environment
-	var saved_uniforms := {}
-	for uniform: Dictionary in _water.shader.get_shader_uniform_list():
-		var parameter := String(uniform["name"])
-		var value: Variant = _water.get_shader_parameter(parameter)
-		if value != null:
-			saved_uniforms[parameter] = value
-	var diagnostic_shader := Shader.new()
-	diagnostic_shader.code = _water.shader.code.replace("render_mode ", "render_mode unshaded, fog_disabled, ")
-	_water.shader = diagnostic_shader
-	for parameter: String in saved_uniforms:
-		_water.set_shader_parameter(parameter, saved_uniforms[parameter])
 
 
 func _validate_bathymetry(state: Dictionary, texture: Texture2D) -> bool:
@@ -492,6 +323,8 @@ func _restore_ocean(saved: Dictionary) -> void:
 
 func _restore_shader_parameters(saved: Dictionary) -> void:
 	for parameter: String in saved:
+		if parameter not in CAPTURED_SHADER_PARAMETERS:
+			continue
 		if parameter in ["bathymetry_texture_size", "bathymetry_bounds_east_north"]:
 			continue
 		var value: Variant = saved[parameter]
