@@ -38,3 +38,4 @@ body_wave_amplitude_m = 0.017
 tail_frequency_hz = 1.35
 map_color = Color(0.34, 0.74, 0.96, 1)
 render_budget_share = 0.57
+supported_fishing_methods = PackedStringArray("boat_fishing")

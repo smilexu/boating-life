@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="BoatFishingRigProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/boat_fishing_rig_profile.gd" id="1_rig"]
+
+[resource]
+script = ExtResource("1_rig")
+rig_id = &"sabiki_rig"
+display_name_key = &"hud.boat_fishing.rig.sabiki"
+rig_type = 1
+hook_count = 5
+maximum_catch_count = 5
+hook_spacing_m = 0.45
+sink_speed_mps = 1.2
+top_leader_length_m = 0.12
+bottom_leader_length_m = 0.14
+branch_length_m = 0.1
+compatible_species_ids = PackedStringArray("herring")

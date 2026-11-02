@@ -46,6 +46,7 @@ var is_autopilot := false
 var is_motion_paused := false
 var is_port_docked := false
 var manual_input_enabled := true
+var _onboard_activity_input_suppressed := false
 
 var _autopilot_steering_input := 0.0
 var _autopilot_target_speed_mps := 0.0
@@ -99,7 +100,7 @@ func get_engine_audio_state() -> Dictionary:
 	var throttle_demand := 0.0
 	if is_autopilot:
 		throttle_demand = clampf(_autopilot_target_speed_mps / maxf(get_autopilot_speed_cap_mps(), 0.1), 0.0, 1.0)
-	elif manual_input_enabled:
+	elif manual_input_enabled and not _onboard_activity_input_suppressed:
 		throttle_demand = maxf(Input.get_action_strength("boat_accelerate"), Input.get_action_strength("boat_brake"))
 	return {
 		"running": true,
@@ -162,7 +163,7 @@ func set_sailing_enabled(enabled: bool) -> bool:
 			_sailboat_body.call("prepare_for_main_spawn", spawn_transform)
 		_sailboat_active = true
 		_sailboat_body.call("set_vessel_active", true)
-		_sailboat_body.call("set_keyboard_controls_enabled", manual_input_enabled)
+		_sailboat_body.call("set_keyboard_controls_enabled", manual_input_enabled and not _onboard_activity_input_suppressed)
 		_set_powerboat_visuals_active(false)
 		speed_mps = 0.0
 	else:
@@ -245,7 +246,15 @@ func _is_sailing_spawn_collision_free(spawn_transform: Transform3D) -> bool:
 func set_sailing_manual_controls_enabled(enabled: bool) -> void:
 	manual_input_enabled = enabled
 	if _sailboat_body != null and _sailboat_active and _sailboat_body.has_method("set_keyboard_controls_enabled"):
-		_sailboat_body.call("set_keyboard_controls_enabled", enabled)
+		_sailboat_body.call("set_keyboard_controls_enabled", enabled and not _onboard_activity_input_suppressed)
+
+
+## Temporarily routes WASD/Space away from vessel controls while the onboard
+## activity camera is active. Vessel motion and autopilot state are untouched.
+func set_onboard_activity_input_suppressed(suppressed: bool) -> void:
+	_onboard_activity_input_suppressed = suppressed
+	if _sailboat_body != null and _sailboat_active and _sailboat_body.has_method("set_keyboard_controls_enabled"):
+		_sailboat_body.call("set_keyboard_controls_enabled", manual_input_enabled and not suppressed)
 
 
 func get_engine_audio_profile() -> EngineAudioProfileScript:
@@ -328,14 +337,14 @@ func set_port_docked(docked: bool) -> void:
 
 func _process(delta: float) -> void:
 	if _sailboat_active and _sailboat_body != null:
-		if manual_input_enabled and Input.is_action_just_pressed("boat_pause"):
+		if manual_input_enabled and not _onboard_activity_input_suppressed and Input.is_action_just_pressed("boat_pause"):
 			is_motion_paused = not is_motion_paused
 		if _sailboat_body.freeze != is_motion_paused:
 			_sailboat_body.freeze = is_motion_paused
 			if not is_motion_paused:
 				_sailboat_body.sleeping = false
 		if _sailboat_body.has_method("set_keyboard_controls_enabled"):
-			_sailboat_body.call("set_keyboard_controls_enabled", manual_input_enabled)
+			_sailboat_body.call("set_keyboard_controls_enabled", manual_input_enabled and not _onboard_activity_input_suppressed)
 		_sync_sailing_proxy()
 		return
 	if is_port_docked:
@@ -343,10 +352,10 @@ func _process(delta: float) -> void:
 		is_motion_paused = true
 		return
 
-	if manual_input_enabled and Input.is_action_just_pressed("boat_pause"):
+	if manual_input_enabled and not _onboard_activity_input_suppressed and Input.is_action_just_pressed("boat_pause"):
 		is_motion_paused = not is_motion_paused
 
-	if manual_input_enabled and is_autopilot and _has_manual_drive_input():
+	if manual_input_enabled and not _onboard_activity_input_suppressed and is_autopilot and _has_manual_drive_input():
 		manual_takeover_requested.emit()
 		if is_autopilot:
 			disengage_autopilot()
@@ -356,7 +365,7 @@ func _process(delta: float) -> void:
 
 	if is_autopilot:
 		_update_autopilot_motion(delta)
-	elif manual_input_enabled:
+	elif manual_input_enabled and not _onboard_activity_input_suppressed:
 		_update_manual_controls(delta)
 
 	var forward_direction := -global_transform.basis.z

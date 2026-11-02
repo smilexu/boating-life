@@ -39,6 +39,14 @@ func _ready() -> void:
 	set_process(true)
 
 
+func _exit_tree() -> void:
+	var viewport := get_viewport()
+	if viewport != null and viewport.size_changed.is_connected(_update_screen_position):
+		viewport.size_changed.disconnect(_update_screen_position)
+	if is_instance_valid(_quality_manager) and _quality_manager.has_signal("settings_changed") and _quality_manager.is_connected("settings_changed", _update_screen_position):
+		_quality_manager.disconnect("settings_changed", _update_screen_position)
+
+
 func _process(_delta: float) -> void:
 	if _controller == null:
 		return
@@ -89,7 +97,12 @@ func _draw() -> void:
 
 
 func _update_screen_position() -> void:
-	var layout := compute_layout_rect(get_viewport_rect().size, _get_ui_scale())
+	if not is_inside_tree():
+		return
+	var viewport := get_viewport()
+	if viewport == null:
+		return
+	var layout := compute_layout_rect(viewport.get_visible_rect().size, _get_ui_scale())
 	position = layout.position
 	size = layout.size
 	queue_redraw()

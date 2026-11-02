@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="OnboardActivityProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/onboard_activity_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+walkable_polygon_xz = PackedVector2Array(-0.62, 0.12, 0.62, 0.12, 0.90, 0.42, 0.90, 3.10, 0.70, 3.36, -0.70, 3.36, -0.90, 3.10, -0.90, 0.42)
+deck_height_m = 0.58
+safe_spawn_position = Vector3(0, 0.58, 1.28)
+boundary_thickness_m = 0.20
+boundary_height_m = 2.25
+deck_collision_thickness_m = 0.16
+move_speed_mps = 2.4
+jump_height_m = 0.42
+capsule_height_m = 1.68
+capsule_radius_m = 0.28
+eye_height_m = 1.55
+first_person_fov_degrees = 76.0
+mouse_sensitivity = 0.45
+pitch_limit_degrees = 85.0
+gravity_mps2 = 9.8

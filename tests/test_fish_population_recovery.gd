@@ -68,7 +68,9 @@ func _run() -> void:
 	var restored_authority := FishLocalAuthority.new()
 	restored_authority.initialize(manager.get_world_seed(), manager.get_bathymetry_manager(), manager.get_georeference(), profiles, 0.0)
 	_check(restored_authority.restore_snapshot(snapshot), "recovery fields survive a current snapshot roundtrip")
-	_check(restored_authority.get_school(school_id) == capped, "restored school state retains population and recovery baseline")
+	var original_state: FishSchoolState = (authority.get("_schools") as Dictionary).get(school_id) as FishSchoolState
+	var restored_state: FishSchoolState = (restored_authority.get("_schools") as Dictionary).get(school_id) as FishSchoolState
+	_check(original_state != null and restored_state != null and original_state.to_dictionary() == restored_state.to_dictionary(), "restored school checkpoint retains population, recovery, and activity-depth state")
 	var malformed: Dictionary = snapshot.duplicate(true)
 	malformed["schools"][0]["baseline_population"] = -2
 	_check(not restored_authority.restore_snapshot(malformed), "invalid recovery fields reject the entire snapshot")

@@ -78,7 +78,7 @@ func update(delta: float, game_time_seconds: float = -1.0) -> void:
 
 func get_school(school_id: String) -> Dictionary:
 	var state: FishSchoolState = _schools.get(school_id)
-	return state.to_dictionary() if state != null else {}
+	return _snapshot_for_state(state) if state != null else {}
 
 
 func get_all_school_snapshots() -> Array[Dictionary]:
@@ -86,11 +86,11 @@ func get_all_school_snapshots() -> Array[Dictionary]:
 	for school_id in _schools.keys():
 		var state: FishSchoolState = _schools[school_id]
 		if state.population > 0 and state.resource_state == "available":
-			snapshots.append(state.to_dictionary())
+			snapshots.append(_snapshot_for_state(state))
 	return snapshots
 
 
-func get_schools_near(world_position: Vector3, radius_m: float) -> Array[Dictionary]:
+func get_schools_near(world_position: Vector3, radius_m: float, include_unavailable: bool = false) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var radius_squared := radius_m * radius_m
 	var center_cell := _position_cell(world_position)
@@ -100,12 +100,12 @@ func get_schools_near(world_position: Vector3, radius_m: float) -> Array[Diction
 			var cell := center_cell + Vector2i(east_offset, north_offset)
 			for school_id in _schools_by_cell.get(cell, []):
 				var state: FishSchoolState = _schools.get(school_id)
-				if state == null or state.population <= 0 or state.resource_state != "available":
+				if state == null or (not include_unavailable and (state.population <= 0 or state.resource_state != "available")):
 					continue
 				var dx := state.world_position.x - world_position.x
 				var dz := state.world_position.z - world_position.z
 				if dx * dx + dz * dz <= radius_squared:
-					result.append(state.to_dictionary())
+					result.append(_snapshot_for_state(state))
 	return result
 
 
@@ -140,6 +140,38 @@ func request_population_change(school_id: String, population_delta: int, game_ti
 	return {"accepted": true, "population": state.population, "state_revision": _state_revision}
 
 
+## Applies multiple catch deductions atomically after validating every school.
+## `changes` maps school IDs to negative integer population deltas.
+func request_population_changes(changes: Dictionary, game_time_seconds: float = -1.0) -> Dictionary:
+	if is_finite(game_time_seconds) and game_time_seconds >= 0.0:
+		_current_game_time_seconds = game_time_seconds
+	var normalized: Dictionary = {}
+	for school_id_variant in changes.keys():
+		var school_id := str(school_id_variant)
+		var delta := int(changes[school_id_variant])
+		if school_id.is_empty() or delta >= 0:
+			return {"accepted": false, "reason": "Batch resource changes must contain negative deltas."}
+		var state := _schools.get(school_id) as FishSchoolState
+		if state == null or state.resource_state != "available" or state.population < -delta:
+			return {"accepted": false, "reason": "A school no longer has enough available fish."}
+		normalized[school_id] = delta
+	if normalized.is_empty():
+		return {"accepted": false, "reason": "No natural fish resources were included."}
+	var populations_after: Dictionary = {}
+	for school_id in normalized:
+		var state := _schools[school_id] as FishSchoolState
+		var effective_population := float(state.population) + state.recovery_fractional_population
+		effective_population = clampf(effective_population + float(normalized[school_id]), 0.0, float(state.baseline_population))
+		state.population = floori(effective_population)
+		state.recovery_fractional_population = effective_population - float(state.population)
+		state.resource_state = "depleted" if state.population == 0 else "available"
+		state.last_population_update_game_time_seconds = _current_game_time_seconds
+		state.last_updated_unix = int(Time.get_unix_time_from_system())
+		populations_after[school_id] = state.population
+	_state_revision += 1
+	return {"accepted": true, "populations": populations_after, "state_revision": _state_revision}
+
+
 func create_snapshot() -> Dictionary:
 	var schools: Array[Dictionary] = []
 	for state in _schools.values():
@@ -166,6 +198,7 @@ func restore_snapshot(snapshot: Dictionary) -> bool:
 	var saved_schools: Variant = snapshot.get("schools", [])
 	if not saved_schools is Array:
 		return false
+	var saved_simulation_seconds := maxf(0.0, float(snapshot.get("simulation_seconds", 0.0)))
 	var restored: Dictionary = {}
 	for data in saved_schools:
 		if not data is Dictionary:
@@ -173,13 +206,15 @@ func restore_snapshot(snapshot: Dictionary) -> bool:
 		var state := FishSchoolState.from_dictionary(data)
 		if state == null or not _profiles_by_id.has(state.species_id):
 			return false
+		if not data.has("activity_depth_state_timestamp_seconds"):
+			state.activity_depth_state_timestamp_seconds = saved_simulation_seconds
 		restored[state.school_id] = state
 	_schools = restored
 	_rebuild_spatial_index()
 	_pending_school_ids.clear()
 	_school_update_cursor = 0
 	_pending_batch_changed = false
-	_simulation_seconds = maxf(0.0, float(snapshot.get("simulation_seconds", 0.0)))
+	_simulation_seconds = saved_simulation_seconds
 	_state_revision = maxi(1, int(snapshot.get("state_revision", 1)))
 	var saved_game_time := float(snapshot.get("current_game_time_seconds", _current_game_time_seconds))
 	if is_finite(saved_game_time) and saved_game_time >= 0.0:
@@ -433,31 +468,88 @@ func _initialize_surface_activity(state: FishSchoolState, profile: FishSpeciesPr
 		state.activity_depth_m = deep_depth
 		state.activity_depth_target_m = deep_depth
 		state.surface_activity_remaining_seconds = _deep_duration(profile, state.seed, 0)
+	state.activity_depth_state_timestamp_seconds = _simulation_seconds
 	_set_activity_movement_label(state, profile)
 
 
-func _advance_surface_activity(state: FishSchoolState, profile: FishSpeciesProfile, step: float) -> void:
+func _advance_surface_activity(state: FishSchoolState, profile: FishSpeciesProfile, _step: float) -> void:
+	var elapsed := maxf(0.0, _simulation_seconds - state.activity_depth_state_timestamp_seconds)
+	var projected := _project_surface_activity(state, profile, elapsed)
+	_apply_surface_activity_projection(state, projected)
+	state.activity_depth_state_timestamp_seconds = _simulation_seconds
+	_set_activity_movement_label(state, profile)
+
+
+func _snapshot_for_state(state: FishSchoolState) -> Dictionary:
+	var snapshot := state.to_dictionary()
+	var profile := _profiles_by_id.get(state.species_id) as FishSpeciesProfile
+	if profile == null or not profile.surface_activity_cycle_enabled:
+		snapshot["effective_activity_depth_m"] = state.activity_depth_m
+		snapshot["effective_surface_activity_state"] = state.surface_activity_state
+		return snapshot
+	var effective_time := _simulation_seconds + minf(_step_accumulator, SIMULATION_STEP_SECONDS)
+	var elapsed := maxf(0.0, effective_time - state.activity_depth_state_timestamp_seconds)
+	var projected := _project_surface_activity(state, profile, elapsed)
+	snapshot["effective_activity_depth_m"] = float(projected["activity_depth_m"])
+	snapshot["effective_activity_depth_target_m"] = float(projected["activity_depth_target_m"])
+	snapshot["effective_surface_activity_state"] = str(projected["surface_activity_state"])
+	snapshot["activity_depth_projection_elapsed_seconds"] = elapsed
+	return snapshot
+
+
+func _project_surface_activity(state: FishSchoolState, profile: FishSpeciesProfile, elapsed_seconds: float) -> Dictionary:
 	var max_depth := maxf(0.5, state.depth_m - 0.8)
-	state.activity_depth_target_m = minf(state.activity_depth_target_m, max_depth)
-	state.activity_depth_m = minf(state.activity_depth_m, max_depth)
+	var depth := minf(state.activity_depth_m, max_depth)
+	var target := minf(state.activity_depth_target_m, max_depth)
 	var activity_state := state.surface_activity_state
-	state.surface_activity_remaining_seconds = maxf(0.0, state.surface_activity_remaining_seconds - step)
-	if activity_state == "near_surface" and state.surface_activity_remaining_seconds <= 0.0:
-		state.surface_activity_state = "descending"
-		state.activity_depth_target_m = _deep_depth_for_cycle(profile, state.seed, state.surface_activity_cycle_index, max_depth)
-	elif activity_state == "deep" and state.surface_activity_remaining_seconds <= 0.0:
-		state.surface_activity_cycle_index += 1
-		state.surface_activity_state = "ascending"
-		state.activity_depth_target_m = _surface_depth_for_cycle(profile, state.seed, state.surface_activity_cycle_index, max_depth)
-	var transition_speed := profile.activity_vertical_speed_mps * step
-	state.activity_depth_m = move_toward(state.activity_depth_m, state.activity_depth_target_m, transition_speed)
-	if state.surface_activity_state == "ascending" and absf(state.activity_depth_m - state.activity_depth_target_m) <= 0.05:
-		state.surface_activity_state = "near_surface"
-		state.surface_activity_remaining_seconds = _surface_duration(profile, state.seed, state.surface_activity_cycle_index)
-	elif state.surface_activity_state == "descending" and absf(state.activity_depth_m - state.activity_depth_target_m) <= 0.05:
-		state.surface_activity_state = "deep"
-		state.surface_activity_remaining_seconds = _deep_duration(profile, state.seed, state.surface_activity_cycle_index)
-	_set_activity_movement_label(state, profile)
+	var remaining := maxf(0.0, state.surface_activity_remaining_seconds)
+	var cycle := state.surface_activity_cycle_index
+	var elapsed := maxf(0.0, elapsed_seconds)
+	var speed := maxf(profile.activity_vertical_speed_mps, 0.001)
+	for _transition_guard in range(4):
+		if activity_state in ["near_surface", "deep"]:
+			if elapsed < remaining:
+				remaining -= elapsed
+				break
+			elapsed -= remaining
+			remaining = 0.0
+			if activity_state == "near_surface":
+				activity_state = "descending"
+				target = _deep_depth_for_cycle(profile, state.seed, cycle, max_depth)
+			else:
+				cycle += 1
+				activity_state = "ascending"
+				target = _surface_depth_for_cycle(profile, state.seed, cycle, max_depth)
+		var travel_seconds := absf(target - depth) / speed
+		if elapsed < travel_seconds:
+			depth = move_toward(depth, target, speed * elapsed)
+			elapsed = 0.0
+			break
+		depth = target
+		elapsed -= travel_seconds
+		if activity_state == "ascending":
+			activity_state = "near_surface"
+			remaining = _surface_duration(profile, state.seed, cycle)
+		elif activity_state == "descending":
+			activity_state = "deep"
+			remaining = _deep_duration(profile, state.seed, cycle)
+		else:
+			break
+	return {
+		"activity_depth_m": depth,
+		"activity_depth_target_m": target,
+		"surface_activity_state": activity_state,
+		"surface_activity_remaining_seconds": remaining,
+		"surface_activity_cycle_index": cycle,
+	}
+
+
+func _apply_surface_activity_projection(state: FishSchoolState, projection: Dictionary) -> void:
+	state.activity_depth_m = float(projection["activity_depth_m"])
+	state.activity_depth_target_m = float(projection["activity_depth_target_m"])
+	state.surface_activity_state = str(projection["surface_activity_state"])
+	state.surface_activity_remaining_seconds = float(projection["surface_activity_remaining_seconds"])
+	state.surface_activity_cycle_index = int(projection["surface_activity_cycle_index"])
 
 
 func _surface_depth_for_cycle(profile: FishSpeciesProfile, seed: int, cycle: int, max_depth: float) -> float:

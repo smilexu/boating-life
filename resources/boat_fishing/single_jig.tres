@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="BoatFishingRigProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/boat_fishing_rig_profile.gd" id="1_rig"]
+
+[resource]
+script = ExtResource("1_rig")
+rig_id = &"single_jig"
+display_name_key = &"hud.boat_fishing.rig.single_jig"
+rig_type = 0
+hook_count = 1
+maximum_catch_count = 1
+hook_spacing_m = 0.0
+sink_speed_mps = 1.3
+compatible_lure_tags = PackedStringArray("spoon", "small_fish_lure")

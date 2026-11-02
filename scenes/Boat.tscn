@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3 uid="uid://ci27qf2ne77u4"]
+[gd_scene load_steps=22 format=3 uid="uid://ci27qf2ne77u4"]
 
 [ext_resource type="Script" uid="uid://cg2hukghay3us" path="res://scripts/boat_controller.gd" id="1_controller"]
 [ext_resource type="Script" uid="uid://bex2jb3h7jqub" path="res://scripts/boat_follow_camera.gd" id="2_follow_camera"]
@@ -19,6 +19,9 @@
 [ext_resource type="Script" path="res://scripts/fishing_fight_profile.gd" id="18_fight_profile_script"]
 [ext_resource type="Resource" path="res://resources/fishing/fight_profiles/needlefish.tres" id="19_needlefish_fight"]
 [ext_resource type="Resource" path="res://resources/fishing/fight_profiles/sea_trout.tres" id="20_sea_trout_fight"]
+[ext_resource type="Script" path="res://scripts/onboard_activity_controller.gd" id="21_onboard_activity"]
+[ext_resource type="Resource" path="res://resources/onboard_activity/starter_cargo_boat.tres" id="22_onboard_profile"]
+[ext_resource type="Script" path="res://scripts/boat_fishing_casting_system.gd" id="23_boat_fishing_casting"]
 
 [node name="Boat" type="Node3D" unique_id=1227113286]
 
@@ -35,6 +38,10 @@ script = ExtResource("5_buoyancy")
 fore_sample_distance = 2.7
 aft_sample_distance = 2.7
 half_beam = 1.1
+
+[node name="OnboardActivityController" type="Node3D" parent="MotionRoot/VisualRoot"]
+script = ExtResource("21_onboard_activity")
+profile = ExtResource("22_onboard_profile")
 
 [node name="BoatModelFrame" type="Node3D" parent="MotionRoot/VisualRoot" unique_id=1725611823]
 transform = Transform3D(5.018633e-07, 0, 6.647381, 0, 6.647381, 0, -6.647381, 0, 5.018633e-07, 0, -0.32, -0.293)
@@ -99,5 +106,8 @@ script = ExtResource("15_fishing_rod_system")
 powerboat_mount_profile = ExtResource("16_powerboat_rod_mount")
 sailboat_mount_profile = ExtResource("17_sailboat_rod_mount")
 fight_profiles = Array[ExtResource("18_fight_profile_script")]([ExtResource("19_needlefish_fight"), ExtResource("20_sea_trout_fight")])
+
+[node name="BoatFishingCastingSystem" type="Node3D" parent="."]
+script = ExtResource("23_boat_fishing_casting")
 
 [editable path="MotionRoot/VisualRoot/BoatModelFrame/FirstBoatModel"]

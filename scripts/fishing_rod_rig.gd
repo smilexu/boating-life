@@ -6,6 +6,14 @@ extends Node3D
 
 const LINE_RADIUS_M := 0.0012
 const REEL_ROTATION_SIGN := -1.0
+const REEL_SPOOL_CORE_RADIUS_M := 0.028
+const REEL_LINE_LAYER_MIN_THICKNESS_M := 0.003
+const REEL_LINE_LAYER_MAX_THICKNESS_M := 0.012
+const REEL_LINE_VISUAL_RANGE_M := 50.0
+const REEL_SPOOL_AXIAL_WIDTH_M := 0.064
+const REEL_WINDING_BASE_OUTER_RADIUS_M := REEL_SPOOL_CORE_RADIUS_M + REEL_LINE_LAYER_MIN_THICKNESS_M
+const REEL_WINDING_RING_COUNT := 56
+const REEL_SPOOL_CENTER_LOCAL := Vector3(0.046, 0.045, 0.19)
 const CATCH_HOOK_LENGTH_RATIO := 0.45
 const CATCH_DEFORMATION_SHADER := preload("res://shaders/fishing_catch_deform.gdshader")
 const CATCH_BODY_CURVE_HOOK_U := 0.95
@@ -19,7 +27,10 @@ var _guide_multimesh: MultiMesh
 var _guide_instance: MultiMeshInstance3D
 var _line_multimesh: MultiMesh
 var _line_instance: MultiMeshInstance3D
-var _reel_spool: Node3D
+var _reel_rotating_assembly: Node3D
+var _reel_spool_visual: Node3D
+var _reel_winding_visual: MultiMeshInstance3D
+var _last_reel_line_length_m := -1.0
 var _line_material: StandardMaterial3D
 var _catch_container: Node3D
 var _catch_body_length_m := 0.0
@@ -97,8 +108,9 @@ func reset_presentation_animation() -> void:
 	_hanging_line_active = false
 	_line_tension = 0.35
 	_splash_elapsed = 10.0
-	if _reel_spool != null:
-		_reel_spool.rotation = Vector3(0.0, 0.0, PI * 0.5)
+	if _reel_rotating_assembly != null:
+		_reel_rotating_assembly.rotation = Vector3(0.0, 0.0, PI * 0.5)
+	set_reel_line_length(0.0)
 	if _splash_ring != null:
 		_splash_ring.visible = false
 	if _splash_droplets != null:
@@ -278,7 +290,7 @@ static func _smoothstep_range(value: float, edge0: float, edge1: float) -> float
 
 
 func get_reel_spin_axis_rig_local() -> Vector3:
-	return _reel_spool.transform.basis * Vector3.UP if _reel_spool != null else Vector3.ZERO
+	return _reel_rotating_assembly.transform.basis * Vector3.UP if _reel_rotating_assembly != null else Vector3.ZERO
 
 
 ## P2's encounter point remains statistical and unchanged. This is only the
@@ -465,9 +477,10 @@ func _process(delta: float) -> void:
 	_tip_recoil_displacement = clampf(_tip_recoil_displacement + _tip_recoil_velocity * visual_delta, -0.08, 0.30)
 	_update_rod_and_guides()
 	_update_line()
-	if _reel_spool != null:
-		# Local Y follows the reel axle, so the spool face spins in a vertical plane.
-		_reel_spool.rotate_object_local(Vector3.UP, REEL_ROTATION_SIGN * _reel_spin_speed * visual_delta)
+	if _reel_rotating_assembly != null:
+		# Local Y follows the shared trolling reel's horizontal drum axle.
+		var angular_delta := REEL_ROTATION_SIGN * _reel_spin_speed * visual_delta
+		_reel_rotating_assembly.rotate_object_local(Vector3.UP, angular_delta)
 	_update_splash(visual_delta)
 
 
@@ -506,7 +519,7 @@ func _build_visuals() -> void:
 	line_mesh.top_radius = 1.0
 	line_mesh.bottom_radius = 1.0
 	line_mesh.radial_segments = 5
-	_line_multimesh = _make_multimesh(line_mesh, _profile.guide_count + 6)
+	_line_multimesh = _make_multimesh(line_mesh, _profile.guide_count + 7)
 	_line_material = StandardMaterial3D.new()
 	_line_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	# A fine warm filament reads separately from the dark graphite rod and stays
@@ -516,6 +529,8 @@ func _build_visuals() -> void:
 	_line_material.emission = Color(0.36, 0.20, 0.035, 1.0)
 	_line_material.emission_energy_multiplier = 0.28
 	_line_material.roughness = 0.52
+	# Keep depth testing active so the reel frame and hull occlude the line.
+	_line_material.no_depth_test = false
 	_line_instance = _make_multimesh_instance("TrollingLine", _line_multimesh, _line_material)
 	_line_instance.visible = false
 
@@ -543,81 +558,221 @@ func _make_multimesh_instance(instance_name: String, multimesh: MultiMesh, mater
 
 
 func _build_reel(material: Material) -> void:
+	var reel_parts := create_reel_assembly(material, material)
+	add_child(reel_parts["root"])
+	_reel_rotating_assembly = reel_parts["rotating_assembly"]
+	_reel_spool_visual = reel_parts["spool"]
+	_reel_winding_visual = reel_parts["winding_visual"]
+	set_reel_line_length(0.0)
+
+
+## Shared procedural reel used by both the hull-mounted trolling rod and the
+## handheld Boat Fishing rod. Callers own placement and rotation state.
+static func create_reel_assembly(body_material: Material, rotating_material: Material = null, handle_axial_side_sign: float = 1.0) -> Dictionary:
+	var moving_material := rotating_material if rotating_material != null else body_material
+	var handle_side := -1.0 if handle_axial_side_sign < 0.0 else 1.0
+	var root := Node3D.new()
+	root.name = "FishingReelAssembly"
 	var foot := MeshInstance3D.new()
 	foot.name = "ReelSeat"
 	var foot_mesh := BoxMesh.new()
 	foot_mesh.size = Vector3(0.075, 0.035, 0.13)
 	foot.mesh = foot_mesh
-	foot.material_override = material
+	foot.material_override = body_material
 	foot.position = Vector3(0.0, 0.025, 0.18)
-	add_child(foot)
-	var spinner := Node3D.new()
-	spinner.name = "ReelSpinningAssembly"
-	spinner.position = Vector3(0.046, 0.045, 0.19)
-	spinner.rotation.z = PI * 0.5
-	add_child(spinner)
-	_reel_spool = spinner
-	var spool := MeshInstance3D.new()
-	spool.name = "ReelSpool"
-	var spool_mesh := CylinderMesh.new()
-	spool_mesh.top_radius = 0.047
-	spool_mesh.bottom_radius = 0.047
-	spool_mesh.height = 0.064
-	spool_mesh.radial_segments = 16
-	spool.mesh = spool_mesh
-	spool.material_override = material
-	spinner.add_child(spool)
+	root.add_child(foot)
+	var frame := Node3D.new()
+	frame.name = "ReelFrame"
+	root.add_child(frame)
+	var side_plate_mesh := CylinderMesh.new()
+	side_plate_mesh.top_radius = 0.043
+	side_plate_mesh.bottom_radius = 0.043
+	side_plate_mesh.height = 0.006
+	side_plate_mesh.radial_segments = 20
 	for side in [-1.0, 1.0]:
 		var side_plate := MeshInstance3D.new()
 		side_plate.name = "ReelSidePlate%s" % ("Left" if side < 0.0 else "Right")
-		var plate_mesh := CylinderMesh.new()
-		plate_mesh.top_radius = 0.061
-		plate_mesh.bottom_radius = 0.061
-		plate_mesh.height = 0.012
-		plate_mesh.radial_segments = 16
-		side_plate.mesh = plate_mesh
-		side_plate.material_override = material
-		side_plate.position.y = side * 0.039
-		spinner.add_child(side_plate)
+		side_plate.mesh = side_plate_mesh
+		side_plate.material_override = body_material
+		side_plate.position = Vector3(
+			REEL_SPOOL_CENTER_LOCAL.x + side * (REEL_SPOOL_AXIAL_WIDTH_M * 0.5 + 0.004),
+			REEL_SPOOL_CENTER_LOCAL.y,
+			REEL_SPOOL_CENTER_LOCAL.z
+		)
+		side_plate.rotation.z = PI * 0.5
+		side_plate.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		frame.add_child(side_plate)
+	var frame_bridge := MeshInstance3D.new()
+	frame_bridge.name = "ReelFrameBridge"
+	var frame_bridge_mesh := BoxMesh.new()
+	frame_bridge_mesh.size = Vector3(0.075, 0.008, 0.012)
+	frame_bridge.mesh = frame_bridge_mesh
+	frame_bridge.material_override = body_material
+	frame_bridge.position = Vector3(REEL_SPOOL_CENTER_LOCAL.x, 0.020, REEL_SPOOL_CENTER_LOCAL.z - 0.005)
+	frame_bridge.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	frame.add_child(frame_bridge)
+	for side in [-1.0, 1.0]:
+		var support := MeshInstance3D.new()
+		support.name = "ReelFrameSupport%s" % ("Left" if side < 0.0 else "Right")
+		var support_mesh := BoxMesh.new()
+		support_mesh.size = Vector3(0.009, 0.036, 0.010)
+		support.mesh = support_mesh
+		support.material_override = body_material
+		support.position = Vector3(REEL_SPOOL_CENTER_LOCAL.x + side * 0.030, 0.038, REEL_SPOOL_CENTER_LOCAL.z)
+		support.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		frame.add_child(support)
+	var spinner := Node3D.new()
+	spinner.name = "ReelSpinningAssembly"
+	spinner.position = REEL_SPOOL_CENTER_LOCAL
+	spinner.rotation.z = PI * 0.5
+	root.add_child(spinner)
+	var spool := MeshInstance3D.new()
+	spool.name = "ReelSpool"
+	var spool_mesh := CylinderMesh.new()
+	spool_mesh.top_radius = REEL_SPOOL_CORE_RADIUS_M
+	spool_mesh.bottom_radius = REEL_SPOOL_CORE_RADIUS_M
+	spool_mesh.height = REEL_SPOOL_AXIAL_WIDTH_M
+	spool_mesh.radial_segments = 20
+	spool.mesh = spool_mesh
+	spool.material_override = body_material
+	spinner.add_child(spool)
+	var line_material := StandardMaterial3D.new()
+	line_material.albedo_color = Color(0.56, 0.63, 0.60, 1.0)
+	line_material.metallic = 0.12
+	line_material.roughness = 0.52
+	var winding_mesh := TorusMesh.new()
+	winding_mesh.outer_radius = REEL_WINDING_BASE_OUTER_RADIUS_M
+	winding_mesh.inner_radius = REEL_WINDING_BASE_OUTER_RADIUS_M - 0.0012
+	winding_mesh.ring_segments = 5
+	winding_mesh.rings = 32
+	var winding_multimesh := MultiMesh.new()
+	winding_multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	winding_multimesh.mesh = winding_mesh
+	winding_multimesh.instance_count = REEL_WINDING_RING_COUNT
+	for winding_index in range(REEL_WINDING_RING_COUNT):
+		var across := float(winding_index) / float(REEL_WINDING_RING_COUNT - 1)
+		var y := lerpf(-REEL_SPOOL_AXIAL_WIDTH_M * 0.5, REEL_SPOOL_AXIAL_WIDTH_M * 0.5, across)
+		# TorusMesh is generated in the XZ plane, with local Y along its axle.
+		# Keep the ring normal on the spool's local Y axis and pack each ring
+		# across the drum width.
+		winding_multimesh.set_instance_transform(winding_index, Transform3D(Basis.IDENTITY, Vector3(0.0, y, 0.0)))
+	winding_multimesh.custom_aabb = AABB(Vector3(-0.043, -0.035, -0.043), Vector3(0.086, 0.070, 0.086))
+	var winding := MultiMeshInstance3D.new()
+	winding.name = "ReelWoundLine"
+	winding.multimesh = winding_multimesh
+	winding.material_override = line_material
+	winding.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	spinner.add_child(winding)
+	# Three spokes on each spool face make the rotation legible from either side.
+	# The fixed side plates and supports remain on ReelFrame.
+	for side in [-1.0, 1.0]:
 		for spoke_index in range(3):
 			var spoke := MeshInstance3D.new()
 			spoke.name = "ReelSpoke%s%d" % ["L" if side < 0.0 else "R", spoke_index]
 			var spoke_mesh := BoxMesh.new()
-			spoke_mesh.size = Vector3(0.078, 0.005, 0.006)
+			spoke_mesh.size = Vector3(0.070, 0.004, 0.005)
 			spoke.mesh = spoke_mesh
-			spoke.material_override = material
-			spoke.position = Vector3(0.026, side * 0.047, 0.0)
+			spoke.material_override = moving_material
+			spoke.position = Vector3(0.0, side * (REEL_SPOOL_AXIAL_WIDTH_M * 0.5 + 0.006), 0.0)
 			spoke.rotation.y = TAU * float(spoke_index) / 3.0
+			spoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			spinner.add_child(spoke)
 	var hub := MeshInstance3D.new()
 	hub.name = "ReelHub"
 	var hub_mesh := CylinderMesh.new()
 	hub_mesh.top_radius = 0.014
 	hub_mesh.bottom_radius = 0.014
-	hub_mesh.height = 0.09
+	hub_mesh.height = 0.012
 	hub_mesh.radial_segments = 12
 	hub.mesh = hub_mesh
-	hub.material_override = material
+	hub.material_override = moving_material
+	hub.position.y = handle_side * (REEL_SPOOL_AXIAL_WIDTH_M * 0.5 + 0.006)
 	spinner.add_child(hub)
 	var handle_arm := MeshInstance3D.new()
 	handle_arm.name = "ReelHandleArm"
 	var handle_arm_mesh := BoxMesh.new()
-	handle_arm_mesh.size = Vector3(0.062, 0.008, 0.009)
+	handle_arm_mesh.size = Vector3(0.050, 0.006, 0.007)
 	handle_arm.mesh = handle_arm_mesh
-	handle_arm.material_override = material
-	handle_arm.position = Vector3(0.028, 0.054, 0.0)
+	handle_arm.material_override = moving_material
+	handle_arm.position = Vector3(0.026, handle_side * (REEL_SPOOL_AXIAL_WIDTH_M * 0.5 + 0.008), 0.0)
 	spinner.add_child(handle_arm)
 	var reel_handle := MeshInstance3D.new()
 	reel_handle.name = "ReelHandleKnob"
 	var handle_mesh := CylinderMesh.new()
-	handle_mesh.top_radius = 0.009
-	handle_mesh.bottom_radius = 0.009
-	handle_mesh.height = 0.034
+	handle_mesh.top_radius = 0.0065
+	handle_mesh.bottom_radius = 0.0065
+	handle_mesh.height = 0.022
 	handle_mesh.radial_segments = 8
 	reel_handle.mesh = handle_mesh
-	reel_handle.material_override = material
-	reel_handle.position = Vector3(0.06, 0.054, 0.0)
+	reel_handle.material_override = moving_material
+	reel_handle.position = Vector3(0.052, handle_side * (REEL_SPOOL_AXIAL_WIDTH_M * 0.5 + 0.008), 0.0)
 	spinner.add_child(reel_handle)
+	var line_guide := MeshInstance3D.new()
+	line_guide.name = "ReelLineGuide"
+	var line_guide_mesh := TorusMesh.new()
+	line_guide_mesh.outer_radius = 0.0048
+	line_guide_mesh.inner_radius = 0.0032
+	line_guide_mesh.ring_segments = 8
+	line_guide_mesh.rings = 4
+	line_guide.mesh = line_guide_mesh
+	line_guide.material_override = moving_material
+	line_guide.position = get_reel_line_guide_local()
+	line_guide.rotation.x = PI * 0.5
+	line_guide.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	root.add_child(line_guide)
+	return {"root": root, "rotating_assembly": spinner, "spool": spool, "winding_visual": winding, "line_guide": line_guide}
+
+
+func set_reel_line_length(line_length_m: float) -> float:
+	_last_reel_line_length_m = maxf(line_length_m, 0.0) if is_finite(line_length_m) else 0.0
+	return set_reel_winding_line_length_on_visual(_reel_winding_visual, _last_reel_line_length_m)
+
+
+static func get_reel_winding_thickness_m(line_length_m: float) -> float:
+	var safe_length := maxf(line_length_m, 0.0) if is_finite(line_length_m) else 0.0
+	var progress := clampf(safe_length / REEL_LINE_VISUAL_RANGE_M, 0.0, 1.0)
+	return lerpf(REEL_LINE_LAYER_MAX_THICKNESS_M, REEL_LINE_LAYER_MIN_THICKNESS_M, progress)
+
+
+static func get_reel_spool_outer_radius_m(line_length_m: float) -> float:
+	return REEL_SPOOL_CORE_RADIUS_M + get_reel_winding_thickness_m(line_length_m)
+
+
+static func get_reel_line_exit_local(line_length_m: float) -> Vector3:
+	# The drum axis is local X after the pivot's 90-degree Z installation.
+	# The shared reel winds counter-clockwise when retrieving, so line pays out
+	# from the lower radial tangent on both the trolling and handheld rods.
+	var outer_radius := get_reel_spool_outer_radius_m(line_length_m)
+	return Vector3(REEL_SPOOL_CENTER_LOCAL.x, REEL_SPOOL_CENTER_LOCAL.y - outer_radius, REEL_SPOOL_CENTER_LOCAL.z)
+
+
+static func get_reel_line_guide_local() -> Vector3:
+	return Vector3(
+		REEL_SPOOL_CENTER_LOCAL.x,
+		REEL_SPOOL_CENTER_LOCAL.y - REEL_SPOOL_CORE_RADIUS_M - REEL_LINE_LAYER_MAX_THICKNESS_M - 0.006,
+		REEL_SPOOL_CENTER_LOCAL.z + 0.018
+	)
+
+
+static func set_reel_winding_line_length_on_visual(winding: MultiMeshInstance3D, line_length_m: float) -> float:
+	var thickness := get_reel_winding_thickness_m(line_length_m)
+	if winding == null or winding.multimesh == null:
+		return thickness
+	if winding.has_meta("line_layer_thickness_m"):
+		var previous_thickness := float(winding.get_meta("line_layer_thickness_m"))
+		if absf(previous_thickness - thickness) <= 0.000025:
+			return thickness
+	var radial_scale := get_reel_spool_outer_radius_m(line_length_m) / REEL_WINDING_BASE_OUTER_RADIUS_M
+	var multimesh := winding.multimesh
+	for winding_index in range(multimesh.instance_count):
+		var current := multimesh.get_instance_transform(winding_index)
+		# TorusMesh's ring plane is XZ, so preserve the Y-axis axle and scale
+		# only its two radial axes. Axial width and ring spacing stay fixed.
+		current.basis = Basis(Vector3.RIGHT * radial_scale, Vector3.UP, Vector3.BACK * radial_scale)
+		multimesh.set_instance_transform(winding_index, current)
+	winding.set_meta("line_layer_thickness_m", thickness)
+	winding.visible = true
+	return thickness
 
 
 func _build_splash() -> void:
@@ -678,7 +833,10 @@ func _update_rod_and_guides() -> void:
 func _update_line() -> void:
 	if not _line_active or _line_multimesh == null:
 		return
-	var points: Array[Vector3] = [Vector3(0.0, 0.055, 0.19)]
+	var points: Array[Vector3] = [
+		get_reel_line_exit_local(_last_reel_line_length_m),
+		get_reel_line_guide_local(),
+	]
 	for index in range(_profile.guide_count):
 		var t := float(index + 1) / float(_profile.guide_count + 1)
 		points.append(_rod_point(t))

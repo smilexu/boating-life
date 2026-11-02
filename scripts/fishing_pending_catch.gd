@@ -7,6 +7,11 @@ var catch_id := ""
 var species_id := ""
 var school_id := ""
 var lure_id := ""
+var fishing_method := "trolling"
+var debug_spawned := false
+var rig_id := "single_jig"
+var hook_index := -1
+var hook_confirmed := false
 var hooked_game_time_seconds := 0.0
 ## Rolled when the hook event is created so the temporary display fish and the
 ## eventual authoritative CatchResult always use the same natural body length.
@@ -19,6 +24,11 @@ func to_dictionary() -> Dictionary:
 		"species_id": species_id,
 		"school_id": school_id,
 		"lure_id": lure_id,
+		"fishing_method": fishing_method,
+		"debug_spawned": debug_spawned,
+		"rig_id": rig_id,
+		"hook_index": hook_index,
+		"hook_confirmed": hook_confirmed,
 		"hooked_game_time_seconds": hooked_game_time_seconds,
 		"body_length_m": body_length_m,
 	}

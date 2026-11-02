@@ -296,6 +296,7 @@ fishing.ui.hooked,Fish on! Reeling in...,中鱼！正在收线……
 fishing.ui.unknown_fish,Unknown fish,未知鱼种
 fishing.ui.catch_result,%s · %.0f cm · %.2f kg,%s · %.0f 厘米 · %.2f 千克
 fishing.ui.catch_confirmed,Catch confirmed,捕获成功
+fishing.ui.debug_test_catch,Debug test catch,调试测试渔获
 fishing.ui.simulation_preview,Simulation preview,模拟预览
 fishing.ui.catch_length_format,Length: %.0f cm,长度：%.0f 厘米
 fishing.ui.catch_weight_format,Estimated weight: %.2f kg,估计重量：%.2f 千克
@@ -303,6 +304,7 @@ fishing.ui.last_catch_format,Last catch: %s · %.0f cm · %.2f kg,最近渔获�
 camera.mode.follow,Follow camera,跟随视角
 camera.mode.god,God view,上帝视角
 camera.mode.fight_camera,Fight Camera,中鱼视角
+camera.mode.onboard_activity,Onboard activity view,船上活动视角
 fishing.debug.presentation_status,Fight: %s · %.1f s left · %.0f%%,搏鱼：%s · 剩余 %.1f 秒 · %.0f%%
 fishing.debug.presentation_load,Rod load %.0f%% · line %s %.1f m · fish %s,鱼竿负载 %.0f%% · 鱼线%s %.1f 米 · 鱼体%s
 fishing.debug.presentation_camera,Camera: %s · auto switch %s,镜头：%s · 自动切换 %s
@@ -336,6 +338,15 @@ fishing.ui.state.catch,Catch complete,捕获完成
 fishing.ui.state.simulation_preview,Debug simulation,调试模拟
 fishing.debug.section.real_trolling,Real trolling,真实拖钓
 fishing.debug.section.simulation,Simulated catch · animation debugging,模拟中鱼 · 动画调试
+fishing.debug.boat_test_bite,Spawn Test Fish & Bite,生成测试鱼并咬钩
+fishing.debug.boat_test_started,Test %s is approaching the lure.,测试鱼 %s 正在游向拟饵。
+fishing.debug.boat_test_unavailable,Boat-fishing test is not available in the current state.,当前状态无法执行船钓测试。
+fishing.debug.boat_test_species_unavailable,Choose a supported test species first.,请先选择支持的测试鱼种。
+fishing.debug.boat_test.reason.boat_fishing_inactive,Start Boat Fishing before spawning a test fish.,请先开启船钓活动。
+fishing.debug.boat_test.reason.single_jig_required,Select the Single Jig rig first.,请先选择单钩拟饵。
+fishing.debug.boat_test.reason.lure_not_in_water,Cast the lure and wait until it is in the water.,请先抛竿，等待拟饵入水。
+fishing.debug.boat_test.reason.catch_already_active,A bite or catch is already in progress.,当前已有咬钩或收鱼事件。
+fishing.debug.boat_test.reason.method_or_rig_mismatch,This fish species is not compatible with the selected rig.,此鱼种与当前钓组不兼容。
 fishing.debug.sim_length,Test fish length,测试鱼体长度
 fishing.debug.hanging_intensity,Hanging struggle intensity,悬挂挣扎强度
 fishing.debug.unit.cm, cm, 厘米
@@ -408,8 +419,62 @@ Mean %s m/s · sea %s","%s · 风 %s 米/秒 · 来向 %s°
 平均 %s 米/秒 · 海况 ×%s"
 hud.activities.title,Activities,活动
 hud.activities.trolling,Trolling,拖钓
+hud.activities.boat_fishing,Boat Fishing,船钓
 hud.activities.fish_finder,Fish Finder,鱼探仪
 hud.activities.controls_help,Controls help,操作帮助
+hud.boat_fishing.title,Boat Fishing,船钓
+hud.boat_fishing.preparing,Ready for boat fishing · no fishing cast has started,船钓准备中 · 尚未开始抛竿
+hud.boat_fishing.view_hint,"Press O to cycle to the deck view. WASD to move · Space to jump · hold right mouse to look.",按 O 循环切换到甲板视角。WASD 移动 · Space 跳跃 · 按住鼠标右键观察。
+hud.boat_fishing.state_ready,Ready to cast,准备抛竿
+hud.boat_fishing.hint_ready,"WASD: move · Hold left mouse to charge, release to cast · O: driving view.",WASD：移动 · 按住鼠标左键蓄力，松开抛竿 · O：驾驶视角。
+hud.boat_fishing.state_charging,Charging cast,抛竿蓄力中
+hud.boat_fishing.hint_charging,Hold left mouse to build power · release to cast.,按住鼠标左键持续蓄力 · 松开抛竿。
+hud.boat_fishing.charge_prompt,"Hold to charge · release to cast","按住蓄力 · 松开抛竿"
+hud.boat_fishing.state_casting,Casting,正在抛投
+hud.boat_fishing.hint_casting,The lure is travelling to the water.,鱼饵正在飞向水面。
+hud.boat_fishing.state_waiting,Lure in water · waiting,鱼饵入水 · 等待中
+hud.boat_fishing.hint_waiting,"Hold left mouse to reel in · F to pay out · hold right mouse and move to work the rod · O changes view.",按住鼠标左键收线 · 按住 F 放线 · 按住鼠标右键并移动可摆竿 · O 切换视角。
+hud.boat_fishing.state_retrieving,Retrieving,正在收竿
+hud.boat_fishing.state_bite_approach,Fish approaching,鱼正在靠近
+hud.boat_fishing.hint_bite_approach,A fish is approaching the lure; the hook sets only when it reaches it.,鱼正在接近拟饵；接触鱼钩后才会确认中鱼并开始自动收鱼。
+hud.boat_fishing.state_fighting,Fish hooked · automatic retrieval,已中鱼 · 自动收鱼中
+hud.boat_fishing.hint_fighting,The fish is being brought in automatically. O still changes view.,鱼正在自动收回。按 O 仍可切换视角。
+hud.boat_fishing.state_landed,Catch landed,渔获已上船
+hud.boat_fishing.hint_landed,The catch is being recorded.,正在确认渔获。
+hud.boat_fishing.hint_retrieving,The line and lure are being recovered.,正在收回鱼线和鱼饵。
+hud.boat_fishing.retrieve,Retrieve,收竿
+hud.boat_fishing.reel,Hold to reel,按住收线
+hud.boat_fishing.line_detail_format,"Lure %.1f m deep · line %.1f m · seabed %s · %s",鱼饵深 %.1f 米 · 放线 %.1f 米 · 海底 %s · %s
+hud.boat_fishing.line_detail_sabiki_format,"Sinker %.1f m deep · line %.1f m · seabed %s · %s",铅坠深 %.1f 米 · 放线 %.1f 米 · 海底 %s · %s
+hud.boat_fishing.line_reeling,Reeling,正在收线
+hud.boat_fishing.line_releasing,Paying out line,正在放线
+hud.boat_fishing.line_held,Line held,线长保持
+hud.boat_fishing.depth_unknown,unknown,未知
+hud.boat_fishing.rig.single_jig,Single Jig,单钩拟饵
+hud.boat_fishing.rig.sabiki,Sabiki Rig,鲱鱼串钩
+hud.boat_fishing.rig_depth_format,"Hook span %.1f–%.1f m",钩组水层 %.1f–%.1f 米
+hud.boat_fishing.end,End Boat Fishing,结束船钓
+hud.boat_fishing.unsupported,Boat Fishing is available only on the starter cargo boat.,船上活动目前只支持测试用机动船。
+hud.boat_fishing.conflict_trolling,End Boat Fishing before starting trolling.,请先结束船钓，再开始拖钓。
+hud.boat_fishing.conflict_boat_fishing,Stop trolling before starting Boat Fishing.,请先停止拖钓，再开始船钓。
+hud.boat_fishing.cast_first_person,Switch to the deck view before casting.,请先切换到甲板第一人称视角再抛竿。
+hud.boat_fishing.cast_aim_down,Aim the rod down toward the water.,请将鱼竿朝下瞄准水面。
+hud.boat_fishing.cast_surface_unavailable,Water surface sampling is unavailable.,当前无法采样动态水面。
+hud.boat_fishing.cast_near_gunwale,Move close to a gunwale before casting.,请靠近船舷后再抛竿。
+hud.boat_fishing.cast_aim_outside,"Aim out over the water, away from the boat.",请朝远离船体的船外水面瞄准。
+hud.boat_fishing.cast_too_close,The water landing point is too close.,落水点太近，请瞄准更远处水面。
+hud.boat_fishing.cast_too_far,The water landing point is beyond casting range.,落水点超出抛投距离。
+hud.boat_fishing.cast_blocked,The cast path is blocked by an obstacle.,抛投路径被障碍物挡住。
+hud.boat_fishing.cast_not_water,The selected landing point is not confirmed as open water.,落点未确认是开放水域，请避开陆地并重新瞄准。
+hud.debug.onboard_status,"Onboard view: %s · activity: %s · movement lock: %s · area: %s · local position: %.2f, %.2f, %.2f","船上视角：%s · 活动：%s · 移动锁定：%s · 活动区：%s · 局部位置：%.2f，%.2f，%.2f"
+hud.debug.onboard_unavailable,Onboard activity unavailable on this vessel,当前船型不支持船上活动
+hud.debug.area_inactive,not active,未启用
+hud.debug.area_valid,inside allowed deck,位于允许甲板区
+hud.debug.area_invalid,outside allowed deck,超出允许甲板区
+hud.debug.active,active,进行中
+hud.debug.inactive,inactive,未进行
+hud.debug.locked,locked,已锁定
+hud.debug.unlocked,unlocked,未锁定
 hud.map.open,Open chart · M,打开海图 · M
 hud.sea_chart.title,SEA CHART · ØRESUND,海图 · 厄勒海峡
 hud.sea_chart.north,N ↑,北 ↑
@@ -770,3 +835,50 @@ Main %.2f m² + headsail %.2f m²
 Independent sail trim · AUTO sail trim · manual helm","船长 %.1f 米 · 吃水 %.2f 米
 主帆 %.2f 平方米 + 前帆 %.2f 平方米
 主帆与前帆独立操控 · 支持自动操帆与手动操舵"
+hud.boat_fishing.state_sabiki_hooked_waiting,Sabiki has fish · keep fishing,串钩已有鱼 · 可继续等待
+hud.boat_fishing.hint_sabiki_hooked_waiting,"Hold left mouse to adjust line. Retrieve Rig brings all hooked fish in; empty hooks keep fishing.",按住鼠标左键可继续收线调整。点击“收获串钩”统一收鱼；空钩会继续等待。
+hud.boat_fishing.hooked_count,%d/%d fish hooked,%d/%d 条鱼已挂钩
+hud.boat_fishing.batch_caught_format,"Caught %d Herring · total %.1f kg",成功收获 %d 条鲱鱼 · 合计 %.1f 千克
+hud.boat_fishing.retrieve_rig,Retrieve Rig,收获串钩
+fishing.debug.boat_sabiki_section,Sabiki multi-catch test,串钩多鱼测试
+fishing.debug.sabiki_hook_index,Hook slot,钩位
+fishing.debug.sabiki_spawn_hook,Spawn test herring at selected hook,在指定钩位生成测试鲱鱼
+fishing.debug.sabiki_spawn_next,Spawn test herring at next empty hook,在下一个空钩生成测试鲱鱼
+fishing.debug.sabiki_fill,Fill all empty hooks,填满所有空钩
+fishing.debug.sabiki_spawned,Test herring is approaching hook %d.,测试鲱鱼正在接近钩位 %d。
+fishing.debug.sabiki_spawned_count,Spawned %d test herring.,已生成 %d 条测试鲱鱼。
+fishing.debug.sabiki_unavailable,Sabiki test is unavailable in the current state.,当前状态无法执行串钩测试。
+fishing.debug.sabiki.reason.boat_fishing_inactive,Start Boat Fishing before spawning test herring.,请先开启船钓活动。
+fishing.debug.sabiki.reason.sabiki_rig_required,Select Sabiki Rig first.,请先选择鲱鱼串钩。
+fishing.debug.sabiki.reason.tackle_not_in_water,Cast the rig and wait until it is in the water.,请先抛投串钩并等待入水。
+fishing.debug.sabiki.reason.catch_already_active,A hook or retrieval event is already active.,当前已有挂钩或收鱼流程。
+fishing.debug.sabiki.reason.no_empty_hook,There are no empty hook slots.,没有空钩位。
+fishing.debug.sabiki.reason.hook_not_empty,That hook slot already has a fish or bite.,该钩位已有鱼或正在咬钩。
+fishing.debug.sabiki.reason.method_or_rig_mismatch,Herring is not compatible with this rig.,鲱鱼与当前钓组不兼容。
+fishing.debug.sabiki.reason.other,Sabiki test could not start.,串钩测试无法启动。
+fishing.debug.boat_bite_diagnostics,Boat fishing natural-bite diagnostics,船钓自然中鱼诊断
+fishing.debug.boat_bite_unavailable,Boat-fishing diagnostics are unavailable.,船钓诊断暂不可用。
+fishing.debug.boat_bite_inactive,Start boat fishing to collect natural-bite diagnostics.,开始船钓后显示自然中鱼诊断。
+fishing.debug.boat_bite_summary,"%s · %s · line %.1f m · relative speed %.2f m/s · empty hooks %d · total hazard %.1f / real hour · mean wait %.1f s · %s","%s · %s · 放线 %.1f 米 · 相对速度 %.2f 米/秒 · 空钩 %d · 总事件率 %.1f 次/现实小时 · 平均等待 %.1f 秒 · %s"
+fishing.debug.boat_bite_bait_depth,Bait depth %.2f m,鱼饵深度 %.2f 米
+fishing.debug.boat_bite_hook_row,Hook %d · depth %.2f m · %s,钩位 %d · 深度 %.2f 米 · %s
+fishing.debug.boat_bite_school_row,"Hook %d · %s / %s · pop %d · reserved %d · horizontal %.1f m × %.2f · target/effective depth %.1f/%.1f m · bait delta %.1f m","钩位 %d · %s / %s · 数量 %d · 预留 %d · 水平 %.1f 米 × %.2f · 目标/有效深度 %.1f/%.1f 米 · 鱼饵深度差 %.1f 米"
+fishing.debug.boat_bite_rate_row,"depth ×%.2f · population ×%.2f · action ×%.2f · surface ×%.2f · base %.1f/h → final %.1f/h · %s","水层 ×%.2f · 数量 ×%.2f · 动作 ×%.2f · 表层 ×%.2f · 基础 %.1f 次/小时 → 最终 %.1f 次/小时 · %s"
+fishing.debug.boat_bite_visual_depth,Visible school depth %.2f m · difference %.2f m,可见鱼群代表深度 %.2f 米 · 差值 %.2f 米
+fishing.debug.boat_bite_no_school,No school was found within the F3 diagnostic radius (50 m is the active bite range).,F3 诊断范围内没有鱼群（实际中鱼范围仍为 50 米）。
+fishing.debug.boat_bite_reason.no_nearby_schools,No fish-school candidate nearby,附近没有鱼群候选
+fishing.debug.boat_bite_reason.method_or_rig_mismatch,Rig or fishing-method mismatch,钓组或钓法不兼容
+fishing.debug.boat_bite_reason.empty_school,No unreserved fish remain,没有未预留的鱼
+fishing.debug.boat_bite_reason.lure_outside_school,Horizontal distance weight is zero,水平距离权重为零
+fishing.debug.boat_bite_reason.activity_depth_mismatch,Water-layer weight is zero,水层权重为零
+fishing.debug.boat_bite_reason.action_weight_low,Action or event rate is zero,动作权重或事件率为零
+fishing.debug.boat_bite_reason.random_not_triggered,Valid chance; random hazard threshold has not been reached,条件有效；随机 hazard 阈值尚未达到
+fishing.debug.boat_bite_reason.bite_started,Bite event started,咬钩事件已开始
+fishing.debug.boat_bite_reason.school_cooldown,School cooldown,鱼群冷却中
+fishing.debug.boat_bite_reason.unknown_species,Unknown species,未知鱼种
+fishing.debug.boat_bite_reason.zero_event_rate,Event rate is zero,事件率为零
+fishing.debug.boat_bite_reason.no_valid_candidate,No valid candidate,没有有效候选
+fishing.debug.boat_bite_hook_state.empty,empty,空钩
+fishing.debug.boat_bite_hook_state.approaching,approaching,接近中
+fishing.debug.boat_bite_hook_state.reserved,reserved,已预留
+fishing.debug.boat_bite_hook_state.hooked,hooked,已挂鱼

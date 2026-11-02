@@ -38,6 +38,9 @@ const TIME_SCALE_PRESETS := [1.0, 6.0, 12.0, 24.0, 60.0]
 @export_node_path("Node") var weather_runtime_authority_path := NodePath("../../WeatherRuntimeAuthority")
 
 var _controller: BoatController
+var _camera_rig: BoatFollowCamera
+var _onboard_activity_controller: OnboardActivityController
+var _boat_fishing_casting_system: BoatFishingCastingSystem
 var _weather_controller: Node
 var _weather_state_controller: Node
 var _day_night_visual_controller: Node
@@ -61,6 +64,7 @@ var _fish_map: Node
 var _fishing_rod_system: FishingRodSystem
 var _weather_runtime_authority: Node
 var _fishing_player_panel: FishingPlayerPanel
+var _fishing_debug_panel: Control
 var _catch_result_panel: PanelContainer
 var _catch_result_title: Label
 var _catch_result_species: Label
@@ -78,6 +82,28 @@ var _status_label: Label
 var _environment_title_label: Label
 var _activity_button: Button
 var _activity_menu: PanelContainer
+var _boat_fishing_menu_button: Button
+var _boat_fishing_panel: PanelContainer
+var _boat_fishing_status_label: Label
+var _boat_fishing_hint_label: Label
+var _boat_fishing_line_detail_label: Label
+var _boat_fishing_rig_depth_label: Label
+var _boat_fishing_hooked_count_label: Label
+var _boat_fishing_rig_selector: OptionButton
+var _boat_fishing_end_button: Button
+var _boat_fishing_retrieve_button: Button
+var _boat_fishing_collect_rig_button: Button
+var _cast_charge_panel: PanelContainer
+var _cast_charge_label: Label
+var _cast_charge_bar: ProgressBar
+var _boat_fishing_status_key := "hud.boat_fishing.preparing"
+var _boat_fishing_hint_key := "hud.boat_fishing.view_hint"
+var _activity_feedback_label: Label
+var _activity_feedback_key := ""
+var _activity_feedback_remaining := 0.0
+var _boat_fishing_active := false
+var _boat_fishing_detail_elapsed := 0.0
+var _onboard_debug_label: Label
 var _navigation_core_panel: PanelContainer
 var _navigation_core_title: Label
 var _navigation_speed_label: Label
@@ -236,6 +262,16 @@ func _ready() -> void:
 	if _controller == null:
 		push_error("Boat HUD could not find its controller at %s." % controller_path)
 		return
+	_onboard_activity_controller = _controller.get_node_or_null("VisualRoot/OnboardActivityController") as OnboardActivityController
+	_boat_fishing_casting_system = get_node_or_null("../BoatFishingCastingSystem") as BoatFishingCastingSystem
+	if _boat_fishing_casting_system != null:
+		_boat_fishing_casting_system.state_changed.connect(_on_boat_fishing_state_changed)
+		_boat_fishing_casting_system.feedback_requested.connect(_show_activity_feedback)
+		_boat_fishing_casting_system.charge_progress_changed.connect(_on_cast_charge_progress_changed)
+	_camera_rig = get_node_or_null("../FollowCameraRig") as BoatFollowCamera
+	if _camera_rig != null:
+		_camera_rig.set_onboard_activity_controller(_onboard_activity_controller)
+		_camera_rig.set_boat_fishing_casting_system(_boat_fishing_casting_system)
 	_navigation_detail_requested = _controller.is_sailing_active()
 	_weather_controller = get_node_or_null(weather_controller_path)
 	_weather_state_controller = get_node_or_null(weather_state_controller_path)
@@ -325,6 +361,7 @@ func _ready() -> void:
 	status_layout.add_child(_cargo_task_label)
 	add_child(_status_panel)
 	_build_activity_menu()
+	_build_boat_fishing_panel()
 	_build_navigation_core_panel()
 	_build_autopilot_panel()
 	_build_fish_finder_display()
@@ -333,6 +370,7 @@ func _ready() -> void:
 	_build_sailing_panel()
 	_build_fishing_player_panel()
 	_build_catch_result_panel()
+	_build_cast_charge_indicator()
 	_build_vessel_picker()
 	_controller.vessel_mode_changed.connect(_on_vessel_mode_changed)
 	var localization_manager := get_node_or_null("/root/LocalizationManager")
@@ -374,6 +412,11 @@ func _build_activity_menu() -> void:
 	trolling.text = tr("hud.activities.trolling")
 	trolling.pressed.connect(_open_trolling_activity)
 	menu.add_child(trolling)
+	_boat_fishing_menu_button = Button.new()
+	_boat_fishing_menu_button.name = "OpenBoatFishingActivity"
+	_boat_fishing_menu_button.text = tr("hud.activities.boat_fishing")
+	_boat_fishing_menu_button.pressed.connect(_open_boat_fishing_activity)
+	menu.add_child(_boat_fishing_menu_button)
 	var finder := Button.new()
 	finder.name = "OpenFishFinderTool"
 	finder.text = tr("hud.activities.fish_finder")
@@ -385,6 +428,14 @@ func _build_activity_menu() -> void:
 	help.pressed.connect(_toggle_controls_help)
 	menu.add_child(help)
 	add_child(_activity_menu)
+	_activity_feedback_label = Label.new()
+	_activity_feedback_label.name = "ActivityFeedback"
+	_activity_feedback_label.visible = false
+	_activity_feedback_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_activity_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_activity_feedback_label.add_theme_color_override("font_color", Color(1.0, 0.78, 0.35, 1.0))
+	_activity_feedback_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_activity_feedback_label)
 
 	_map_button = Button.new()
 	_map_button.name = "MapToolButton"
@@ -394,6 +445,87 @@ func _build_activity_menu() -> void:
 	_map_button.pressed.connect(_open_map_tool)
 	add_child(_map_button)
 	_build_controls_help_panel()
+
+
+func _build_boat_fishing_panel() -> void:
+	_boat_fishing_panel = PanelContainer.new()
+	_boat_fishing_panel.name = "BoatFishingActivityPanel"
+	_boat_fishing_panel.visible = false
+	_boat_fishing_panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.035, 0.12, 0.16, 0.92)
+	style.border_color = Color(0.28, 0.52, 0.55, 0.72)
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(8)
+	style.content_margin_left = 12.0
+	style.content_margin_right = 12.0
+	style.content_margin_top = 9.0
+	style.content_margin_bottom = 9.0
+	_boat_fishing_panel.add_theme_stylebox_override("panel", style)
+	var layout := VBoxContainer.new()
+	layout.add_theme_constant_override("separation", 5)
+	_boat_fishing_panel.add_child(layout)
+	var title := Label.new()
+	title.name = "BoatFishingActivityTitle"
+	title.text = tr("hud.boat_fishing.title")
+	title.add_theme_font_size_override("font_size", 16)
+	layout.add_child(title)
+	_boat_fishing_rig_selector = OptionButton.new()
+	_boat_fishing_rig_selector.name = "BoatFishingRigSelector"
+	_boat_fishing_rig_selector.focus_mode = Control.FOCUS_NONE
+	_boat_fishing_rig_selector.item_selected.connect(_on_boat_fishing_rig_selected)
+	layout.add_child(_boat_fishing_rig_selector)
+	_boat_fishing_status_label = Label.new()
+	_boat_fishing_status_label.name = "BoatFishingActivityStatus"
+	_boat_fishing_status_label.text = tr("hud.boat_fishing.preparing")
+	layout.add_child(_boat_fishing_status_label)
+	_boat_fishing_hint_label = Label.new()
+	_boat_fishing_hint_label.name = "BoatFishingActivityHint"
+	_boat_fishing_hint_label.text = tr("hud.boat_fishing.view_hint")
+	_boat_fishing_hint_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_boat_fishing_hint_label.add_theme_font_size_override("font_size", 13)
+	layout.add_child(_boat_fishing_hint_label)
+	_boat_fishing_line_detail_label = Label.new()
+	_boat_fishing_line_detail_label.name = "BoatFishingLineDetail"
+	_boat_fishing_line_detail_label.visible = false
+	_boat_fishing_line_detail_label.add_theme_font_size_override("font_size", 12)
+	_boat_fishing_line_detail_label.add_theme_color_override("font_color", Color(0.70, 0.84, 0.81, 1.0))
+	layout.add_child(_boat_fishing_line_detail_label)
+	_boat_fishing_rig_depth_label = Label.new()
+	_boat_fishing_rig_depth_label.name = "BoatFishingRigDepthDetail"
+	_boat_fishing_rig_depth_label.visible = false
+	_boat_fishing_rig_depth_label.add_theme_font_size_override("font_size", 12)
+	_boat_fishing_rig_depth_label.add_theme_color_override("font_color", Color(0.70, 0.84, 0.81, 1.0))
+	layout.add_child(_boat_fishing_rig_depth_label)
+	_boat_fishing_hooked_count_label = Label.new()
+	_boat_fishing_hooked_count_label.name = "BoatFishingHookedCount"
+	_boat_fishing_hooked_count_label.visible = false
+	_boat_fishing_hooked_count_label.add_theme_font_size_override("font_size", 12)
+	_boat_fishing_hooked_count_label.add_theme_color_override("font_color", Color(0.95, 0.82, 0.42, 1.0))
+	layout.add_child(_boat_fishing_hooked_count_label)
+	_boat_fishing_collect_rig_button = Button.new()
+	_boat_fishing_collect_rig_button.name = "RetrieveSabikiRig"
+	_boat_fishing_collect_rig_button.text = tr("hud.boat_fishing.retrieve_rig")
+	_boat_fishing_collect_rig_button.visible = false
+	_boat_fishing_collect_rig_button.focus_mode = Control.FOCUS_NONE
+	_boat_fishing_collect_rig_button.pressed.connect(_request_sabiki_retrieval)
+	layout.add_child(_boat_fishing_collect_rig_button)
+	_boat_fishing_retrieve_button = Button.new()
+	_boat_fishing_retrieve_button.name = "RetrieveBoatFishingCast"
+	_boat_fishing_retrieve_button.text = tr("hud.boat_fishing.reel")
+	_boat_fishing_retrieve_button.visible = false
+	_boat_fishing_retrieve_button.focus_mode = Control.FOCUS_NONE
+	_boat_fishing_retrieve_button.button_down.connect(_start_boat_fishing_reel)
+	_boat_fishing_retrieve_button.button_up.connect(_stop_boat_fishing_reel)
+	layout.add_child(_boat_fishing_retrieve_button)
+	_boat_fishing_end_button = Button.new()
+	_boat_fishing_end_button.name = "EndBoatFishingActivity"
+	_boat_fishing_end_button.text = tr("hud.boat_fishing.end")
+	_boat_fishing_end_button.pressed.connect(end_boat_fishing_activity)
+	layout.add_child(_boat_fishing_end_button)
+	add_child(_boat_fishing_panel)
+	_rebuild_boat_fishing_rig_selector()
+	_refresh_boat_fishing_rig_selector()
 
 
 func _build_controls_help_panel() -> void:
@@ -492,18 +624,270 @@ func _build_navigation_core_panel() -> void:
 
 func _toggle_activity_menu() -> void:
 	_activity_menu.visible = not _activity_menu.visible
+	if _activity_menu.visible and _boat_fishing_casting_system != null:
+		_boat_fishing_casting_system.release_held_controls_for_ui()
 	if _activity_menu.visible and _help_panel != null:
 		_help_panel.visible = false
 	_update_hud_layout()
+
+
+func _build_cast_charge_indicator() -> void:
+	_cast_charge_panel = PanelContainer.new()
+	_cast_charge_panel.name = "BoatFishingCastChargeIndicator"
+	_cast_charge_panel.visible = false
+	_cast_charge_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.025, 0.085, 0.105, 0.86)
+	panel_style.border_color = Color(0.34, 0.68, 0.69, 0.72)
+	panel_style.set_border_width_all(1)
+	panel_style.set_corner_radius_all(7)
+	panel_style.content_margin_left = 12.0
+	panel_style.content_margin_right = 12.0
+	panel_style.content_margin_top = 7.0
+	panel_style.content_margin_bottom = 7.0
+	_cast_charge_panel.add_theme_stylebox_override("panel", panel_style)
+	var charge_layout := VBoxContainer.new()
+	charge_layout.add_theme_constant_override("separation", 4)
+	charge_layout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_cast_charge_panel.add_child(charge_layout)
+	_cast_charge_label = Label.new()
+	_cast_charge_label.text = tr("hud.boat_fishing.charge_prompt")
+	_cast_charge_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_cast_charge_label.add_theme_font_size_override("font_size", 13)
+	_cast_charge_label.add_theme_color_override("font_color", Color(0.85, 0.94, 0.91))
+	_cast_charge_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	charge_layout.add_child(_cast_charge_label)
+	_cast_charge_bar = ProgressBar.new()
+	_cast_charge_bar.min_value = 0.0
+	_cast_charge_bar.max_value = 100.0
+	_cast_charge_bar.value = 0.0
+	_cast_charge_bar.show_percentage = false
+	_cast_charge_bar.custom_minimum_size = Vector2(224.0, 10.0)
+	_cast_charge_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	charge_layout.add_child(_cast_charge_bar)
+	add_child(_cast_charge_panel)
+
+
+func _on_cast_charge_progress_changed(progress: float, indicator_visible: bool) -> void:
+	if _cast_charge_panel == null:
+		return
+	var should_be_visible := indicator_visible and _onboard_activity_controller != null and _onboard_activity_controller.is_first_person_active()
+	if _cast_charge_panel.visible != should_be_visible:
+		_cast_charge_panel.visible = should_be_visible
+	_cast_charge_bar.value = clampf(progress, 0.0, 1.0) * 100.0
+	if should_be_visible:
+		var prompt := tr("hud.boat_fishing.charge_prompt")
+		if _cast_charge_label.text != prompt:
+			_cast_charge_label.text = prompt
 
 
 func _open_trolling_activity() -> void:
 	_activity_menu.visible = false
 	if _fishing_player_panel == null:
 		return
+	if _boat_fishing_active:
+		_show_activity_feedback("hud.boat_fishing.conflict_trolling")
+		_fishing_player_panel.show_feedback("hud.boat_fishing.conflict_trolling")
+		_update_hud_layout()
+		return
+	# Trolling opens directly into the rod-side fishing composition. This uses
+	# the existing Fight Camera transform, not the deck-walking activity camera.
+	if _camera_rig != null:
+		_camera_rig.begin_trolling_rod_view(true)
+	if _fishing_rod_system != null:
+		_fishing_rod_system.set_trolling_activity_visible(true)
 	_fishing_player_panel.set_collapsed(false)
 	_fishing_player_panel.visible = true
 	_update_hud_layout()
+
+
+func _open_boat_fishing_activity() -> void:
+	_activity_menu.visible = false
+	if _boat_fishing_active:
+		_update_hud_layout()
+		return
+	if _controller == null or _controller.is_sailing_active() or _onboard_activity_controller == null or not _onboard_activity_controller.is_supported() or _boat_fishing_casting_system == null:
+		_show_activity_feedback("hud.boat_fishing.unsupported")
+		_update_hud_layout()
+		return
+	if _fishing_player_panel != null and _fishing_player_panel.is_trolling_active():
+		_show_activity_feedback("hud.boat_fishing.conflict_boat_fishing")
+		_fishing_player_panel.show_feedback("hud.boat_fishing.conflict_boat_fishing")
+		_update_hud_layout()
+		return
+	if _fishing_player_panel != null and _fishing_player_panel.visible:
+		_fishing_player_panel.visible = false
+		if _camera_rig != null and not _fishing_player_panel.is_trolling_active():
+			_camera_rig.end_trolling_rod_view()
+		if _fishing_rod_system != null and not _fishing_player_panel.is_trolling_active():
+			_fishing_rod_system.set_trolling_activity_visible(false)
+	if _camera_rig == null or not _camera_rig.begin_onboard_activity():
+		_show_activity_feedback("hud.boat_fishing.unsupported")
+		_update_hud_layout()
+		return
+	_boat_fishing_active = true
+	if not _boat_fishing_casting_system.begin_activity():
+		_boat_fishing_active = false
+		_camera_rig.end_onboard_activity()
+		_show_activity_feedback("hud.boat_fishing.unsupported")
+		_update_hud_layout()
+		return
+	if not _camera_rig.enter_onboard_activity_view():
+		_boat_fishing_casting_system.end_activity()
+		_boat_fishing_active = false
+		_camera_rig.end_onboard_activity()
+		_show_activity_feedback("hud.boat_fishing.unsupported")
+		_update_hud_layout()
+		return
+	_set_trolling_start_block_reason("hud.boat_fishing.conflict_trolling")
+	if _boat_fishing_panel != null:
+		_boat_fishing_panel.visible = true
+	_update_hud_layout()
+
+
+func end_boat_fishing_activity() -> void:
+	if not _boat_fishing_active:
+		return
+	_boat_fishing_active = false
+	if _boat_fishing_casting_system != null:
+		_boat_fishing_casting_system.end_activity()
+	if _camera_rig != null:
+		_camera_rig.end_onboard_activity()
+	elif _onboard_activity_controller != null:
+		_onboard_activity_controller.end_activity()
+	_set_trolling_start_block_reason("")
+	if _boat_fishing_panel != null:
+		_boat_fishing_panel.visible = false
+	_update_hud_layout()
+
+
+func _start_boat_fishing_reel() -> void:
+	if _boat_fishing_casting_system != null:
+		_boat_fishing_casting_system.set_manual_reeling(true, true)
+
+
+func _stop_boat_fishing_reel() -> void:
+	if _boat_fishing_casting_system != null:
+		_boat_fishing_casting_system.set_manual_reeling(false, true)
+
+
+func _request_sabiki_retrieval() -> void:
+	if _boat_fishing_casting_system != null:
+		_boat_fishing_casting_system.request_sabiki_retrieval()
+
+
+func _on_boat_fishing_state_changed(_state_name: String, status_key: String, hint_key: String) -> void:
+	_boat_fishing_status_key = status_key
+	_boat_fishing_hint_key = hint_key
+	if _boat_fishing_status_label != null:
+		_boat_fishing_status_label.text = tr(_boat_fishing_status_key)
+	if _boat_fishing_hint_label != null:
+		_boat_fishing_hint_label.text = tr(_boat_fishing_hint_key)
+	if _boat_fishing_retrieve_button != null:
+		var cast_state := _boat_fishing_casting_system.get_casting_state() if _boat_fishing_casting_system != null else BoatFishingCastingSystem.CastState.READY
+		var can_retrieve := cast_state in [BoatFishingCastingSystem.CastState.WAITING, BoatFishingCastingSystem.CastState.SABIKI_HOOKED_WAITING]
+		_boat_fishing_retrieve_button.visible = _boat_fishing_casting_system != null and _boat_fishing_casting_system.is_cast_active()
+		_boat_fishing_retrieve_button.disabled = not can_retrieve
+	_refresh_boat_fishing_rig_selector()
+	_refresh_boat_fishing_line_detail()
+	_update_hud_layout()
+
+
+func _refresh_boat_fishing_line_detail() -> void:
+	if _boat_fishing_line_detail_label == null or _boat_fishing_casting_system == null:
+		return
+	var snapshot := _boat_fishing_casting_system.get_interaction_snapshot()
+	var state_name := str(snapshot.get("state", ""))
+	var visible := bool(snapshot.get("line_active", false)) and state_name in ["WAITING", "SABIKI_HOOKED_WAITING", "FIGHTING", "CATCH_PRESENTATION"]
+	_boat_fishing_line_detail_label.visible = visible
+	var rig_snapshot: Dictionary = snapshot.get("rig", {})
+	var depth_range: Dictionary = snapshot.get("hook_depth_range", {})
+	var sabiki_active := str(rig_snapshot.get("rig_id", "")) == "sabiki_rig"
+	_boat_fishing_rig_depth_label.visible = visible and sabiki_active
+	var hooked_count := int(snapshot.get("sabiki_hooked_count", 0))
+	var hook_capacity := int(snapshot.get("sabiki_hook_capacity", 0))
+	var batch_summary: Dictionary = snapshot.get("sabiki_batch_result_summary", {})
+	_boat_fishing_hooked_count_label.visible = visible and sabiki_active
+	_boat_fishing_collect_rig_button.visible = visible and sabiki_active and hooked_count > 0 and state_name in ["WAITING", "SABIKI_HOOKED_WAITING"]
+	_boat_fishing_collect_rig_button.disabled = bool(snapshot.get("sabiki_batch_retrieval_active", false))
+	if _boat_fishing_hooked_count_label.visible:
+		if state_name == "CATCH_PRESENTATION" and int(batch_summary.get("catch_count", 0)) > 0:
+			_boat_fishing_hooked_count_label.text = tr("hud.boat_fishing.batch_caught_format") % [
+				int(batch_summary.get("catch_count", 0)),
+				float(batch_summary.get("total_weight_kg", 0.0)),
+			]
+		else:
+			_boat_fishing_hooked_count_label.text = tr("hud.boat_fishing.hooked_count") % [hooked_count, hook_capacity]
+	if not visible:
+		_boat_fishing_line_detail_label.text = ""
+		_boat_fishing_rig_depth_label.text = ""
+		_boat_fishing_hooked_count_label.text = ""
+		return
+	var operation_key := "hud.boat_fishing.line_reeling" if bool(snapshot.get("manual_reeling", false)) else "hud.boat_fishing.line_releasing" if bool(snapshot.get("manual_line_releasing", false)) else "hud.boat_fishing.line_held"
+	var bottom_depth := float(snapshot.get("water_depth_m", -1.0))
+	var bottom_text := ("%.1f m" % bottom_depth) if bottom_depth >= 0.0 else tr("hud.boat_fishing.depth_unknown")
+	var depth_format_key := "hud.boat_fishing.line_detail_sabiki_format" if sabiki_active else "hud.boat_fishing.line_detail_format"
+	var tackle_depth := float(snapshot.get("sinker_depth_below_surface_m", 0.0)) if sabiki_active else float(snapshot.get("bait_depth_below_surface_m", 0.0))
+	_boat_fishing_line_detail_label.text = tr(depth_format_key) % [
+		tackle_depth,
+		float(snapshot.get("line_length_m", 0.0)),
+		bottom_text,
+		tr(operation_key),
+	]
+	if _boat_fishing_rig_depth_label.visible:
+		_boat_fishing_rig_depth_label.text = tr("hud.boat_fishing.rig_depth_format") % [
+			float(depth_range.get("shallow_m", 0.0)),
+			float(depth_range.get("deep_m", 0.0)),
+		]
+	_refresh_boat_fishing_rig_selector()
+
+
+func _refresh_boat_fishing_rig_selector() -> void:
+	if _boat_fishing_rig_selector == null or _boat_fishing_casting_system == null:
+		return
+	var selected_rig := _boat_fishing_casting_system.get_rig_snapshot()
+	var selected_index := 0
+	for index in range(_boat_fishing_rig_selector.item_count):
+		if StringName(str(_boat_fishing_rig_selector.get_item_metadata(index))) == StringName(selected_rig.get("rig_id", &"")):
+			selected_index = index
+	_boat_fishing_rig_selector.select(selected_index)
+	_boat_fishing_rig_selector.disabled = _boat_fishing_casting_system.get_casting_state() != BoatFishingCastingSystem.CastState.READY
+
+
+func _rebuild_boat_fishing_rig_selector() -> void:
+	if _boat_fishing_rig_selector == null or _boat_fishing_casting_system == null:
+		return
+	_boat_fishing_rig_selector.clear()
+	for rig in _boat_fishing_casting_system.get_available_rigs():
+		var index := _boat_fishing_rig_selector.item_count
+		_boat_fishing_rig_selector.add_item(tr(String(rig.get("display_name_key", ""))))
+		_boat_fishing_rig_selector.set_item_metadata(index, String(rig.get("rig_id", "")))
+	_refresh_boat_fishing_rig_selector()
+
+
+func _on_boat_fishing_rig_selected(index: int) -> void:
+	if _boat_fishing_casting_system == null or index < 0 or index >= _boat_fishing_rig_selector.item_count:
+		return
+	var rig_id := StringName(str(_boat_fishing_rig_selector.get_item_metadata(index)))
+	if not _boat_fishing_casting_system.select_rig(rig_id):
+		_refresh_boat_fishing_rig_selector()
+	_refresh_boat_fishing_line_detail()
+
+
+func _show_activity_feedback(message_key: String, duration: float = 2.8) -> void:
+	_activity_feedback_key = message_key
+	_activity_feedback_remaining = duration
+	if _activity_feedback_label != null:
+		_activity_feedback_label.text = tr(message_key)
+		_activity_feedback_label.visible = true
+	_update_hud_layout()
+
+
+func _set_trolling_start_block_reason(message_key: String) -> void:
+	if _fishing_player_panel != null:
+		_fishing_player_panel.set_start_block_reason(message_key)
+	if _fishing_debug_panel != null and _fishing_debug_panel.has_method("set_trolling_start_block_reason"):
+		_fishing_debug_panel.call("set_trolling_start_block_reason", message_key)
 
 
 func _open_fish_finder_tool() -> void:
@@ -546,6 +930,8 @@ func _toggle_controls_help() -> void:
 
 
 func _prepare_major_tool(tool_name: String) -> void:
+	if _boat_fishing_casting_system != null:
+		_boat_fishing_casting_system.release_held_controls_for_ui()
 	if tool_name != "map" and _fish_map != null and _fish_map.has_method("set_display_mode"):
 		if str(_fish_map.call("get_display_mode")) == "expanded":
 			_fish_map.call("set_display_mode", "mini")
@@ -568,14 +954,24 @@ func _build_trolling_panel_signals() -> void:
 func _on_trolling_configuration_closed() -> void:
 	if _fishing_player_panel != null and not _fishing_player_panel.is_trolling_active():
 		_fishing_player_panel.visible = false
+		if _camera_rig != null:
+			_camera_rig.end_trolling_rod_view()
+		if _fishing_rod_system != null:
+			_fishing_rod_system.set_trolling_activity_visible(false)
 
 
 func _on_trolling_activity_state_changed(active: bool) -> void:
 	if _fishing_player_panel == null:
 		return
 	_fishing_player_panel.visible = active
+	if _fishing_rod_system != null:
+		_fishing_rod_system.set_trolling_activity_visible(active)
 	if active:
 		_fishing_player_panel.set_collapsed(false)
+		if _camera_rig != null and not _camera_rig.is_trolling_rod_view_active():
+			_camera_rig.begin_trolling_rod_view(true)
+	elif _camera_rig != null:
+		_camera_rig.end_trolling_rod_view()
 	_update_hud_layout()
 
 
@@ -608,14 +1004,35 @@ func _on_locale_changed(_locale_id: String) -> void:
 		var menu := _activity_menu.get_child(0) as VBoxContainer
 		if menu != null:
 			(menu.get_node("OpenTrollingActivity") as Button).text = tr("hud.activities.trolling")
+			if _boat_fishing_menu_button != null:
+				_boat_fishing_menu_button.text = tr("hud.activities.boat_fishing")
 			(menu.get_node("OpenFishFinderTool") as Button).text = tr("hud.activities.fish_finder")
 			(menu.get_node("OpenControlsHelp") as Button).text = tr("hud.activities.controls_help")
-		var help_title := get_node_or_null("ControlsHelpPanel/VBoxContainer/HBoxContainer/ControlsHelpTitle") as Label
-		if help_title != null:
-			help_title.text = tr("hud.activities.controls_help")
-		var help_close := get_node_or_null("ControlsHelpPanel/VBoxContainer/HBoxContainer/CloseControlsHelp") as Button
-		if help_close != null:
-			help_close.tooltip_text = tr("hud.close")
+	if _boat_fishing_panel != null:
+		var boat_fishing_title := _boat_fishing_panel.find_child("BoatFishingActivityTitle", true, false) as Label
+		if boat_fishing_title != null:
+			boat_fishing_title.text = tr("hud.boat_fishing.title")
+		if _boat_fishing_status_label != null:
+			_boat_fishing_status_label.text = tr(_boat_fishing_status_key)
+		if _boat_fishing_hint_label != null:
+			_boat_fishing_hint_label.text = tr(_boat_fishing_hint_key)
+		if _boat_fishing_retrieve_button != null:
+			_boat_fishing_retrieve_button.text = tr("hud.boat_fishing.reel")
+		if _boat_fishing_collect_rig_button != null:
+			_boat_fishing_collect_rig_button.text = tr("hud.boat_fishing.retrieve_rig")
+		_rebuild_boat_fishing_rig_selector()
+		if _boat_fishing_line_detail_label != null and _boat_fishing_line_detail_label.visible:
+			_refresh_boat_fishing_line_detail()
+		if _boat_fishing_end_button != null:
+			_boat_fishing_end_button.text = tr("hud.boat_fishing.end")
+	if _activity_feedback_label != null and not _activity_feedback_key.is_empty():
+		_activity_feedback_label.text = tr(_activity_feedback_key)
+	var help_title := get_node_or_null("ControlsHelpPanel/VBoxContainer/HBoxContainer/ControlsHelpTitle") as Label
+	if help_title != null:
+		help_title.text = tr("hud.activities.controls_help")
+	var help_close := get_node_or_null("ControlsHelpPanel/VBoxContainer/HBoxContainer/CloseControlsHelp") as Button
+	if help_close != null:
+		help_close.tooltip_text = tr("hud.close")
 	if _map_button != null:
 		_map_button.text = tr("hud.map.open")
 	if _fish_finder_toggle_button != null:
@@ -889,9 +1306,10 @@ func _on_catch_display_updated(snapshot: Dictionary) -> void:
 		_catch_result_card_is_retained = false
 		return
 	var simulated := str(snapshot.get("source", "")) == "DEBUG_SIMULATION"
+	var debug_test_catch := bool(snapshot.get("debug_spawned", false))
 	_catch_result_card_is_retained = simulated or not str(snapshot.get("catch_id", "")).is_empty()
 	_catch_result_card_hold_remaining = CATCH_RESULT_CARD_HOLD_SECONDS if _catch_result_card_is_retained else 0.0
-	_catch_result_title.text = tr("fishing.ui.simulation_preview") if simulated else tr("fishing.ui.catch_confirmed")
+	_catch_result_title.text = tr("fishing.ui.simulation_preview") if simulated else tr("fishing.ui.debug_test_catch") if debug_test_catch else tr("fishing.ui.catch_confirmed")
 	_catch_result_species.text = tr(str(snapshot.get("species_name_key", "fishing.ui.unknown_fish")))
 	_catch_result_length.text = tr("fishing.ui.catch_length_format") % float(snapshot.get("length_cm", 0.0))
 	_catch_result_weight.text = tr("fishing.ui.catch_weight_format") % float(snapshot.get("weight_kg", 0.0))
@@ -1578,6 +1996,9 @@ func _sail_deployment_state_key(target: float, current: float) -> String:
 	return "hud.sailing.furling.partial"
 
 func _on_vessel_mode_changed(sailboat_active: bool) -> void:
+	if sailboat_active and _boat_fishing_active:
+		end_boat_fishing_activity()
+		_show_activity_feedback("hud.boat_fishing.unsupported")
 	_navigation_detail_requested = sailboat_active
 	if _boat_audio_controller != null and _boat_audio_controller.has_method("bind_vessel"):
 		var motion_source: Node = _controller.get_sailing_body() if sailboat_active else _controller.get_node_or_null("VisualRoot")
@@ -1675,6 +2096,13 @@ func _adjust_headsail(direction: int) -> void:
 
 func _process(delta: float) -> void:
 	_advance_catch_result_card(delta)
+	if _activity_feedback_remaining > 0.0:
+		_activity_feedback_remaining = maxf(0.0, _activity_feedback_remaining - delta)
+		if _activity_feedback_remaining <= 0.0:
+			_activity_feedback_key = ""
+			if _activity_feedback_label != null:
+				_activity_feedback_label.visible = false
+			_update_hud_layout()
 	_sample_debug_frame_time()
 	_runtime_elapsed += delta
 	_fps_elapsed += delta
@@ -1690,6 +2118,11 @@ func _process(delta: float) -> void:
 		if _navigation_refresh_elapsed >= 0.1:
 			_navigation_refresh_elapsed = fmod(_navigation_refresh_elapsed, 0.1)
 			_update_navigation_core_panel()
+	_boat_fishing_detail_elapsed += delta
+	if _boat_fishing_detail_elapsed >= 0.2:
+		_boat_fishing_detail_elapsed = fmod(_boat_fishing_detail_elapsed, 0.2)
+		if _boat_fishing_panel != null and _boat_fishing_panel.visible:
+			_refresh_boat_fishing_line_detail()
 	_autopilot_refresh_elapsed += delta
 	if _autopilot_refresh_elapsed >= 0.2:
 		_autopilot_refresh_elapsed = fmod(_autopilot_refresh_elapsed, 0.2)
@@ -1896,6 +2329,8 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F3:
 		_debug_panel.visible = not _debug_panel.visible
+		if _onboard_activity_controller != null:
+			_onboard_activity_controller.set_debug_bounds_visible(_debug_panel.visible)
 		if _debug_panel.visible:
 			_begin_debug_panel_overrides()
 			_update_debug_status()
@@ -2020,6 +2455,9 @@ func _build_debug_panel() -> void:
 	_weather_runtime_status_label = _make_debug_label()
 	_weather_runtime_status_label.name = "WeatherRuntimeReadout"
 	layout.add_child(_weather_runtime_status_label)
+	_onboard_debug_label = _make_debug_label()
+	_onboard_debug_label.name = "OnboardActivityDebugStatus"
+	layout.add_child(_onboard_debug_label)
 	var preset_row := HBoxContainer.new()
 	preset_row.add_theme_constant_override("separation", 6)
 	for preset in [["1  晴天", 0], ["2  少云", 1], ["3  阴天", 2]]:
@@ -2171,6 +2609,7 @@ func _build_debug_panel() -> void:
 	_debug_scroll.set_tab_title(2, tr("fishing.debug.tab"))
 	add_child(_debug_panel)
 	fishing_debug_panel.configure(_fish_resource_manager, _fishing_rod_system, _fish_finder_display, _fish_school_renderer)
+	_fishing_debug_panel = fishing_debug_panel
 	_refresh_weather_controls()
 	_refresh_settings_controls()
 	_refresh_city_lighting_controls()
@@ -3284,9 +3723,34 @@ func _update_hud_layout() -> void:
 			_activity_menu.offset_left = -activity_width - margin
 			_activity_menu.offset_right = -margin
 			var menu_top := margin + 48.0 * scale
+			var menu_height := maxf(168.0 * scale, _activity_menu.get_combined_minimum_size().y)
 			_activity_menu.offset_top = menu_top
-			_activity_menu.offset_bottom = menu_top + 148.0 * scale
+			_activity_menu.offset_bottom = menu_top + menu_height
 			_activity_menu.custom_minimum_size.x = activity_width
+		var activity_content_bottom := _activity_button.offset_bottom
+		if _activity_menu != null and _activity_menu.visible:
+			activity_content_bottom = _activity_menu.offset_bottom
+		if _activity_feedback_label != null:
+			_activity_feedback_label.anchor_left = 1.0
+			_activity_feedback_label.anchor_right = 1.0
+			_activity_feedback_label.anchor_top = 0.0
+			_activity_feedback_label.anchor_bottom = 0.0
+			_activity_feedback_label.offset_left = -activity_width - margin
+			_activity_feedback_label.offset_right = -margin
+			_activity_feedback_label.offset_top = activity_content_bottom + 5.0 * scale
+			_activity_feedback_label.offset_bottom = _activity_feedback_label.offset_top + 46.0 * scale
+			activity_content_bottom = _activity_feedback_label.offset_bottom if _activity_feedback_label.visible else activity_content_bottom
+		if _boat_fishing_panel != null:
+			var boat_fishing_width := minf(285.0 * scale, maxf(220.0 * scale, viewport_width * 0.28))
+			_boat_fishing_panel.anchor_left = 1.0
+			_boat_fishing_panel.anchor_right = 1.0
+			_boat_fishing_panel.anchor_top = 0.0
+			_boat_fishing_panel.anchor_bottom = 0.0
+			_boat_fishing_panel.offset_left = -boat_fishing_width - margin
+			_boat_fishing_panel.offset_right = -margin
+			_boat_fishing_panel.offset_top = activity_content_bottom + 8.0 * scale
+			_boat_fishing_panel.offset_bottom = _boat_fishing_panel.offset_top + 205.0 * scale
+			_boat_fishing_panel.custom_minimum_size = Vector2(boat_fishing_width, 0.0)
 	if _fishing_player_panel != null:
 		var fishing_width := minf(310.0 * scale, maxf(220.0, viewport_width * 0.30))
 		_fishing_player_panel.offset_left = -fishing_width - margin
@@ -3305,6 +3769,10 @@ func _update_hud_layout() -> void:
 		var top_after_activity := margin + 52.0 * scale
 		if _fishing_player_panel != null and _fishing_player_panel.visible:
 			top_after_activity = _fishing_player_panel.offset_bottom + 8.0 * scale
+		if _boat_fishing_panel != null and _boat_fishing_panel.visible:
+			top_after_activity = maxf(top_after_activity, _boat_fishing_panel.offset_bottom + 8.0 * scale)
+		if _activity_feedback_label != null and _activity_feedback_label.visible:
+			top_after_activity = maxf(top_after_activity, _activity_feedback_label.offset_bottom + 8.0 * scale)
 		if _activity_menu != null and _activity_menu.visible:
 			top_after_activity = maxf(top_after_activity, _activity_menu.offset_bottom + 8.0 * scale)
 		_autopilot_panel.offset_left = -minf(390.0 * scale, viewport_width * 0.4) - margin
@@ -3377,6 +3845,16 @@ func _update_hud_layout() -> void:
 		_polar_panel.offset_right = polar_width * 0.5
 		_polar_panel.offset_top = -polar_height * 0.5
 		_polar_panel.offset_bottom = polar_height * 0.5
+	if _cast_charge_panel != null:
+		_cast_charge_panel.anchor_left = 0.5
+		_cast_charge_panel.anchor_right = 0.5
+		_cast_charge_panel.anchor_top = 0.74
+		_cast_charge_panel.anchor_bottom = 0.74
+		_cast_charge_panel.offset_left = -146.0 * scale
+		_cast_charge_panel.offset_right = 146.0 * scale
+		_cast_charge_panel.offset_top = -22.0 * scale
+		_cast_charge_panel.offset_bottom = 43.0 * scale
+		_cast_charge_panel.custom_minimum_size = Vector2(292.0 * scale, 65.0 * scale)
 
 
 static func sailing_panel_layout_metrics(viewport_size: Vector2, ui_scale: float, detailed: bool) -> Dictionary:
@@ -3405,8 +3883,35 @@ func _refresh_weather_controls() -> void:
 	_weather_label.text = "当前天气：%s   ·   按 1 / 2 / 3 切换" % _weather_controller.get("current_weather_name")
 
 
+func is_boat_fishing_active() -> bool:
+	return _boat_fishing_active
+
+
+func _update_onboard_debug_status() -> void:
+	if _onboard_debug_label == null:
+		return
+	if _onboard_activity_controller == null:
+		_onboard_debug_label.text = tr("hud.debug.onboard_unavailable")
+		return
+	_onboard_activity_controller.set_debug_bounds_visible(_debug_panel != null and _debug_panel.visible)
+	var snapshot := _onboard_activity_controller.get_debug_snapshot()
+	var mode_name := _camera_rig.get_camera_mode_name() if _camera_rig != null else "follow"
+	var local_position: Vector3 = snapshot.get("player_local_position", Vector3.ZERO)
+	var area_status_key := "hud.debug.area_inactive"
+	if bool(snapshot.get("activity_active", false)):
+		area_status_key = "hud.debug.area_valid" if bool(snapshot.get("inside_walkable_area", false)) else "hud.debug.area_invalid"
+	_onboard_debug_label.text = tr("hud.debug.onboard_status") % [
+		tr("camera.mode." + mode_name),
+		tr("hud.debug.active") if bool(snapshot.get("activity_active", false)) else tr("hud.debug.inactive"),
+		tr("hud.debug.locked") if bool(snapshot.get("movement_locked", false)) else tr("hud.debug.unlocked"),
+		tr(area_status_key),
+		local_position.x, local_position.y, local_position.z,
+	]
+
+
 func _update_debug_status() -> void:
 	_refresh_world_time_controls()
+	_update_onboard_debug_status()
 	_update_weather_runtime_debug_status()
 	_update_fish_motion_status()
 	_update_dolphin_status()

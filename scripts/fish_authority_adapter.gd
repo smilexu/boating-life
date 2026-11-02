@@ -26,7 +26,7 @@ func get_all_school_snapshots() -> Array[Dictionary]:
 	return []
 
 
-func get_schools_near(_world_position: Vector3, _radius_m: float) -> Array[Dictionary]:
+func get_schools_near(_world_position: Vector3, _radius_m: float, _include_unavailable: bool = false) -> Array[Dictionary]:
 	return []
 
 
@@ -36,6 +36,10 @@ func get_map_snapshot(_species_ids: Array[String] = []) -> Array[Dictionary]:
 
 func request_population_change(_school_id: String, _population_delta: int, _game_time_seconds: float = -1.0) -> Dictionary:
 	return {"accepted": false, "reason": "Authority adapter does not allow client-side resource mutation."}
+
+
+func request_population_changes(_changes: Dictionary, _game_time_seconds: float = -1.0) -> Dictionary:
+	return {"accepted": false, "reason": "Authority adapter does not support atomic batch resource mutation."}
 
 
 func create_snapshot() -> Dictionary:

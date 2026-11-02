@@ -17,6 +17,19 @@ const PRESENTATION_SOURCE_NAMES := ["NONE", "REAL_CATCH", "DEBUG_SIMULATION"]
 const DEBUG_SIMULATION_PHASES := [PresentationPhase.HOOK_STRIKE, PresentationPhase.FISH_STRUGGLE, PresentationPhase.PROGRESSIVE_RETRIEVAL, PresentationPhase.SURFACE_LANDING, PresentationPhase.CATCH_PRESENTATION]
 const HANGING_CURL_PULSE_DURATION_SECONDS := 0.48
 const HANGING_SWAY_DAMPING := 2.8
+const TROLLING_AUDIO_PATHS := {
+	"line_out": "res://assets/sfx/fishing_line_out.wav",
+	"drag": "res://assets/sfx/fishing_drag.wav",
+	"reel_in": "res://assets/sfx/fishing_reel_in.wav",
+	"splash": "res://assets/sfx/fishing_splash.wav",
+	"catch_success": "res://assets/sfx/fishing_catch_success.wav",
+}
+const TROLLING_LOOP_VOLUME_DB := {"line_out": -12.0, "drag": 4.0, "reel_in": 4.0}
+const TROLLING_ONE_SHOT_VOLUME_DB := {"splash": -6.0, "catch_success": -2.0}
+const TROLLING_AUDIO_FADE_SECONDS := 0.1
+const TROLLING_AMBIENCE_DUCK_DB := {"Ocean": 8.0, "Engine": 8.0, "Weather": 5.0}
+const TROLLING_AMBIENCE_DUCK_FADE_SECONDS := 0.14
+const REEL_AUDIO_DIRECTION_EPSILON := 0.05
 const DEFAULT_HANGING_CURL_PULSES := [
 	Vector3(-0.2, 1.0, 1.0),
 	Vector3(0.62, 0.98, -1.0),
@@ -68,10 +81,12 @@ var _active_visual_root: Node3D
 var _active_profile: FishingRodMountProfile
 var _mount: FishingRodMount
 var _rig: FishingRodRig
+var _trolling_activity_visible := false
 var _fight_profile: FishingFightProfile
 var _pending: FishingPendingCatch
 var _catch_result: FishingCatchResult
 var _presentation_species_id := ""
+var _presentation_method := "trolling"
 var _presentation_length_m := 0.0
 var _presentation_weight_kg := 0.0
 var _presentation_seed := 0
@@ -86,6 +101,7 @@ var _fight_elapsed := 0.0
 var _presentation_elapsed := 0.0
 var _cast_elapsed := 0.0
 var _line_distance_m := 0.0
+var _reel_spin_speed_for_audio := 0.0
 var _struggle_pulse_triggered: Dictionary = {}
 var _splash_pulse_triggered: Dictionary = {}
 var _settlement_requested := false
@@ -94,6 +110,15 @@ var _last_line_state := "OUT"
 var _last_fish_stage := "HIDDEN"
 var _connected_encounter: FishingEncounterSystem
 var _active_sailboat := false
+var _trolling_audio_players: Dictionary = {}
+var _trolling_audio_loop_active: Dictionary = {}
+var _trolling_audio_loop_gain: Dictionary = {}
+var _trolling_audio_loop_target: Dictionary = {}
+var _external_fishing_audio_loops: Dictionary = {}
+var _shared_fishing_audio_event_counts: Dictionary = {}
+var _trolling_ambience_bus_states: Dictionary = {}
+var _last_splash_audio_catch_id := ""
+var _success_audio_played_for_presentation := false
 
 
 func _ready() -> void:
@@ -106,6 +131,7 @@ func _ready() -> void:
 	_active_sailboat = bool(_controller.call("is_sailing_active")) if _controller != null and _controller.has_method("is_sailing_active") else false
 	_resolve_encounter()
 	_bind_active_hull()
+	_create_trolling_audio_players()
 	set_process(true)
 
 
@@ -117,6 +143,10 @@ func _process(delta: float) -> void:
 		if _cast_elapsed >= cast_duration_seconds:
 			_set_visual_state(VisualState.TROLLING)
 	elif visual_state == VisualState.TROLLING:
+		# No fish is pulling line while the rig is simply trolling. Clear any
+		# spin left by a completed/cancelled fight so the shared spool and crank
+		# remain still during normal trolling.
+		_set_reel_spin(0.0)
 		_update_visual_line(0.0, 0.0)
 	elif visual_state in [VisualState.HOOKED, VisualState.REELING]:
 		_advance_fight_presentation(delta)
@@ -128,6 +158,7 @@ func _process(delta: float) -> void:
 			_finish_presentation()
 	elif visual_state == VisualState.SIMULATING:
 		if _simulation_paused:
+			_sync_trolling_loop_audio(delta, true)
 			return
 		var simulation_delta := delta * _simulation_time_scale
 		if presentation_phase == PresentationPhase.CATCH_PRESENTATION:
@@ -138,13 +169,46 @@ func _process(delta: float) -> void:
 				_finish_simulation()
 		else:
 			_advance_fight_presentation(simulation_delta)
+	_sync_trolling_loop_audio(delta)
 
 
 func _exit_tree() -> void:
+	_stop_all_trolling_audio()
 	if presentation_source == PresentationSource.DEBUG_SIMULATION and _encounter != null:
 		_encounter.set_debug_presentation_paused(false)
 	_release_camera()
 	_clear_visuals()
+
+
+## Public audio seam for other fishing activities. It shares this system's
+## players, loop streams, fades, SFX bus and ambience ducking without sharing
+## or changing their gameplay states.
+func set_external_fishing_audio_loop(owner_id: StringName, key: String, active: bool) -> void:
+	if not TROLLING_LOOP_VOLUME_DB.has(key) or owner_id == &"":
+		return
+	var requests: Dictionary = _external_fishing_audio_loops.get(owner_id, {})
+	requests[key] = active
+	_external_fishing_audio_loops[owner_id] = requests
+	_sync_trolling_loop_audio(0.0)
+
+
+func clear_external_fishing_audio_loops(owner_id: StringName) -> void:
+	if owner_id == &"":
+		return
+	_external_fishing_audio_loops.erase(owner_id)
+	_sync_trolling_loop_audio(0.0)
+
+
+func play_shared_fishing_one_shot(key: String) -> bool:
+	if not TROLLING_ONE_SHOT_VOLUME_DB.has(key):
+		return false
+	_shared_fishing_audio_event_counts[key] = int(_shared_fishing_audio_event_counts.get(key, 0)) + 1
+	_play_trolling_one_shot(key)
+	return true
+
+
+func get_shared_fishing_audio_event_count(key: String) -> int:
+	return int(_shared_fishing_audio_event_counts.get(key, 0))
 
 
 func get_encounter_system() -> FishingEncounterSystem:
@@ -164,12 +228,17 @@ func get_presentation_source_name() -> String:
 	return PRESENTATION_SOURCE_NAMES[clampi(int(presentation_source), 0, PRESENTATION_SOURCE_NAMES.size() - 1)]
 
 
+func get_presentation_method() -> String:
+	return _presentation_method
+
+
 func start_trolling() -> bool:
 	_resolve_encounter()
 	if _encounter == null or visual_state != VisualState.IDLE:
 		return false
 	if not _encounter.start_trolling():
 		return false
+	_set_reel_spin(0.0)
 	_cast_elapsed = 0.0
 	_set_visual_state(VisualState.CASTING)
 	_update_rod_load(0.0)
@@ -179,6 +248,7 @@ func start_trolling() -> bool:
 
 
 func stop_trolling() -> void:
+	_stop_all_trolling_audio()
 	_resolve_encounter()
 	if _encounter != null:
 		_encounter.stop_trolling()
@@ -188,6 +258,14 @@ func stop_trolling() -> void:
 	if _rig != null:
 		_rig.set_line_active(false)
 		_rig.set_rod_load(0.0)
+	_update_mount_visibility()
+
+
+## Shows the mounted trolling rod while the Trolling activity/setup is open.
+## This is presentation only: it does not deploy line or start the encounter.
+func set_trolling_activity_visible(visible: bool) -> void:
+	_trolling_activity_visible = visible
+	_update_mount_visibility()
 
 
 func debug_reset_visual() -> void:
@@ -200,7 +278,7 @@ func debug_reset_visual() -> void:
 	_set_visual_state(VisualState.IDLE if _encounter == null or _encounter.state == FishingEncounterSystem.State.IDLE else VisualState.TROLLING)
 	if _rig != null:
 		_rig.set_rod_load(0.0)
-		_rig.set_reel_spin(0.0)
+		_set_reel_spin(0.0)
 		_rig.set_line_active(visual_state != VisualState.IDLE)
 
 
@@ -312,7 +390,7 @@ func debug_seek_simulation_phase(phase_index: int) -> bool:
 			_camera_rig.set_fight_camera_focus_progress(1.0)
 		if _rig != null:
 			_rig.set_line_active(true)
-			_rig.set_reel_spin(0.0)
+			_set_reel_spin(0.0)
 			_rig.set_catch_visual_visible(true)
 			_update_catch_presentation_pose()
 		_emit_catch_display_snapshot()
@@ -361,6 +439,7 @@ func _begin_debug_simulation(species_id: String, natural_length_m: float, animat
 	_splash_pulse_triggered.clear()
 	_last_line_state = "HOLD"
 	_last_fish_stage = "FAR"
+	_last_splash_audio_catch_id = ""
 	_set_presentation_phase(PresentationPhase.HOOK_STRIKE)
 	_set_visual_state(VisualState.SIMULATING)
 	if _encounter != null:
@@ -420,10 +499,13 @@ func get_presentation_snapshot() -> Dictionary:
 	return {
 		"phase": get_presentation_phase_name(),
 		"phase_remaining_seconds": phase_remaining,
+		"phase_elapsed_seconds": _phase_elapsed() if presentation_phase != PresentationPhase.NONE else 0.0,
 		"total_progress": clampf(elapsed / maxf(total_duration, 0.001), 0.0, 1.0),
 		"rod_load_ratio": load_ratio,
 		"line_state": _last_line_state,
 		"line_distance_m": _line_distance_m,
+		"line_out_reference_m": _active_profile.line_out_length_m if _active_profile != null else 9.0,
+		"near_boat_line_reference_m": _active_profile.catch_surface_distance_m if _active_profile != null else 2.7,
 		"hanging_line_length_m": tip_world.distance_to(hook_world) if has_fish_visual else 0.0,
 		"hanging_tail_clearance_m": tail_world.y - water_height if has_fish_visual else 0.0,
 		"fish_stage": _last_fish_stage,
@@ -496,6 +578,7 @@ func _bind_active_hull() -> void:
 	_mount.name = "FishingRodMountP3"
 	_mount.mount_profile = profile
 	_active_visual_root.add_child(_mount)
+	_mount.visible = _trolling_activity_visible or visual_state != VisualState.IDLE
 	if visuals_enabled:
 		_rig = FishingRodRig.new()
 		_rig.name = "FishingRodRig"
@@ -523,6 +606,7 @@ func _on_fish_hooked(pending: FishingPendingCatch) -> void:
 		return
 	if _pending != null and _pending.catch_id == pending.catch_id:
 		return
+	_last_splash_audio_catch_id = ""
 	_begin_real_presentation(pending)
 
 
@@ -532,6 +616,7 @@ func _begin_real_presentation(pending: FishingPendingCatch) -> void:
 	_queued_real_pending = null
 	_clear_presentation()
 	_pending = pending
+	_presentation_method = pending.fishing_method
 	presentation_source = PresentationSource.REAL_CATCH
 	_simulation_resume_trolling = false
 	_presentation_species_id = pending.species_id
@@ -545,6 +630,7 @@ func _begin_real_presentation(pending: FishingPendingCatch) -> void:
 	_line_distance_m = _active_profile.line_out_length_m if _active_profile != null else 9.0
 	_last_line_state = "HOLD"
 	_last_fish_stage = "FAR"
+	_last_splash_audio_catch_id = ""
 	_set_presentation_phase(PresentationPhase.HOOK_STRIKE)
 	_set_visual_state(VisualState.HOOKED)
 	if _rig != null:
@@ -553,9 +639,9 @@ func _begin_real_presentation(pending: FishingPendingCatch) -> void:
 		_rig.set_catch_visual_visible(false)
 		_rig.set_line_active(true)
 		_rig.trigger_hook_strike()
-		_rig.set_reel_spin(0.0)
+		_set_reel_spin(0.0)
 		_update_visual_line(0.0, 0.0)
-	if _camera_rig != null and _mount != null:
+	if _presentation_method != "boat_fishing" and _camera_rig != null and _mount != null:
 		_camera_rig.set_fight_camera_target(_mount, _active_profile)
 		_camera_rig.set_fight_camera_focus_progress(0.0)
 		_camera_rig.begin_fight_camera(auto_switch_to_fight_camera)
@@ -586,13 +672,14 @@ func _on_catch_succeeded(result: FishingCatchResult) -> void:
 	_last_fish_stage = "LANDED"
 	if _rig != null:
 		_rig.set_line_active(true)
-		_rig.set_reel_spin(0.0)
+		_set_reel_spin(0.0)
 		_rig.set_catch_visual_visible(true)
 		_update_catch_presentation_pose()
 	_emit_catch_display_snapshot()
 
 
 func _on_catch_cancelled(catch_id: String, _reason: String) -> void:
+	_request_all_trolling_loops_stop()
 	if _queued_real_pending != null and catch_id == _queued_real_pending.catch_id:
 		_queued_real_pending = null
 		_simulation_resume_trolling = _encounter != null and _encounter.state == FishingEncounterSystem.State.TROLLING
@@ -606,6 +693,7 @@ func _on_catch_cancelled(catch_id: String, _reason: String) -> void:
 
 func _on_trolling_stopped() -> void:
 	_simulation_resume_trolling = false
+	_request_all_trolling_loops_stop()
 
 
 func _sync_after_catch_cancelled(catch_id: String) -> void:
@@ -660,7 +748,7 @@ func _begin_simulated_catch_presentation() -> void:
 	_last_fish_stage = "LANDED"
 	if _rig != null:
 		_rig.set_line_active(true)
-		_rig.set_reel_spin(0.0)
+		_set_reel_spin(0.0)
 		_rig.set_catch_visual_visible(true)
 		_update_catch_presentation_pose()
 	_emit_catch_display_snapshot()
@@ -681,7 +769,7 @@ func _update_fight_visuals() -> void:
 		retrieval_progress = clampf((_fight_elapsed - retrieval_start) / maxf(progressive_retrieval_seconds, 0.001), 0.0, 1.0)
 	elif phase == PresentationPhase.SURFACE_LANDING:
 		retrieval_progress = 1.0
-	if _camera_rig != null:
+	if _presentation_method != "boat_fishing" and _camera_rig != null:
 		_camera_rig.set_fight_camera_focus_progress(retrieval_progress)
 	var load_ratio := base_load + pulse_strength * (profile.struggle_load_peak if profile != null else 0.24)
 	if phase == PresentationPhase.HOOK_STRIKE:
@@ -697,7 +785,7 @@ func _update_fight_visuals() -> void:
 		if pulse_index >= 0 and not _struggle_pulse_triggered.has(pulse_index):
 			_struggle_pulse_triggered[pulse_index] = true
 			_rig.trigger_struggle_impulse(pulse_strength)
-			if _camera_rig != null:
+			if _presentation_method != "boat_fishing" and _camera_rig != null:
 				_camera_rig.trigger_fight_camera_impulse(pulse_strength)
 	var start_distance := _active_profile.line_out_length_m if _active_profile != null else 9.0
 	var near_boat_distance := _active_profile.catch_surface_distance_m if _active_profile != null else 2.7
@@ -705,10 +793,10 @@ func _update_fight_visuals() -> void:
 	_line_distance_m = maxf(1.6, distance)
 	if burst_strength > 0.15:
 		_last_line_state = "BACKING_OUT"
-		_rig.set_reel_spin(-(profile.reverse_line_speed_radians_per_second if profile != null else 5.0) * burst_strength)
+		_set_reel_spin(-(profile.reverse_line_speed_radians_per_second if profile != null else 5.0) * burst_strength)
 	else:
 		_last_line_state = "REELING" if phase in [PresentationPhase.PROGRESSIVE_RETRIEVAL, PresentationPhase.SURFACE_LANDING] else "HOLD"
-		_rig.set_reel_spin(5.5 if phase == PresentationPhase.PROGRESSIVE_RETRIEVAL else (2.2 if phase == PresentationPhase.SURFACE_LANDING else 0.0))
+		_set_reel_spin(5.5 if phase == PresentationPhase.PROGRESSIVE_RETRIEVAL else (2.2 if phase == PresentationPhase.SURFACE_LANDING else 0.0))
 	var fish_stage := "FAR"
 	var fish_visible := false
 	var visible_start := profile.near_boat_visible_start_progress if profile != null else 0.36
@@ -719,6 +807,11 @@ func _update_fight_visuals() -> void:
 		var surface_elapsed := _phase_elapsed()
 		fish_stage = get_surface_fish_stage(profile, surface_elapsed)
 		fish_visible = true
+	var presentation_audio_key := _get_presentation_audio_key()
+	var splash_already_played := presentation_audio_key.is_empty() or _last_splash_audio_catch_id == presentation_audio_key
+	if should_play_trolling_splash(presentation_source, phase, fish_stage, _last_fish_stage, splash_already_played):
+		_last_splash_audio_catch_id = presentation_audio_key
+		_play_trolling_one_shot("splash")
 	_last_fish_stage = fish_stage
 	_rig.set_catch_visual_visible(fish_visible)
 	if phase == PresentationPhase.SURFACE_LANDING:
@@ -933,6 +1026,7 @@ func _emit_catch_display_snapshot() -> void:
 		"length_cm": _catch_result.length_m * 100.0 if real_result else _presentation_length_m * 100.0,
 		"weight_kg": _catch_result.estimated_weight_kg if real_result else _presentation_weight_kg,
 		"catch_id": _catch_result.catch_id if real_result else "",
+		"debug_spawned": real_result and _catch_result.debug_spawned,
 		"presentation_elapsed": _presentation_elapsed,
 	})
 
@@ -1085,15 +1179,16 @@ func _animation_phase_offset() -> float:
 func _update_visual_line(retrieval_progress: float, burst_strength: float) -> void:
 	if _rig == null or _active_visual_root == null:
 		return
+	var trailing := _line_distance_m if _has_active_presentation() else (_active_profile.line_out_length_m if _active_profile != null else 9.0)
+	if visual_state in [VisualState.CASTING, VisualState.TROLLING]:
+		var eased_cast := clampf(_cast_elapsed / maxf(cast_duration_seconds, 0.001), 0.0, 1.0) if visual_state == VisualState.CASTING else 1.0
+		trailing *= eased_cast
+	_rig.set_reel_line_length(trailing)
 	var lift_started := presentation_phase == PresentationPhase.SURFACE_LANDING and _get_surface_lift_progress(_fight_profile, _phase_elapsed()) > 0.0
 	if presentation_phase == PresentationPhase.CATCH_PRESENTATION or lift_started or (presentation_phase == PresentationPhase.SURFACE_LANDING and _last_fish_stage == "LANDED"):
 		_rig.set_hanging_line_world(_rig.get_catch_hook_point_world())
 		_last_line_state = "HANGING"
 		return
-	var trailing := _line_distance_m if _has_active_presentation() else (_active_profile.line_out_length_m if _active_profile != null else 9.0)
-	if visual_state in [VisualState.CASTING, VisualState.TROLLING]:
-		var eased_cast := clampf(_cast_elapsed / maxf(cast_duration_seconds, 0.001), 0.0, 1.0) if visual_state == VisualState.CASTING else 1.0
-		trailing *= eased_cast
 	var tip_world := _rig.to_global(_rig.get_rod_tip_local())
 	var tip_root_local := _active_visual_root.to_local(tip_world)
 	var water_entry_root_local := Vector3(tip_root_local.x, -0.18, tip_root_local.z + minf(trailing * 0.22, 2.1))
@@ -1195,14 +1290,268 @@ func _phase_elapsed() -> float:
 
 
 func _set_presentation_phase(next_phase: PresentationPhase) -> void:
+	var entering_catch_presentation := next_phase == PresentationPhase.CATCH_PRESENTATION and presentation_phase != PresentationPhase.CATCH_PRESENTATION
 	presentation_phase = next_phase
+	if entering_catch_presentation and _presentation_method != "boat_fishing" and should_play_trolling_catch_presentation_audio(presentation_source, _success_audio_played_for_presentation):
+		_success_audio_played_for_presentation = true
+		_play_trolling_one_shot("catch_success")
 
 
 func _set_visual_state(next_state: VisualState) -> void:
 	if visual_state == next_state:
 		return
 	visual_state = next_state
+	if next_state in [VisualState.IDLE, VisualState.TROLLING]:
+		_set_reel_spin(0.0)
+	_update_mount_visibility()
 	visual_state_changed.emit(get_visual_state_name())
+
+
+func _update_mount_visibility() -> void:
+	if _mount != null and is_instance_valid(_mount):
+		_mount.visible = _trolling_activity_visible or (visual_state != VisualState.IDLE and _presentation_method != "boat_fishing")
+
+
+static func get_trolling_audio_loop_targets(state: int, reel_spin_speed_radians_per_second: float) -> Dictionary:
+	var casting := state == VisualState.CASTING
+	var active_fight := state in [VisualState.HOOKED, VisualState.REELING, VisualState.SIMULATING]
+	return {
+		"line_out": casting,
+		"drag": active_fight and reel_spin_speed_radians_per_second < -REEL_AUDIO_DIRECTION_EPSILON,
+		"reel_in": active_fight and reel_spin_speed_radians_per_second > REEL_AUDIO_DIRECTION_EPSILON,
+	}
+
+
+static func should_play_trolling_splash(source: int, phase: int, current_stage: String, previous_stage: String, already_played: bool) -> bool:
+	return (
+		source in [PresentationSource.REAL_CATCH, PresentationSource.DEBUG_SIMULATION]
+		and phase == PresentationPhase.SURFACE_LANDING
+		and current_stage == "LIFTING"
+		and previous_stage != "LIFTING"
+		and not already_played
+	)
+
+
+static func should_play_trolling_catch_presentation_audio(source: int, already_played: bool) -> bool:
+	return source in [PresentationSource.REAL_CATCH, PresentationSource.DEBUG_SIMULATION] and not already_played
+
+
+func _get_presentation_audio_key() -> String:
+	if _pending != null:
+		return _pending.catch_id
+	if presentation_source == PresentationSource.DEBUG_SIMULATION:
+		return "debug:%s:%d" % [_presentation_species_id, _presentation_seed]
+	return ""
+
+
+func get_trolling_audio_diagnostics() -> Dictionary:
+	var loops := {}
+	for key in TROLLING_LOOP_VOLUME_DB.keys():
+		var player := _trolling_audio_players.get(key) as AudioStreamPlayer
+		var stream := player.stream as AudioStreamWAV if player != null else null
+		loops[key] = {
+			"playing": player.playing if player != null else false,
+			"requested": bool(_trolling_audio_loop_active.get(key, false)),
+			"target": float(_trolling_audio_loop_target.get(key, 0.0)) > 0.5,
+			"gain": float(_trolling_audio_loop_gain.get(key, 0.0)),
+			"loop_end_samples": stream.loop_end if stream != null else -1,
+			"sample_count": roundi(stream.get_length() * float(stream.mix_rate)) if stream != null else 0,
+		}
+	var one_shots := {}
+	for key in TROLLING_ONE_SHOT_VOLUME_DB.keys():
+		var player := _trolling_audio_players.get(key) as AudioStreamPlayer
+		one_shots[key] = player.playing if player != null else false
+	return {
+		"available": not _trolling_audio_players.is_empty(),
+		"loops": loops,
+		"one_shots": one_shots,
+		"external_loop_requests": _external_fishing_audio_loops.duplicate(true),
+		"shared_event_counts": _shared_fishing_audio_event_counts.duplicate(true),
+		"reel_spin_speed_rad_s": _reel_spin_speed_for_audio,
+		"line_length_m": _line_distance_m,
+		"line_state": _last_line_state,
+		"ambience_duck_active": not _trolling_ambience_bus_states.is_empty(),
+	}
+
+
+func _create_trolling_audio_players() -> void:
+	if OS.has_feature("dedicated_server") or DisplayServer.get_name().to_lower() == "headless":
+		return
+	_ensure_fishing_sfx_bus()
+	for key in TROLLING_AUDIO_PATHS.keys():
+		var source := load(str(TROLLING_AUDIO_PATHS[key])) as AudioStream
+		if source == null:
+			push_warning("FishingRodSystem could not load trolling sound '%s'." % str(TROLLING_AUDIO_PATHS[key]))
+			continue
+		var player := AudioStreamPlayer.new()
+		player.name = "TrollingSfx_%s" % key
+		player.bus = "SFX"
+		if TROLLING_LOOP_VOLUME_DB.has(key):
+			var loop_stream := _make_trolling_loop_stream(source)
+			if loop_stream == null:
+				player.queue_free()
+				continue
+			player.stream = loop_stream
+			player.volume_db = -80.0
+			_trolling_audio_loop_active[key] = false
+			_trolling_audio_loop_gain[key] = 0.0
+			_trolling_audio_loop_target[key] = 0.0
+		else:
+			player.stream = source
+			player.volume_db = float(TROLLING_ONE_SHOT_VOLUME_DB.get(key, 0.0))
+		add_child(player)
+		_trolling_audio_players[key] = player
+
+
+func _ensure_fishing_sfx_bus() -> void:
+	var bus_index := AudioServer.get_bus_index("SFX")
+	if bus_index >= 0:
+		return
+	AudioServer.add_bus()
+	bus_index = AudioServer.get_bus_count() - 1
+	AudioServer.set_bus_name(bus_index, "SFX")
+	AudioServer.set_bus_send(bus_index, "Master")
+
+
+func _make_trolling_loop_stream(source: AudioStream) -> AudioStream:
+	var stream := source.duplicate(true) as AudioStream
+	if stream is AudioStreamWAV:
+		var wav_stream := stream as AudioStreamWAV
+		var sample_count := roundi(wav_stream.get_length() * float(wav_stream.mix_rate))
+		if sample_count <= 1:
+			push_warning("FishingRodSystem cannot loop an empty trolling sound '%s'." % source.resource_path)
+			return null
+		wav_stream.loop_mode = AudioStreamWAV.LOOP_FORWARD
+		wav_stream.loop_begin = 0
+		# AudioStreamWAV loop_end is a sample-frame index. Zero produces an
+		# empty loop region, which left looped reel sounds inaudible while the
+		# same source worked as a one-shot.
+		wav_stream.loop_end = sample_count
+		return stream
+	push_warning("FishingRodSystem cannot loop unsupported trolling sound type '%s'." % source.get_class())
+	return null
+
+
+func _sync_trolling_loop_audio(delta: float, force_silent: bool = false) -> void:
+	var targets := {} if force_silent else get_trolling_audio_loop_targets(int(visual_state), _reel_spin_speed_for_audio)
+	if not force_silent:
+		for owner_requests_variant in _external_fishing_audio_loops.values():
+			var owner_requests: Dictionary = owner_requests_variant
+			for key_variant in owner_requests.keys():
+				var key := str(key_variant)
+				if bool(owner_requests[key]) and targets.has(key):
+					targets[key] = true
+	for key in TROLLING_LOOP_VOLUME_DB.keys():
+		_set_trolling_loop_target(str(key), bool(targets.get(key, false)))
+		_advance_trolling_loop_fade(str(key), delta)
+	_update_trolling_ambience_ducking(_has_trolling_audio_playback(), delta)
+
+
+func _has_trolling_audio_playback() -> bool:
+	for player_variant in _trolling_audio_players.values():
+		var player := player_variant as AudioStreamPlayer
+		if player != null and player.playing:
+			return true
+	return false
+
+
+func _update_trolling_ambience_ducking(duck_active: bool, delta: float) -> void:
+	if not duck_active and _trolling_ambience_bus_states.is_empty():
+		return
+	var fade_weight := 1.0 - exp(-maxf(delta, 0.0) / TROLLING_AMBIENCE_DUCK_FADE_SECONDS)
+	for bus_name_variant in TROLLING_AMBIENCE_DUCK_DB.keys():
+		var bus_name := str(bus_name_variant)
+		var bus_index := AudioServer.get_bus_index(bus_name)
+		if bus_index < 0:
+			continue
+		if duck_active and not _trolling_ambience_bus_states.has(bus_name):
+			var initial_db := AudioServer.get_bus_volume_db(bus_index)
+			_trolling_ambience_bus_states[bus_name] = {
+				"base_db": initial_db,
+				"last_applied_db": initial_db,
+			}
+		if not _trolling_ambience_bus_states.has(bus_name):
+			continue
+		var state: Dictionary = _trolling_ambience_bus_states[bus_name]
+		var current_db := AudioServer.get_bus_volume_db(bus_index)
+		if absf(current_db - float(state.get("last_applied_db", current_db))) > 0.25:
+			state["base_db"] = current_db
+		var base_db := float(state.get("base_db", current_db))
+		var target_db := base_db - float(TROLLING_AMBIENCE_DUCK_DB[bus_name]) if duck_active else base_db
+		var applied_db := lerpf(current_db, target_db, fade_weight)
+		if not duck_active and absf(applied_db - target_db) < 0.1:
+			applied_db = target_db
+		AudioServer.set_bus_volume_db(bus_index, applied_db)
+		state["last_applied_db"] = applied_db
+		if not duck_active and is_equal_approx(applied_db, base_db):
+			_trolling_ambience_bus_states.erase(bus_name)
+		else:
+			_trolling_ambience_bus_states[bus_name] = state
+
+
+func _set_reel_spin(speed_radians_per_second: float) -> void:
+	_reel_spin_speed_for_audio = speed_radians_per_second if is_finite(speed_radians_per_second) else 0.0
+	if _rig != null and is_instance_valid(_rig):
+		_rig.set_reel_spin(_reel_spin_speed_for_audio)
+
+
+func _set_trolling_loop_target(key: String, active: bool) -> void:
+	if not _trolling_audio_players.has(key):
+		return
+	var player := _trolling_audio_players[key] as AudioStreamPlayer
+	if player == null:
+		return
+	if active and not bool(_trolling_audio_loop_active.get(key, false)):
+		_trolling_audio_loop_active[key] = true
+		if not player.playing:
+			player.volume_db = -80.0
+			player.play()
+	_trolling_audio_loop_target[key] = 1.0 if active else 0.0
+
+
+func _advance_trolling_loop_fade(key: String, delta: float) -> void:
+	if not _trolling_audio_players.has(key):
+		return
+	var player := _trolling_audio_players[key] as AudioStreamPlayer
+	if player == null:
+		return
+	var current := float(_trolling_audio_loop_gain.get(key, 0.0))
+	var target := float(_trolling_audio_loop_target.get(key, 0.0))
+	var step := maxf(delta, 0.0) / TROLLING_AUDIO_FADE_SECONDS
+	current = move_toward(current, target, step)
+	_trolling_audio_loop_gain[key] = current
+	var target_db := float(TROLLING_LOOP_VOLUME_DB.get(key, 0.0))
+	player.volume_db = linear_to_db(current) + target_db if current > 0.0001 else -80.0
+	if target <= 0.0 and current <= 0.0001:
+		player.stop()
+		_trolling_audio_loop_active[key] = false
+
+
+func _play_trolling_one_shot(key: String) -> void:
+	var player := _trolling_audio_players.get(key) as AudioStreamPlayer
+	if player == null:
+		return
+	player.stop()
+	player.volume_db = float(TROLLING_ONE_SHOT_VOLUME_DB.get(key, 0.0))
+	player.play()
+
+
+func _request_all_trolling_loops_stop() -> void:
+	for key in TROLLING_LOOP_VOLUME_DB.keys():
+		_trolling_audio_loop_target[str(key)] = 0.0
+
+
+func _stop_all_trolling_audio() -> void:
+	_external_fishing_audio_loops.clear()
+	for player_variant in _trolling_audio_players.values():
+		var player := player_variant as AudioStreamPlayer
+		if player != null:
+			player.stop()
+	for key in TROLLING_LOOP_VOLUME_DB.keys():
+		_trolling_audio_loop_active[str(key)] = false
+		_trolling_audio_loop_gain[str(key)] = 0.0
+		_trolling_audio_loop_target[str(key)] = 0.0
+	_update_trolling_ambience_ducking(false, 1.0)
 
 
 func _find_fight_profile(species_id: String) -> FishingFightProfile:
@@ -1229,6 +1578,8 @@ func _clear_presentation() -> void:
 	if was_debug_simulation and _encounter != null:
 		_encounter.set_debug_presentation_paused(false)
 	_presentation_species_id = ""
+	_presentation_method = "trolling"
+	_success_audio_played_for_presentation = false
 	_presentation_length_m = 0.0
 	_presentation_weight_kg = 0.0
 	_presentation_seed = 0
@@ -1239,6 +1590,7 @@ func _clear_presentation() -> void:
 	_fight_elapsed = 0.0
 	_presentation_elapsed = 0.0
 	_line_distance_m = 0.0
+	_set_reel_spin(0.0)
 	_retrieval_started_catch_id = ""
 	_struggle_pulse_triggered.clear()
 	_splash_pulse_triggered.clear()
@@ -1272,8 +1624,9 @@ func _clear_visuals() -> void:
 
 
 func _finish_presentation() -> void:
+	var settled_trolling_catch := _pending != null and _pending.fishing_method == "trolling"
 	_clear_presentation()
-	if _encounter != null and _encounter.state == FishingEncounterSystem.State.SETTLED:
+	if settled_trolling_catch and _encounter != null and _encounter.state == FishingEncounterSystem.State.SETTLED:
 		_encounter.start_trolling()
 	_set_visual_state(VisualState.TROLLING if _encounter != null and _encounter.state == FishingEncounterSystem.State.TROLLING else VisualState.IDLE)
 	if _rig != null:

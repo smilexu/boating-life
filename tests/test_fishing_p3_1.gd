@@ -71,7 +71,7 @@ func _test_rod_rig() -> void:
 	var reel := rig.find_child("ReelSpinningAssembly", true, false) as Node3D
 	_check(rod != null and rod.multimesh.instance_count == 12, "rod keeps fixed 12-segment MultiMesh topology")
 	_check(guides != null and guides.multimesh.instance_count == 7, "guides keep fixed 7-instance topology")
-	_check(line != null and line.multimesh.instance_count == POWERBOAT_MOUNT.guide_count + 6, "fine line keeps a fixed curved MultiMesh topology")
+	_check(line != null and line.multimesh.instance_count == POWERBOAT_MOUNT.guide_count + 7, "fine line keeps a fixed curved MultiMesh topology from reel exit through fairlead and guides")
 	_check(FishingRodRig.LINE_RADIUS_M < POWERBOAT_MOUNT.rod_tip_diameter_m * 0.5, "fishing line radius is thinner than the rod tip radius")
 	var line_material := line.material_override as StandardMaterial3D if line != null else null
 	_check(line_material != null and line_material.albedo_color.r > line_material.albedo_color.b, "warm line material contrasts with graphite rod and blue water")
@@ -83,7 +83,7 @@ func _test_rod_rig() -> void:
 	rig.set_reel_spin(1.0)
 	rig._process(0.1)
 	var spoke_radial_after := reel.transform.basis * Vector3.RIGHT
-	_check(reel_axis.dot(spoke_radial_before.cross(spoke_radial_after)) < -0.001, "positive reel-in input turns the spool in the corrected winding direction")
+	_check(reel_axis.dot(spoke_radial_before.cross(spoke_radial_after)) < -0.001, "positive reel-in input turns the rotor in the corrected winding direction")
 	rig.reset_presentation_animation()
 	var straight_tip := rig.get_rod_tip_local()
 	rig.trigger_hook_strike()

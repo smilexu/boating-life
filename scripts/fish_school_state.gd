@@ -18,6 +18,8 @@ var activity_depth_target_m := 0.0
 var surface_activity_state := "inactive"
 var surface_activity_remaining_seconds := 0.0
 var surface_activity_cycle_index := 0
+## Real-time timestamp of the last Authority checkpoint for the activity depth.
+var activity_depth_state_timestamp_seconds := 0.0
 var direction_radians := 0.0
 var movement_speed_mps := 0.0
 var seed := 0
@@ -46,6 +48,7 @@ func to_dictionary() -> Dictionary:
 		"surface_activity_state": surface_activity_state,
 		"surface_activity_remaining_seconds": surface_activity_remaining_seconds,
 		"surface_activity_cycle_index": surface_activity_cycle_index,
+		"activity_depth_state_timestamp_seconds": activity_depth_state_timestamp_seconds,
 		"direction_radians": direction_radians,
 		"movement_speed_mps": movement_speed_mps,
 		"seed": seed,
@@ -77,6 +80,7 @@ static func from_dictionary(data: Dictionary) -> FishSchoolState:
 	school.surface_activity_state = str(data.get("surface_activity_state", "deep"))
 	school.surface_activity_remaining_seconds = maxf(0.0, float(data.get("surface_activity_remaining_seconds", 0.0)))
 	school.surface_activity_cycle_index = maxi(0, int(data.get("surface_activity_cycle_index", 0)))
+	school.activity_depth_state_timestamp_seconds = maxf(0.0, float(data.get("activity_depth_state_timestamp_seconds", -1.0)))
 	school.direction_radians = float(data.get("direction_radians", 0.0))
 	school.movement_speed_mps = maxf(0.0, float(data.get("movement_speed_mps", 0.0)))
 	school.seed = int(data.get("seed", 0))

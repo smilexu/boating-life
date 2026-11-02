@@ -24,6 +24,7 @@ var _feedback_label: Label
 var _title_label: Label
 var _last_catch_result: FishingCatchResult
 var _feedback_key := ""
+var _start_block_reason_key := ""
 var _content: VBoxContainer
 var _collapsed_label: Label
 var _collapse_button: Button
@@ -137,6 +138,16 @@ func is_trolling_active() -> bool:
 	return _is_activity_active()
 
 
+func set_start_block_reason(message_key: String) -> void:
+	_start_block_reason_key = message_key
+	if _action_button != null:
+		_action_button.tooltip_text = tr(message_key) if not message_key.is_empty() else ""
+
+
+func show_feedback(message_key: String, duration: float = 2.5) -> void:
+	_show_feedback(message_key, duration)
+
+
 func refresh_localized_text() -> void:
 	_refresh_localized_text()
 	_update_panel()
@@ -219,9 +230,12 @@ func _on_lure_selected(index: int) -> void:
 
 
 func _on_action_pressed() -> void:
+	var active := _is_activity_active()
+	if not active and not _start_block_reason_key.is_empty():
+		_show_feedback(_start_block_reason_key)
+		return
 	if _encounter == null:
 		return
-	var active := _is_activity_active()
 	if active:
 		if _rod_system != null:
 			_rod_system.stop_trolling()
@@ -294,6 +308,7 @@ func _update_panel() -> void:
 	_state_label.text = _localized_state(state_name)
 	_action_button.text = tr("fishing.ui.stop") if active else tr("fishing.ui.start")
 	_action_button.disabled = false
+	_action_button.tooltip_text = tr(_start_block_reason_key) if not active and not _start_block_reason_key.is_empty() else ""
 	_close_button.visible = not active
 	_collapsed_label.text = tr("fishing.ui.collapsed_format") % [tr("fishing.ui.state.trolling"), tr(lure.name_key) if lure != null else tr("fishing.ui.unavailable")]
 	_apply_collapsed_state()
@@ -303,10 +318,12 @@ func _update_panel() -> void:
 
 
 func _is_activity_active() -> bool:
-	if _encounter != null and _encounter.state in [FishingEncounterSystem.State.TROLLING, FishingEncounterSystem.State.HOOKED, FishingEncounterSystem.State.RETRIEVING]:
+	if _encounter != null and _encounter.state == FishingEncounterSystem.State.TROLLING:
 		return true
+	if _encounter != null and _encounter.pending_catch != null:
+		return _encounter.pending_catch.fishing_method == "trolling" and _encounter.state in [FishingEncounterSystem.State.HOOKED, FishingEncounterSystem.State.RETRIEVING]
 	if _rod_system != null:
-		return _rod_system.get_visual_state_name() in ["CASTING", "TROLLING", "HOOKED", "REELING", "PRESENTATION"]
+		return _rod_system.get_presentation_method() == "trolling" and _rod_system.get_visual_state_name() in ["CASTING", "TROLLING", "HOOKED", "REELING", "PRESENTATION"]
 	return false
 
 

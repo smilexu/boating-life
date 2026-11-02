@@ -4,7 +4,7 @@ extends Node3D
 ## Existing smooth follow/God camera. During a catch the same Camera3D can
 ## temporarily use a hull-local Fight Camera anchor in the O-key cycle.
 
-enum CameraMode { FOLLOW, GOD, FIGHT_CAMERA }
+enum CameraMode { FOLLOW, GOD, FIGHT_CAMERA, ONBOARD_ACTIVITY, TROLLING_ROD_VIEW }
 const NORMAL_FOV := 58.0
 
 @export_node_path("Node3D") var target_path := NodePath("../MotionRoot")
@@ -25,6 +25,13 @@ var _camera_mode := CameraMode.FOLLOW
 var _mode_before_fight := CameraMode.FOLLOW
 var _fight_camera_active := false
 var _fight_camera_anchor: Node3D
+var _trolling_rod_view_active := false
+var _trolling_view_return_mode := CameraMode.FOLLOW
+var _onboard_activity_controller: OnboardActivityController
+var _boat_fishing_casting_system: BoatFishingCastingSystem
+var _onboard_activity_active := false
+var _onboard_return_mode := CameraMode.FOLLOW
+var _rod_aim_mouse_active := false
 var _fight_camera_offset_local := Vector3(0.45, 1.15, -1.6)
 var _fight_camera_focus_local := Vector3(0.0, -0.35, 5.8)
 var _fight_camera_approach_focus_adjustment_local := Vector3(0.0, -0.15, 0.35)
@@ -57,9 +64,19 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if _target == null:
 		return
-	if _camera_mode == CameraMode.FIGHT_CAMERA:
-		if not _fight_camera_active or not is_instance_valid(_fight_camera_anchor):
+	if _camera_mode == CameraMode.ONBOARD_ACTIVITY:
+		# Keep the inactive driving camera current and ready so leaving first
+		# person does not reveal a stale transform.
+		_update_follow_camera(delta)
+		_current_fov = lerpf(_current_fov, NORMAL_FOV, 1.0 - exp(-follow_smoothing * delta))
+		_camera.fov = _current_fov
+		return
+	if _camera_mode in [CameraMode.FIGHT_CAMERA, CameraMode.TROLLING_ROD_VIEW]:
+		var rod_view_valid := is_instance_valid(_fight_camera_anchor)
+		if _camera_mode == CameraMode.FIGHT_CAMERA and (not _fight_camera_active or not rod_view_valid):
 			end_fight_camera()
+		elif _camera_mode == CameraMode.TROLLING_ROD_VIEW and (not _trolling_rod_view_active or not rod_view_valid):
+			end_trolling_rod_view()
 		else:
 			_update_fight_camera(delta)
 			return
@@ -73,20 +90,36 @@ func _unhandled_input(event: InputEvent) -> void:
 		cycle_camera_view()
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
-		_mouse_look_active = event.pressed
+		if event.pressed:
+			_rod_aim_mouse_active = (
+				_camera_mode == CameraMode.ONBOARD_ACTIVITY
+				and is_instance_valid(_boat_fishing_casting_system)
+				and _boat_fishing_casting_system.begin_rod_aim()
+			)
+			_mouse_look_active = _camera_mode != CameraMode.TROLLING_ROD_VIEW
+		else:
+			if _rod_aim_mouse_active and is_instance_valid(_boat_fishing_casting_system):
+				_boat_fishing_casting_system.end_rod_aim()
+			_rod_aim_mouse_active = false
+			_mouse_look_active = false
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED if _mouse_look_active else Input.MOUSE_MODE_VISIBLE)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and _mouse_look_active:
-		orbit_yaw += event.relative.x * mouse_sensitivity * 0.01
-		var minimum_elevation := deg_to_rad(2.0)
-		var maximum_elevation := deg_to_rad(88.0) if _camera_mode == CameraMode.GOD else deg_to_rad(84.0)
-		orbit_elevation = clampf(
-			orbit_elevation - event.relative.y * mouse_sensitivity * 0.01,
-			minimum_elevation,
-			maximum_elevation
-		)
+		if _rod_aim_mouse_active and is_instance_valid(_boat_fishing_casting_system):
+			_boat_fishing_casting_system.apply_rod_aim_mouse_motion(event.relative)
+		elif _camera_mode == CameraMode.ONBOARD_ACTIVITY and is_instance_valid(_onboard_activity_controller):
+			_onboard_activity_controller.apply_mouse_look(event.relative)
+		else:
+			orbit_yaw += event.relative.x * mouse_sensitivity * 0.01
+			var minimum_elevation := deg_to_rad(2.0)
+			var maximum_elevation := deg_to_rad(88.0) if _camera_mode == CameraMode.GOD else deg_to_rad(84.0)
+			orbit_elevation = clampf(
+				orbit_elevation - event.relative.y * mouse_sensitivity * 0.01,
+				minimum_elevation,
+				maximum_elevation
+			)
 		get_viewport().set_input_as_handled()
-	elif event is InputEventMouseButton and event.pressed and _camera_mode != CameraMode.FIGHT_CAMERA:
+	elif event is InputEventMouseButton and event.pressed and _camera_mode not in [CameraMode.FIGHT_CAMERA, CameraMode.ONBOARD_ACTIVITY, CameraMode.TROLLING_ROD_VIEW]:
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP and _camera_mode != CameraMode.GOD:
 			_zoom_offset_m = maxf(_zoom_offset_m - zoom_step_m, 4.0 - _get_vessel_follow_distance())
 			get_viewport().set_input_as_handled()
@@ -98,10 +131,21 @@ func _unhandled_input(event: InputEvent) -> void:
 func _exit_tree() -> void:
 	if _mouse_look_active:
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
+	if is_instance_valid(_boat_fishing_casting_system):
+		_boat_fishing_casting_system.release_held_controls_for_ui()
+
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT:
+		release_mouse_look()
 
 
 func release_mouse_look() -> void:
 	_mouse_look_active = false
+	_rod_aim_mouse_active = false
+	if is_instance_valid(_boat_fishing_casting_system):
+		_boat_fishing_casting_system.end_rod_aim()
+		_boat_fishing_casting_system.set_manual_reeling(false)
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
 
@@ -113,6 +157,8 @@ func set_fight_camera_target(anchor: Node3D, mount_profile: FishingRodMountProfi
 		_fight_camera_anchor = null
 		if _fight_camera_active:
 			end_fight_camera()
+		if _trolling_rod_view_active:
+			end_trolling_rod_view()
 		return
 	_fight_camera_offset_local = mount_profile.fight_camera_offset_from_mount_local_m
 	_fight_camera_focus_local = mount_profile.fight_camera_look_target_from_mount_local_m
@@ -145,6 +191,36 @@ func end_fight_camera() -> void:
 		_set_camera_mode(_mode_before_fight if _mode_before_fight != CameraMode.FIGHT_CAMERA else CameraMode.FOLLOW)
 
 
+func begin_trolling_rod_view(auto_switch: bool = true) -> bool:
+	if not is_instance_valid(_fight_camera_anchor):
+		return false
+	if not _trolling_rod_view_active:
+		_trolling_view_return_mode = _camera_mode if _camera_mode != CameraMode.TROLLING_ROD_VIEW else CameraMode.FOLLOW
+	_trolling_rod_view_active = true
+	if auto_switch:
+		_set_camera_mode(CameraMode.TROLLING_ROD_VIEW)
+	return true
+
+
+func end_trolling_rod_view() -> void:
+	if not _trolling_rod_view_active:
+		return
+	_trolling_rod_view_active = false
+	if _camera_mode == CameraMode.TROLLING_ROD_VIEW:
+		var return_mode := _trolling_view_return_mode
+		if return_mode == CameraMode.TROLLING_ROD_VIEW:
+			return_mode = CameraMode.FOLLOW
+		if return_mode == CameraMode.FIGHT_CAMERA and not _fight_camera_active:
+			return_mode = CameraMode.FOLLOW
+		if return_mode == CameraMode.ONBOARD_ACTIVITY and not _onboard_activity_active:
+			return_mode = CameraMode.FOLLOW
+		_set_camera_mode(return_mode)
+
+
+func is_trolling_rod_view_active() -> bool:
+	return _trolling_rod_view_active
+
+
 func trigger_fight_camera_impulse(strength: float = 1.0) -> void:
 	if not _fight_camera_active or _camera_mode != CameraMode.FIGHT_CAMERA:
 		return
@@ -160,6 +236,10 @@ func cycle_camera_view() -> String:
 	var modes: Array[int] = [CameraMode.FOLLOW, CameraMode.GOD]
 	if _fight_camera_active and is_instance_valid(_fight_camera_anchor):
 		modes.append(CameraMode.FIGHT_CAMERA)
+	if _trolling_rod_view_active and is_instance_valid(_fight_camera_anchor):
+		modes.append(CameraMode.TROLLING_ROD_VIEW)
+	if _onboard_activity_active and is_instance_valid(_onboard_activity_controller) and _onboard_activity_controller.is_supported():
+		modes.append(CameraMode.ONBOARD_ACTIVITY)
 	var current_index := modes.find(_camera_mode)
 	var next_index := (current_index + 1) % modes.size() if current_index >= 0 else 0
 	_set_camera_mode(modes[next_index])
@@ -182,6 +262,10 @@ func get_camera_mode_name() -> String:
 			return "god"
 		CameraMode.FIGHT_CAMERA:
 			return "fight_camera"
+		CameraMode.TROLLING_ROD_VIEW:
+			return "fight_camera"
+		CameraMode.ONBOARD_ACTIVITY:
+			return "onboard_activity"
 		_:
 			return "follow"
 
@@ -198,22 +282,82 @@ func get_fight_camera_anchor() -> Node3D:
 	return _fight_camera_anchor
 
 
+func set_onboard_activity_controller(controller: OnboardActivityController) -> void:
+	if _onboard_activity_active:
+		end_onboard_activity()
+	_onboard_activity_controller = controller
+
+
+func set_boat_fishing_casting_system(casting_system: BoatFishingCastingSystem) -> void:
+	_boat_fishing_casting_system = casting_system
+
+
+func begin_onboard_activity() -> bool:
+	if not is_instance_valid(_onboard_activity_controller) or not _onboard_activity_controller.begin_activity():
+		return false
+	_onboard_activity_active = true
+	return true
+
+
+func enter_onboard_activity_view() -> bool:
+	if not _onboard_activity_active or not is_instance_valid(_onboard_activity_controller) or not _onboard_activity_controller.is_supported():
+		return false
+	_set_camera_mode(CameraMode.ONBOARD_ACTIVITY)
+	return _camera_mode == CameraMode.ONBOARD_ACTIVITY
+
+
+func end_onboard_activity() -> void:
+	if not _onboard_activity_active:
+		return
+	_onboard_activity_active = false
+	if _camera_mode == CameraMode.ONBOARD_ACTIVITY:
+		var return_mode := _onboard_return_mode
+		if return_mode == CameraMode.ONBOARD_ACTIVITY or (return_mode == CameraMode.FIGHT_CAMERA and not _fight_camera_active):
+			return_mode = CameraMode.FOLLOW
+		_set_camera_mode(return_mode)
+	if is_instance_valid(_onboard_activity_controller):
+		_onboard_activity_controller.end_activity()
+
+
+func is_onboard_activity_active() -> bool:
+	return _onboard_activity_active
+
+
 func get_available_camera_modes() -> Array[String]:
 	var result: Array[String] = ["follow", "god"]
-	if _fight_camera_active and is_instance_valid(_fight_camera_anchor):
+	if (_fight_camera_active or _trolling_rod_view_active) and is_instance_valid(_fight_camera_anchor):
 		result.append("fight_camera")
+	if _onboard_activity_active and is_instance_valid(_onboard_activity_controller) and _onboard_activity_controller.is_supported():
+		result.append("onboard_activity")
 	return result
 
 
 func _set_camera_mode(next_mode: int) -> void:
 	if next_mode == CameraMode.FIGHT_CAMERA and (not _fight_camera_active or not is_instance_valid(_fight_camera_anchor)):
 		return
+	if next_mode == CameraMode.TROLLING_ROD_VIEW and (not _trolling_rod_view_active or not is_instance_valid(_fight_camera_anchor)):
+		return
+	if next_mode == CameraMode.ONBOARD_ACTIVITY and (
+		not _onboard_activity_active
+		or not is_instance_valid(_onboard_activity_controller)
+		or not _onboard_activity_controller.is_supported()
+	):
+		return
 	if _camera_mode == next_mode:
 		return
-	var was_god := _camera_mode == CameraMode.GOD
-	if _camera_mode == CameraMode.FIGHT_CAMERA and next_mode != CameraMode.FIGHT_CAMERA:
+	var previous_mode := _camera_mode
+	var was_god := previous_mode == CameraMode.GOD
+	var was_onboard_activity := _camera_mode == CameraMode.ONBOARD_ACTIVITY
+	if is_instance_valid(_boat_fishing_casting_system):
+		_boat_fishing_casting_system.on_camera_view_changed(next_mode == CameraMode.ONBOARD_ACTIVITY)
+	if _camera_mode in [CameraMode.FIGHT_CAMERA, CameraMode.TROLLING_ROD_VIEW] and next_mode not in [CameraMode.FIGHT_CAMERA, CameraMode.TROLLING_ROD_VIEW]:
 		_fight_camera_impulse_offset = Vector2.ZERO
 		_fight_camera_impulse_velocity = Vector2.ZERO
+	if was_onboard_activity and next_mode != CameraMode.ONBOARD_ACTIVITY:
+		_onboard_activity_controller.set_first_person_active(false)
+		_mouse_look_active = false
+		_rod_aim_mouse_active = false
+		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_camera_mode = next_mode
 	if next_mode == CameraMode.GOD and not was_god:
 		_saved_orbit_yaw = orbit_yaw
@@ -222,8 +366,17 @@ func _set_camera_mode(next_mode: int) -> void:
 	elif was_god and next_mode != CameraMode.GOD:
 		orbit_yaw = _saved_orbit_yaw
 		orbit_elevation = _saved_orbit_elevation
-	if next_mode == CameraMode.FIGHT_CAMERA:
+	if next_mode in [CameraMode.FIGHT_CAMERA, CameraMode.TROLLING_ROD_VIEW]:
 		_current_fov = _camera.fov if _camera != null else NORMAL_FOV
+		_camera.make_current()
+	elif next_mode == CameraMode.ONBOARD_ACTIVITY:
+		_onboard_return_mode = CameraMode.FOLLOW if was_onboard_activity else previous_mode
+		if _onboard_activity_controller.set_first_person_active(true):
+			return
+		_camera_mode = CameraMode.FOLLOW
+		_camera.make_current()
+	else:
+		_camera.make_current()
 
 
 func _update_follow_camera(delta: float) -> void:

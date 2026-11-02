@@ -115,8 +115,8 @@ func get_all_school_snapshots() -> Array[Dictionary]:
 	return _authority.get_all_school_snapshots() if _authority != null else []
 
 
-func get_schools_near(world_position: Vector3, radius_m: float) -> Array[Dictionary]:
-	return _authority.get_schools_near(world_position, radius_m) if _authority != null else []
+func get_schools_near(world_position: Vector3, radius_m: float, include_unavailable: bool = false) -> Array[Dictionary]:
+	return _authority.get_schools_near(world_position, radius_m, include_unavailable) if _authority != null else []
 
 
 ## Map visibility is intentionally labelled as an ecological prediction.
@@ -140,7 +140,7 @@ func get_school_render_state(school: Dictionary) -> String:
 		return "logical"
 	if not profile.surface_activity_cycle_enabled:
 		return "visual"
-	return "visual" if float(school.get("activity_depth_m", INF)) <= profile.logical_depth_threshold_m else "logical"
+	return "visual" if float(school.get("effective_activity_depth_m", school.get("activity_depth_m", INF))) <= profile.logical_depth_threshold_m else "logical"
 
 
 func get_resource_density_at(world_position: Vector3, species_id: String = "") -> Dictionary:
@@ -163,6 +163,16 @@ func request_population_change(school_id: String, population_delta: int) -> Dict
 	if _authority == null:
 		return {"accepted": false, "reason": "No active fish authority."}
 	var result := _authority.request_population_change(school_id, population_delta, _world_game_time_seconds())
+	if bool(result.get("accepted", false)):
+		_last_revision = _authority.get_state_revision()
+		resources_changed.emit(_last_revision)
+	return result
+
+
+func request_population_changes(changes: Dictionary) -> Dictionary:
+	if _authority == null:
+		return {"accepted": false, "reason": "No active fish authority."}
+	var result := _authority.request_population_changes(changes, _world_game_time_seconds())
 	if bool(result.get("accepted", false)):
 		_last_revision = _authority.get_state_revision()
 		resources_changed.emit(_last_revision)

@@ -4,6 +4,8 @@ extends Resource
 ## Shared ecological and visual tuning for one fish species.
 ## Habitat ranges are game suitability estimates, not survey observations.
 
+const SURFACE_ACTIVITY_VISUAL_DEPTH_M := 2.0
+
 @export_group("Identity")
 ## Stable save/network identity. Never derive this from localized display text.
 @export var species_id := ""
@@ -111,3 +113,11 @@ func suitability_for_depth(depth_m: float) -> float:
 	elif depth_m > preferred_depth_max_m:
 		preferred = 1.0 - 0.75 * smoothstep(preferred_depth_max_m, maximum_depth_m, depth_m)
 	return clampf(edge_in * edge_out * preferred, 0.0, 1.0)
+
+
+func is_surface_activity_visually_indicated(activity_state: String, activity_depth_m: float) -> bool:
+	return surface_activity_cycle_enabled \
+		and activity_state in ["near_surface", "ascending", "descending"] \
+		and is_finite(activity_depth_m) \
+		and activity_depth_m >= 0.0 \
+		and activity_depth_m <= SURFACE_ACTIVITY_VISUAL_DEPTH_M

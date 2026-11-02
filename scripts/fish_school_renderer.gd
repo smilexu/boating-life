@@ -118,7 +118,7 @@ func begin_observation(school_id: String) -> bool:
 		return false
 	var species_id := str(school.get("species_id", ""))
 	var profile := _manager.get_species_profile(species_id)
-	if profile != null and profile.surface_activity_cycle_enabled and float(school.get("activity_depth_m", 99.0)) > profile.logical_depth_threshold_m:
+	if profile != null and profile.surface_activity_cycle_enabled and _school_activity_depth(school, 99.0) > profile.logical_depth_threshold_m:
 		return false
 	if _observation_camera == null:
 		_return_camera = get_viewport().get_camera_3d()
@@ -187,7 +187,7 @@ func get_school_visual_debug(school_id: String, reference_world_position: Varian
 		return {}
 	var school_position := Vector3(float(position_values[0]), 0.0, float(position_values[2]))
 	var depth_m := float(school.get("depth_m", 0.0))
-	var activity_depth_m := float(school.get("activity_depth_m", _vertical_depth_offset(profile, depth_m, 0.0)))
+	var activity_depth_m := _school_activity_depth(school, _vertical_depth_offset(profile, depth_m, 0.0))
 	var surface_height := _surface_height(school_position)
 	var fish_count := 0
 	var state_counts: Dictionary = {}
@@ -240,8 +240,12 @@ func get_school_visual_debug(school_id: String, reference_world_position: Varian
 		"depth_from_surface_m": average_depth,
 		"bathymetry_depth_m": depth_m,
 		"activity_depth_m": average_depth,
-		"surface_activity_state": str(school.get("surface_activity_state", "unknown")),
-		"activity_label": str(school.get("surface_activity_state", school.get("movement_state", "cruise"))) if profile.surface_activity_cycle_enabled else str(school.get("movement_state", "cruise")),
+		"visible_representative_depth_m": average_depth if fish_count > 0 else -1.0,
+		"effective_depth_vs_visual_delta_m": average_depth - activity_depth_m if fish_count > 0 else -1.0,
+		"surface_activity_state": _school_activity_state(school),
+		"activity_label": _school_activity_state(school) if profile.surface_activity_cycle_enabled else str(school.get("movement_state", "cruise")),
+		"authority_target_depth_m": float(school.get("effective_activity_depth_target_m", school.get("activity_depth_target_m", activity_depth_m))),
+		"effective_activity_depth_m": float(school.get("effective_activity_depth_m", activity_depth_m)),
 		"render_state": _render_state_for_activity_depth(average_depth, profile) if profile.surface_activity_cycle_enabled else "visual",
 		"seabed_clearance_m": maxf(0.0, depth_m - average_depth),
 		"behavior_counts": state_counts,
@@ -359,7 +363,7 @@ func _update_observation_camera(school: Dictionary) -> void:
 	var surface_height := _surface_height(school_position)
 	var fish_depth := bathymetry_depth * 0.30 if profile == null else _vertical_depth_offset(profile, bathymetry_depth, 0.0)
 	if profile != null and profile.surface_activity_cycle_enabled:
-		fish_depth = float(school.get("activity_depth_m", fish_depth))
+		fish_depth = _school_activity_depth(school, fish_depth)
 	var target := Vector3(school_position.x, surface_height - fish_depth, school_position.z)
 	var state_position_sum := Vector3.ZERO
 	var state_position_count := 0
@@ -689,7 +693,7 @@ func _update_visible_fish(delta: float) -> void:
 			continue
 		var profile: FishSpeciesProfile = _species_visuals[species_id]["profile"]
 		var surface_layer_fish := profile.surface_activity_cycle_enabled
-		var activity_depth := float(school.get("activity_depth_m", _vertical_depth_offset(profile, float(school.get("depth_m", 0.0)), 0.0)))
+		var activity_depth := _school_activity_depth(school, _vertical_depth_offset(profile, float(school.get("depth_m", 0.0)), 0.0))
 		if surface_layer_fish:
 			var school_id := str(school.get("school_id", ""))
 			var logical_threshold := profile.logical_depth_threshold_m
@@ -704,8 +708,8 @@ func _update_visible_fish(delta: float) -> void:
 				_logical_school_counts[species_id] = int(_logical_school_counts[species_id]) + 1
 				_surface_school_motion_states.erase(school_id)
 				continue
-			var activity_state := str(school.get("surface_activity_state", ""))
-			if activity_depth <= 2.0 and activity_state in ["near_surface", "ascending", "descending"]:
+			var activity_state := _school_activity_state(school)
+			if profile.is_surface_activity_visually_indicated(activity_state, activity_depth):
 				_near_surface_school_count += 1
 		if remaining_total <= 0:
 			continue
@@ -729,9 +733,9 @@ func _update_visible_fish(delta: float) -> void:
 					"radius": _school_wander_radius(profile) + surface_fish_scatter_extension_m + 2.0,
 					"weight": reveal_weight,
 				})
-		if surface_layer_fish and not fish_records.is_empty() and activity_depth <= 2.0:
-			var activity_state := str(school.get("surface_activity_state", ""))
-			if activity_state in ["near_surface", "ascending", "descending"]:
+		if surface_layer_fish and not fish_records.is_empty():
+			var activity_state := _school_activity_state(school)
+			if profile.is_surface_activity_visually_indicated(activity_state, activity_depth):
 				_surface_school_records.append({
 					"school_id": str(school.get("school_id", "")),
 					"species_id": species_id,
@@ -979,7 +983,7 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 		if not _individual_states.has(individual_key):
 			_individual_states[individual_key] = _create_individual_state(
 				int(school["seed"]), index, profile,
-				float(school.get("activity_depth_m", profile.target_visual_length_m))
+				_school_activity_depth(school, profile.target_visual_length_m)
 			)
 		var state: Dictionary = _individual_states[individual_key]
 		var offset: Vector2 = state["local_position"]
@@ -1268,7 +1272,7 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 		elif profile.surface_activity_cycle_enabled:
 			var bottom_clearance := maxf(0.42, minf(0.9, visual_length_m * 0.30))
 			var maximum_swim_depth := maxf(0.30, local_depth - bottom_clearance)
-			var target_depth := float(school.get("activity_depth_m", depth_offset)) + float(state["depth_variation"]) * 0.16
+			var target_depth := _school_activity_depth(school, depth_offset) + float(state["depth_variation"]) * 0.16
 			target_depth = clampf(target_depth, 0.30, maximum_swim_depth)
 			var current_depth := clampf(float(state.get("swim_depth_m", target_depth)), 0.30, maximum_swim_depth)
 			current_depth = move_toward(current_depth, target_depth, profile.activity_vertical_speed_mps * delta)
@@ -1492,6 +1496,14 @@ func _vertical_depth_offset(profile: FishSpeciesProfile, depth: float, variation
 			return maxf(0.45, depth - 0.85 - variation * 0.25)
 		_:
 			return clampf(depth * 0.30 + variation * 1.4, 1.2, minf(13.0, maxf(1.2, depth - 0.45)))
+
+
+func _school_activity_depth(school: Dictionary, fallback: float) -> float:
+	return float(school.get("effective_activity_depth_m", school.get("activity_depth_m", fallback)))
+
+
+func _school_activity_state(school: Dictionary) -> String:
+	return str(school.get("effective_surface_activity_state", school.get("surface_activity_state", "unknown")))
 
 
 func _surface_height(position: Vector3) -> float:
