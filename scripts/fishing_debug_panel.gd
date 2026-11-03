@@ -24,12 +24,17 @@ var _boat_sabiki_hook_index_spin: SpinBox
 var _boat_sabiki_spawn_hook_button: Button
 var _boat_sabiki_spawn_next_button: Button
 var _boat_sabiki_fill_button: Button
-var _boat_bite_diagnostics_label: Label
+var _boat_bite_overview_label: Label
+var _boat_bite_visible_school_label: Label
+var _boat_bite_logic_school_label: Label
+var _boat_ambient_diagnostics_label: Label
+var _boat_fight_diagnostics_label: Label
 var _simulation_stop_button: Button
 var _simulation_replay_button: Button
 var _simulation_pause_button: Button
 var _simulation_speed_option: OptionButton
 var _simulation_phase_option: OptionButton
+var _boat_test_species_option: OptionButton
 var _simulation_seek_button: Button
 var _finder_preview_depth_spin: SpinBox
 var _finder_preview_strength_spin: SpinBox
@@ -40,9 +45,12 @@ var _advanced_toggle: Button
 var _advanced_controls: VBoxContainer
 var _seed_spin: SpinBox
 var _status_label: Label
+var _simulation_diagnostics_label: Label
+var _finder_diagnostics_label: Label
 var _feedback_label: Label
 var _refresh_elapsed := 0.0
 var _simulation_species_ids: Array[String] = []
+var _boat_test_species_ids: Array[String] = []
 var _trolling_start_block_reason_key := ""
 
 
@@ -52,35 +60,47 @@ func _ready() -> void:
 	var content := VBoxContainer.new()
 	content.name = "FishingDebugContent"
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.add_theme_constant_override("separation", 7)
+	content.add_theme_constant_override("separation", 14)
 	add_child(content)
 	var title := Label.new()
 	title.text = tr("fishing.debug.title")
+	title.set_meta("translation_key", "fishing.debug.title")
 	title.add_theme_font_size_override("font_size", 17)
 	content.add_child(title)
-	_add_section_heading(content, "fishing.debug.section.real_trolling")
+	_feedback_label = Label.new()
+	_feedback_label.name = "FishingDebugActionFeedback"
+	_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_feedback_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.42, 1.0))
+	content.add_child(_feedback_label)
+
+	var trolling_section := _add_section_container(content, "fishing.debug.section.real_trolling")
 	_lure_option = OptionButton.new()
 	_lure_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_lure_option.item_selected.connect(_on_lure_selected)
-	content.add_child(_lure_option)
+	trolling_section.add_child(_lure_option)
 	var start_stop_row := HBoxContainer.new()
 	_trolling_start_button = _add_button(start_stop_row, "fishing.debug.start", _on_start_pressed)
 	_trolling_stop_button = _add_button(start_stop_row, "fishing.debug.stop", _on_stop_pressed)
-	content.add_child(start_stop_row)
+	trolling_section.add_child(start_stop_row)
+	_status_label = _make_readout_label(trolling_section, "TrollingDiagnostics")
 
-	_add_section_heading(content, "fishing.debug.section.simulation")
-	_simulation_species_option = OptionButton.new()
-	_simulation_species_option.name = "SimulatedCatchSpecies"
-	_simulation_species_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_simulation_species_option.disabled = true
-	_simulation_species_option.item_selected.connect(_on_simulation_species_selected)
-	content.add_child(_simulation_species_option)
-	_boat_test_bite_button = _add_button(content, "fishing.debug.boat_test_bite", _on_boat_test_bite_pressed)
+	var boat_test_section := _add_section_container(content, "fishing.debug.section.boat_test_operations")
+	var boat_test_species_label := Label.new()
+	boat_test_species_label.text = tr("fishing.debug.boat_test_species")
+	boat_test_species_label.set_meta("translation_key", "fishing.debug.boat_test_species")
+	_boat_test_species_option = OptionButton.new()
+	_boat_test_species_option.name = "BoatFishingTestSpecies"
+	_boat_test_species_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_boat_test_species_option.item_selected.connect(_on_boat_test_species_selected)
+	boat_test_section.add_child(boat_test_species_label)
+	boat_test_section.add_child(_boat_test_species_option)
+	_boat_test_bite_button = _add_button(boat_test_section, "fishing.debug.boat_test_bite", _on_boat_test_bite_pressed)
 	_boat_test_bite_button.name = "BoatFishingSpawnTestFishBite"
-	_add_section_heading(content, "fishing.debug.boat_sabiki_section")
+	_add_section_heading(boat_test_section, "fishing.debug.boat_sabiki_section")
 	var sabiki_hook_row := HBoxContainer.new()
 	var sabiki_hook_label := Label.new()
 	sabiki_hook_label.text = tr("fishing.debug.sabiki_hook_index")
+	sabiki_hook_label.set_meta("translation_key", "fishing.debug.sabiki_hook_index")
 	sabiki_hook_row.add_child(sabiki_hook_label)
 	_boat_sabiki_hook_index_spin = SpinBox.new()
 	_boat_sabiki_hook_index_spin.name = "BoatSabikiTestHookIndex"
@@ -89,22 +109,43 @@ func _ready() -> void:
 	_boat_sabiki_hook_index_spin.step = 1.0
 	_boat_sabiki_hook_index_spin.value = 1.0
 	sabiki_hook_row.add_child(_boat_sabiki_hook_index_spin)
-	content.add_child(sabiki_hook_row)
-	_boat_sabiki_spawn_hook_button = _add_button(content, "fishing.debug.sabiki_spawn_hook", _on_sabiki_spawn_hook_pressed)
+	boat_test_section.add_child(sabiki_hook_row)
+	_boat_sabiki_spawn_hook_button = _add_button(boat_test_section, "fishing.debug.sabiki_spawn_hook", _on_sabiki_spawn_hook_pressed)
 	_boat_sabiki_spawn_hook_button.name = "BoatSabikiSpawnTestFishAtHook"
-	_boat_sabiki_spawn_next_button = _add_button(content, "fishing.debug.sabiki_spawn_next", _on_sabiki_spawn_next_pressed)
+	_boat_sabiki_spawn_next_button = _add_button(boat_test_section, "fishing.debug.sabiki_spawn_next", _on_sabiki_spawn_next_pressed)
 	_boat_sabiki_spawn_next_button.name = "BoatSabikiSpawnTestFishNextEmpty"
-	_boat_sabiki_fill_button = _add_button(content, "fishing.debug.sabiki_fill", _on_sabiki_fill_pressed)
+	_boat_sabiki_fill_button = _add_button(boat_test_section, "fishing.debug.sabiki_fill", _on_sabiki_fill_pressed)
 	_boat_sabiki_fill_button.name = "BoatSabikiFillTestHooks"
-	_add_section_heading(content, "fishing.debug.boat_bite_diagnostics")
-	_boat_bite_diagnostics_label = Label.new()
-	_boat_bite_diagnostics_label.name = "BoatFishingBiteDiagnostics"
-	_boat_bite_diagnostics_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	_boat_bite_diagnostics_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content.add_child(_boat_bite_diagnostics_label)
+
+	var school_section := _add_section_container(content, "fishing.debug.section.boat_school_targeting")
+	_boat_bite_overview_label = _make_readout_label(school_section, "BoatFishingBiteOverview")
+	_add_section_heading(school_section, "fishing.debug.section.boat_visible_school_candidates")
+	var visual_school_note := Label.new()
+	visual_school_note.text = tr("fishing.debug.boat_visual_school_note")
+	visual_school_note.set_meta("translation_key", "fishing.debug.boat_visual_school_note")
+	visual_school_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	visual_school_note.add_theme_color_override("font_color", Color(0.64, 0.79, 0.78, 1.0))
+	school_section.add_child(visual_school_note)
+	_boat_bite_visible_school_label = _make_readout_label(school_section, "BoatFishingRenderedSchoolCandidates")
+	_add_section_heading(school_section, "fishing.debug.section.boat_logic_school_candidates")
+	_boat_bite_logic_school_label = _make_readout_label(school_section, "BoatFishingLogicSchoolCandidates")
+
+	var ambient_section := _add_section_container(content, "fishing.debug.section.boat_ambient_encounter")
+	_boat_ambient_diagnostics_label = _make_readout_label(ambient_section, "BoatFishingAmbientDiagnostics")
+
+	var fight_section := _add_section_container(content, "fishing.debug.section.boat_fight_diagnostics")
+	_boat_fight_diagnostics_label = _make_readout_label(fight_section, "BoatFishingFightDiagnostics")
+
+	var simulation_section := _add_section_container(content, "fishing.debug.section.trolling_simulation")
+	_simulation_species_option = OptionButton.new()
+	_simulation_species_option.name = "SimulatedCatchSpecies"
+	_simulation_species_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_simulation_species_option.disabled = true
+	_simulation_species_option.item_selected.connect(_on_simulation_species_selected)
 	var length_row := HBoxContainer.new()
 	var length_label := Label.new()
 	length_label.text = tr("fishing.debug.sim_length")
+	length_label.set_meta("translation_key", "fishing.debug.sim_length")
 	length_row.add_child(length_label)
 	_simulation_length_spin = SpinBox.new()
 	_simulation_length_spin.name = "SimulatedFishLengthCm"
@@ -115,10 +156,12 @@ func _ready() -> void:
 	_simulation_length_spin.value = 65.0
 	_simulation_length_spin.value_changed.connect(_on_simulation_length_changed)
 	length_row.add_child(_simulation_length_spin)
-	content.add_child(length_row)
+	simulation_section.add_child(_simulation_species_option)
+	simulation_section.add_child(length_row)
 	var hanging_intensity_row := HBoxContainer.new()
 	var hanging_intensity_label := Label.new()
 	hanging_intensity_label.text = tr("fishing.debug.hanging_intensity")
+	hanging_intensity_label.set_meta("translation_key", "fishing.debug.hanging_intensity")
 	hanging_intensity_row.add_child(hanging_intensity_label)
 	_hanging_struggle_intensity_spin = SpinBox.new()
 	_hanging_struggle_intensity_spin.name = "HangingStruggleIntensity"
@@ -129,15 +172,16 @@ func _ready() -> void:
 	_hanging_struggle_intensity_spin.suffix = "×"
 	_hanging_struggle_intensity_spin.value_changed.connect(_on_hanging_struggle_intensity_changed)
 	hanging_intensity_row.add_child(_hanging_struggle_intensity_spin)
-	content.add_child(hanging_intensity_row)
+	simulation_section.add_child(hanging_intensity_row)
 	_simulation_weight_label = Label.new()
-	content.add_child(_simulation_weight_label)
+	simulation_section.add_child(_simulation_weight_label)
 	_simulation_reason_label = Label.new()
 	_simulation_reason_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	content.add_child(_simulation_reason_label)
+	simulation_section.add_child(_simulation_reason_label)
 	var animation_seed_row := HBoxContainer.new()
 	var animation_seed_label := Label.new()
 	animation_seed_label.text = tr("fishing.debug.sim_seed")
+	animation_seed_label.set_meta("translation_key", "fishing.debug.sim_seed")
 	animation_seed_row.add_child(animation_seed_label)
 	_simulation_seed_spin = SpinBox.new()
 	_simulation_seed_spin.name = "SimulatedAnimationSeed"
@@ -146,15 +190,15 @@ func _ready() -> void:
 	_simulation_seed_spin.step = 1
 	_simulation_seed_spin.value = 20261030
 	animation_seed_row.add_child(_simulation_seed_spin)
-	content.add_child(animation_seed_row)
-	_simulation_start_button = _add_button(content, "fishing.debug.sim_start", _on_simulation_start_pressed)
+	simulation_section.add_child(animation_seed_row)
+	_simulation_start_button = _add_button(simulation_section, "fishing.debug.sim_start", _on_simulation_start_pressed)
 	_simulation_start_button.name = "SimulatedCatchStart"
 	var simulation_buttons := HBoxContainer.new()
 	_simulation_stop_button = _add_button(simulation_buttons, "fishing.debug.sim_stop", _on_simulation_stop_pressed)
 	_simulation_replay_button = _add_button(simulation_buttons, "fishing.debug.sim_replay", _on_simulation_replay_pressed)
 	_simulation_stop_button.name = "SimulatedCatchStop"
 	_simulation_replay_button.name = "SimulatedCatchReplay"
-	content.add_child(simulation_buttons)
+	simulation_section.add_child(simulation_buttons)
 	var playback_row := HBoxContainer.new()
 	_simulation_pause_button = _add_button(playback_row, "fishing.debug.sim_pause", _on_simulation_pause_pressed)
 	_simulation_pause_button.name = "SimulatedCatchPause"
@@ -169,7 +213,7 @@ func _ready() -> void:
 	_simulation_speed_option.select(1)
 	_simulation_speed_option.item_selected.connect(_on_simulation_speed_selected)
 	playback_row.add_child(_simulation_speed_option)
-	content.add_child(playback_row)
+	simulation_section.add_child(playback_row)
 	var seek_row := HBoxContainer.new()
 	_simulation_phase_option = OptionButton.new()
 	_simulation_phase_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -177,12 +221,14 @@ func _ready() -> void:
 	seek_row.add_child(_simulation_phase_option)
 	_simulation_seek_button = _add_button(seek_row, "fishing.debug.sim_seek", _on_simulation_seek_pressed)
 	_simulation_seek_button.name = "SimulatedCatchSeek"
-	content.add_child(seek_row)
+	simulation_section.add_child(seek_row)
+	_simulation_diagnostics_label = _make_readout_label(simulation_section, "TrollingSimulationDiagnostics")
 
-	_add_section_heading(content, "fishing.debug.finder_preview_heading")
+	var finder_section := _add_section_container(content, "fishing.debug.finder_preview_heading")
 	var finder_preview_depth_row := HBoxContainer.new()
 	var finder_preview_depth_label := Label.new()
 	finder_preview_depth_label.text = tr("fishing.debug.finder_preview_depth")
+	finder_preview_depth_label.set_meta("translation_key", "fishing.debug.finder_preview_depth")
 	finder_preview_depth_row.add_child(finder_preview_depth_label)
 	_finder_preview_depth_spin = SpinBox.new()
 	_finder_preview_depth_spin.name = "SonarPreviewDepth"
@@ -193,10 +239,11 @@ func _ready() -> void:
 	_finder_preview_depth_spin.suffix = tr("fishing.debug.unit.m")
 	_finder_preview_depth_spin.value_changed.connect(_on_finder_preview_parameter_changed)
 	finder_preview_depth_row.add_child(_finder_preview_depth_spin)
-	content.add_child(finder_preview_depth_row)
+	finder_section.add_child(finder_preview_depth_row)
 	var finder_preview_strength_row := HBoxContainer.new()
 	var finder_preview_strength_label := Label.new()
 	finder_preview_strength_label.text = tr("fishing.debug.finder_preview_strength")
+	finder_preview_strength_label.set_meta("translation_key", "fishing.debug.finder_preview_strength")
 	finder_preview_strength_row.add_child(finder_preview_strength_label)
 	_finder_preview_strength_spin = SpinBox.new()
 	_finder_preview_strength_spin.name = "SonarPreviewStrength"
@@ -206,7 +253,7 @@ func _ready() -> void:
 	_finder_preview_strength_spin.value = 0.8
 	_finder_preview_strength_spin.value_changed.connect(_on_finder_preview_parameter_changed)
 	finder_preview_strength_row.add_child(_finder_preview_strength_spin)
-	content.add_child(finder_preview_strength_row)
+	finder_section.add_child(finder_preview_strength_row)
 	_finder_preview_size_option = OptionButton.new()
 	_finder_preview_size_option.name = "SonarPreviewSizeBand"
 	_finder_preview_size_option.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -215,34 +262,32 @@ func _ready() -> void:
 		_finder_preview_size_option.set_item_metadata(_finder_preview_size_option.item_count - 1, size_band)
 	_finder_preview_size_option.select(1)
 	_finder_preview_size_option.item_selected.connect(_on_finder_preview_size_selected)
-	content.add_child(_finder_preview_size_option)
+	finder_section.add_child(_finder_preview_size_option)
 	var finder_preview_buttons := HBoxContainer.new()
 	_finder_preview_start_button = _add_button(finder_preview_buttons, "fishing.debug.finder_preview_start", _on_finder_preview_start_pressed)
 	_finder_preview_start_button.name = "SonarPreviewStart"
 	_finder_preview_stop_button = _add_button(finder_preview_buttons, "fishing.debug.finder_preview_stop", _on_finder_preview_stop_pressed)
 	_finder_preview_stop_button.name = "SonarPreviewStop"
-	content.add_child(finder_preview_buttons)
+	finder_section.add_child(finder_preview_buttons)
+	_finder_diagnostics_label = _make_readout_label(finder_section, "FishFinderDiagnostics")
 
-	_status_label = Label.new()
-	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	content.add_child(_status_label)
-	_feedback_label = Label.new()
-	_feedback_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	content.add_child(_feedback_label)
+	var advanced_section := _add_section_container(content, "fishing.debug.section.encounter_advanced")
 	_advanced_toggle = Button.new()
 	_advanced_toggle.text = tr("fishing.debug.advanced")
+	_advanced_toggle.set_meta("translation_key", "fishing.debug.advanced")
 	_advanced_toggle.name = "AdvancedP2Toggle"
 	_advanced_toggle.toggle_mode = true
 	_advanced_toggle.toggled.connect(_on_advanced_toggled)
-	content.add_child(_advanced_toggle)
+	advanced_section.add_child(_advanced_toggle)
 	_advanced_controls = VBoxContainer.new()
 	_advanced_controls.name = "AdvancedP2Controls"
 	_advanced_controls.visible = false
 	_advanced_controls.add_theme_constant_override("separation", 5)
-	content.add_child(_advanced_controls)
+	advanced_section.add_child(_advanced_controls)
 	var seed_row := HBoxContainer.new()
 	var seed_label := Label.new()
 	seed_label.text = tr("fishing.debug.seed")
+	seed_label.set_meta("translation_key", "fishing.debug.seed")
 	seed_row.add_child(seed_label)
 	_seed_spin = SpinBox.new()
 	_seed_spin.min_value = 0
@@ -277,8 +322,53 @@ func configure(manager: Node, rod_system: FishingRodSystem = null, fish_finder_d
 		_manager.connect("resources_ready", _on_manager_resources_ready, CONNECT_ONE_SHOT)
 	_resolve_systems()
 	_populate_simulation_species()
+	_populate_boat_test_species()
 	_populate_simulation_phases()
 	_refresh_status()
+
+
+func refresh_localized_text() -> void:
+	_refresh_translated_controls(self)
+	if _simulation_length_spin != null:
+		_simulation_length_spin.suffix = tr("fishing.debug.unit.cm")
+	if _finder_preview_depth_spin != null:
+		_finder_preview_depth_spin.suffix = tr("fishing.debug.unit.m")
+	if _manager != null:
+		_simulation_species_ids.clear()
+		_boat_test_species_ids.clear()
+		_populate_simulation_species()
+		_populate_boat_test_species()
+	_populate_simulation_phases()
+	_populate_lures()
+	if _simulation_speed_option != null:
+		var selected_speed := float(_simulation_speed_option.get_item_metadata(_simulation_speed_option.selected)) if _simulation_speed_option.selected >= 0 else 1.0
+		_simulation_speed_option.clear()
+		for speed in [0.5, 1.0, 2.0]:
+			var speed_key := "fishing.debug.sim_speed.half" if is_equal_approx(speed, 0.5) else "fishing.debug.sim_speed.normal" if is_equal_approx(speed, 1.0) else "fishing.debug.sim_speed.double"
+			_simulation_speed_option.add_item(tr(speed_key))
+			_simulation_speed_option.set_item_metadata(_simulation_speed_option.item_count - 1, speed)
+			if is_equal_approx(speed, selected_speed):
+				_simulation_speed_option.select(_simulation_speed_option.item_count - 1)
+	if _finder_preview_size_option != null:
+		var selected_size := str(_finder_preview_size_option.get_item_metadata(_finder_preview_size_option.selected)) if _finder_preview_size_option.selected >= 0 else "medium"
+		_finder_preview_size_option.clear()
+		for size_band in ["small", "medium", "large"]:
+			_finder_preview_size_option.add_item(tr("fishing.debug.finder_preview_size." + size_band))
+			_finder_preview_size_option.set_item_metadata(_finder_preview_size_option.item_count - 1, size_band)
+			if size_band == selected_size:
+				_finder_preview_size_option.select(_finder_preview_size_option.item_count - 1)
+	_refresh_status()
+
+
+func _refresh_translated_controls(node: Node) -> void:
+	var translation_key := str(node.get_meta("translation_key", ""))
+	if not translation_key.is_empty():
+		if node is Label:
+			(node as Label).text = tr(translation_key)
+		elif node is Button:
+			(node as Button).text = tr(translation_key)
+	for child in node.get_children():
+		_refresh_translated_controls(child)
 
 
 func _on_manager_resources_ready() -> void:
@@ -298,6 +388,7 @@ func _process(delta: float) -> void:
 
 func _resolve_systems() -> void:
 	_populate_simulation_species()
+	_populate_boat_test_species()
 	_boat_casting_system = get_tree().root.find_child("BoatFishingCastingSystem", true, false) as BoatFishingCastingSystem
 	if _manager == null:
 		return
@@ -325,16 +416,51 @@ func _populate_lures() -> void:
 			_lure_option.select(_lure_option.item_count - 1)
 
 
-func _add_section_heading(parent: Control, key: String) -> void:
+func _add_section_container(parent: Control, key: String) -> VBoxContainer:
+	var section := VBoxContainer.new()
+	section.name = "Section_" + key.replace(".", "_")
+	section.add_theme_constant_override("separation", 7)
 	var heading := Label.new()
 	heading.text = tr(key)
-	heading.add_theme_font_size_override("font_size", 14)
+	heading.set_meta("translation_key", key)
+	heading.add_theme_font_size_override("font_size", 15)
+	heading.add_theme_color_override("font_color", Color(0.86, 0.95, 0.91, 1.0))
+	section.add_child(heading)
+	var separator := HSeparator.new()
+	section.add_child(separator)
+	var body := VBoxContainer.new()
+	body.add_theme_constant_override("separation", 5)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	section.add_child(body)
+	parent.add_child(section)
+	return body
+
+
+func _add_section_heading(parent: Control, key: String) -> void:
+	var separator := HSeparator.new()
+	parent.add_child(separator)
+	var heading := Label.new()
+	heading.text = tr(key)
+	heading.set_meta("translation_key", key)
+	heading.add_theme_font_size_override("font_size", 13)
+	heading.add_theme_color_override("font_color", Color(0.70, 0.86, 0.83, 1.0))
 	parent.add_child(heading)
+
+
+func _make_readout_label(parent: Control, label_name: String) -> Label:
+	var label := Label.new()
+	label.name = label_name
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.add_theme_color_override("font_color", Color(0.82, 0.90, 0.88, 1.0))
+	parent.add_child(label)
+	return label
 
 
 func _add_button(parent: Control, key: String, callback: Callable) -> Button:
 	var button := Button.new()
 	button.text = tr(key)
+	button.set_meta("translation_key", key)
 	button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	button.pressed.connect(callback)
 	parent.add_child(button)
@@ -373,6 +499,52 @@ func _populate_simulation_species() -> void:
 			selected_index = _simulation_species_option.item_count - 1
 	_simulation_species_option.select(selected_index)
 	_on_simulation_species_selected(selected_index)
+	_refresh_controls()
+
+
+func _populate_boat_test_species() -> void:
+	if _boat_test_species_option == null or _manager == null:
+		return
+	var available_profiles: Array[FishSpeciesProfile] = []
+	for species_id in ["sea_trout", "needlefish"]:
+		var profile := _manager.call("get_species_profile", species_id) as FishSpeciesProfile
+		if profile != null:
+			available_profiles.append(profile)
+	var next_species_ids: Array[String] = []
+	for profile in available_profiles:
+		next_species_ids.append(profile.species_id)
+	if next_species_ids == _boat_test_species_ids and (not next_species_ids.is_empty() or _boat_test_species_option.item_count == 1):
+		return
+	var previous_species_id := _selected_boat_test_species_id()
+	_boat_test_species_option.clear()
+	_boat_test_species_ids = next_species_ids
+	if available_profiles.is_empty():
+		_boat_test_species_option.add_item(tr("fishing.debug.unavailable"))
+		_boat_test_species_option.select(0)
+		_boat_test_species_option.disabled = true
+		_refresh_controls()
+		return
+	_boat_test_species_option.disabled = false
+	var selected_index := 0
+	for profile in available_profiles:
+		_boat_test_species_option.add_item(tr(profile.name_key))
+		_boat_test_species_option.set_item_metadata(_boat_test_species_option.item_count - 1, profile.species_id)
+		if profile.species_id == previous_species_id:
+			selected_index = _boat_test_species_option.item_count - 1
+	_boat_test_species_option.select(selected_index)
+	_refresh_controls()
+
+
+func _selected_boat_test_species_id() -> String:
+	if _boat_test_species_option == null:
+		return ""
+	var index := _boat_test_species_option.selected
+	if index < 0 or index >= _boat_test_species_option.item_count:
+		return ""
+	return str(_boat_test_species_option.get_item_metadata(index))
+
+
+func _on_boat_test_species_selected(_index: int) -> void:
 	_refresh_controls()
 
 
@@ -562,7 +734,7 @@ func _on_boat_test_bite_pressed() -> void:
 	if _boat_casting_system == null:
 		_show_feedback(tr("fishing.debug.boat_test_unavailable"))
 		return
-	var species_id := _selected_simulation_species_id()
+	var species_id := _selected_boat_test_species_id()
 	if species_id.is_empty():
 		_show_feedback(tr("fishing.debug.boat_test_species_unavailable"))
 		return
@@ -691,9 +863,17 @@ func _on_advanced_toggled(expanded: bool) -> void:
 
 
 func _refresh_status() -> void:
+	_refresh_controls()
+	_refresh_trolling_diagnostics()
+	_refresh_simulation_diagnostics()
+	_refresh_fish_finder_diagnostics()
+	_update_simulation_weight_preview()
+	_refresh_boat_bite_diagnostics()
+
+
+func _refresh_trolling_diagnostics() -> void:
 	if _status_label == null:
 		return
-	_refresh_controls()
 	if _encounter == null:
 		_status_label.text = tr("fishing.debug.unavailable")
 		return
@@ -707,7 +887,7 @@ func _refresh_status() -> void:
 	var speed := float(diagnostics.get("boat_speed_mps", 0.0))
 	var depth_min := float(diagnostics.get("effective_lure_min_depth_m", lure.work_depth_range_m.x if lure != null else 0.0))
 	var depth_max := float(context.get("effective_lure_max_depth_m", lure.work_depth_range_m.y if lure != null else 0.0))
-	var lines := [
+	var lines: Array[String] = [
 		tr("fishing.debug.state") % _localized_state(_encounter.get_state_name()),
 		tr("fishing.debug.current_lure") % (tr(lure.name_key) if lure != null else tr("fishing.debug.unavailable")),
 		tr("fishing.debug.speed") % speed,
@@ -716,50 +896,6 @@ func _refresh_status() -> void:
 		tr("fishing.debug.rate") % [rate, float(diagnostics.get("probability_per_game_minute", 0.0)) * 100.0],
 		tr("fishing.debug.pending") % (str(pending.get("catch_id", "—")) if not pending.is_empty() else "—"),
 	]
-	if _rod_system != null:
-		lines.append(tr("fishing.debug.rod_visual_state") % tr("fishing.debug.visual." + _rod_system.get_visual_state_name().to_lower()))
-		var presentation := _rod_system.get_presentation_snapshot()
-		var source_name := str(presentation.get("source", "NONE"))
-		if source_name != "NONE":
-			lines.append(tr("fishing.debug.presentation_source") % tr("fishing.debug.source." + source_name.to_lower()))
-			var species_profile := _manager.call("get_species_profile", str(presentation.get("species_id", ""))) as FishSpeciesProfile if _manager != null else null
-			var presentation_species := tr(species_profile.name_key) if species_profile != null else str(presentation.get("species_id", ""))
-			if source_name == "DEBUG_SIMULATION":
-				lines.append(tr("fishing.debug.sim_status") % [presentation_species, float(presentation.get("body_length_cm", 0.0)), float(presentation.get("estimated_weight_kg", 0.0)), int(presentation.get("simulation_seed", 0))])
-			else:
-				lines.append(tr("fishing.debug.presentation_catch") % [presentation_species, float(presentation.get("body_length_cm", 0.0)), float(presentation.get("estimated_weight_kg", 0.0))])
-		var phase_key := "fishing.debug.phase." + str(presentation.get("phase", "none")).to_lower()
-		var line_key := "fishing.debug.line_state." + str(presentation.get("line_state", "out")).to_lower()
-		var fish_key := "fishing.debug.fish_stage." + str(presentation.get("fish_stage", "hidden")).to_lower()
-		var camera_key := "camera.mode." + str(presentation.get("camera_mode", "unavailable"))
-		lines.append(tr("fishing.debug.presentation_status") % [tr(phase_key), float(presentation.get("phase_remaining_seconds", 0.0)), float(presentation.get("total_progress", 0.0)) * 100.0])
-		lines.append(tr("fishing.debug.presentation_load") % [float(presentation.get("rod_load_ratio", 0.0)) * 100.0, tr(line_key), float(presentation.get("line_distance_m", 0.0)), tr(fish_key)])
-		if _rod_system.has_method("get_trolling_audio_diagnostics"):
-			var audio: Dictionary = _rod_system.get_trolling_audio_diagnostics()
-			var loops: Dictionary = audio.get("loops", {})
-			var drag: Dictionary = loops.get("drag", {})
-			var reel_in: Dictionary = loops.get("reel_in", {})
-			lines.append("Trolling SFX: spin %.2f rad/s | drag target/active/play %s/%s/%s gain %.2f | reel-in %s/%s/%s gain %.2f" % [
-				float(audio.get("reel_spin_speed_rad_s", 0.0)),
-				"1" if bool(drag.get("target", false)) else "0",
-				"1" if bool(drag.get("requested", false)) else "0",
-				"1" if bool(drag.get("playing", false)) else "0",
-				float(drag.get("gain", 0.0)),
-				"1" if bool(reel_in.get("target", false)) else "0",
-				"1" if bool(reel_in.get("requested", false)) else "0",
-				"1" if bool(reel_in.get("playing", false)) else "0",
-				float(reel_in.get("gain", 0.0)),
-			])
-		var camera_label := tr(camera_key) if camera_key != "camera.mode.unavailable" else tr("fishing.debug.unavailable")
-		var auto_switch_label := tr("fishing.debug.auto_on") if bool(presentation.get("auto_fight_camera", false)) else tr("fishing.debug.auto_off")
-		lines.append(tr("fishing.debug.presentation_camera") % [camera_label, auto_switch_label])
-		var simulation_active := str(presentation.get("source", "NONE")) == "DEBUG_SIMULATION"
-		if simulation_active:
-			_simulation_reason_label.text = tr("fishing.debug.sim_preview_only")
-		elif _encounter.pending_catch != null or _encounter.state in [FishingEncounterSystem.State.HOOKED, FishingEncounterSystem.State.RETRIEVING]:
-			_simulation_reason_label.text = tr("fishing.debug.sim_blocked_pending")
-		else:
-			_simulation_reason_label.text = tr("fishing.debug.sim_no_school_required")
 	if not candidates.is_empty():
 		var brief: Array[String] = []
 		for candidate in candidates.slice(0, mini(4, candidates.size())):
@@ -771,6 +907,67 @@ func _refresh_status() -> void:
 	if not result.is_empty():
 		var profile := _manager.call("get_species_profile", str(result.get("species_id", ""))) as FishSpeciesProfile
 		lines.append(tr("fishing.debug.last_catch") % [tr(profile.name_key) if profile != null else str(result.get("species_id", "")), float(result.get("length_m", 0.0)) * 100.0, float(result.get("estimated_weight_kg", 0.0)), int(result.get("population_before", 0)), int(result.get("population_after", 0))])
+	_status_label.text = "\n".join(lines)
+
+
+func _refresh_simulation_diagnostics() -> void:
+	if _simulation_diagnostics_label == null:
+		return
+	if _rod_system == null:
+		_simulation_diagnostics_label.text = tr("fishing.debug.unavailable")
+		return
+	var lines: Array[String] = []
+	lines.append(tr("fishing.debug.rod_visual_state") % tr("fishing.debug.visual." + _rod_system.get_visual_state_name().to_lower()))
+	var presentation := _rod_system.get_presentation_snapshot()
+	var source_name := str(presentation.get("source", "NONE"))
+	if source_name != "NONE":
+		lines.append(tr("fishing.debug.presentation_source") % tr("fishing.debug.source." + source_name.to_lower()))
+		var species_profile := _manager.call("get_species_profile", str(presentation.get("species_id", ""))) as FishSpeciesProfile if _manager != null else null
+		var presentation_species := tr(species_profile.name_key) if species_profile != null else str(presentation.get("species_id", ""))
+		if source_name == "DEBUG_SIMULATION":
+			lines.append(tr("fishing.debug.sim_status") % [presentation_species, float(presentation.get("body_length_cm", 0.0)), float(presentation.get("estimated_weight_kg", 0.0)), int(presentation.get("simulation_seed", 0))])
+		else:
+			lines.append(tr("fishing.debug.presentation_catch") % [presentation_species, float(presentation.get("body_length_cm", 0.0)), float(presentation.get("estimated_weight_kg", 0.0))])
+	var phase_key := "fishing.debug.phase." + str(presentation.get("phase", "none")).to_lower()
+	var line_key := "fishing.debug.line_state." + str(presentation.get("line_state", "out")).to_lower()
+	var fish_key := "fishing.debug.fish_stage." + str(presentation.get("fish_stage", "hidden")).to_lower()
+	var camera_key := "camera.mode." + str(presentation.get("camera_mode", "unavailable"))
+	lines.append(tr("fishing.debug.presentation_status") % [tr(phase_key), float(presentation.get("phase_remaining_seconds", 0.0)), float(presentation.get("total_progress", 0.0)) * 100.0])
+	lines.append(tr("fishing.debug.presentation_load") % [float(presentation.get("rod_load_ratio", 0.0)) * 100.0, tr(line_key), float(presentation.get("line_distance_m", 0.0)), tr(fish_key)])
+	if _rod_system.has_method("get_trolling_audio_diagnostics"):
+		var audio: Dictionary = _rod_system.get_trolling_audio_diagnostics()
+		var loops: Dictionary = audio.get("loops", {})
+		var drag: Dictionary = loops.get("drag", {})
+		var reel_in: Dictionary = loops.get("reel_in", {})
+		lines.append("Trolling SFX: spin %.2f rad/s | drag target/active/play %s/%s/%s gain %.2f | reel-in %s/%s/%s gain %.2f" % [
+			float(audio.get("reel_spin_speed_rad_s", 0.0)),
+			"1" if bool(drag.get("target", false)) else "0",
+			"1" if bool(drag.get("requested", false)) else "0",
+			"1" if bool(drag.get("playing", false)) else "0",
+			float(drag.get("gain", 0.0)),
+			"1" if bool(reel_in.get("target", false)) else "0",
+			"1" if bool(reel_in.get("requested", false)) else "0",
+			"1" if bool(reel_in.get("playing", false)) else "0",
+			float(reel_in.get("gain", 0.0)),
+		])
+	var camera_label := tr(camera_key) if camera_key != "camera.mode.unavailable" else tr("fishing.debug.unavailable")
+	var auto_switch_label := tr("fishing.debug.auto_on") if bool(presentation.get("auto_fight_camera", false)) else tr("fishing.debug.auto_off")
+	lines.append(tr("fishing.debug.presentation_camera") % [camera_label, auto_switch_label])
+	var simulation_active := source_name == "DEBUG_SIMULATION"
+	if _simulation_reason_label != null:
+		if simulation_active:
+			_simulation_reason_label.text = tr("fishing.debug.sim_preview_only")
+		elif _encounter != null and (_encounter.pending_catch != null or _encounter.state in [FishingEncounterSystem.State.HOOKED, FishingEncounterSystem.State.RETRIEVING]):
+			_simulation_reason_label.text = tr("fishing.debug.sim_blocked_pending")
+		else:
+			_simulation_reason_label.text = tr("fishing.debug.sim_no_school_required")
+	_simulation_diagnostics_label.text = "\n".join(lines)
+
+
+func _refresh_fish_finder_diagnostics() -> void:
+	if _finder_diagnostics_label == null:
+		return
+	var lines: Array[String] = []
 	var scan := _finder.get_last_scan() if _finder != null else {}
 	var finder_history: Array[Dictionary] = _finder.get_scan_history() if _finder != null else []
 	var finder_capacity := _finder.get_effective_history_capacity() if _finder != null else 0
@@ -856,85 +1053,273 @@ func _refresh_status() -> void:
 		if _finder_preview_stop_button != null:
 			_finder_preview_stop_button.disabled = not preview_active
 	_append_fish_finder_school_diagnostics(lines, scan)
-	_status_label.text = "\n".join(lines)
-	_update_simulation_weight_preview()
-	_refresh_boat_bite_diagnostics()
+	_finder_diagnostics_label.text = "\n".join(lines)
 
 
 func _refresh_boat_bite_diagnostics() -> void:
-	if _boat_bite_diagnostics_label == null:
+	if _boat_bite_overview_label == null:
+		return
+	if not is_visible_in_tree():
 		return
 	if _boat_casting_system == null or not is_instance_valid(_boat_casting_system):
-		_boat_bite_diagnostics_label.text = tr("fishing.debug.boat_bite_unavailable")
+		_set_boat_bite_diagnostics_text(tr("fishing.debug.boat_bite_unavailable"))
 		return
 	var diagnostics := _boat_casting_system.get_natural_bite_diagnostics(true)
 	if not bool(diagnostics.get("activity_active", false)):
-		_boat_bite_diagnostics_label.text = tr("fishing.debug.boat_bite_inactive")
+		_set_boat_bite_diagnostics_text(tr("fishing.debug.boat_bite_inactive"))
 		return
-	var rate := float(diagnostics.get("total_event_rate_per_real_hour", 0.0))
+	var trigger_mode := str(diagnostics.get("trigger_mode", "NONE"))
+	var rate := float(diagnostics.get("ambient_event_rate_per_real_hour", diagnostics.get("total_event_rate_per_real_hour", 0.0)))
 	var average_wait := 3600.0 / rate if rate > 0.0 else INF
 	var reason := _boat_bite_reason_text(str(diagnostics.get("reason", "no_valid_candidate")))
 	var rig_snapshot: Dictionary = _boat_casting_system.get_rig_snapshot()
 	var rig_name := tr(str(rig_snapshot.get("display_name_key", "")))
-	var lines: Array[String] = [tr("fishing.debug.boat_bite_summary") % [
-		rig_name,
-		str(diagnostics.get("state_name", "—")),
-		float(diagnostics.get("line_length_m", 0.0)),
-		float(diagnostics.get("lure_relative_speed_mps", 0.0)),
-		int(diagnostics.get("empty_hook_count", 1)),
+	var overview_lines: Array[String] = []
+	var rendered_school_lines: Array[String] = []
+	var logic_school_lines: Array[String] = []
+	var ambient_lines: Array[String] = []
+	var fight_lines: Array[String] = []
+	if trigger_mode in ["SCHOOL_TARGETED", "MIXED"]:
+		overview_lines.append(tr("fishing.debug.boat_bite_summary_targeted") % [
+			rig_name,
+			str(diagnostics.get("state_name", "—")),
+			float(diagnostics.get("line_length_m", 0.0)),
+			float(diagnostics.get("lure_relative_speed_mps", 0.0)),
+			int(diagnostics.get("empty_hook_count", 1)),
+			int(diagnostics.get("targeted_candidate_count", 0)),
+			reason,
+		])
+	else:
+		overview_lines.append(tr("fishing.debug.boat_bite_summary") % [
+			rig_name,
+			str(diagnostics.get("state_name", "—")),
+			float(diagnostics.get("line_length_m", 0.0)),
+			float(diagnostics.get("lure_relative_speed_mps", 0.0)),
+			int(diagnostics.get("empty_hook_count", 1)),
+			rate,
+			average_wait,
+			reason,
+		])
+	var mode_key := "fishing.debug.boat_bite_mode." + trigger_mode.to_lower()
+	overview_lines.append(tr("fishing.debug.boat_bite_mode_line") % [tr(mode_key) if tr(mode_key) != mode_key else trigger_mode])
+	var session: Dictionary = diagnostics.get("boat_fishing_session", {})
+	ambient_lines.append(tr("fishing.debug.boat_ambient_rate_state") % [
 		rate,
-		average_wait,
-		reason,
-	]]
+		float(diagnostics.get("average_first_bite_seconds", 3600.0 / rate if rate > 0.0 else INF)),
+		int(diagnostics.get("ambient_eligible_species_count", 0)),
+		str(diagnostics.get("reason", "—")),
+	])
+	if not session.is_empty():
+		ambient_lines.append(tr("fishing.debug.boat_ambient_session") % [
+			str(session.get("fishing_session_id", "—")),
+			str(session.get("cast_session_id", "—")),
+			float(session.get("ambient_hazard_accumulated", 0.0)),
+			float(session.get("ambient_hazard_threshold", 0.0)),
+		])
+		var first_entry: Dictionary = session.get("first_entry", {})
+		if not first_entry.is_empty():
+			var entry_position: Variant = first_entry.get("first_entry_world_position", Vector3.ZERO)
+			var entry_label := "—"
+			if entry_position is Vector3:
+				entry_label = "%.1f, %.1f, %.1f" % [entry_position.x, entry_position.y, entry_position.z]
+			ambient_lines.append(tr("fishing.debug.boat_ambient_first_drop") % [
+				entry_label,
+				float(first_entry.get("initial_search_radius_m", 15.0)),
+				int(first_entry.get("initial_candidate_school_count", 0)),
+				str(first_entry.get("initial_candidate_school_ids", [])),
+			])
+		var authority_result: Dictionary = session.get("last_ambient_authority_result", {})
+		if not authority_result.is_empty():
+			ambient_lines.append(tr("fishing.debug.boat_ambient_authority") % [
+				"yes" if bool(authority_result.get("accepted", false)) else "no",
+				str(authority_result.get("reason", "accepted")),
+				str(authority_result.get("candidate", {}).get("ambient_fish_id", authority_result.get("ambient_fish_id", "—"))),
+			])
+		for ambient_fish in session.get("active_ambient_fish", []):
+			ambient_lines.append(tr("fishing.debug.boat_ambient_fish") % [
+				str(ambient_fish.get("ambient_fish_id", "—")),
+				str(ambient_fish.get("species_id", "—")),
+				float(ambient_fish.get("body_length_m", 0.0)),
+				int(ambient_fish.get("hook_index", -1)) + 1,
+				str(ambient_fish.get("lifecycle_state", "—")),
+			])
 	var bait_depth := float(diagnostics.get("bait_depth_m", -1.0))
 	if bait_depth >= 0.0:
-		lines.append(tr("fishing.debug.boat_bite_bait_depth") % bait_depth)
+		overview_lines.append(tr("fishing.debug.boat_bite_bait_depth") % bait_depth)
 	for hook_variant in diagnostics.get("hook_depths", []):
 		var hook: Dictionary = hook_variant
-		lines.append(tr("fishing.debug.boat_bite_hook_row") % [
+		overview_lines.append(tr("fishing.debug.boat_bite_hook_row") % [
 			int(hook.get("hook_index", 0)) + 1,
 			float(hook.get("depth_m", -1.0)),
 			tr("fishing.debug.boat_bite_hook_state." + str(hook.get("status", "empty"))),
 		])
+	var trigger_states: Array = diagnostics.get("hook_trigger_states", [])
+	for trigger_variant in trigger_states:
+		var trigger: Dictionary = trigger_variant
+		var hook_index := int(trigger.get("hook_index", 0))
+		var trigger_candidate: Dictionary = trigger.get("candidate", {})
+		if trigger_candidate.is_empty():
+			for candidate_variant in diagnostics.get("candidate_schools", []):
+				var possible: Dictionary = candidate_variant
+				if int(possible.get("hook_index", 0)) == hook_index and (bool(possible.get("target_eligible", false)) or bool(possible.get("ambient_eligible", false))):
+					trigger_candidate = possible
+					break
+		var mode := str(trigger.get("trigger_mode", "NONE"))
+		var trigger_mode_key := "fishing.debug.boat_bite_mode." + mode.to_lower()
+		var zone := str(trigger_candidate.get("school_zone", trigger.get("school_zone", "outside")))
+		var zone_key := "fishing.debug.boat_bite_zone." + zone
+		var phase := str(trigger.get("phase", "inactive"))
+		var phase_key := "fishing.debug.boat_bite_phase." + phase
+		var reason_key := _boat_bite_reason_text(str(trigger.get("reason", "no_valid_candidate")))
+		overview_lines.append(tr("fishing.debug.boat_bite_trigger_row") % [
+			hook_index + 1,
+			tr(trigger_mode_key) if tr(trigger_mode_key) != trigger_mode_key else mode,
+			str(trigger_candidate.get("school_id", trigger.get("school_id", "—"))),
+			tr(zone_key) if tr(zone_key) != zone_key else zone,
+			float(trigger_candidate.get("horizontal_distance_m", -1.0)),
+			float(trigger_candidate.get("vertical_delta_m", -1.0)),
+			float(trigger_candidate.get("normalized_3d_distance", -1.0)),
+			int(trigger_candidate.get("available_population", 0)),
+			tr("fish.finder.debug.yes") if bool(trigger_candidate.get("depth_match", false)) else tr("fish.finder.debug.no"),
+			tr("fish.finder.debug.yes") if bool(trigger_candidate.get("action_qualified", false)) else tr("fish.finder.debug.no"),
+			tr(phase_key) if tr(phase_key) != phase_key else phase,
+			float(trigger.get("reaction_remaining_seconds", 0.0)),
+			reason_key,
+		])
 	var candidates: Array = diagnostics.get("candidate_schools", [])
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
-		return float(a.get("event_rate_per_real_hour", 0.0)) > float(b.get("event_rate_per_real_hour", 0.0))
+		var a_score := 100.0 if bool(a.get("target_eligible", false)) else (10.0 if bool(a.get("ambient_eligible", false)) else 0.0)
+		var b_score := 100.0 if bool(b.get("target_eligible", false)) else (10.0 if bool(b.get("ambient_eligible", false)) else 0.0)
+		if not is_equal_approx(a_score, b_score):
+			return a_score > b_score
+		return float(a.get("normalized_3d_distance", INF)) < float(b.get("normalized_3d_distance", INF))
 	)
-	if candidates.is_empty():
-		lines.append(tr("fishing.debug.boat_bite_no_school"))
-	else:
-		for candidate_variant in candidates.slice(0, mini(5, candidates.size())):
-			var candidate: Dictionary = candidate_variant
-			var species_id := str(candidate.get("species_id", ""))
-			var species_profile := _manager.call("get_species_profile", species_id) as FishSpeciesProfile if _manager != null else null
-			var species_name := tr(species_profile.name_key) if species_profile != null else species_id
-			lines.append(tr("fishing.debug.boat_bite_school_row") % [
-				int(candidate.get("hook_index", -1)) + 1 if candidate.has("hook_index") else 0,
-				str(candidate.get("school_id", "—")),
-				species_name,
-				int(candidate.get("population", 0)),
-				int(candidate.get("reserved_population", 0)),
-				float(candidate.get("horizontal_distance_m", -1.0)),
-				float(candidate.get("horizontal_weight", 0.0)),
-				float(candidate.get("activity_depth_target_m", candidate.get("activity_depth_m", 0.0))),
-				float(candidate.get("effective_activity_depth_m", candidate.get("activity_depth_m", 0.0))),
-				float(candidate.get("vertical_delta_m", 0.0)),
-			])
-			lines.append(tr("fishing.debug.boat_bite_rate_row") % [
-				float(candidate.get("depth_weight", 0.0)),
-				float(candidate.get("population_weight", 0.0)),
-				float(candidate.get("action_weight", 0.0)),
-				float(candidate.get("surface_activity_multiplier", 1.0)),
-				float(candidate.get("base_event_rate_per_real_hour", 0.0)),
-				float(candidate.get("event_rate_per_real_hour", 0.0)),
-				_boat_bite_reason_text(str(candidate.get("rejection_reason", "random_not_triggered"))),
-			])
+	var school_visual_cache: Dictionary = {}
+	for candidate_variant in candidates.slice(0, mini(5, candidates.size())):
+		var candidate: Dictionary = candidate_variant
+		var school_id := str(candidate.get("school_id", ""))
+		if not school_visual_cache.has(school_id):
+			var visual_data: Dictionary = {}
 			if _fish_school_renderer != null and is_instance_valid(_fish_school_renderer):
-				var visual := _fish_school_renderer.get_school_visual_debug(str(candidate.get("school_id", "")))
-				var visible_depth := float(visual.get("visible_representative_depth_m", -1.0))
-				if visible_depth >= 0.0:
-					lines.append(tr("fishing.debug.boat_bite_visual_depth") % [visible_depth, absf(visible_depth - float(candidate.get("effective_activity_depth_m", 0.0)))])
-	_boat_bite_diagnostics_label.text = "\n".join(lines)
+				visual_data = _fish_school_renderer.get_school_visual_debug(school_id)
+			school_visual_cache[school_id] = visual_data
+		var visual: Dictionary = school_visual_cache.get(school_id, {})
+		var has_render_instances := int(visual.get("visual_instances_bound_to_school", 0)) > 0
+		var candidate_lines := rendered_school_lines if has_render_instances else logic_school_lines
+		var species_id := str(candidate.get("species_id", ""))
+		var species_profile := _manager.call("get_species_profile", species_id) as FishSpeciesProfile if _manager != null else null
+		var species_name := tr(species_profile.name_key) if species_profile != null else species_id
+		candidate_lines.append(tr("fishing.debug.boat_bite_school_row") % [
+			int(candidate.get("hook_index", -1)) + 1 if candidate.has("hook_index") else 0,
+			school_id if not school_id.is_empty() else "—",
+			species_name,
+			int(candidate.get("population", 0)),
+			int(candidate.get("reserved_population", 0)),
+			float(candidate.get("horizontal_distance_m", -1.0)),
+			float(candidate.get("horizontal_weight", 0.0)),
+			float(candidate.get("activity_depth_target_m", candidate.get("activity_depth_m", 0.0))),
+			float(candidate.get("effective_activity_depth_m", candidate.get("activity_depth_m", 0.0))),
+			float(candidate.get("vertical_delta_m", 0.0)),
+		])
+		candidate_lines.append(tr("fishing.debug.boat_bite_school_geometry") % [
+			tr("fish.finder.debug.yes") if bool(candidate.get("target_eligible", false)) else tr("fish.finder.debug.no"),
+			tr("fish.finder.debug.yes") if bool(candidate.get("ambient_eligible", false)) else tr("fish.finder.debug.no"),
+			float(candidate.get("school_horizontal_radius_m", 0.0)),
+			float(candidate.get("vertical_tolerance_m", 0.0)),
+			float(candidate.get("normalized_3d_distance", -1.0)),
+			int(candidate.get("available_population", 0)),
+			_boat_bite_reason_text(str(candidate.get("rejection_reason", "no_valid_candidate"))),
+		])
+		if has_render_instances:
+			var visible_depth := float(visual.get("visible_representative_depth_m", -1.0))
+			if visible_depth >= 0.0:
+				candidate_lines.append(tr("fishing.debug.boat_bite_visual_depth") % [visible_depth, absf(visible_depth - float(candidate.get("effective_activity_depth_m", 0.0)))])
+	if rendered_school_lines.is_empty():
+		rendered_school_lines.append(tr("fishing.debug.boat_bite_no_rendered_schools"))
+	if logic_school_lines.is_empty():
+		logic_school_lines.append(tr("fishing.debug.boat_bite_no_logic_schools"))
+	for ambient_variant in diagnostics.get("ambient_candidates", []):
+		var ambient_candidate: Dictionary = ambient_variant
+		var ambient_profile := _manager.call("get_species_profile", str(ambient_candidate.get("species_id", ""))) as FishSpeciesProfile if _manager != null else null
+		var ambient_species_name := tr(ambient_profile.name_key) if ambient_profile != null else str(ambient_candidate.get("species_id", "—"))
+		ambient_lines.append(tr("fishing.debug.boat_ambient_candidate") % [
+			int(ambient_candidate.get("hook_index", -1)) + 1,
+			ambient_species_name,
+			float(ambient_candidate.get("hook_depth_m", 0.0)),
+			float(ambient_candidate.get("ecological_weight", 0.0)),
+			str(ambient_candidate.get("habitat_region", "—")),
+		])
+	if ambient_lines.size() == 1:
+		ambient_lines.append(tr("fishing.debug.boat_ambient_no_candidates"))
+	var fight_snapshot: Dictionary = _boat_casting_system.get_fight_snapshot(true)
+	if bool(fight_snapshot.get("session_active", false)) or int(fight_snapshot.get("participant_count", 0)) > 0 or bool(fight_snapshot.get("snapped", false)):
+		fight_lines.append(tr("fishing.debug.boat_fight_header") % [
+			str(fight_snapshot.get("state_name", "—")),
+			float(fight_snapshot.get("line_length_m", 0.0)),
+			float(fight_snapshot.get("reel_in_rate_mps", 0.0)),
+			float(fight_snapshot.get("line_out_rate_mps", 0.0)),
+			float(fight_snapshot.get("effective_fish_load_n", 0.0)),
+			float(fight_snapshot.get("tension_n", 0.0)),
+			float(fight_snapshot.get("line_break_force_n", 0.0)),
+			float(fight_snapshot.get("tension_ratio", 0.0)) * 100.0,
+			float(fight_snapshot.get("drag_setting", 0.0)) * 100.0,
+			float(fight_snapshot.get("drag_threshold_n", 0.0)),
+			float(fight_snapshot.get("break_danger_seconds", 0.0)),
+			"yes" if bool(fight_snapshot.get("drag_paying_out", false)) else "no",
+			"yes" if bool(fight_snapshot.get("snapped", false)) else "no",
+		])
+		fight_lines.append(tr("fishing.debug.boat_fight_visual") % [
+			float(fight_snapshot.get("rod_visual_target_bend_deg", 0.0)),
+			float(fight_snapshot.get("rod_visual_actual_bend_deg", 0.0)),
+			float(fight_snapshot.get("rod_tip_vibration_deg", 0.0)),
+			float(fight_snapshot.get("rod_burst_impulse_deg", 0.0)),
+			(1.0 - float(fight_snapshot.get("line_visual_slack_ratio", 1.0))) * 100.0,
+		])
+		for participant_variant in fight_snapshot.get("participants", []):
+			var participant: Dictionary = participant_variant
+			fight_lines.append(tr("fishing.debug.boat_fight_participant") % [
+				str(participant.get("catch_id", "")).substr(0, 8),
+				int(participant.get("hook_index", -1)) + 1,
+				str(participant.get("species_id", "—")),
+				float(participant.get("body_length_m", 0.0)),
+				float(participant.get("stamina_ratio", 0.0)) * 100.0,
+				str(participant.get("struggle_state", "—")),
+				float(participant.get("current_pull_n", 0.0)),
+				str(participant.get("swim_direction", Vector3.ZERO)),
+				float(participant.get("mouth_hook_error_m", -1.0)),
+				float(participant.get("hull_clearance_m", -1.0)),
+			])
+			fight_lines.append(tr("fishing.debug.boat_fight_geometry") % [
+				_format_debug_world_position(participant.get("fish_world_position", Vector3.ZERO)),
+				_format_debug_world_position(participant.get("mouth_world_position", Vector3.ZERO)),
+				_format_debug_world_position(participant.get("hook_world_position", Vector3.ZERO)),
+			])
+	else:
+		fight_lines.append(tr("fishing.debug.boat_fight_inactive"))
+	_boat_bite_overview_label.text = "\n".join(overview_lines)
+	_boat_bite_visible_school_label.text = "\n".join(rendered_school_lines)
+	_boat_bite_logic_school_label.text = "\n".join(logic_school_lines)
+	_boat_ambient_diagnostics_label.text = "\n".join(ambient_lines)
+	_boat_fight_diagnostics_label.text = "\n".join(fight_lines)
+
+
+func _set_boat_bite_diagnostics_text(message: String) -> void:
+	for label in [
+		_boat_bite_overview_label,
+		_boat_bite_visible_school_label,
+		_boat_bite_logic_school_label,
+		_boat_ambient_diagnostics_label,
+		_boat_fight_diagnostics_label,
+	]:
+		if label != null:
+			label.text = message
+
+
+func _format_debug_world_position(value: Variant) -> String:
+	if not value is Vector3:
+		return "—"
+	var position: Vector3 = value
+	return "(%.2f, %.2f, %.2f)" % [position.x, position.y, position.z]
 
 
 func _boat_bite_reason_text(reason: String) -> String:
@@ -1028,6 +1413,7 @@ func _append_fish_finder_school_diagnostics(lines: Array, scan: Dictionary) -> v
 func _refresh_controls() -> void:
 	var simulation_active := _rod_system != null and _rod_system.presentation_source == FishingRodSystem.PresentationSource.DEBUG_SIMULATION
 	var has_species := not _selected_simulation_species_id().is_empty()
+	var has_boat_test_species := not _selected_boat_test_species_id().is_empty()
 	var can_simulate := _rod_system != null and _rod_system.can_start_debug_simulation() and has_species
 	if _trolling_start_button != null:
 		_trolling_start_button.disabled = _rod_system != null and (simulation_active or _rod_system.visual_state != FishingRodSystem.VisualState.IDLE)
@@ -1037,7 +1423,9 @@ func _refresh_controls() -> void:
 	if _simulation_start_button != null:
 		_simulation_start_button.disabled = not can_simulate
 	if _boat_test_bite_button != null:
-		_boat_test_bite_button.disabled = simulation_active or _boat_casting_system == null or not has_species
+		_boat_test_bite_button.disabled = simulation_active or _boat_casting_system == null or not has_boat_test_species
+	if _boat_test_species_option != null:
+		_boat_test_species_option.disabled = simulation_active or _boat_test_species_option.item_count == 0 or not has_boat_test_species
 	var rig_snapshot: Dictionary = _boat_casting_system.get_rig_snapshot() if _boat_casting_system != null else {}
 	var sabiki_selected := str(rig_snapshot.get("rig_id", "")) == "sabiki_rig"
 	var sabiki_available := _boat_casting_system != null and _boat_casting_system.is_activity_active() and sabiki_selected

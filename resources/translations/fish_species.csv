@@ -128,7 +128,8 @@ fishing.lure.surface_lure.name,Surface lure,表层拟饵
 fishing.lure.shallow_minnow.name,Shallow minnow,浅潜米诺
 fishing.lure.medium_minnow.name,Medium minnow,中潜米诺
 fishing.debug.tab,Fishing,钓鱼
-fishing.debug.title,Trolling and fish finder diagnostics,拖钓与鱼探仪诊断
+fishing.debug.title,"Fishing systems · boat fishing, trolling and fish finder",钓鱼系统 · 船钓、拖钓与鱼探仪
+fishing.debug.window_drag_title,DEBUG PANEL · DRAG HERE TO MOVE,调试面板 · 按住此处拖动移动
 fishing.debug.seed,Random seed,随机种子
 fishing.debug.start,Start trolling,开始拖钓
 fishing.debug.stop,Stop trolling,停止拖钓
@@ -338,6 +339,20 @@ fishing.ui.state.catch,Catch complete,捕获完成
 fishing.ui.state.simulation_preview,Debug simulation,调试模拟
 fishing.debug.section.real_trolling,Real trolling,真实拖钓
 fishing.debug.section.simulation,Simulated catch · animation debugging,模拟中鱼 · 动画调试
+fishing.debug.section.boat_test_operations,Boat Fishing · Test Operations,船钓 · 测试操作
+fishing.debug.section.boat_school_targeting,Boat Fishing · School Targeting,船钓 · 鱼群定向中鱼
+fishing.debug.section.boat_visible_school_candidates,Schools with rendered fish models,有渲染鱼模型的鱼群
+fishing.debug.section.boat_logic_school_candidates,Logic-only fish schools,仅逻辑数据的鱼群
+fishing.debug.section.boat_ambient_encounter,Boat Fishing · Open-water Encounters,船钓 · 普通海域随机偶遇
+fishing.debug.section.boat_fight_diagnostics,Boat Fishing · Fight Diagnostics,船钓 · 搏鱼诊断
+fishing.debug.section.trolling_simulation,Trolling Catch Presentation Simulation,拖钓中鱼演出模拟
+fishing.debug.section.encounter_advanced,Advanced Encounter Tools,高级钓鱼事件工具
+fishing.debug.boat_visual_school_note,Grouped by whether fish render instances exist, not by current camera visibility.,按是否存在鱼类渲染实例分类，不按当前摄像机是否看见判断。
+fishing.debug.boat_bite_no_rendered_schools,No renderer-backed school candidates at this hook position.,当前钩位没有带渲染实例的候选鱼群。
+fishing.debug.boat_bite_no_logic_schools,No logic-only school candidates at this hook position.,当前钩位没有仅逻辑鱼群候选。
+fishing.debug.boat_ambient_no_candidates,No eligible ambient fish candidate at the current hook positions.,当前钩位没有符合条件的普通海域鱼种候选。
+fishing.debug.boat_fight_inactive,No active boat-fishing fight session.,当前没有进行中的船钓搏鱼会话。
+fishing.debug.boat_test_species,Test fish species,测试鱼种
 fishing.debug.boat_test_bite,Spawn Test Fish & Bite,生成测试鱼并咬钩
 fishing.debug.boat_test_started,Test %s is approaching the lure.,测试鱼 %s 正在游向拟饵。
 fishing.debug.boat_test_unavailable,Boat-fishing test is not available in the current state.,当前状态无法执行船钓测试。
@@ -437,10 +452,26 @@ hud.boat_fishing.hint_waiting,"Hold left mouse to reel in · F to pay out · hol
 hud.boat_fishing.state_retrieving,Retrieving,正在收竿
 hud.boat_fishing.state_bite_approach,Fish approaching,鱼正在靠近
 hud.boat_fishing.hint_bite_approach,A fish is approaching the lure; the hook sets only when it reaches it.,鱼正在接近拟饵；接触鱼钩后才会确认中鱼并开始自动收鱼。
-hud.boat_fishing.state_fighting,Fish hooked · automatic retrieval,已中鱼 · 自动收鱼中
-hud.boat_fishing.hint_fighting,The fish is being brought in automatically. O still changes view.,鱼正在自动收回。按 O 仍可切换视角。
+hud.boat_fishing.state_fighting,Fish hooked · fight the fish,已中鱼 · 正在搏鱼
+hud.boat_fishing.hint_fighting,"Hold left mouse to reel. Q lowers drag · R raises drag. O changes view.",按住鼠标左键收线 · Q 降低泄力 · R 提高泄力 · O 切换视角。
 hud.boat_fishing.state_landed,Catch landed,渔获已上船
 hud.boat_fishing.hint_landed,The catch is being recorded.,正在确认渔获。
+hud.boat_fishing.state_landing,Landing fish,正在船边提鱼
+hud.boat_fishing.hint_landing,The fish is being lifted beside the hull.,鱼正在船舷外侧被提起。
+hud.boat_fishing.state_line_snapped,Line snapped,鱼线断了
+hud.boat_fishing.hint_line_snapped,The hooked fish was lost. You can cast again shortly.,鱼已脱离并失去本次渔获，稍后可以重新抛竿。
+hud.boat_fishing.line_snapped,The fishing line snapped.,鱼线断了。
+hud.boat_fishing.line_snap_notice,LINE SNAPPED — THE FISH GOT AWAY,鱼线断了，鱼跑了
+hud.boat_fishing.drag_setting_format,Drag %d%%,泄力 %d%%
+hud.boat_fishing.drag_adjustment_up_format,DRAG ↑ %d%%,提高泄力 ↑ %d%%
+hud.boat_fishing.drag_adjustment_down_format,DRAG ↓ %d%%,降低泄力 ↓ %d%%
+hud.boat_fishing.fight_line_out,Fish pulling line,鱼正在拉线
+hud.boat_fishing.fight_line_reeling,Reeling under load,受力收线中
+hud.boat_fishing.fight_line_held,Line holding,鱼线暂时稳定
+fishing.debug.boat_fight_header,"Fight %s · line %.2fm · reel %.2fm/s · out %.2fm/s · fish %.1fN · tension %.1f/%.1fN (%.0f%%) · drag %.0f%%/%.1fN · danger %.2fs · payout %s · snapped %s","搏鱼 %s · 线 %.2fm · 收 %.2fm/s · 放 %.2fm/s · 鱼力 %.1fN · 张力 %.1f/%.1fN (%.0f%%) · 泄力 %.0f%%/%.1fN · 危险 %.2fs · 泄线 %s · 断线 %s"
+fishing.debug.boat_fight_visual,"Rod bend target %.1f° / actual %.1f° · tip vibration %.1f° · burst %.1f° · line visual tension %.0f%%","鱼竿弯曲目标 %.1f° / 实际 %.1f° · 竿尖振动 %.1f° · 爆发冲击 %.1f° · 鱼线视觉张紧 %.0f%%"
+fishing.debug.boat_fight_participant,"%s H%d %s · %.2fm · stamina %.0f%% · %s · pull %.1fN · swim %s · mouth error %.4fm · hull %.3fm","%s H%d %s · %.2fm · 体力 %.0f%% · %s · 拉力 %.1fN · 游向 %s · 嘴钩误差 %.4fm · 船体间距 %.3fm"
+fishing.debug.boat_fight_geometry,"fish %s · mouth %s · hook %s","鱼身 %s · 鱼嘴 %s · 鱼钩 %s"
 hud.boat_fishing.hint_retrieving,The line and lure are being recovered.,正在收回鱼线和鱼饵。
 hud.boat_fishing.retrieve,Retrieve,收竿
 hud.boat_fishing.reel,Hold to reel,按住收线
@@ -836,7 +867,7 @@ Independent sail trim · AUTO sail trim · manual helm","船长 %.1f 米 · 吃�
 主帆 %.2f 平方米 + 前帆 %.2f 平方米
 主帆与前帆独立操控 · 支持自动操帆与手动操舵"
 hud.boat_fishing.state_sabiki_hooked_waiting,Sabiki has fish · keep fishing,串钩已有鱼 · 可继续等待
-hud.boat_fishing.hint_sabiki_hooked_waiting,"Hold left mouse to adjust line. Retrieve Rig brings all hooked fish in; empty hooks keep fishing.",按住鼠标左键可继续收线调整。点击“收获串钩”统一收鱼；空钩会继续等待。
+hud.boat_fishing.hint_sabiki_hooked_waiting,"Hold left mouse to reel the rig. Empty hooks keep fishing until the rig reaches the boat.",按住鼠标左键收线。串钩到达船边前，空钩会继续等待咬钩。
 hud.boat_fishing.hooked_count,%d/%d fish hooked,%d/%d 条鱼已挂钩
 hud.boat_fishing.batch_caught_format,"Caught %d Herring · total %.1f kg",成功收获 %d 条鲱鱼 · 合计 %.1f 千克
 hud.boat_fishing.retrieve_rig,Retrieve Rig,收获串钩
@@ -865,7 +896,7 @@ fishing.debug.boat_bite_hook_row,Hook %d · depth %.2f m · %s,钩位 %d · 深�
 fishing.debug.boat_bite_school_row,"Hook %d · %s / %s · pop %d · reserved %d · horizontal %.1f m × %.2f · target/effective depth %.1f/%.1f m · bait delta %.1f m","钩位 %d · %s / %s · 数量 %d · 预留 %d · 水平 %.1f 米 × %.2f · 目标/有效深度 %.1f/%.1f 米 · 鱼饵深度差 %.1f 米"
 fishing.debug.boat_bite_rate_row,"depth ×%.2f · population ×%.2f · action ×%.2f · surface ×%.2f · base %.1f/h → final %.1f/h · %s","水层 ×%.2f · 数量 ×%.2f · 动作 ×%.2f · 表层 ×%.2f · 基础 %.1f 次/小时 → 最终 %.1f 次/小时 · %s"
 fishing.debug.boat_bite_visual_depth,Visible school depth %.2f m · difference %.2f m,可见鱼群代表深度 %.2f 米 · 差值 %.2f 米
-fishing.debug.boat_bite_no_school,No school was found within the F3 diagnostic radius (50 m is the active bite range).,F3 诊断范围内没有鱼群（实际中鱼范围仍为 50 米）。
+fishing.debug.boat_bite_no_school,No targeted school candidate; ambient eligibility is shown below,没有定向鱼群候选；普通海域候选见下方
 fishing.debug.boat_bite_reason.no_nearby_schools,No fish-school candidate nearby,附近没有鱼群候选
 fishing.debug.boat_bite_reason.method_or_rig_mismatch,Rig or fishing-method mismatch,钓组或钓法不兼容
 fishing.debug.boat_bite_reason.empty_school,No unreserved fish remain,没有未预留的鱼
@@ -882,3 +913,38 @@ fishing.debug.boat_bite_hook_state.empty,empty,空钩
 fishing.debug.boat_bite_hook_state.approaching,approaching,接近中
 fishing.debug.boat_bite_hook_state.reserved,reserved,已预留
 fishing.debug.boat_bite_hook_state.hooked,hooked,已挂鱼
+fishing.debug.boat_bite_summary_targeted,"%s · %s · line %.1f m · relative speed %.2f m/s · empty hooks %d · targeted schools %d · %s","%s · %s · 放线 %.1f 米 · 相对速度 %.2f 米/秒 · 空钩 %d · 定向鱼群 %d · %s"
+fishing.debug.boat_bite_mode_line,Trigger mode: %s,触发模式：%s
+fishing.debug.boat_bite_mode.school_targeted,School targeted,鱼群定向
+fishing.debug.boat_bite_mode.ambient_encounter,Ambient encounter,鱼群外偶遇
+fishing.debug.boat_bite_mode.mixed,Mixed by hook,各钩模式不同
+fishing.debug.boat_bite_mode.none,None eligible,当前无有效机会
+fishing.debug.boat_bite_zone.core,core,核心区
+fishing.debug.boat_bite_zone.edge,edge,边缘区
+fishing.debug.boat_bite_zone.outside,outside,范围外
+fishing.debug.boat_bite_phase.target_reaction,reacting,反应中
+fishing.debug.boat_bite_phase.ambient_waiting,ambient hazard,偶遇概率累计中
+fishing.debug.boat_bite_phase.triggered,triggered,已触发
+fishing.debug.boat_bite_phase.ineligible,ineligible,条件不满足
+fishing.debug.boat_bite_phase.occupied,occupied,钩位已占用
+fishing.debug.boat_bite_phase.inactive,inactive,未运行
+fishing.debug.boat_bite_phase.target_boundary_hold,boundary hold,边界保持中
+fishing.debug.boat_bite_trigger_row,"Hook %d · %s · school %s · %s · H %.1f m / V %.1f m / 3D %.2f · available %d · depth %s · action %s · %s · %.1f s · %s","钩位 %d · %s · 鱼群 %s · %s · 水平 %.1f 米 / 垂直 %.1f 米 / 三维 %.2f · 可用 %d 条 · 水层 %s · 动作 %s · %s · %.1f 秒 · %s"
+fishing.debug.boat_bite_school_geometry,"target %s · ambient %s · school extents H %.1f/V %.1f m · normalized 3D %.2f · available %d · %s","定向 %s · 偶遇 %s · 鱼群范围 H %.1f/V %.1f 米 · 归一化三维距离 %.2f · 可用 %d 条 · %s"
+fishing.debug.boat_bite_reason.action_requirement_not_met,Single Jig needs a little lure movement,单钩亮片需要轻微运动
+fishing.debug.boat_bite_reason.outside_school_volume,Hook is outside the school's 3D activity area,鱼钩在鱼群三维活动范围外
+fishing.debug.boat_bite_reason.inside_school_target_zone,Inside school; targeted trigger has priority,处于鱼群定向范围内
+fishing.debug.boat_bite_reason.outside_horizontal_range,Outside the 50 m horizontal range,超出 50 米水平范围
+fishing.debug.boat_bite_reason.target_reaction_waiting,Valid school target; fish response is progressing,鱼群条件有效；鱼正在反应
+fishing.debug.boat_bite_reason.ambient_random_waiting,No targeted school; low-probability encounter is accumulating,没有定向鱼群；正在累计低概率偶遇
+fishing.debug.boat_bite_reason.target_boundary_hold,Brief boundary hysteresis is keeping the same approach active,边界短暂波动；保持当前接近事件
+fishing.debug.boat_bite_reason.target_reaction_complete,School-targeted reaction completed,鱼群定向反应完成
+fishing.debug.boat_bite_reason.ambient_encounter_triggered,Ambient encounter selected from a real school,已从真实鱼群触发偶遇
+fishing.debug.boat_bite_reason.reservation_failed,Authority could not reserve a fish,Authority 未能预约鱼
+fishing.debug.boat_bite_reason.encounter_busy,Another encounter currently owns the shared system,共享系统当前由其他钓鱼事件占用
+fishing.debug.boat_ambient_session,Session %s · cast %s · ambient hazard %.3f / threshold %.3f,会话 %s · 本次抛投 %s · 普通海域 hazard %.3f / 阈值 %.3f
+fishing.debug.boat_ambient_first_drop,First entry %s · initial search %.1f m · schools %d · IDs %s,首次入水 %s · 初始搜索 %.1f 米 · 鱼群 %d 个 · ID %s
+fishing.debug.boat_ambient_rate_state,Ambient %.2f events/real hour · mean %.0f s · eligible species %d · %s,普通海域 %.2f 次/现实小时 · 平均 %.0f 秒 · 合格鱼种 %d · %s
+fishing.debug.boat_ambient_authority,Authority request accepted %s · %s · fish %s,Authority 请求接受 %s · %s · 鱼 %s
+fishing.debug.boat_ambient_fish,Ambient fish %s · %s · %.2f m · hook %d · %s,临时自然鱼 %s · %s · %.2f 米 · 钩位 %d · %s
+fishing.debug.boat_ambient_candidate,Ambient candidate · hook %d · %s · depth %.1f m · ecology weight %.4f · habitat %s,普通海域候选 · 钩位 %d · %s · 深度 %.1f 米 · 生态权重 %.4f · 栖息地 %s

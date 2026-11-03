@@ -9,7 +9,7 @@ signal feedback_requested(message_key: String)
 signal charge_progress_changed(progress: float, visible: bool)
 signal interaction_updated(snapshot: Dictionary)
 
-enum CastState { READY, CHARGING, CASTING, WAITING, SABIKI_HOOKED_WAITING, RETRIEVING, BITE_APPROACH, FIGHTING, CATCH_PRESENTATION }
+enum CastState { READY, CHARGING, CASTING, WAITING, SABIKI_HOOKED_WAITING, RETRIEVING, BITE_APPROACH, FIGHTING, CATCH_PRESENTATION, LANDING, LINE_BROKEN }
 
 const ROD_BEND_SHADER := preload("res://shaders/boat_fishing_rod_bend.gdshader")
 const SINGLE_JIG_PROFILE: BoatFishingRigProfile = preload("res://resources/boat_fishing/single_jig.tres")
@@ -27,12 +27,16 @@ const AIRBORNE_BAIT_DAMPING_PER_SECOND := 1.65
 const AIRBORNE_BAIT_SURFACE_CLEARANCE_M := 0.025
 const AIRBORNE_LINE_VISUAL_SAG_M := 0.18
 const SEABED_CLEARANCE_M := 0.22
-const LINE_RADIUS_M := FishingRodRig.LINE_RADIUS_M
+# Boat-line visual radius is presentation-only and kept slightly thicker than
+# the trolling rig's default so it remains readable against both water tones.
+const LINE_RADIUS_M := 0.0015
 const LINE_SIDES := 5
 const LINE_SEGMENTS := 8
 const SPOON_LENGTH_M := 0.085
 const SPOON_WIDTH_M := 0.024
 const SPOON_LINE_EYE_Y_M := 0.050
+const SPOON_HOOK_TIP_Y_M := -(SPOON_LENGTH_M * 0.5) - 0.00402
+const SABIKI_HOOK_TIP_BRANCH_OFFSET := Vector3(0.00864, -0.00432, 0.0)
 const SABIKI_HOOK_TUBE_RADIUS_M := 0.0022
 const CHARGE_LIFT_TIME_SECONDS := 0.4
 const CHARGE_MIDPOINT_SECONDS := 1.5
@@ -50,6 +54,16 @@ const MAX_AUTOMATIC_LINE_BURST_EXTRA_M := 5.0
 const DEFAULT_CAST_MAX_DISTANCE_FROM_GUNWALE_M := 0.72
 const DEFAULT_CAST_MIN_OUTWARD_ALIGNMENT := 0.55
 const MINIMUM_MANUAL_RETRIEVAL_LINE_M := 0.08
+const FIGHT_PRESENTATION_DURATION_SECONDS := 1.25
+const FIGHT_LANDING_DURATION_SECONDS := 1.10
+const FIGHT_LANDING_FISH_STAGGER_SECONDS := 0.12
+const FIGHT_LANDING_FISH_RISE_SECONDS := 0.72
+const FIGHT_LANDING_RISE_METERS := 0.62
+const FIGHT_LANDING_RISE_SPEED_MPS := 0.85
+const FIGHT_HULL_SAFETY_MARGIN_M := 0.28
+const FIGHT_LINE_BROKEN_DURATION_SECONDS := 0.9
+const FIGHT_DEFAULT_DRAG_ADJUST_RATE_PER_SECOND := 0.35
+const BOAT_FIGHT_LINE_PROFILE: BoatFishingLineProfile = preload("res://resources/boat_fishing/line_profiles/standard_boat_fishing_line.tres")
 
 @export_node_path("Node3D") var onboard_controller_path := NodePath("../MotionRoot/VisualRoot/OnboardActivityController")
 @export_node_path("Node") var boat_controller_path := NodePath("../MotionRoot")
@@ -66,6 +80,7 @@ const MINIMUM_MANUAL_RETRIEVAL_LINE_M := 0.08
 @export_range(0.3, 1.2, 0.01) var cast_recovery_duration := 0.65
 @export_range(45.0, 80.0, 1.0) var cast_max_back_angle_deg := 65.0
 @export_range(12.0, 42.0, 1.0) var cast_full_bend_angle_deg := 30.0
+@export_range(0.05, 1.0, 0.05) var fight_drag_adjustment_per_second := FIGHT_DEFAULT_DRAG_ADJUST_RATE_PER_SECOND
 
 @export_category("Manual handling")
 @export_range(0.5, 2.5, 0.05) var manual_reel_speed_mps := 1.25
@@ -73,6 +88,20 @@ const MINIMUM_MANUAL_RETRIEVAL_LINE_M := 0.08
 @export_range(0.1, 1.0, 0.05) var line_tension_slack_m := 0.45
 @export_range(1.0, 10.0, 0.25) var line_pull_response := 5.0
 @export_range(4.0, 18.0, 0.5) var rod_bend_at_full_tension_deg := 10.0
+@export_category("Boat fight presentation")
+@export_range(2.0, 80.0, 0.5) var rod_visual_reference_load_n := 18.0
+@export_range(0.25, 1.5, 0.05) var rod_visual_response_exponent := 0.6
+@export_range(20.0, 36.0, 1.0) var rod_visual_max_bend_deg := 34.0
+@export_range(0.0, 20.0, 0.5) var rod_visual_burst_impulse_deg := 11.0
+@export_range(0.05, 1.0, 0.01) var rod_visual_burst_decay_seconds := 0.28
+@export_range(0.0, 5.0, 0.1) var rod_visual_release_recoil_deg := 3.5
+@export_range(0.05, 1.0, 0.01) var rod_visual_release_decay_seconds := 0.32
+@export_range(0.0, 4.0, 0.1) var rod_visual_micro_vibration_deg := 0.9
+@export_range(0.0, 5.0, 0.1) var rod_visual_burst_vibration_deg := 2.0
+@export_range(1.0, 18.0, 0.5) var rod_visual_vibration_frequency_hz := 7.5
+@export_range(1.0, 30.0, 0.5) var line_visual_reference_load_n := 8.0
+@export_range(0.0, 0.04, 0.001) var line_visual_vibration_m := 0.012
+@export_range(1.0, 18.0, 0.5) var line_visual_vibration_frequency_hz := 8.5
 @export_range(0.08, 0.5, 0.01) var rod_aim_degrees_per_mouse_pixel := 0.22
 @export_range(0.05, 0.35, 0.01) var terminal_tackle_recovery_margin_m := 0.16
 @export_range(0.04, 0.2, 0.01) var cast_aim_preview_interval_seconds := 0.08
@@ -105,6 +134,7 @@ var _bait_flight_duration := 0.0
 var _bait_flight_started := false
 var _bait_has_landed := false
 var _cast_tackle_entry_complete := false
+var _cast_first_entry_recorded := false
 var _bait_airborne_retrieval := false
 var _airborne_retrieval_elapsed := 0.0
 var _sabiki_retrieval_taut := false
@@ -128,6 +158,7 @@ var _rod_aim_active := false
 var _rod_aim_yaw_deg := 0.0
 var _rod_aim_pitch_deg := 0.0
 var _rod_tension := 0.0
+var _rod_bend_direction_local := Vector2(1.0, 0.0)
 var _previous_line_connection_world := Vector3.ZERO
 var _has_previous_line_connection := false
 var _previous_boat_world := Vector3.ZERO
@@ -148,6 +179,7 @@ var _rod_line_guides: Array[MeshInstance3D] = []
 var _reel_visual_total_rotation_rad := 0.0
 var _last_reel_line_delta_m := 0.0
 var _requested_fishing_audio_loops := {"line_out": false, "drag": false, "reel_in": false}
+var _requested_fishing_audio_intensities := {"line_out": 0.0, "drag": 0.0, "reel_in": 0.0}
 var _fishing_audio_event_counts := {"splash": 0, "catch_success": 0}
 var _played_success_audio_batches: Dictionary = {}
 var _success_audio_batch_order: Array[String] = []
@@ -191,9 +223,43 @@ var _fight_line_burst_offset_m := 0.0
 var _fight_radial_direction := Vector3.FORWARD
 var _active_catch_id := ""
 var _active_catch_species_id := ""
+var _active_catch_body_length_m := 0.0
 var _bite_visual_scale := 1.0
 var _catch_result_received := false
 var _catch_presentation_elapsed := 0.0
+var _fight_solver := BoatFishingFightSolver.new()
+var _fight_session_active := false
+var _fight_session_sequence := 0
+var _active_fight_session_id := 0
+var _fight_last_real_tick_usec := -1
+var _fight_drag_setting := BOAT_FIGHT_LINE_PROFILE.default_drag_setting
+var _fight_participants_by_catch_id: Dictionary = {}
+var _fight_participant_order: Array[String] = []
+var _fight_fish_visuals_by_catch_id: Dictionary = {}
+var _fight_fish_visual_elapsed_by_catch_id: Dictionary = {}
+var _fight_fish_heading_by_catch_id: Dictionary = {}
+var _fight_previous_struggle_state_by_catch_id: Dictionary = {}
+var _fight_sabiki_branch_directions_local: Dictionary = {}
+var _fight_snapshot: Dictionary = {}
+var _fight_landing_elapsed := 0.0
+var _fight_landing_surface_crossed: Dictionary = {}
+var _line_broken_elapsed := 0.0
+var _fight_terminal_motion_this_step := false
+var _fight_landing_start_bait_world := Vector3.ZERO
+var _fight_landing_raise_m := FIGHT_LANDING_RISE_METERS
+var _fight_rod_burst_impulse_rad := 0.0
+var _fight_rod_target_bend_deg := 0.0
+var _fight_rod_micro_vibration_deg := 0.0
+var _fight_rod_recoil_amplitude_deg := 0.0
+var _fight_rod_recoil_elapsed := 0.0
+var _fight_visual_elapsed := 0.0
+var _fight_previous_base_bend_deg := 0.0
+var _fight_drag_feedback_remaining := 0.0
+var _fight_drag_feedback_direction := 0
+var _fight_max_mouth_hook_error_m := 0.0
+var _fight_rod_release_start_deg := 0.0
+var _fight_rod_release_elapsed := 0.0
+var _fight_rod_release_active := false
 
 
 func _ready() -> void:
@@ -214,13 +280,31 @@ func _ready() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_WM_WINDOW_FOCUS_OUT or what == NOTIFICATION_APPLICATION_FOCUS_OUT:
 		release_held_controls_for_ui()
+		_fight_last_real_tick_usec = Time.get_ticks_usec()
+	elif what == NOTIFICATION_UNPAUSED:
+		# Paused wall-clock time is not part of an active fight simulation step.
+		_fight_last_real_tick_usec = Time.get_ticks_usec()
+
+
+func _exit_tree() -> void:
+	_clear_boat_fishing_audio_loops()
+	_reset_boat_fight_session(true)
+	if is_instance_valid(_encounter):
+		if _encounter.pending_catch != null and _encounter.pending_catch.fishing_method == "boat_fishing":
+			_encounter.cancel_boat_fishing_catch("boat_fishing_scene_unloaded")
+		elif not _encounter.get_sabiki_hook_catches().is_empty():
+			_encounter.cancel_sabiki_catches("boat_fishing_scene_unloaded")
+		_encounter.end_boat_fishing_session("boat_fishing_scene_unloaded")
 
 
 func begin_activity() -> bool:
 	if _onboard == null or not _onboard.is_activity_active() or _activity_active:
 		return _activity_active
 	_activity_active = true
+	_reset_boat_fight_session(true)
 	_resolve_encounter()
+	if _encounter != null:
+		_encounter.begin_boat_fishing_session()
 	_state = CastState.READY
 	_current_rig = SINGLE_JIG_PROFILE
 	_reset_sabiki_hook_states()
@@ -243,10 +327,13 @@ func end_activity() -> void:
 	if not _activity_active:
 		return
 	cancel_charge_immediately()
+	_reset_boat_fight_session(true)
 	if _encounter != null and _encounter.pending_catch != null and _encounter.pending_catch.fishing_method == "boat_fishing":
 		_encounter.cancel_boat_fishing_catch("boat_fishing_ended")
 	if _encounter != null and not _encounter.get_sabiki_hook_catches().is_empty():
 		_encounter.cancel_sabiki_catches("boat_fishing_ended")
+	if _encounter != null:
+		_encounter.end_boat_fishing_session("boat_fishing_ended")
 	clear_cast()
 	_activity_active = false
 	_manual_reeling = false
@@ -265,6 +352,7 @@ func end_activity() -> void:
 
 
 func clear_cast() -> void:
+	_reset_boat_fight_session(true)
 	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
 		_bite_fish_visual.queue_free()
 	_bite_fish_visual = null
@@ -286,6 +374,7 @@ func clear_cast() -> void:
 	_bait_flight_started = false
 	_bait_has_landed = false
 	_cast_tackle_entry_complete = false
+	_cast_first_entry_recorded = false
 	_bait_airborne_retrieval = false
 	_airborne_retrieval_elapsed = 0.0
 	_sabiki_retrieval_taut = false
@@ -317,7 +406,7 @@ func clear_cast() -> void:
 	_natural_bite_pending_real_delta = 0.0
 	_last_natural_bite_diagnostics.clear()
 	if _encounter != null:
-		_encounter.reset_boat_fishing_hazard()
+		_encounter.reset_boat_fishing_trigger_state()
 	_rod_aim_yaw_deg = 0.0
 	_rod_aim_pitch_deg = 0.0
 	_has_previous_line_connection = false
@@ -382,6 +471,7 @@ func release_charge() -> bool:
 	_bait_flight_started = false
 	_bait_has_landed = false
 	_cast_tackle_entry_complete = false
+	_cast_first_entry_recorded = false
 	_bait_airborne_retrieval = false
 	_airborne_retrieval_elapsed = 0.0
 	_sabiki_retrieval_taut = false
@@ -447,7 +537,7 @@ func set_manual_reeling(active: bool, from_ui: bool = false) -> bool:
 		_manual_reeling_from_ui = active
 	else:
 		_manual_reeling_input_held = active
-	if active and (not _activity_active or not _is_waiting_line_state() or _automatic_control_owned or _is_menu_open()):
+	if active and (not _activity_active or not _is_manual_reel_state() or _automatic_control_owned or _is_menu_open()):
 		if from_ui:
 			_manual_reeling_from_ui = false
 		else:
@@ -503,8 +593,10 @@ func get_natural_bite_diagnostics(include_unavailable_for_diagnostics: bool = fa
 	result["line_length_m"] = _line_paid_out_length_m
 	result["activity_active"] = _activity_active
 	result["rig_type"] = _current_rig.rig_type if _current_rig != null else -1
+	if _encounter != null:
+		result["boat_fishing_session"] = _encounter.get_boat_fishing_session_snapshot()
 	if _current_rig != null and _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
-		var positions := get_hook_world_positions()
+		var positions := get_hook_attachment_world_positions()
 		var hook_depths: Array[Dictionary] = []
 		var empty_count := 0
 		for hook_index in range(_current_rig.hook_count):
@@ -523,31 +615,94 @@ func get_natural_bite_diagnostics(include_unavailable_for_diagnostics: bool = fa
 	if include_unavailable_for_diagnostics and _activity_active and _bait_has_landed and _is_waiting_line_state() and _encounter != null and _current_rig != null:
 		var relative_velocity := _bait_velocity_world - _boat_velocity_estimate_world * BAIT_WATER_DRAG_FOLLOW
 		var rows: Array[Dictionary] = []
-		var total_rate := 0.0
+		var ambient_rows: Array[Dictionary] = []
+		var ambient_evaluations: Array[Dictionary] = []
+		var ambient_rate := 0.0
+		var trigger_states: Array[Dictionary] = []
+		var targeted_count := 0
 		if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
-			var positions := get_hook_world_positions()
+			var positions := get_hook_attachment_world_positions()
 			for hook_index in range(mini(_current_rig.hook_count, positions.size())):
 				if hook_index >= _sabiki_hook_states.size() or str(_sabiki_hook_states[hook_index].get("status", "empty")) != "empty":
+					if _encounter != null:
+						_encounter.clear_boat_fishing_hook_trigger_state(hook_index)
+					trigger_states.append({"hook_index": hook_index, "trigger_mode": "NONE", "phase": "occupied", "reason": "hook_not_empty"})
 					continue
 				var depth := _depth_below_surface_at(positions[hook_index])
-				var evaluated := _encounter.evaluate_boat_fishing_candidates(positions[hook_index], depth, relative_velocity.length(), _current_rig, true)
-				total_rate += float(evaluated.get("total_event_rate_per_real_hour", 0.0))
+				var evaluated := _encounter.evaluate_boat_fishing_candidates(positions[hook_index], depth, relative_velocity.length(), _current_rig, true, hook_index)
+				ambient_rate = maxf(ambient_rate, float(evaluated.get("ambient_event_rate_per_real_hour", 0.0)))
+				ambient_evaluations.append(evaluated)
+				targeted_count += int(evaluated.get("targeted_candidate_count", 0))
+				var trigger_state := _encounter.get_boat_fishing_hook_trigger_debug(hook_index)
+				trigger_state["hook_index"] = hook_index
+				trigger_states.append(trigger_state)
 				for candidate_variant in evaluated.get("candidate_schools", []):
 					var row: Dictionary = candidate_variant.duplicate(true)
 					row["hook_index"] = hook_index
 					row["hook_depth_m"] = depth
 					rows.append(row)
+				for candidate_variant in evaluated.get("ambient_candidates", []):
+					var row: Dictionary = candidate_variant.duplicate(true)
+					row["ambient_eligible"] = true
+					ambient_rows.append(row)
 		else:
-			var depth := _get_bait_depth_below_surface_m()
-			var evaluated := _encounter.evaluate_boat_fishing_candidates(_bait_world, depth, relative_velocity.length(), _current_rig, true)
-			total_rate = float(evaluated.get("total_event_rate_per_real_hour", 0.0))
+			var hook_position := _get_single_jig_hook_attachment_world()
+			var depth := _depth_below_surface_at(hook_position)
+			var evaluated := _encounter.evaluate_boat_fishing_candidates(hook_position, depth, relative_velocity.length(), _current_rig, true, 0)
+			ambient_rate = float(evaluated.get("ambient_event_rate_per_real_hour", 0.0))
+			ambient_evaluations.append(evaluated)
+			targeted_count = int(evaluated.get("targeted_candidate_count", 0))
 			rows.assign(evaluated.get("candidate_schools", []))
+			for candidate_variant in evaluated.get("ambient_candidates", []):
+				var row: Dictionary = candidate_variant.duplicate(true)
+				row["ambient_eligible"] = true
+				ambient_rows.append(row)
+			var trigger_state := _encounter.get_boat_fishing_hook_trigger_debug(0)
+			trigger_state["hook_index"] = 0
+			trigger_states.append(trigger_state)
+		result["ambient_candidates"] = ambient_rows
 		result["candidate_schools"] = rows
 		result["candidate_school_count"] = rows.size()
-		result["total_event_rate_per_real_hour"] = total_rate
-		result["average_first_bite_seconds"] = 3600.0 / total_rate if total_rate > 0.0 else INF
-		result["reason"] = "random_not_triggered" if total_rate > 0.0 else _natural_bite_rejection_reason(rows)
+		result["total_event_rate_per_real_hour"] = ambient_rate
+		result["ambient_event_rate_per_real_hour"] = ambient_rate
+		result["average_first_bite_seconds"] = 3600.0 / ambient_rate if ambient_rate > 0.0 else INF
+		result["hook_trigger_states"] = trigger_states
+		result["trigger_mode"] = _aggregate_boat_trigger_modes(trigger_states)
+		if result["trigger_mode"] == "NONE" and ambient_rate > 0.0:
+			result["trigger_mode"] = "AMBIENT_ENCOUNTER"
+		result["targeted_candidate_count"] = targeted_count
+		result["target_reaction_remaining_seconds"] = _minimum_target_reaction_remaining(trigger_states)
+		result["reason"] = _preferred_boat_trigger_reason(trigger_states, ambient_rate, rows)
 	return result
+
+
+func _aggregate_boat_trigger_modes(states: Array[Dictionary]) -> String:
+	var has_targeted := false
+	var has_ambient := false
+	for trigger_state in states:
+		has_targeted = has_targeted or str(trigger_state.get("trigger_mode", "")) == "SCHOOL_TARGETED"
+		has_ambient = has_ambient or str(trigger_state.get("trigger_mode", "")) == "AMBIENT_ENCOUNTER"
+	if has_targeted and has_ambient:
+		return "MIXED"
+	if has_targeted:
+		return "SCHOOL_TARGETED"
+	if has_ambient:
+		return "AMBIENT_ENCOUNTER"
+	return "NONE"
+
+
+func _preferred_boat_trigger_reason(states: Array[Dictionary], ambient_rate: float, rows: Array[Dictionary]) -> String:
+	for trigger_state in states:
+		var mode := str(trigger_state.get("trigger_mode", ""))
+		var phase := str(trigger_state.get("phase", ""))
+		if mode == "SCHOOL_TARGETED" and phase in ["target_reaction", "triggered", "target_boundary_hold"]:
+			return str(trigger_state.get("reason", "target_reaction_waiting"))
+	for trigger_state in states:
+		if str(trigger_state.get("phase", "")) == "triggered":
+			return str(trigger_state.get("reason", "bite_started"))
+	if ambient_rate > 0.0:
+		return "random_not_triggered"
+	return _natural_bite_rejection_reason(rows)
 
 
 func get_sabiki_hooked_count() -> int:
@@ -560,7 +715,7 @@ func get_sabiki_hooked_count() -> int:
 
 func get_sabiki_hook_states_snapshot() -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
-	var positions := get_hook_world_positions()
+	var positions := get_hook_attachment_world_positions()
 	for hook_index in range(_current_rig.hook_count):
 		var hook_state: Dictionary = _sabiki_hook_states[hook_index] if hook_index < _sabiki_hook_states.size() else {}
 		var position: Vector3 = positions[hook_index] if hook_index < positions.size() else Vector3.ZERO
@@ -577,55 +732,12 @@ func get_sabiki_hook_states_snapshot() -> Array[Dictionary]:
 
 
 func request_sabiki_retrieval() -> bool:
-	if not _activity_active or _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI or not _is_waiting_line_state() or _automatic_control_owned:
+	# Compatibility seam for any old UI caller: retrieval is now the same held
+	# manual-reel input used by the left mouse button. It does not start an
+	# automatic batch timeline or settle catches.
+	if _current_rig == null or _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI or get_sabiki_hooked_count() <= 0:
 		return false
-	if get_sabiki_hooked_count() <= 0 or _encounter == null:
-		return false
-	_cancel_sabiki_approach_reservations()
-	var catches := _encounter.get_sabiki_hook_catches()
-	var representative: FishingPendingCatch
-	for catch_record in catches:
-		if catch_record.hook_confirmed:
-			representative = catch_record
-			break
-	if representative == null:
-		return false
-	_sabiki_batch_retrieval_active = true
-	_sabiki_batch_catch_count = get_sabiki_hooked_count()
-	_active_catch_id = representative.catch_id
-	_active_catch_species_id = representative.species_id
-	_bite_debug_spawned = representative.debug_spawned
-	_bite_candidate.clear()
-	_fight_start_bait_world = _bait_world
-	_fight_start_bait_depth_m = _get_bait_depth_below_surface_m()
-	_fight_line_burst_offset_m = 0.0
-	var horizontal := Vector3(_bait_world.x - _get_rod_tip_world().x, 0.0, _bait_world.z - _get_rod_tip_world().z)
-	_fight_start_horizontal_distance_m = horizontal.length()
-	_fight_radial_direction = horizontal.normalized() if horizontal.length_squared() > 0.001 else -_boat_controller.global_basis.z.normalized() if _boat_controller != null else Vector3.FORWARD
-	_rod_tension = clampf(0.55 + 0.06 * float(_sabiki_batch_catch_count), 0.0, 0.9)
-	_rod_bend_angle_deg = rod_bend_at_full_tension_deg * _rod_tension
-	_set_rod_bend_angle(deg_to_rad(_rod_bend_angle_deg))
-	_sabiki_retrieval_taut = true
-	set_automatic_control_owned(true)
-	_manual_reeling = false
-	_manual_reeling_from_ui = false
-	_manual_reeling_input_held = false
-	_manual_line_release_held = false
-	_manual_line_releasing = false
-	_rod_aim_active = false
-	_set_boat_fishing_audio_loop("line_out", false)
-	_set_boat_fishing_audio_loop("reel_in", false)
-	_set_boat_fishing_audio_loop("drag", false)
-	_set_state(CastState.FIGHTING)
-	var pending := _encounter.begin_sabiki_batch_retrieval()
-	if pending == null:
-		_sabiki_batch_retrieval_active = false
-		set_automatic_control_owned(false)
-		_set_state(CastState.SABIKI_HOOKED_WAITING)
-		return false
-	_active_catch_id = pending.catch_id
-	_active_catch_species_id = pending.species_id
-	return true
+	return set_manual_reeling(true, true)
 
 
 func debug_spawn_sabiki_fish(hook_index: int = -1) -> Dictionary:
@@ -647,7 +759,7 @@ func debug_spawn_sabiki_fish(hook_index: int = -1) -> Dictionary:
 	var profile := _fish_manager.get_species_profile("herring") if _fish_manager != null else null
 	if profile == null or not profile.supported_fishing_methods.has("boat_fishing") or not FishingEncounterSystem.rig_matches_profile(profile, _current_rig):
 		return {"accepted": false, "reason": "method_or_rig_mismatch"}
-	var hook_positions := get_hook_world_positions()
+	var hook_positions := get_hook_attachment_world_positions()
 	var hook_position: Vector3 = hook_positions[hook_index] if hook_index < hook_positions.size() else _bait_world
 	var candidate := {
 		"school_id": "",
@@ -684,7 +796,7 @@ func get_hook_depth_range_m() -> Dictionary:
 		return {"valid": false, "shallow_m": 0.0, "deep_m": 0.0}
 	var shallow_depth := INF
 	var deep_depth := 0.0
-	for hook_position in get_hook_world_positions():
+	for hook_position in get_hook_attachment_world_positions():
 		var surface_y := float(_sample_water(hook_position).get("height", hook_position.y))
 		var depth := maxf(0.0, surface_y - hook_position.y)
 		shallow_depth = minf(shallow_depth, depth)
@@ -702,6 +814,37 @@ func get_hook_world_positions() -> Array[Vector3]:
 	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SINGLE_JIG:
 		return [_bait_world]
 	return get_rig_hook_positions(_bait_world, _get_sabiki_up_direction_world())
+
+
+## Actual hook tips are distinct from Sabiki branch roots returned above.
+func get_hook_attachment_world_positions() -> Array[Vector3]:
+	if not is_cast_active():
+		return []
+	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SINGLE_JIG:
+		return [_get_single_jig_hook_attachment_world()]
+	_update_rig_visual_position()
+	var positions: Array[Vector3] = []
+	for hook_index in range(_current_rig.hook_count):
+		positions.append(_get_sabiki_hook_attachment_world_position(hook_index))
+	return positions
+
+
+func _get_single_jig_hook_attachment_world() -> Vector3:
+	return _bait_world + _lure_visual_basis_world * Vector3(0.0, SPOON_HOOK_TIP_Y_M, 0.0)
+
+
+func _get_pending_catch_body_length_m() -> float:
+	return _active_catch_body_length_m
+
+
+func _get_sabiki_hook_attachment_world_position(hook_index: int) -> Vector3:
+	if hook_index < 0 or hook_index >= _sabiki_hook_nodes.size() or _sabiki_rig_root == null:
+		var bases := get_hook_world_positions()
+		return bases[hook_index] if hook_index >= 0 and hook_index < bases.size() else _bait_world
+	var hook_node := _sabiki_hook_nodes[hook_index]
+	var branch_length := _current_rig.branch_length_m
+	var local_hook_tip := Vector3(-branch_length, 0.0, 0.0) + SABIKI_HOOK_TIP_BRANCH_OFFSET
+	return hook_node.global_transform * local_hook_tip
 
 
 func get_rig_hook_positions(sinker_world_position: Vector3, rig_up_direction: Vector3) -> Array[Vector3]:
@@ -817,6 +960,10 @@ func end_rod_aim() -> void:
 
 func on_camera_view_changed(first_person_active: bool) -> void:
 	## Release held controls on O without disturbing the cast itself.
+	if _rod_visual_root != null and is_instance_valid(_rod_visual_root):
+		_rod_visual_root.visible = _activity_active and first_person_active
+		if first_person_active and _state != CastState.CASTING:
+			_update_rod_hand_anchor()
 	if not first_person_active:
 		_manual_reeling = false
 		_manual_reeling_from_ui = false
@@ -835,11 +982,11 @@ func get_casting_state() -> int:
 
 
 func get_casting_state_name() -> String:
-	return ["READY", "CHARGING", "CASTING", "WAITING", "SABIKI_HOOKED_WAITING", "RETRIEVING", "BITE_APPROACH", "FIGHTING", "CATCH_PRESENTATION"][_state]
+	return ["READY", "CHARGING", "CASTING", "WAITING", "SABIKI_HOOKED_WAITING", "RETRIEVING", "BITE_APPROACH", "FIGHTING", "CATCH_PRESENTATION", "LANDING", "LINE_BROKEN"][_state]
 
 
 func is_cast_active() -> bool:
-	return _state in [CastState.CASTING, CastState.WAITING, CastState.SABIKI_HOOKED_WAITING, CastState.RETRIEVING, CastState.BITE_APPROACH, CastState.FIGHTING, CastState.CATCH_PRESENTATION]
+	return _state in [CastState.CASTING, CastState.WAITING, CastState.SABIKI_HOOKED_WAITING, CastState.RETRIEVING, CastState.BITE_APPROACH, CastState.FIGHTING, CastState.CATCH_PRESENTATION, CastState.LANDING]
 
 
 func is_activity_active() -> bool:
@@ -886,10 +1033,14 @@ func get_debug_snapshot() -> Dictionary:
 		"line_tension": _rod_tension,
 		"automatic_control_owned": _automatic_control_owned,
 		"bite_approach_active": _state == CastState.BITE_APPROACH,
-		"catch_in_progress": _state in [CastState.FIGHTING, CastState.CATCH_PRESENTATION],
+		"catch_in_progress": _state in [CastState.SABIKI_HOOKED_WAITING, CastState.FIGHTING, CastState.LANDING, CastState.CATCH_PRESENTATION],
 		"catch_result_received": _catch_result_received,
 		"active_catch_id": _active_catch_id,
 		"debug_spawned_catch": _bite_debug_spawned,
+		"fight_session_active": _fight_session_active,
+		"fight_session_id": _active_fight_session_id,
+		"drag_setting": _fight_drag_setting,
+		"fight_snapshot": get_fight_snapshot(),
 		"encounter_state": _encounter.get_state_name() if _encounter != null else "unavailable",
 		"reel_visual_rotation_rad": _reel_visual_total_rotation_rad,
 		"reel_line_delta_m": _last_reel_line_delta_m,
@@ -902,7 +1053,7 @@ func get_debug_snapshot() -> Dictionary:
 		"sinker_world_position": get_sinker_world_position(),
 		"rod_tip_world_position": line_start,
 		"line_connection_world_position": line_connection,
-		"hook_world_positions": get_hook_world_positions(),
+		"hook_world_positions": get_hook_attachment_world_positions(),
 		"sabiki_hooks": get_sabiki_hook_states_snapshot(),
 		"sabiki_hooked_count": get_sabiki_hooked_count(),
 		"sabiki_hook_capacity": _current_rig.maximum_catch_count,
@@ -914,7 +1065,7 @@ func get_debug_snapshot() -> Dictionary:
 
 
 func get_interaction_snapshot() -> Dictionary:
-	var tip := _get_rod_tip_world() if _rod_visual_root != null else Vector3.ZERO
+	var tip := (_get_fight_solver_rod_tip_world() if _fight_session_active or _state == CastState.LANDING else _get_rod_tip_world()) if _rod_visual_root != null else Vector3.ZERO
 	var line_connection := _get_tackle_line_connection_world() if _rod_visual_root != null else Vector3.ZERO
 	return {
 		"state": get_casting_state_name(),
@@ -929,7 +1080,7 @@ func get_interaction_snapshot() -> Dictionary:
 		"lure_world_position": _bait_world,
 		"sinker_world_position": get_sinker_world_position(),
 		"line_connection_world_position": line_connection,
-		"hook_world_positions": get_hook_world_positions(),
+		"hook_world_positions": get_hook_attachment_world_positions(),
 		"lure_velocity_world_mps": _bait_velocity_world,
 		"manual_reeling": _manual_reeling,
 		"manual_line_releasing": _manual_line_releasing,
@@ -941,12 +1092,102 @@ func get_interaction_snapshot() -> Dictionary:
 		"sabiki_hook_capacity": _current_rig.maximum_catch_count,
 		"sabiki_batch_retrieval_active": _sabiki_batch_retrieval_active,
 		"sabiki_batch_result_summary": _sabiki_batch_result_summary.duplicate(true),
-		"catch_in_progress": _state in [CastState.FIGHTING, CastState.CATCH_PRESENTATION],
+		"catch_in_progress": _state in [CastState.SABIKI_HOOKED_WAITING, CastState.FIGHTING, CastState.LANDING, CastState.CATCH_PRESENTATION],
 		"bite_approach_active": _state == CastState.BITE_APPROACH,
 		"catch_debug_spawned": _bite_debug_spawned,
 		"catch_id": _active_catch_id,
 		"catch_result_received": _catch_result_received,
+		"fight_session_active": _fight_session_active,
+		"fight_session_id": _active_fight_session_id,
+		"drag_setting": _fight_drag_setting,
+		"drag_adjustment_feedback_remaining": _fight_drag_feedback_remaining,
+		"drag_adjustment_direction": _fight_drag_feedback_direction,
+		"fight_snapshot": get_fight_snapshot(),
 	}
+
+
+func get_fight_snapshot(include_geometry_debug: bool = false) -> Dictionary:
+	var result := _fight_snapshot.duplicate(true)
+	if include_geometry_debug and _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		_update_rig_visual_position()
+	var participants: Array[Dictionary] = []
+	for catch_id in _fight_participant_order:
+		var participant := _fight_participants_by_catch_id.get(catch_id) as BoatFishingFightParticipant
+		if participant != null:
+			var row := participant.get_read_only_snapshot()
+			if include_geometry_debug:
+				var hook_position := _fight_hook_position_by_catch_id(catch_id)
+				var visual := _fight_fish_visuals_by_catch_id.get(catch_id) as Node3D
+				var profile := _fish_manager.get_species_profile(str(row.get("species_id", ""))) if _fish_manager != null else null
+				var mouth_position := hook_position
+				var fish_position := Vector3.ZERO
+				var mouth_error := -1.0
+				var hull_clearance := -1.0
+				if visual != null and is_instance_valid(visual) and profile != null:
+					fish_position = visual.global_position
+					mouth_position = visual.global_transform * profile.boat_fishing_mouth_anchor_local
+					mouth_error = mouth_position.distance_to(hook_position)
+					hull_clearance = _get_fight_body_hull_clearance_m(visual, profile, float(row.get("body_length_m", 0.0)))
+				row["hook_world_position"] = hook_position
+				row["fish_world_position"] = fish_position
+				row["mouth_world_position"] = mouth_position
+				row["mouth_hook_error_m"] = mouth_error
+				row["hull_clearance_m"] = hull_clearance
+			participants.append(row)
+	result["session_active"] = _fight_session_active
+	result["session_id"] = _active_fight_session_id
+	result["drag_setting"] = _fight_drag_setting
+	result["participant_count"] = participants.size()
+	result["participants"] = participants
+	result["line_length_m"] = _line_paid_out_length_m
+	result["line_break_force_n"] = BOAT_FIGHT_LINE_PROFILE.line_break_force_n
+	result["drag_threshold_n"] = BOAT_FIGHT_LINE_PROFILE.get_drag_threshold_n(_fight_drag_setting)
+	result["state_name"] = get_casting_state_name()
+	result["rod_burst_impulse_rad"] = _fight_rod_burst_impulse_rad
+	result["rod_visual_reference_load_n"] = rod_visual_reference_load_n
+	result["rod_visual_target_bend_deg"] = _fight_rod_target_bend_deg
+	result["rod_visual_actual_bend_deg"] = _rod_bend_angle_deg
+	result["rod_tip_vibration_deg"] = _fight_rod_micro_vibration_deg
+	result["rod_burst_impulse_deg"] = rad_to_deg(_fight_rod_burst_impulse_rad)
+	result["line_visual_slack_ratio"] = _get_fight_line_visual_slack_ratio()
+	result["line_visual_tautness"] = 1.0 - float(result["line_visual_slack_ratio"])
+	result["drag_adjustment_feedback_remaining"] = _fight_drag_feedback_remaining
+	result["drag_adjustment_direction"] = _fight_drag_feedback_direction
+	result["mouth_hook_error_max_m"] = _fight_max_mouth_hook_error_m
+	return result
+
+
+func _get_fight_line_visual_slack_ratio() -> float:
+	if not _fight_session_active:
+		return 1.0
+	return calculate_line_visual_slack_ratio(
+		float(_fight_snapshot.get("tension_n", 0.0)),
+		line_visual_reference_load_n
+	)
+
+
+func _get_fight_body_hull_clearance_m(visual: Node3D, profile: FishSpeciesProfile, body_length_m: float) -> float:
+	if _boat_controller == null or not _boat_controller.has_method("get_vessel_length_m") or not _boat_controller.has_method("get_vessel_beam_m"):
+		return -1.0
+	var forward_local := Vector3.LEFT if profile.model_forward_axis == 1 else Vector3.RIGHT
+	var tail_direction := -(visual.global_basis * forward_local).normalized()
+	var body_radius := maxf(0.02, body_length_m * 0.08)
+	var minimum_clearance := INF
+	for sample_index in range(5):
+		var fraction := float(sample_index) / 4.0
+		var sample_position := visual.global_position.lerp(visual.global_position + tail_direction * body_length_m * 0.92, fraction)
+		minimum_clearance = minf(minimum_clearance, _get_hull_ellipse_clearance_m(sample_position) - body_radius)
+	return minimum_clearance if is_finite(minimum_clearance) else -1.0
+
+
+func _get_hull_ellipse_clearance_m(position: Vector3) -> float:
+	if _boat_controller == null or not _boat_controller.has_method("get_vessel_length_m") or not _boat_controller.has_method("get_vessel_beam_m"):
+		return -1.0
+	var local := _boat_controller.to_local(position)
+	var half_beam := maxf(0.5, float(_boat_controller.call("get_vessel_beam_m")) * 0.5 + FIGHT_HULL_SAFETY_MARGIN_M)
+	var half_length := maxf(1.0, float(_boat_controller.call("get_vessel_length_m")) * 0.5 + FIGHT_HULL_SAFETY_MARGIN_M)
+	var normalized_radius := sqrt(local.x * local.x / (half_beam * half_beam) + local.z * local.z / (half_length * half_length))
+	return (normalized_radius - 1.0) * minf(half_beam, half_length)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -957,7 +1198,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			if _state == CastState.READY:
 				begin_charge()
 				get_viewport().set_input_as_handled()
-			elif _is_waiting_line_state():
+			elif _is_manual_reel_state():
 				set_manual_reeling(true)
 				get_viewport().set_input_as_handled()
 	elif event.is_action_released("boat_fishing_cast"):
@@ -967,19 +1208,25 @@ func _unhandled_input(event: InputEvent) -> void:
 			else:
 				release_charge()
 			get_viewport().set_input_as_handled()
-		elif _is_waiting_line_state():
+		elif _is_manual_reel_state():
 			set_manual_reeling(false)
 			get_viewport().set_input_as_handled()
 
 
 func _input(event: InputEvent) -> void:
-	if not _activity_active or not InputMap.has_action("boat_fishing_pay_out"):
+	if not _activity_active:
+		return
+	if _fight_session_active and not _is_menu_open() and not _is_pointer_over_ui() and (event.is_action_pressed("boat_fishing_drag_loosen", false) or event.is_action_pressed("boat_fishing_drag_tighten", false)):
+		get_viewport().set_input_as_handled()
+		return
+	if not InputMap.has_action("boat_fishing_pay_out"):
 		return
 	if event.is_action_pressed("boat_fishing_pay_out", false):
 		# F also opens port services; give it to line payout only during a live
-		# water cast, leaving the port shortcut available in READY/other states.
-		if _is_waiting_line_state():
-			if not _automatic_control_owned and not _is_pointer_over_ui() and not _is_menu_open():
+		# water cast without a fight. During a fight the reel solver owns all
+		# line motion; F must not act as a second line-length writer.
+		if _is_waiting_line_state() or (_fight_session_active and _state == CastState.FIGHTING):
+			if not _fight_session_active and not _automatic_control_owned and not _is_pointer_over_ui() and not _is_menu_open():
 				_manual_line_release_held = true
 				_sync_manual_line_controls()
 			get_viewport().set_input_as_handled()
@@ -996,11 +1243,21 @@ func _process(delta: float) -> void:
 	if not is_instance_valid(_onboard):
 		cancel_charge_immediately()
 		return
+	var first_person_active := _onboard.is_first_person_active()
+	if _rod_visual_root != null and is_instance_valid(_rod_visual_root):
+		_rod_visual_root.visible = first_person_active
+		# Casting deliberately holds its release pose. After the cast, keep the
+		# handheld rod anchored to the player's current hull-local hand/camera
+		# direction, including while a fish is approaching or being fought.
+		if first_person_active and _state != CastState.CASTING:
+			_update_rod_hand_anchor()
+	var fight_real_delta := _measure_fight_real_delta()
+	var feedback_delta := fight_real_delta if _fight_session_active else maxf(delta, 0.0)
+	_fight_drag_feedback_remaining = maxf(0.0, _fight_drag_feedback_remaining - feedback_delta)
 	var reel_line_length_before := _get_reel_feedback_line_length()
 	_update_boat_velocity_estimate(delta)
 	if _state == CastState.READY:
 		_update_ready_rod_pose()
-		_rod_visual_root.visible = _onboard.is_first_person_active()
 	elif _state == CastState.CHARGING:
 		if not _charge_canceling and (
 			not is_instance_valid(_onboard)
@@ -1019,7 +1276,11 @@ func _process(delta: float) -> void:
 			_release_non_ui_line_inputs()
 		_reconcile_physical_line_inputs()
 		_sync_manual_line_controls()
-		_update_waiting_bait(delta)
+		if _fight_session_active:
+			_update_fight_controls(fight_real_delta)
+			_advance_boat_fight(fight_real_delta)
+		else:
+			_update_waiting_bait(delta)
 		if _is_waiting_line_state():
 			_advance_sabiki_hook_approaches(delta)
 		if _is_waiting_line_state():
@@ -1029,9 +1290,21 @@ func _process(delta: float) -> void:
 	elif _state == CastState.BITE_APPROACH:
 		_advance_bite_approach(delta)
 	elif _state == CastState.FIGHTING:
-		_advance_auto_fight(delta)
+		if _is_menu_open() or _has_gui_focus():
+			release_held_controls_for_ui()
+		elif _is_pointer_over_ui():
+			_release_non_ui_line_inputs()
+		else:
+			_reconcile_physical_line_inputs()
+			_sync_manual_line_controls()
+			_update_fight_controls(fight_real_delta)
+		_advance_boat_fight(fight_real_delta)
 	elif _state == CastState.CATCH_PRESENTATION:
 		_advance_catch_presentation(delta)
+	elif _state == CastState.LANDING:
+		_advance_fight_landing(delta)
+	elif _state == CastState.LINE_BROKEN:
+		_advance_line_broken(delta)
 	_update_cast_aim_marker(delta)
 	_update_rod_line_guides()
 	_update_line_and_bait_visuals()
@@ -1105,37 +1378,96 @@ func _update_natural_bite_judgement(delta: float) -> void:
 	_natural_bite_pending_real_delta = 0.0
 	var relative_velocity := _bait_velocity_world - _boat_velocity_estimate_world * BAIT_WATER_DRAG_FOLLOW
 	var diagnostic_candidates: Array[Dictionary] = []
+	var diagnostic_ambient_candidates: Array[Dictionary] = []
 	var hook_depths: Array[Dictionary] = []
-	var total_event_rate := 0.0
 	var bite_started := false
+	var hook_trigger_states: Array[Dictionary] = []
+	var has_targeted_mode := false
+	var last_reason := "no_ambient_candidates"
+	var targeted_candidate_count := 0
+	var ambient_evaluations: Array[Dictionary] = []
 	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
-		var hook_positions := get_hook_world_positions()
+		var hook_positions := get_hook_attachment_world_positions()
 		for hook_index in range(mini(_current_rig.hook_count, hook_positions.size())):
 			var hook_status := str(_sabiki_hook_states[hook_index].get("status", "empty")) if hook_index < _sabiki_hook_states.size() else "empty"
 			var hook_position: Vector3 = hook_positions[hook_index]
 			var hook_depth := _depth_below_surface_at(hook_position)
 			hook_depths.append({"hook_index": hook_index, "depth_m": hook_depth, "status": hook_status})
 			if hook_status != "empty":
+				_encounter.clear_boat_fishing_hook_trigger_state(hook_index)
+				hook_trigger_states.append({"hook_index": hook_index, "trigger_mode": "NONE", "phase": "occupied", "reason": "hook_not_empty"})
 				continue
 			var diagnostics := _encounter.evaluate_boat_fishing_candidates(
 				hook_position,
 				hook_depth,
 				relative_velocity.length(),
-				_current_rig
+				_current_rig,
+				false,
+				hook_index
 			)
-			total_event_rate += float(diagnostics.get("total_event_rate_per_real_hour", 0.0))
+			targeted_candidate_count += int(diagnostics.get("targeted_candidate_count", 0))
 			for candidate_variant in diagnostics.get("candidate_schools", []):
 				var row: Dictionary = candidate_variant.duplicate(true)
 				row["hook_index"] = hook_index
 				row["hook_depth_m"] = hook_depth
 				diagnostic_candidates.append(row)
-			var candidate := _encounter.advance_boat_fishing_hazard_for_hook(diagnostics, elapsed_real_seconds, hook_index)
-			if candidate.is_empty():
+			for candidate_variant in diagnostics.get("ambient_candidates", []):
+				var ambient_row: Dictionary = candidate_variant.duplicate(true)
+				ambient_row["hook_index"] = hook_index
+				ambient_row["ambient_eligible"] = true
+				diagnostic_ambient_candidates.append(ambient_row)
+			var trigger := _encounter.advance_boat_fishing_trigger_for_hook(diagnostics, elapsed_real_seconds, hook_index)
+			trigger["hook_index"] = hook_index
+			hook_trigger_states.append(trigger.duplicate(true))
+			var trigger_mode := str(trigger.get("trigger_mode", "NONE"))
+			has_targeted_mode = has_targeted_mode or trigger_mode == "SCHOOL_TARGETED"
+			last_reason = str(trigger.get("reason", diagnostics.get("reason", last_reason)))
+			var candidate: Dictionary = trigger.get("candidate", {})
+			var hook_locked := false
+			if not candidate.is_empty():
+				var pending := _encounter.reserve_sabiki_hook(candidate, _current_rig, hook_index, false)
+				if pending != null:
+					_encounter.clear_boat_fishing_hook_trigger_state(hook_index)
+					_begin_sabiki_hook_bite(hook_index, pending, candidate, false)
+					bite_started = true
+					hook_locked = true
+				else:
+					trigger["reason"] = "reservation_failed"
+					last_reason = "reservation_failed"
+					hook_trigger_states[hook_trigger_states.size() - 1] = trigger.duplicate(true)
+				hook_locked = true
+			elif str(trigger.get("phase", "")) == "target_reaction":
+				hook_locked = true
+			var ambient_evaluation := diagnostics.duplicate(true)
+			ambient_evaluation["trigger_locked"] = hook_locked
+			ambient_evaluations.append(ambient_evaluation)
+		var ambient_trigger := _encounter.advance_boat_fishing_ambient_hazard(ambient_evaluations, elapsed_real_seconds)
+		if str(ambient_trigger.get("phase", "")) == "triggered":
+			var ambient_context: Dictionary = ambient_trigger.get("ambient_context", {})
+			var ambient_request := _encounter.request_ambient_boat_fishing_catch(ambient_context, _current_rig)
+			_encounter.set_boat_fishing_ambient_authority_result(ambient_request)
+			if bool(ambient_request.get("accepted", false)):
+				var ambient_pending := ambient_request.get("pending") as FishingPendingCatch
+				var ambient_candidate: Dictionary = ambient_request.get("candidate", {})
+				var ambient_hook_index := int(ambient_trigger.get("hook_index", -1))
+				if ambient_pending != null and _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+					_begin_sabiki_hook_bite(ambient_hook_index, ambient_pending, ambient_candidate, false)
+					bite_started = true
+				elif ambient_pending != null:
+					bite_started = _begin_bite_event(ambient_candidate, false, false, ambient_pending)
+				if ambient_hook_index >= 0 and ambient_hook_index < hook_trigger_states.size():
+					hook_trigger_states[ambient_hook_index] = {"hook_index": ambient_hook_index, "trigger_mode": "AMBIENT_ENCOUNTER", "phase": "reserved", "reason": "ambient_authority_reserved", "ambient_fish_id": ambient_pending.ambient_fish_id if ambient_pending != null else ""}
+			else:
+				last_reason = str(ambient_request.get("reason", "ambient_authority_rejected"))
+				if ambient_trigger.get("hook_index", -1) >= 0 and int(ambient_trigger.get("hook_index", -1)) < hook_trigger_states.size():
+					hook_trigger_states[int(ambient_trigger.get("hook_index", -1))] = {"hook_index": int(ambient_trigger.get("hook_index", -1)), "trigger_mode": "AMBIENT_ENCOUNTER", "phase": "rejected", "reason": last_reason}
+		var ambient_rate := float(ambient_trigger.get("ambient_event_rate_per_real_hour", 0.0))
+		for evaluation in ambient_evaluations:
+			if bool(evaluation.get("trigger_locked", false)) or _dictionary_array_for_casting(evaluation.get("ambient_candidates", [])).is_empty():
 				continue
-			var pending := _encounter.reserve_sabiki_hook(candidate, _current_rig, hook_index, false)
-			if pending != null:
-				_begin_sabiki_hook_bite(hook_index, pending, candidate, false)
-				bite_started = true
+			var ambient_hook_index := int(evaluation.get("hook_index", -1))
+			if ambient_hook_index >= 0 and ambient_hook_index < hook_trigger_states.size() and str(ambient_trigger.get("phase", "")) == "ambient_waiting":
+				hook_trigger_states[ambient_hook_index] = {"hook_index": ambient_hook_index, "trigger_mode": "AMBIENT_ENCOUNTER", "phase": "ambient_waiting", "reason": str(ambient_trigger.get("reason", "random_not_triggered")), "ambient_event_rate_per_real_hour": ambient_rate}
 		_last_natural_bite_diagnostics = {
 			"rig_id": _current_rig.rig_id,
 			"rig_type": _current_rig.rig_type,
@@ -1143,31 +1475,66 @@ func _update_natural_bite_judgement(delta: float) -> void:
 			"line_length_m": _line_paid_out_length_m,
 			"lure_relative_speed_mps": relative_velocity.length(),
 			"hook_depths": hook_depths,
+			"hook_trigger_states": hook_trigger_states,
 			"empty_hook_count": _count_empty_sabiki_hooks(),
 			"candidate_schools": diagnostic_candidates,
+			"ambient_candidates": diagnostic_ambient_candidates,
 			"candidate_school_count": diagnostic_candidates.size(),
-			"total_event_rate_per_real_hour": total_event_rate,
-			"average_first_bite_seconds": 3600.0 / total_event_rate if total_event_rate > 0.0 else INF,
-			"reason": "bite_started" if bite_started else (_natural_bite_no_event_reason(total_event_rate, relative_velocity.length()) if total_event_rate > 0.0 else _natural_bite_rejection_reason(diagnostic_candidates)),
+			"targeted_candidate_count": targeted_candidate_count,
+			"trigger_mode": "MIXED" if has_targeted_mode and ambient_rate > 0.0 else ("SCHOOL_TARGETED" if has_targeted_mode else ("AMBIENT_ENCOUNTER" if ambient_rate > 0.0 else str(ambient_trigger.get("trigger_mode", "NONE")))),
+			"total_event_rate_per_real_hour": ambient_rate,
+			"ambient_event_rate_per_real_hour": ambient_rate,
+			"average_first_bite_seconds": 3600.0 / ambient_rate if ambient_rate > 0.0 else INF,
+			"ambient_hazard_accumulated": float(ambient_trigger.get("hazard_accumulated", 0.0)),
+			"ambient_hazard_threshold": float(ambient_trigger.get("hazard_threshold", 0.0)),
+			"ambient_eligible_hook_count": int(ambient_trigger.get("eligible_hook_count", 0)),
+			"ambient_eligible_species_count": int(ambient_trigger.get("eligible_species_count", 0)),
+			"target_reaction_remaining_seconds": _minimum_target_reaction_remaining(hook_trigger_states),
+			"reason": "bite_started" if bite_started else str(ambient_trigger.get("reason", last_reason)),
 			"last_sample_real_delta_seconds": elapsed_real_seconds,
 		}
+		_last_natural_bite_diagnostics["boat_fishing_session"] = _encounter.get_boat_fishing_session_snapshot()
 		return
 	if _current_rig.rig_type != BoatFishingRigProfile.RigType.SINGLE_JIG:
 		return
-	var bait_depth := _get_bait_depth_below_surface_m()
+	var single_hook_world := _get_single_jig_hook_attachment_world()
+	var bait_depth := _depth_below_surface_at(single_hook_world)
 	var diagnostics := _encounter.evaluate_boat_fishing_candidates(
-		_bait_world,
+		single_hook_world,
 		bait_depth,
 		relative_velocity.length(),
-		_current_rig
+		_current_rig,
+		false,
+		0
 	)
 	for candidate_variant in diagnostics.get("candidate_schools", []):
 		diagnostic_candidates.append(candidate_variant.duplicate(true))
-	total_event_rate = float(diagnostics.get("total_event_rate_per_real_hour", 0.0))
-	var candidate := _encounter.advance_boat_fishing_hazard(diagnostics, elapsed_real_seconds)
+	for candidate_variant in diagnostics.get("ambient_candidates", []):
+		var ambient_row: Dictionary = candidate_variant.duplicate(true)
+		ambient_row["ambient_eligible"] = true
+		diagnostic_ambient_candidates.append(ambient_row)
+	targeted_candidate_count = int(diagnostics.get("targeted_candidate_count", 0))
+	var trigger := _encounter.advance_boat_fishing_trigger_for_hook(diagnostics, elapsed_real_seconds, 0)
+	hook_trigger_states.append(trigger.duplicate(true))
+	var candidate: Dictionary = trigger.get("candidate", {})
 	if not candidate.is_empty():
-		_begin_bite_event(candidate, false, false)
-		bite_started = true
+		bite_started = _begin_bite_event(candidate, false, false)
+		if not bite_started:
+			trigger["reason"] = "reservation_failed"
+	has_targeted_mode = str(trigger.get("trigger_mode", "")) == "SCHOOL_TARGETED"
+	var ambient_eval_single := diagnostics.duplicate(true)
+	ambient_eval_single["trigger_locked"] = not candidate.is_empty() or str(trigger.get("phase", "")) == "target_reaction"
+	var ambient_trigger_single := _encounter.advance_boat_fishing_ambient_hazard([ambient_eval_single], elapsed_real_seconds)
+	if str(ambient_trigger_single.get("phase", "")) == "triggered":
+		var request := _encounter.request_ambient_boat_fishing_catch(ambient_trigger_single.get("ambient_context", {}), _current_rig)
+		_encounter.set_boat_fishing_ambient_authority_result(request)
+		if bool(request.get("accepted", false)):
+			bite_started = _begin_bite_event(request.get("candidate", {}), false, false, request.get("pending") as FishingPendingCatch)
+		else:
+			last_reason = str(request.get("reason", "ambient_authority_rejected"))
+	elif not _dictionary_array_for_casting(diagnostics.get("ambient_candidates", [])).is_empty() and str(ambient_trigger_single.get("phase", "")) == "ambient_waiting":
+		hook_trigger_states[0] = {"hook_index": 0, "trigger_mode": "AMBIENT_ENCOUNTER", "phase": "ambient_waiting", "reason": str(ambient_trigger_single.get("reason", "random_not_triggered")), "ambient_event_rate_per_real_hour": float(ambient_trigger_single.get("ambient_event_rate_per_real_hour", 0.0))}
+	var total_event_rate := float(ambient_trigger_single.get("ambient_event_rate_per_real_hour", 0.0))
 	_last_natural_bite_diagnostics = {
 		"rig_id": _current_rig.rig_id,
 		"rig_type": _current_rig.rig_type,
@@ -1175,13 +1542,41 @@ func _update_natural_bite_judgement(delta: float) -> void:
 		"line_length_m": _line_paid_out_length_m,
 		"bait_depth_m": bait_depth,
 		"lure_relative_speed_mps": relative_velocity.length(),
+		"hook_trigger_states": hook_trigger_states,
 		"candidate_schools": diagnostic_candidates,
+		"ambient_candidates": diagnostic_ambient_candidates,
 		"candidate_school_count": diagnostic_candidates.size(),
+		"targeted_candidate_count": targeted_candidate_count,
+		"trigger_mode": "SCHOOL_TARGETED" if has_targeted_mode else ("AMBIENT_ENCOUNTER" if total_event_rate > 0.0 else str(ambient_trigger_single.get("trigger_mode", "NONE"))),
 		"total_event_rate_per_real_hour": total_event_rate,
+		"ambient_event_rate_per_real_hour": total_event_rate,
 		"average_first_bite_seconds": 3600.0 / total_event_rate if total_event_rate > 0.0 else INF,
-		"reason": "bite_started" if bite_started else (_natural_bite_no_event_reason(total_event_rate, relative_velocity.length()) if total_event_rate > 0.0 else _natural_bite_rejection_reason(diagnostic_candidates)),
+		"target_reaction_remaining_seconds": _minimum_target_reaction_remaining(hook_trigger_states),
+		"ambient_hazard_accumulated": float(ambient_trigger_single.get("hazard_accumulated", 0.0)),
+		"ambient_hazard_threshold": float(ambient_trigger_single.get("hazard_threshold", 0.0)),
+		"ambient_eligible_hook_count": int(ambient_trigger_single.get("eligible_hook_count", 0)),
+		"ambient_eligible_species_count": int(ambient_trigger_single.get("eligible_species_count", 0)),
+		"reason": "bite_started" if bite_started else str(ambient_trigger_single.get("reason", diagnostics.get("reason", last_reason))),
 		"last_sample_real_delta_seconds": elapsed_real_seconds,
 	}
+	_last_natural_bite_diagnostics["boat_fishing_session"] = _encounter.get_boat_fishing_session_snapshot()
+
+
+func _dictionary_array_for_casting(value: Variant) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	if value is Array:
+		for row in value:
+			if row is Dictionary:
+				result.append(row)
+	return result
+
+
+func _minimum_target_reaction_remaining(states: Array[Dictionary]) -> float:
+	var remaining := INF
+	for state in states:
+		if str(state.get("trigger_mode", "")) == "SCHOOL_TARGETED" and str(state.get("phase", "")) == "target_reaction":
+			remaining = minf(remaining, float(state.get("reaction_remaining_seconds", INF)))
+	return remaining
 
 
 func _count_empty_sabiki_hooks() -> int:
@@ -1226,7 +1621,7 @@ func _natural_bite_no_event_reason(total_event_rate: float, relative_speed_mps: 
 func _begin_sabiki_hook_bite(hook_index: int, pending: FishingPendingCatch, candidate: Dictionary, debug_spawned: bool, force_approach: bool = false) -> void:
 	if pending == null or hook_index < 0 or hook_index >= _sabiki_hook_states.size():
 		return
-	var positions := get_hook_world_positions()
+	var positions := get_hook_attachment_world_positions()
 	if hook_index >= positions.size():
 		_encounter.release_sabiki_reservation(pending.catch_id)
 		return
@@ -1244,7 +1639,11 @@ func _begin_sabiki_hook_bite(hook_index: int, pending: FishingPendingCatch, cand
 	hook_state["surface_crossed"] = false
 	if should_approach:
 		var school_start := hook_position - Vector3.FORWARD * 3.2
-		if not debug_spawned and _fish_manager != null:
+		if pending.source_type == "ambient":
+			var ambient_start: Variant = candidate.get("spawn_world_position", [])
+			if ambient_start is Array and ambient_start.size() >= 3:
+				school_start = Vector3(float(ambient_start[0]), float(ambient_start[1]), float(ambient_start[2]))
+		elif not debug_spawned and _fish_manager != null:
 			var school: Dictionary = _fish_manager.get_school(pending.school_id)
 			var values: Array = school.get("world_position", [])
 			if values.size() >= 3:
@@ -1271,7 +1670,7 @@ func _begin_sabiki_hook_bite(hook_index: int, pending: FishingPendingCatch, cand
 		hook_state["visual"] = _create_sabiki_fish_visual(pending.species_id, pending.body_length_m, direction_to_hook)
 		if hook_state["visual"] != null:
 			(hook_state["visual"] as Node3D).name = "SabikiHookFish_%02d" % (hook_index + 1)
-			(hook_state["visual"] as Node3D).global_position = school_start
+			_set_fish_visual_pose_at_hook(hook_state["visual"] as Node3D, pending.species_id, pending.body_length_m, school_start, direction_to_hook)
 	else:
 		hook_state["status"] = "reserved"
 		hook_state["approach_duration"] = 0.0
@@ -1291,7 +1690,7 @@ func _advance_sabiki_hook_approaches(delta: float) -> void:
 			hook_state["approach_elapsed"] = elapsed
 			var duration := maxf(0.01, float(hook_state.get("approach_duration", 1.0)))
 			var progress := clampf(elapsed / duration, 0.0, 1.0)
-			var hook_positions := get_hook_world_positions()
+			var hook_positions := get_hook_attachment_world_positions()
 			if hook_index < hook_positions.size():
 				var start: Vector3 = hook_state.get("start_world", hook_positions[hook_index])
 				var target: Vector3 = hook_positions[hook_index]
@@ -1299,8 +1698,15 @@ func _advance_sabiki_hook_approaches(delta: float) -> void:
 				var eased := _smoothstep01(progress)
 				var visual := hook_state.get("visual") as Node3D
 				if visual != null and is_instance_valid(visual):
-					visual.global_position = start.lerp(target, eased) + side * sin(PI * progress) * 0.22 + Vector3.UP * sin(PI * progress) * 0.08
-					_set_sabiki_fish_heading(visual, str(hook_state.get("species_id", "herring")), float(hook_state.get("body_length_m", 0.32)), target - visual.global_position, sin(elapsed * 6.0) * 0.045)
+					var mouth_target := start.lerp(target, eased) + side * sin(PI * progress) * 0.22 + Vector3.UP * sin(PI * progress) * 0.08
+					_set_fish_visual_pose_at_hook(
+						visual,
+						str(hook_state.get("species_id", "herring")),
+						float(hook_state.get("body_length_m", 0.32)),
+						mouth_target,
+						target - start,
+						sin(elapsed * 6.0) * 0.045
+					)
 			if progress < 1.0:
 				_sabiki_hook_states[hook_index] = hook_state
 				continue
@@ -1312,28 +1718,32 @@ func _advance_sabiki_hook_approaches(delta: float) -> void:
 		hook_state["pending"] = pending
 		hook_state["body_length_m"] = pending.body_length_m
 		if hook_state.get("visual") == null:
-			var hook_positions := get_hook_world_positions()
+			var hook_positions := get_hook_attachment_world_positions()
 			if hook_index < hook_positions.size():
 				var heading := _get_sabiki_up_direction_world()
 				var visual := _create_sabiki_fish_visual(pending.species_id, pending.body_length_m, heading)
 				if visual != null:
 					visual.name = "SabikiHookFish_%02d" % (hook_index + 1)
-					visual.global_position = hook_positions[hook_index] + Vector3.RIGHT * 0.16
+					_set_fish_visual_pose_at_hook(visual, pending.species_id, pending.body_length_m, hook_positions[hook_index], _get_hull_outward_horizontal(hook_positions[hook_index]))
 					hook_state["visual"] = visual
 		_sabiki_hook_states[hook_index] = hook_state
+		if not _register_fight_participant(pending, hook_state.get("visual") as Node3D):
+			_encounter.cancel_sabiki_catches("boat_fight_participant_init_failed")
+			_reset_boat_fight_session(true)
+			_clear_sabiki_hook_visuals()
+			_reset_sabiki_hook_states()
+			_set_state(CastState.WAITING)
+			return
 		_rod_tension = maxf(_rod_tension, 0.18)
 		_rod_bend_angle_deg = rod_bend_at_full_tension_deg * _rod_tension
 		_set_rod_bend_angle(deg_to_rad(_rod_bend_angle_deg))
-		if get_sabiki_hooked_count() >= _current_rig.maximum_catch_count:
-			request_sabiki_retrieval()
-			return
 		_set_state(CastState.SABIKI_HOOKED_WAITING)
 
 
 func _update_sabiki_hooked_fish_visuals(delta: float) -> void:
 	if _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI or _sabiki_hook_states.is_empty():
 		return
-	var hook_positions := get_hook_world_positions()
+	var hook_positions := get_hook_attachment_world_positions()
 	for hook_index in range(mini(_sabiki_hook_states.size(), hook_positions.size())):
 		var hook_state: Dictionary = _sabiki_hook_states[hook_index]
 		if str(hook_state.get("status", "")) != "hooked":
@@ -1342,33 +1752,29 @@ func _update_sabiki_hooked_fish_visuals(delta: float) -> void:
 		if visual == null or not is_instance_valid(visual):
 			continue
 		var hook_position: Vector3 = hook_positions[hook_index]
-		var side := _rod_swing.global_basis.x
-		side.y = 0.0
-		if side.length_squared() < 0.001:
-			side = Vector3.RIGHT
-		side = side.normalized()
 		var surface_y := float(_sample_water(hook_position).get("height", hook_position.y))
 		var is_out_of_water := hook_position.y >= surface_y
-		var fish_position := hook_position + side * 0.16 + Vector3.UP * 0.05
 		if is_out_of_water:
-			fish_position.y = maxf(fish_position.y, surface_y + 0.08)
 			if not bool(hook_state.get("surface_crossed", false)):
 				hook_state["surface_crossed"] = true
 				if Time.get_ticks_msec() * 0.001 - _last_sabiki_splash_time >= 0.32:
 					_last_sabiki_splash_time = Time.get_ticks_msec() * 0.001
-					_show_splash_visual(fish_position)
+					_show_splash_visual(hook_position)
 					_play_boat_fishing_one_shot("splash")
-		else:
-			fish_position.y = minf(fish_position.y, surface_y - 0.025)
-		visual.global_position = visual.global_position.lerp(fish_position, 1.0 - exp(-maxf(delta, 0.0) * 14.0))
+		if _fight_session_active or _state == CastState.LANDING:
+			_sabiki_hook_states[hook_index] = hook_state
+			continue
+		if _state == CastState.CATCH_PRESENTATION and _catch_result_received:
+			continue
 		var elapsed := float(hook_state.get("struggle_elapsed", 0.0)) + maxf(delta, 0.0)
 		hook_state["struggle_elapsed"] = elapsed
 		_sabiki_hook_states[hook_index] = hook_state
-		_set_sabiki_fish_heading(visual, str(hook_state.get("species_id", "herring")), float(hook_state.get("body_length_m", 0.32)), _fight_radial_direction, sin(elapsed * 7.0) * 0.055)
+		_set_fish_visual_pose_at_hook(visual, str(hook_state.get("species_id", "herring")), float(hook_state.get("body_length_m", 0.32)), hook_position, _fight_radial_direction, sin(elapsed * 7.0) * 0.055)
 
 
 func _reset_sabiki_hook_states() -> void:
 	_sabiki_hook_states.clear()
+	_fight_sabiki_branch_directions_local.clear()
 	if _current_rig == null or _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI:
 		return
 	for hook_index in range(_current_rig.hook_count):
@@ -1448,16 +1854,49 @@ func _create_sabiki_fish_visual(species_id: String, body_length_m: float, headin
 	return fish
 
 
-func _set_sabiki_fish_heading(fish: Node3D, species_id: String, body_length_m: float, heading: Vector3, roll_radians: float) -> void:
+func _set_fish_visual_pose_at_hook(
+	fish: Node3D,
+	species_id: String,
+	body_length_m: float,
+	hook_world: Vector3,
+	heading: Vector3,
+	roll_radians: float = 0.0
+) -> void:
 	if fish == null or not is_instance_valid(fish):
 		return
 	var profile := _fish_manager.get_species_profile(species_id) if _fish_manager != null else null
 	if profile == null:
 		return
-	var direction := heading.normalized() if heading.length_squared() > 0.001 else Vector3.FORWARD
-	var basis := FishSchoolRenderer.basis_for_model_heading(direction, profile.model_forward_axis)
-	basis = basis.rotated(direction, roll_radians)
-	fish.global_basis = basis.scaled(Vector3.ONE * maxf(0.05, body_length_m / 1.2))
+	var scale_factor := maxf(0.05, body_length_m / 1.2)
+	var direction := heading if heading.is_finite() and heading.length_squared() > 0.001 else _fight_radial_direction
+	if direction.length_squared() < 0.001:
+		direction = Vector3.FORWARD
+	direction = direction.normalized()
+	var basis := _boat_fish_basis_for_heading(direction, profile)
+	basis = basis.rotated(direction, clampf(roll_radians, -0.5, 0.5))
+	var scaled_basis := basis.scaled(Vector3.ONE * scale_factor)
+	fish.global_transform = Transform3D(
+		scaled_basis,
+		mouth_anchored_fish_origin(hook_world, scaled_basis, profile.boat_fishing_mouth_anchor_local)
+	)
+
+
+func _boat_fish_basis_for_heading(direction: Vector3, profile: FishSpeciesProfile) -> Basis:
+	var horizontal := Vector3(direction.x, 0.0, direction.z)
+	if horizontal.length_squared() < 0.0001:
+		horizontal = Vector3(_fight_radial_direction.x, 0.0, _fight_radial_direction.z)
+	if horizontal.length_squared() < 0.0001:
+		horizontal = Vector3.FORWARD
+	horizontal = horizontal.normalized()
+	var pitch := clampf(direction.y, -0.65, 0.65)
+	var forward := Vector3(horizontal.x, pitch, horizontal.z).normalized()
+	var model_x_forward := -forward if profile.model_forward_axis == 1 else forward
+	var model_up := Vector3.UP - model_x_forward * model_x_forward.dot(Vector3.UP)
+	if model_up.length_squared() < 0.0001:
+		model_up = Vector3.RIGHT - model_x_forward * model_x_forward.dot(Vector3.RIGHT)
+	model_up = model_up.normalized()
+	var model_z := model_x_forward.cross(model_up).normalized()
+	return Basis(model_x_forward, model_up, model_z)
 
 
 func _depth_below_surface_at(position: Vector3) -> float:
@@ -1469,23 +1908,39 @@ func _is_waiting_line_state() -> bool:
 	return _state in [CastState.WAITING, CastState.SABIKI_HOOKED_WAITING]
 
 
-func _begin_bite_event(candidate: Dictionary, debug_spawned: bool, force_approach: bool) -> bool:
+func _is_manual_reel_state() -> bool:
+	return _is_waiting_line_state() or (_fight_session_active and _state == CastState.FIGHTING)
+
+
+func _has_gui_focus() -> bool:
+	if get_viewport() == null:
+		return false
+	return is_instance_valid(get_viewport().gui_get_focus_owner())
+
+
+func _begin_bite_event(candidate: Dictionary, debug_spawned: bool, force_approach: bool, reserved_pending: FishingPendingCatch = null) -> bool:
 	if _encounter == null or candidate.is_empty():
 		return false
-	var pending := _encounter.begin_boat_fishing_approach(candidate, debug_spawned)
+	var pending := reserved_pending if reserved_pending != null else _encounter.begin_boat_fishing_approach(candidate, debug_spawned)
 	if pending == null:
 		return false
+	debug_spawned = pending.debug_spawned
 	_bite_candidate = candidate.duplicate(true)
 	_bite_debug_spawned = debug_spawned
 	_active_catch_id = pending.catch_id
 	_active_catch_species_id = pending.species_id
+	_active_catch_body_length_m = pending.body_length_m
 	_bite_elapsed = 0.0
 	_bite_fish_visual = null
 	var species := _fish_manager.get_species_profile(pending.species_id) if _fish_manager != null else null
 	var depth_m := _get_bait_depth_below_surface_m()
 	var should_approach := should_visualize_bite_approach(depth_m, shallow_bite_visual_depth_m, force_approach)
 	var school_start := _bait_world
-	if not debug_spawned:
+	if pending.source_type == "ambient":
+		var ambient_start: Variant = candidate.get("spawn_world_position", [])
+		if ambient_start is Array and ambient_start.size() >= 3:
+			school_start = Vector3(float(ambient_start[0]), float(ambient_start[1]), float(ambient_start[2]))
+	elif not debug_spawned:
 		var school: Dictionary = _fish_manager.get_school(pending.school_id) if _fish_manager != null else {}
 		var values: Array = school.get("world_position", [])
 		if values.size() >= 3:
@@ -1513,7 +1968,7 @@ func _begin_bite_event(candidate: Dictionary, debug_spawned: bool, force_approac
 		_bite_duration = clampf(start_distance / movement_speed, 1.0, 4.5)
 		_bite_fish_visual = _create_transient_fish_visual(pending.species_id, pending.body_length_m, to_bait)
 		if _bite_fish_visual != null:
-			_bite_fish_visual.global_position = _bite_fish_start_world
+			_set_fish_visual_pose_at_hook(_bite_fish_visual, pending.species_id, pending.body_length_m, _bite_fish_start_world, to_bait)
 	else:
 		_bite_duration = 0.0
 		_bite_fish_start_world = _bait_world
@@ -1538,11 +1993,12 @@ func _advance_bite_approach(delta: float) -> void:
 	var progress := clampf(_bite_elapsed / maxf(_bite_duration, 0.01), 0.0, 1.0)
 	var eased := _smoothstep01(progress)
 	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
-		var travel := _bait_world - _bite_fish_start_world
+		var hook_world := _get_single_jig_hook_attachment_world()
+		var travel := hook_world - _bite_fish_start_world
 		var lateral := _bite_fish_side_world * sin(PI * progress) * minf(0.65, travel.length() * 0.08)
 		var vertical := Vector3.UP * sin(PI * progress) * 0.16
-		_bite_fish_visual.global_position = _bite_fish_start_world.lerp(_bait_world, eased) + lateral + vertical
-		_set_transient_fish_heading(_bite_fish_visual, _bait_world - _bite_fish_visual.global_position, sin(_bite_elapsed * 5.5) * 0.035)
+		var mouth_target := _bite_fish_start_world.lerp(hook_world, eased) + lateral + vertical
+		_set_fish_visual_pose_at_hook(_bite_fish_visual, _active_catch_species_id, _get_pending_catch_body_length_m(), mouth_target, hook_world - _bite_fish_visual.global_position, sin(_bite_elapsed * 5.5) * 0.035)
 	if progress >= 1.0:
 		_confirm_boat_bite()
 
@@ -1567,17 +2023,28 @@ func _confirm_boat_bite() -> void:
 		return
 	_active_catch_id = pending.catch_id
 	_active_catch_species_id = pending.species_id
+	_active_catch_body_length_m = pending.body_length_m
 	_fight_start_bait_world = _bait_world
 	_fight_start_bait_depth_m = _get_bait_depth_below_surface_m()
 	_fight_line_burst_offset_m = 0.0
-	var horizontal := Vector3(_bait_world.x - _get_rod_tip_world().x, 0.0, _bait_world.z - _get_rod_tip_world().z)
+	var fight_connection := _get_tackle_line_connection_world()
+	var horizontal := Vector3(fight_connection.x - _get_fight_solver_rod_tip_world().x, 0.0, fight_connection.z - _get_fight_solver_rod_tip_world().z)
 	_fight_start_horizontal_distance_m = horizontal.length()
 	_fight_radial_direction = horizontal.normalized() if horizontal.length_squared() > 0.001 else -_boat_controller.global_basis.z.normalized() if _boat_controller != null else Vector3.FORWARD
 	if _bite_fish_visual == null:
 		_bite_fish_visual = _create_transient_fish_visual(pending.species_id, pending.body_length_m, _fight_radial_direction)
+	var single_hook_position := _get_single_jig_hook_attachment_world()
 	if _bite_fish_visual != null:
-		_bite_fish_visual.global_position = _bait_world + Vector3.UP * 0.20
-	_rod_tension = 0.92
+		_set_fish_visual_pose_at_hook(_bite_fish_visual, pending.species_id, pending.body_length_m, single_hook_position, _fight_radial_direction)
+	if not _register_fight_participant(pending, _bite_fish_visual):
+		_encounter.cancel_boat_fishing_catch("boat_fight_participant_init_failed")
+		_reset_boat_fight_session(true)
+		_active_catch_id = ""
+		_active_catch_species_id = ""
+		_set_state(CastState.WAITING)
+		return
+	set_automatic_control_owned(false)
+	_rod_tension = 0.0
 	_rod_bend_angle_deg = rod_bend_at_full_tension_deg * _rod_tension
 	_set_rod_bend_angle(deg_to_rad(_rod_bend_angle_deg))
 	_catch_result_received = false
@@ -1585,94 +2052,879 @@ func _confirm_boat_bite() -> void:
 	_set_state(CastState.FIGHTING)
 
 
-func _advance_auto_fight(delta: float) -> void:
-	if _fishing_audio_system == null or _encounter == null:
-		if _encounter != null:
-			_encounter.cancel_boat_fishing_catch("fight_controller_unavailable")
-		set_automatic_control_owned(false)
-		_rod_tension = 0.0
-		_rod_bend_angle_deg = 0.0
-		_set_rod_bend_angle(0.0)
-		_set_state(CastState.WAITING)
+func _register_fight_participant(pending: FishingPendingCatch, fish_visual: Node3D) -> bool:
+	if pending == null or pending.catch_id.is_empty() or not pending.hook_confirmed:
+		return false
+	if _fight_participants_by_catch_id.has(pending.catch_id):
+		return true
+	if _fight_participant_order.size() >= BoatFishingFightSolver.MAX_FISH_PARTICIPANTS:
+		return false
+	if not _fight_session_active:
+		_fight_session_sequence += 1
+		_active_fight_session_id = _fight_session_sequence
+		_fight_solver.reset_session()
+		_fight_drag_setting = clampf(BOAT_FIGHT_LINE_PROFILE.default_drag_setting, 0.0, 1.0)
+		_fight_session_active = true
+		_fight_last_real_tick_usec = Time.get_ticks_usec()
+		_fight_snapshot = _fight_solver.get_read_only_snapshot()
+	var species := _fish_manager.get_species_profile(pending.species_id) if _fish_manager != null else null
+	var reference_length := -1.0
+	if species != null:
+		reference_length = (species.body_length_range_m.x + species.body_length_range_m.y) * 0.5
+	var profile := BoatFishingFightProfileCatalog.load_profile(pending.species_id, reference_length)
+	if profile == null:
+		return false
+	var fish_position := _fight_hook_position_for_pending(pending)
+	var participant := BoatFishingFightParticipant.new()
+	if not participant.initialize_from_pending_catch(pending, profile, -1, _get_hull_outward_horizontal(fish_position)):
+		return false
+	_fight_participants_by_catch_id[pending.catch_id] = participant
+	_fight_participant_order.append(pending.catch_id)
+	_fight_fish_visuals_by_catch_id[pending.catch_id] = fish_visual
+	_fight_fish_visual_elapsed_by_catch_id[pending.catch_id] = 0.0
+	_fight_fish_heading_by_catch_id[pending.catch_id] = -_get_hull_outward_horizontal(fish_position)
+	_fight_previous_struggle_state_by_catch_id[pending.catch_id] = "steady"
+	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		_fight_sabiki_branch_directions_local[pending.hook_index] = Vector3.LEFT
+	if _active_catch_id.is_empty():
+		_active_catch_id = pending.catch_id
+		_active_catch_species_id = pending.species_id
+		_bite_debug_spawned = pending.debug_spawned
+	return true
+
+
+func _fight_hook_position_for_pending(pending: FishingPendingCatch) -> Vector3:
+	if pending != null and _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		return _get_sabiki_hook_attachment_world_position(pending.hook_index)
+	return _get_single_jig_hook_attachment_world()
+
+
+func _measure_fight_real_delta() -> float:
+	if not _fight_session_active:
+		_fight_last_real_tick_usec = -1
+		return 0.0
+	var now_usec := Time.get_ticks_usec()
+	if _fight_last_real_tick_usec < 0:
+		_fight_last_real_tick_usec = now_usec
+		return 0.0
+	var elapsed_usec := maxi(0, now_usec - _fight_last_real_tick_usec)
+	_fight_last_real_tick_usec = now_usec
+	return float(elapsed_usec) / 1000000.0
+
+
+static func calculate_rod_visual_bend_angle_deg(
+	tension_n: float,
+	reference_load_n: float,
+	maximum_bend_deg: float,
+	response_exponent: float
+) -> float:
+	if not is_finite(tension_n) or not is_finite(reference_load_n) or not is_finite(maximum_bend_deg) or not is_finite(response_exponent):
+		return 0.0
+	var reference := maxf(reference_load_n, 0.001)
+	var load_fraction := clampf(maxf(tension_n, 0.0) / reference, 0.0, 1.0)
+	return clampf(maximum_bend_deg, 0.0, 60.0) * pow(load_fraction, clampf(response_exponent, 0.05, 3.0))
+
+
+static func calculate_line_visual_slack_ratio(tension_n: float, reference_load_n: float, response_exponent: float = 0.7) -> float:
+	if not is_finite(tension_n) or not is_finite(reference_load_n) or not is_finite(response_exponent):
+		return 1.0
+	var load_fraction := clampf(maxf(tension_n, 0.0) / maxf(reference_load_n, 0.001), 0.0, 1.0)
+	return clampf(1.0 - pow(load_fraction, clampf(response_exponent, 0.05, 3.0)), 0.0, 1.0)
+
+
+static func calculate_bend_direction_local(line_direction_world: Vector3, rod_mesh_basis: Basis) -> Vector2:
+	if not is_finite(line_direction_world.x) or not is_finite(line_direction_world.y) or not is_finite(line_direction_world.z):
+		return Vector2.RIGHT
+	if absf(rod_mesh_basis.determinant()) < 0.000001:
+		return Vector2.RIGHT
+	var local_direction := rod_mesh_basis.inverse() * line_direction_world
+	local_direction.y = 0.0
+	if local_direction.length_squared() < 0.0001:
+		return Vector2.RIGHT
+	local_direction = local_direction.normalized()
+	return Vector2(local_direction.x, local_direction.z)
+
+
+static func calculate_drag_setting_after_input(
+	current_setting: float,
+	loosen_pressed: bool,
+	tighten_pressed: bool,
+	delta_real_seconds: float,
+	adjustment_rate_per_second: float
+) -> float:
+	var safe_current := clampf(current_setting, 0.0, 1.0) if is_finite(current_setting) else 0.3
+	if loosen_pressed == tighten_pressed or not is_finite(delta_real_seconds) or delta_real_seconds <= 0.0:
+		return safe_current
+	var step := maxf(0.0, adjustment_rate_per_second) * delta_real_seconds if is_finite(adjustment_rate_per_second) else 0.0
+	return clampf(safe_current + (step if tighten_pressed else -step), 0.0, 1.0)
+
+
+func _update_fight_controls(delta: float) -> void:
+	if not _fight_session_active or delta <= 0.0 or not is_finite(delta):
 		return
-	var snapshot := _fishing_audio_system.get_presentation_snapshot()
-	if str(snapshot.get("catch_id", "")) != _active_catch_id or str(snapshot.get("source", "")) != "REAL_CATCH":
+	if _is_menu_open() or _is_pointer_over_ui() or _has_gui_focus():
 		return
-	var phase := str(snapshot.get("phase", "NONE"))
-	var phase_elapsed := float(snapshot.get("phase_elapsed_seconds", 0.0))
-	var line_out_reference := maxf(0.1, float(snapshot.get("line_out_reference_m", 9.0)))
-	var near_boat_reference := maxf(0.1, float(snapshot.get("near_boat_line_reference_m", 2.7)))
-	var load_target := float(snapshot.get("rod_load_ratio", 0.72))
-	_rod_tension = move_toward(_rod_tension, clampf(maxf(load_target, 0.32), 0.0, 1.0), maxf(delta, 0.0) * 1.8)
-	_rod_bend_angle_deg = rod_bend_at_full_tension_deg * _rod_tension
-	_set_rod_bend_angle(deg_to_rad(_rod_bend_angle_deg))
-	var retrieval_progress := 0.0
-	var phase_duration := 0.0
-	var expected_p3_line_distance := line_out_reference
-	if phase == "PROGRESSIVE_RETRIEVAL":
-		phase_duration = maxf(_fishing_audio_system.progressive_retrieval_seconds, 0.01)
-		retrieval_progress = clampf(phase_elapsed / phase_duration, 0.0, 1.0)
-		expected_p3_line_distance = lerpf(line_out_reference, near_boat_reference, retrieval_progress)
-	elif phase == "SURFACE_LANDING":
-		phase_duration = maxf(_fishing_audio_system.surface_landing_seconds, 0.01)
-		retrieval_progress = clampf(phase_elapsed / phase_duration, 0.0, 1.0)
-		expected_p3_line_distance = near_boat_reference
-	elif phase == "CATCH_PRESENTATION":
-		if _catch_result_received:
-			_set_state(CastState.CATCH_PRESENTATION)
-			_advance_catch_presentation(delta)
+	var loosen := InputMap.has_action("boat_fishing_drag_loosen") and Input.is_action_pressed("boat_fishing_drag_loosen")
+	var tighten := InputMap.has_action("boat_fishing_drag_tighten") and Input.is_action_pressed("boat_fishing_drag_tighten")
+	if loosen == tighten:
 		return
-	_fight_line_burst_offset_m = move_toward(
-		_fight_line_burst_offset_m,
-		get_automatic_line_burst_offset_m(str(snapshot.get("line_state", "")), float(snapshot.get("line_distance_m", expected_p3_line_distance)), expected_p3_line_distance),
-		maxf(delta, 0.0) * 8.0
+	var previous_setting := _fight_drag_setting
+	_fight_drag_setting = calculate_drag_setting_after_input(
+		_fight_drag_setting,
+		loosen,
+		tighten,
+		delta,
+		fight_drag_adjustment_per_second
 	)
-	if phase == "PROGRESSIVE_RETRIEVAL":
-		_update_auto_retrieval_position(retrieval_progress, lerpf(_fight_start_bait_depth_m, 1.1, retrieval_progress), lerpf(_fight_start_horizontal_distance_m, 2.3, retrieval_progress))
-	elif phase == "SURFACE_LANDING":
-		_update_auto_retrieval_position(1.0, lerpf(1.1, 0.12, retrieval_progress), lerpf(2.3, 1.55, retrieval_progress))
-	else:
-		_update_auto_retrieval_position(0.0, _fight_start_bait_depth_m, _fight_start_horizontal_distance_m)
-	_update_bite_fish_pose(delta, phase, retrieval_progress)
-
-
-func _update_auto_retrieval_position(_progress: float, target_depth_m: float, horizontal_distance_m: float) -> void:
-	var tip := _get_rod_tip_world()
-	var xz_direction := Vector2(_fight_radial_direction.x, _fight_radial_direction.z)
-	if xz_direction.length_squared() < 0.001:
-		xz_direction = Vector2(0.0, -1.0)
-	xz_direction = xz_direction.normalized()
-	var target_xz := Vector2(tip.x, tip.z) + xz_direction * maxf(0.25, horizontal_distance_m + _fight_line_burst_offset_m)
-	var target := Vector3(target_xz.x, tip.y, target_xz.y)
-	var surface_y := float(_sample_water(target).get("height", tip.y))
-	target.y = surface_y - maxf(0.08, target_depth_m)
-	_bait_world = target
-	_bait_velocity_world = Vector3.ZERO
-	_clamp_bait_to_water_column()
-	_line_paid_out_length_m = clampf(tip.distance_to(_bait_world), 0.55, maximum_line_length_m)
-	_rod_tension = maxf(_rod_tension, 0.65)
-
-
-func _update_bite_fish_pose(delta: float, phase: String, retrieval_progress: float) -> void:
-	if _bite_fish_visual == null or not is_instance_valid(_bite_fish_visual):
+	if is_equal_approx(previous_setting, _fight_drag_setting):
 		return
-	var target := _bait_world + Vector3.UP * 0.18
-	if phase == "SURFACE_LANDING":
-		var surface_y := float(_sample_water(_bait_world).get("height", _bait_world.y))
-		target.y = maxf(target.y, surface_y + 0.10)
-		target.x += sin(Time.get_ticks_msec() * 0.004) * 0.08
-	_bite_fish_visual.global_position = _bite_fish_visual.global_position.lerp(target, 1.0 - exp(-maxf(delta, 0.0) * 4.0))
-	_set_transient_fish_heading(_bite_fish_visual, _get_rod_tip_world() - _bite_fish_visual.global_position, sin(Time.get_ticks_msec() * 0.006) * 0.06 * (0.4 + retrieval_progress))
+	_fight_drag_feedback_direction = 1 if tighten else -1
+	_fight_drag_feedback_remaining = 1.25
+	if not _fight_snapshot.is_empty():
+		_fight_snapshot["drag_setting"] = _fight_drag_setting
+		_fight_snapshot["drag_threshold_n"] = BOAT_FIGHT_LINE_PROFILE.get_drag_threshold_n(_fight_drag_setting)
+	interaction_updated.emit(get_interaction_snapshot())
+
+
+func _advance_boat_fight(delta: float) -> void:
+	if not _fight_session_active or _fight_participant_order.is_empty() or delta <= 0.0 or not is_finite(delta):
+		return
+	var fish_snapshots: Array[Dictionary] = []
+	for catch_id in _fight_participant_order:
+		var participant := _fight_participants_by_catch_id.get(catch_id) as BoatFishingFightParticipant
+		if participant == null:
+			continue
+		var hook_position := _fight_hook_position_by_catch_id(catch_id)
+		fish_snapshots.append(participant.advance(delta, _get_hull_outward_horizontal(hook_position)))
+	if fish_snapshots.is_empty():
+		return
+	var rod_tip := _get_fight_solver_rod_tip_world()
+	var line_direction := _get_tackle_line_connection_world() - rod_tip
+	if line_direction.length_squared() < 0.000001:
+		line_direction = _fight_radial_direction
+	if line_direction.length_squared() < 0.000001:
+		line_direction = Vector3.FORWARD
+	line_direction = line_direction.normalized()
+	var safe_minimum_line_m := _get_fight_minimum_line_length_m()
+	var line_before := _line_paid_out_length_m
+	var solved := _fight_solver.solve_step(
+		delta,
+		line_before,
+		safe_minimum_line_m,
+		maximum_line_length_m,
+		_manual_reeling,
+		_fight_drag_setting,
+		fish_snapshots,
+		line_direction
+	)
+	var line_delta_m := float(solved.get("line_delta_m", 0.0))
+	# This is the single fight-session write to the authoritative line length.
+	_line_paid_out_length_m = clampf(line_before + line_delta_m, safe_minimum_line_m, maximum_line_length_m)
+	_apply_fight_terminal_line_position(line_delta_m, safe_minimum_line_m, delta)
+	_fight_snapshot = solved.duplicate(true)
+	_fight_snapshot["line_length_m"] = _line_paid_out_length_m
+	_fight_snapshot["line_minimum_m"] = safe_minimum_line_m
+	_fight_snapshot["drag_setting"] = _fight_drag_setting
+	_fight_snapshot["drag_threshold_n"] = BOAT_FIGHT_LINE_PROFILE.get_drag_threshold_n(_fight_drag_setting)
+	_fight_visual_elapsed += delta
+	var tension_n := maxf(0.0, float(solved.get("tension_n", 0.0)))
+	var target_tension_ratio := clampf(float(solved.get("tension_ratio", 0.0)), 0.0, 1.0)
+	var rise_tau := 0.10 if target_tension_ratio > _rod_tension else 0.24
+	_rod_tension = lerpf(_rod_tension, target_tension_ratio, 1.0 - exp(-delta / rise_tau))
+	var base_bend_deg := calculate_rod_visual_bend_angle_deg(
+		tension_n,
+		rod_visual_reference_load_n,
+		rod_visual_max_bend_deg,
+		rod_visual_response_exponent
+	)
+	if base_bend_deg < _fight_previous_base_bend_deg - 2.5:
+		_fight_rod_recoil_amplitude_deg = minf(
+			rod_visual_release_recoil_deg,
+			_fight_previous_base_bend_deg - base_bend_deg
+		)
+		_fight_rod_recoil_elapsed = 0.0
+	_fight_previous_base_bend_deg = base_bend_deg
+	_fight_rod_burst_impulse_rad *= exp(-delta / maxf(rod_visual_burst_decay_seconds, 0.01))
+	for snapshot in fish_snapshots:
+		var catch_id := str(snapshot.get("catch_id", ""))
+		var struggle_state := str(snapshot.get("struggle_state", "steady"))
+		var previous_state := str(_fight_previous_struggle_state_by_catch_id.get(catch_id, "steady"))
+		if struggle_state == "burst" and previous_state != "burst":
+			_fight_rod_burst_impulse_rad = maxf(_fight_rod_burst_impulse_rad, deg_to_rad(rod_visual_burst_impulse_deg))
+		_fight_previous_struggle_state_by_catch_id[catch_id] = struggle_state
+	var burst_strength := 0.0
+	var vibration_phase_total := 0.0
+	for snapshot in fish_snapshots:
+		var catch_id := str(snapshot.get("catch_id", ""))
+		var phase := float(posmod(catch_id.hash(), 10000)) / 10000.0 * TAU
+		var struggle_state := str(snapshot.get("struggle_state", "steady"))
+		if struggle_state == "burst":
+			burst_strength += 1.0
+		var participant_wave := sin(_fight_visual_elapsed * TAU * rod_visual_vibration_frequency_hz + phase)
+		vibration_phase_total += participant_wave * (1.7 if struggle_state == "burst" else 1.0)
+	var participant_count := maxi(fish_snapshots.size(), 1)
+	var tension_visual_load := clampf(tension_n / maxf(rod_visual_reference_load_n, 0.001), 0.0, 1.0)
+	var line_out_fraction := clampf(float(solved.get("line_out_rate_mps", 0.0)) / maxf(BOAT_FIGHT_LINE_PROFILE.max_line_out_speed_mps, 0.1), 0.0, 1.0)
+	var movement_level := maxf(tension_visual_load, line_out_fraction * 0.55)
+	var deterministic_wave := vibration_phase_total / sqrt(float(participant_count))
+	var micro_amplitude := rod_visual_micro_vibration_deg * movement_level
+	var burst_vibration := rod_visual_burst_vibration_deg * clampf(burst_strength, 0.0, 1.0)
+	_fight_rod_micro_vibration_deg = deterministic_wave * (micro_amplitude + burst_vibration)
+	_fight_rod_recoil_elapsed += delta
+	var recoil := -_fight_rod_recoil_amplitude_deg * cos(TAU * 2.4 * _fight_rod_recoil_elapsed) * exp(-_fight_rod_recoil_elapsed / maxf(rod_visual_release_decay_seconds, 0.01))
+	var raw_visual_target := base_bend_deg + rad_to_deg(_fight_rod_burst_impulse_rad) + _fight_rod_micro_vibration_deg + recoil
+	var positive_bend_limit_deg := minf(
+		rod_visual_max_bend_deg + rod_visual_burst_impulse_deg + rod_visual_burst_vibration_deg,
+		rad_to_deg(0.8)
+	)
+	_fight_rod_target_bend_deg = clampf(raw_visual_target, -rod_visual_release_recoil_deg, positive_bend_limit_deg)
+	var visual_tau := 0.07 if _fight_rod_target_bend_deg > _rod_bend_angle_deg else 0.15
+	_rod_bend_angle_deg = lerpf(_rod_bend_angle_deg, _fight_rod_target_bend_deg, 1.0 - exp(-delta / visual_tau))
+	_rod_bend_direction_local = calculate_bend_direction_local(
+		_get_tackle_line_connection_world() - _get_fight_solver_rod_tip_world(),
+		_rod_mesh_instance.global_basis if _rod_mesh_instance != null else Basis.IDENTITY
+	)
+	_set_rod_bend_direction(_rod_bend_direction_local)
+	_set_rod_bend_angle(deg_to_rad(_rod_bend_angle_deg))
+	_apply_fight_participant_motion(delta, fish_snapshots)
+	if bool(solved.get("snapped", false)):
+		_break_boat_fight(str(solved.get("break_reason", "line_overload")))
+		return
+	if _line_paid_out_length_m <= safe_minimum_line_m + 0.025 and (_manual_reeling or line_delta_m < -0.0001):
+		_begin_fight_landing()
+
+
+func _fight_hook_position_by_catch_id(catch_id: String) -> Vector3:
+	var participant := _fight_participants_by_catch_id.get(catch_id) as BoatFishingFightParticipant
+	if participant == null:
+		return _bait_world
+	return _fight_hook_position_for_index(int(participant.get_read_only_snapshot().get("hook_index", -1)))
+
+
+func _fight_hook_position_for_index(hook_index: int) -> Vector3:
+	if _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI:
+		return _get_single_jig_hook_attachment_world()
+	_update_rig_visual_position()
+	return _get_sabiki_hook_attachment_world_position(hook_index)
+
+
+func _apply_fight_terminal_line_position(line_delta_m: float, minimum_line_m: float, delta: float) -> void:
+	var previous := _bait_world
+	var rod_tip := _get_fight_solver_rod_tip_world()
+	var connection_offset := _get_terminal_line_connection_offset_world()
+	var current_connection := _get_tackle_line_connection_world()
+	var direction := current_connection - rod_tip
+	if direction.length_squared() < 0.000001:
+		direction = _fight_radial_direction
+	if direction.length_squared() < 0.000001:
+		direction = Vector3.DOWN
+	direction = direction.normalized()
+	var target_connection: Vector3
+	if _line_paid_out_length_m <= minimum_line_m + 0.01:
+		target_connection = _get_fight_safe_hull_edge_target_world()
+	else:
+		target_connection = rod_tip + direction * _line_paid_out_length_m
+	target_connection = _constrain_fight_connection_to_terminal_water_column(target_connection, rod_tip, _line_paid_out_length_m, connection_offset)
+	_bait_world = target_connection - connection_offset
+	_bait_velocity_world = (_bait_world - previous) / maxf(delta, 0.0001)
+	_fight_terminal_motion_this_step = absf(line_delta_m) > 0.0001
+	var line_direction := target_connection - rod_tip
+	if line_direction.length_squared() > 0.000001:
+		_fight_radial_direction = line_direction.normalized()
+	_update_rig_visual_position()
+
+
+func _get_fight_solver_rod_tip_world() -> Vector3:
+	if _rod_swing == null:
+		return global_position
+	# Physics uses the straight rod axis. Shader bend and burst feedback are
+	# presentation-only and must not alter line length, payout, or solver input.
+	return _rod_swing.to_global(ROD_AXIS_LOCAL * ROD_LENGTH_M)
+
+
+func _get_terminal_line_connection_offset_world() -> Vector3:
+	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		return _get_sabiki_up_direction_world() * _current_rig.get_line_attachment_height_m()
+	return _lure_visual_basis_world * Vector3.UP * SPOON_LINE_EYE_Y_M
+
+
+func _constrain_fight_connection_to_terminal_water_column(
+	connection: Vector3,
+	rod_tip: Vector3,
+	line_length_m: float,
+	connection_offset: Vector3
+) -> Vector3:
+	var terminal := connection - connection_offset
+	var surface_y := float(_sample_water(terminal).get("height", terminal.y)) - 0.025
+	var bottom := _sample_seabed(terminal)
+	var floor_y := float(bottom.get("bottom_world_y", terminal.y - 1000.0)) + SEABED_CLEARANCE_M if bool(bottom.get("valid", false)) else terminal.y - 1000.0
+	var clamped_y := clampf(terminal.y, floor_y, surface_y)
+	if not is_equal_approx(clamped_y, terminal.y):
+		var connection_y := clamped_y + connection_offset.y
+		var vertical_delta := clampf(connection_y - rod_tip.y, -line_length_m * 0.999, line_length_m * 0.999)
+		var horizontal_length := sqrt(maxf(0.0, line_length_m * line_length_m - vertical_delta * vertical_delta))
+		var horizontal := Vector3(connection.x - rod_tip.x, 0.0, connection.z - rod_tip.z)
+		if horizontal.length_squared() < 0.000001:
+			horizontal = Vector3(_fight_radial_direction.x, 0.0, _fight_radial_direction.z)
+		horizontal = horizontal.normalized() if horizontal.length_squared() > 0.000001 else Vector3.FORWARD
+		connection = Vector3(rod_tip.x, rod_tip.y + vertical_delta, rod_tip.z) + horizontal * horizontal_length
+	return connection
+
+
+func _apply_fight_participant_motion(delta: float, fish_snapshots: Array[Dictionary]) -> void:
+	_update_rig_visual_position()
+	for snapshot in fish_snapshots:
+		var catch_id := str(snapshot.get("catch_id", ""))
+		var hook_index := int(snapshot.get("hook_index", -1))
+		var swim_direction: Vector3 = snapshot.get("swim_direction", Vector3.ZERO)
+		var speed := maxf(0.0, float(snapshot.get("swim_speed_mps", 0.0)))
+		var hook_position: Vector3
+		if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+			_advance_sabiki_branch_for_fish(hook_index, swim_direction, speed, delta)
+			_update_rig_visual_position()
+			hook_position = _get_sabiki_hook_attachment_world_position(hook_index)
+		else:
+			_advance_single_jig_tackle_for_fish(swim_direction, speed, delta)
+			hook_position = _get_single_jig_hook_attachment_world()
+		var visual := _fight_fish_visuals_by_catch_id.get(catch_id) as Node3D
+		if visual == null or not is_instance_valid(visual):
+			continue
+		var profile := _fish_manager.get_species_profile(str(snapshot.get("species_id", ""))) if _fish_manager != null else null
+		var visual_elapsed := float(_fight_fish_visual_elapsed_by_catch_id.get(catch_id, 0.0)) + delta
+		_fight_fish_visual_elapsed_by_catch_id[catch_id] = visual_elapsed
+		var frequency := profile.tail_frequency_hz if profile != null else 2.0
+		var struggle_state := str(snapshot.get("struggle_state", "steady"))
+		var intensity := 0.12 if struggle_state == "steady" else 0.34 if struggle_state == "burst" else 0.20
+		var phase := visual_elapsed * TAU * frequency
+		var target_heading := swim_direction if swim_direction.length_squared() > 0.0001 else -_get_hull_outward_horizontal(hook_position)
+		var previous_heading: Vector3 = _fight_fish_heading_by_catch_id.get(catch_id, -_get_hull_outward_horizontal(hook_position))
+		var turn_rate := profile.boat_fishing_turn_rate_deg_s if profile != null else 300.0
+		var heading := _advance_fight_fish_heading(catch_id, previous_heading, target_heading, hook_position, float(snapshot.get("body_length_m", 0.3)), profile, turn_rate, delta)
+		_set_fish_visual_pose_at_hook(
+			visual,
+			str(snapshot.get("species_id", "")),
+			float(snapshot.get("body_length_m", 0.3)),
+			hook_position,
+			heading,
+			sin(phase) * intensity
+		)
+		var mouth_world := visual.global_transform * (profile.boat_fishing_mouth_anchor_local if profile != null else Vector3.ZERO)
+		var error_m := mouth_world.distance_to(hook_position)
+		_fight_max_mouth_hook_error_m = maxf(_fight_max_mouth_hook_error_m, error_m)
+
+
+func _advance_single_jig_tackle_for_fish(direction: Vector3, speed: float, delta: float) -> void:
+	if speed <= 0.0 or delta <= 0.0:
+		return
+	var rod_tip := _get_fight_solver_rod_tip_world()
+	var previous_connection := _get_tackle_line_connection_world()
+	var safe_direction := _remove_inward_hull_swim(direction, previous_connection)
+	var connection := advance_tethered_hook_world(
+		rod_tip,
+		previous_connection,
+		safe_direction,
+		speed,
+		delta,
+		_line_paid_out_length_m
+	)
+	connection = _constrain_fight_connection_to_terminal_water_column(
+		connection,
+		rod_tip,
+		_line_paid_out_length_m,
+		_get_terminal_line_connection_offset_world()
+	)
+	connection = _constrain_fight_connection_to_line_and_hull(
+		connection,
+		rod_tip,
+		_line_paid_out_length_m,
+		_get_terminal_line_connection_offset_world()
+	)
+	_bait_world = connection - _get_terminal_line_connection_offset_world()
+	_bait_velocity_world = (_bait_world - (previous_connection - _get_terminal_line_connection_offset_world())) / maxf(delta, 0.0001)
+	var final_radial := connection - rod_tip
+	if final_radial.length_squared() > 0.000001:
+		_fight_radial_direction = final_radial.normalized()
+	_fight_terminal_motion_this_step = false
+
+
+func _constrain_fight_connection_to_line_and_hull(
+	connection: Vector3,
+	rod_tip: Vector3,
+	line_length_m: float,
+	connection_offset: Vector3
+) -> Vector3:
+	var radius := maxf(0.0, line_length_m)
+	var radial := connection - rod_tip
+	if radial.length_squared() < 0.000001:
+		radial = _fight_radial_direction if _fight_radial_direction.length_squared() > 0.000001 else Vector3.FORWARD
+	var constrained := rod_tip + radial.normalized() * radius
+	if _get_hull_ellipse_clearance_m(constrained - connection_offset) >= 0.0:
+		return constrained
+	var safe_edge := _get_fight_safe_hull_edge_target_world() + connection_offset
+	var safe_radial := safe_edge - rod_tip
+	if safe_radial.length_squared() < 0.000001:
+		safe_radial = _fight_radial_direction
+	constrained = rod_tip + safe_radial.normalized() * radius
+	return constrained
+
+
+func _advance_sabiki_branch_for_fish(hook_index: int, direction: Vector3, speed: float, delta: float) -> void:
+	if hook_index < 0 or hook_index >= _sabiki_hook_nodes.size() or speed <= 0.0 or delta <= 0.0:
+		return
+	var root_basis := _sabiki_rig_root.global_basis.orthonormalized()
+	var local_direction: Vector3 = _fight_sabiki_branch_directions_local.get(hook_index, Vector3.LEFT)
+	var world_branch_direction := (root_basis * local_direction).normalized()
+	var safe_swim_direction := _remove_inward_hull_swim(direction, _get_sabiki_hook_attachment_world_position(hook_index))
+	var next_world_direction := advance_bounded_branch_direction_world(
+		world_branch_direction,
+		safe_swim_direction,
+		speed,
+		delta,
+		_current_rig.branch_length_m,
+		(root_basis * Vector3.LEFT).normalized(),
+		deg_to_rad(52.0)
+	)
+	_fight_sabiki_branch_directions_local[hook_index] = (root_basis.inverse() * next_world_direction).normalized()
+
+
+func _remove_inward_hull_swim(direction: Vector3, position: Vector3) -> Vector3:
+	var outward := _get_hull_outward_horizontal(position)
+	return remove_inward_swim_direction(direction, outward)
+
+
+static func remove_inward_swim_direction(direction: Vector3, hull_outward_horizontal: Vector3) -> Vector3:
+	if not direction.is_finite() or not hull_outward_horizontal.is_finite() or direction.length_squared() < 0.000001:
+		return Vector3.ZERO
+	var safe_direction := direction.normalized()
+	var outward := Vector3(hull_outward_horizontal.x, 0.0, hull_outward_horizontal.z)
+	if outward.length_squared() > 0.000001:
+		outward = outward.normalized()
+		if safe_direction.dot(outward) < 0.0:
+			safe_direction -= outward * safe_direction.dot(outward)
+	return safe_direction.normalized() if safe_direction.length_squared() > 0.000001 else Vector3.ZERO
+
+
+func _advance_fight_fish_heading(
+	catch_id: String,
+	current_heading: Vector3,
+	target_heading: Vector3,
+	hook_world: Vector3,
+	body_length_m: float,
+	profile: FishSpeciesProfile,
+	turn_rate_deg_s: float,
+	delta: float
+) -> Vector3:
+	var outward := _get_hull_outward_horizontal(hook_world)
+	var target := target_heading.normalized() if target_heading.is_finite() and target_heading.length_squared() > 0.0001 else -outward
+	if not _fight_fish_pose_clears_hull(hook_world, target, body_length_m, profile):
+		target = -outward
+	var current := current_heading.normalized() if current_heading.is_finite() and current_heading.length_squared() > 0.0001 else target
+	var step_angle := deg_to_rad(maxf(turn_rate_deg_s, 30.0)) * maxf(delta, 0.0)
+	for _attempt in range(7):
+		var candidate := advance_heading_toward(current, target, step_angle)
+		if _fight_fish_pose_clears_hull(hook_world, candidate, body_length_m, profile):
+			_fight_fish_heading_by_catch_id[catch_id] = candidate
+			return candidate
+		step_angle *= 0.5
+	_fight_fish_heading_by_catch_id[catch_id] = current
+	return current
+
+
+func _fight_fish_pose_clears_hull(hook_world: Vector3, heading: Vector3, body_length_m: float, profile: FishSpeciesProfile) -> bool:
+	if profile == null or _boat_controller == null or not _boat_controller.has_method("get_vessel_length_m") or not _boat_controller.has_method("get_vessel_beam_m"):
+		return true
+	var safe_length := maxf(0.05, body_length_m)
+	var basis := _boat_fish_basis_for_heading(heading, profile)
+	var scale_factor := maxf(0.05, safe_length / 1.2)
+	var scaled_basis := basis.scaled(Vector3.ONE * scale_factor)
+	var origin := mouth_anchored_fish_origin(hook_world, scaled_basis, profile.boat_fishing_mouth_anchor_local)
+	var forward_local := Vector3.LEFT if profile.model_forward_axis == 1 else Vector3.RIGHT
+	var tail_direction := -(basis * forward_local).normalized()
+	var radius := safe_length * 0.08
+	for sample_index in range(6):
+		var fraction := float(sample_index) / 5.0
+		var sample_position := origin.lerp(origin + tail_direction * safe_length * 0.92, fraction)
+		if _get_hull_ellipse_clearance_m(sample_position) < radius:
+			return false
+	return true
+
+
+static func advance_heading_toward(current_heading: Vector3, target_heading: Vector3, maximum_turn_radians: float) -> Vector3:
+	if not current_heading.is_finite() or not target_heading.is_finite() or current_heading.length_squared() < 0.000001 or target_heading.length_squared() < 0.000001:
+		return target_heading.normalized() if target_heading.is_finite() and target_heading.length_squared() > 0.000001 else Vector3.FORWARD
+	var current := current_heading.normalized()
+	var target := target_heading.normalized()
+	var angle := current.angle_to(target)
+	if angle <= maxf(0.0, maximum_turn_radians) or angle <= 0.0001:
+		return target
+	var axis := current.cross(target)
+	if axis.length_squared() < 0.000001:
+		axis = current.cross(Vector3.UP)
+		if axis.length_squared() < 0.000001:
+			axis = current.cross(Vector3.RIGHT)
+	return current.rotated(axis.normalized(), minf(angle, maxf(0.0, maximum_turn_radians))).normalized()
+
+
+func _get_hull_outward_horizontal(position: Vector3) -> Vector3:
+	if _boat_controller == null or not _boat_controller.has_method("get_vessel_length_m") or not _boat_controller.has_method("get_vessel_beam_m"):
+		var fallback := position - (_boat_controller.global_position if _boat_controller != null else Vector3.ZERO)
+		fallback.y = 0.0
+		if fallback.length_squared() < 0.0001:
+			fallback = _fight_radial_direction
+		fallback.y = 0.0
+		return fallback.normalized() if fallback.length_squared() > 0.0001 else Vector3.FORWARD
+	var local := _boat_controller.to_local(position)
+	var half_beam := maxf(0.5, float(_boat_controller.call("get_vessel_beam_m")) * 0.5 + FIGHT_HULL_SAFETY_MARGIN_M)
+	var half_length := maxf(1.0, float(_boat_controller.call("get_vessel_length_m")) * 0.5 + FIGHT_HULL_SAFETY_MARGIN_M)
+	var local_outward := Vector3(local.x / (half_beam * half_beam), 0.0, local.z / (half_length * half_length))
+	var outward := _boat_controller.global_basis * local_outward
+	outward.y = 0.0
+	if outward.length_squared() < 0.0001:
+		outward = position - _boat_controller.global_position
+		outward.y = 0.0
+	return outward.normalized() if outward.length_squared() > 0.0001 else Vector3.FORWARD
+
+
+func _project_fight_position_outside_hull(position: Vector3, extra_margin_m: float = 0.0) -> Vector3:
+	if _boat_controller == null or not _boat_controller.has_method("get_vessel_length_m") or not _boat_controller.has_method("get_vessel_beam_m"):
+		return position
+	var local := _boat_controller.to_local(position)
+	var half_beam := maxf(0.5, float(_boat_controller.call("get_vessel_beam_m")) * 0.5 + FIGHT_HULL_SAFETY_MARGIN_M + extra_margin_m)
+	var half_length := maxf(1.0, float(_boat_controller.call("get_vessel_length_m")) * 0.5 + FIGHT_HULL_SAFETY_MARGIN_M + extra_margin_m)
+	var ellipse := local.x * local.x / (half_beam * half_beam) + local.z * local.z / (half_length * half_length)
+	if ellipse >= 1.0:
+		return position
+	if ellipse < 0.000001:
+		var outward := _boat_controller.global_basis.inverse() * _get_hull_outward_horizontal(position)
+		local.x = outward.x
+		local.z = outward.z
+		ellipse = local.x * local.x / (half_beam * half_beam) + local.z * local.z / (half_length * half_length)
+		if ellipse < 0.000001:
+			local.x = 1.0
+			ellipse = 1.0 / (half_beam * half_beam)
+	var scale := 1.001 / sqrt(ellipse)
+	local.x *= scale
+	local.z *= scale
+	return _boat_controller.to_global(local)
+
+
+func _get_fight_minimum_line_length_m() -> float:
+	return maxf(MINIMUM_MANUAL_RETRIEVAL_LINE_M, float(_get_fight_safe_hull_edge_data().get("distance_m", MINIMUM_MANUAL_RETRIEVAL_LINE_M)))
+
+
+func _get_fight_safe_hull_edge_target_world() -> Vector3:
+	var edge_data := _get_fight_safe_hull_edge_data()
+	return edge_data.get("position", _bait_world)
+
+
+func _get_fight_safe_hull_edge_data() -> Dictionary:
+	var tip := _get_fight_solver_rod_tip_world()
+	if _boat_controller == null or not _boat_controller.has_method("get_vessel_length_m") or not _boat_controller.has_method("get_vessel_beam_m"):
+		return {"position": _get_tackle_line_connection_world(), "distance_m": MINIMUM_MANUAL_RETRIEVAL_LINE_M}
+	var local_tip := _boat_controller.to_local(tip)
+	var local_connection := _boat_controller.to_local(_get_tackle_line_connection_world())
+	var half_beam := maxf(0.5, float(_boat_controller.call("get_vessel_beam_m")) * 0.5 + FIGHT_HULL_SAFETY_MARGIN_M)
+	var half_length := maxf(1.0, float(_boat_controller.call("get_vessel_length_m")) * 0.5 + FIGHT_HULL_SAFETY_MARGIN_M)
+	var start_value := local_tip.x * local_tip.x / (half_beam * half_beam) + local_tip.z * local_tip.z / (half_length * half_length)
+	if start_value >= 1.0:
+		# The handheld rod tip can extend beyond the conservative hull ellipse.
+		# In that case use the nearest point on the ellipse plus a small water-side
+		# margin, rather than pretending the fish is already at the current bait.
+		var radial := Vector2(local_tip.x, local_tip.z)
+		if radial.length_squared() < 0.000001:
+			radial = Vector2(1.0, 0.0)
+		var boundary_scale := 1.0 / sqrt(maxf(start_value, 0.000001))
+		var boundary := radial * boundary_scale
+		var outward := radial.normalized()
+		var edge_local := Vector3(boundary.x + outward.x * 0.24, local_tip.y, boundary.y + outward.y * 0.24)
+		var edge := _boat_controller.to_global(edge_local)
+		var surface_y := float(_sample_water(edge).get("height", edge.y))
+		var target := Vector3(edge.x, surface_y - 0.08, edge.z)
+		return {"position": target, "distance_m": tip.distance_to(target)}
+	var delta := Vector2(local_connection.x - local_tip.x, local_connection.z - local_tip.z)
+	if delta.length_squared() < 0.000001:
+		var fallback := _boat_controller.global_basis.inverse() * _get_hull_outward_horizontal(_bait_world)
+		delta = Vector2(fallback.x, fallback.z)
+	if delta.length_squared() < 0.000001:
+		delta = Vector2(1.0, 0.0)
+	delta = delta.normalized()
+	var p := Vector2(local_tip.x, local_tip.z)
+	var a := delta.x * delta.x / (half_beam * half_beam) + delta.y * delta.y / (half_length * half_length)
+	var b := 2.0 * (p.x * delta.x / (half_beam * half_beam) + p.y * delta.y / (half_length * half_length))
+	var c := start_value - 1.0
+	var discriminant := maxf(0.0, b * b - 4.0 * a * c)
+	var exit_distance := (-b + sqrt(discriminant)) / maxf(2.0 * a, 0.000001)
+	var edge_local := Vector3(local_tip.x + delta.x * (exit_distance + 0.24), local_tip.y, local_tip.z + delta.y * (exit_distance + 0.24))
+	var edge := _boat_controller.to_global(edge_local)
+	var surface_y := float(_sample_water(edge).get("height", edge.y))
+	var target := Vector3(edge.x, surface_y - 0.08, edge.z)
+	return {"position": target, "distance_m": tip.distance_to(target)}
+
+
+func _begin_fight_landing() -> void:
+	if not _fight_session_active or _encounter == null or _state == CastState.LANDING:
+		return
+	_clear_manual_line_controls()
+	_rod_aim_active = false
+	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		_cancel_sabiki_approach_reservations()
+		var pending := _encounter.begin_sabiki_batch_retrieval()
+		if pending == null:
+			_handle_fight_settlement_failure("sabiki_batch_start_failed")
+			return
+		_sabiki_batch_retrieval_active = true
+		_sabiki_batch_catch_count = get_sabiki_hooked_count()
+		_active_catch_id = pending.catch_id
+		_active_catch_species_id = pending.species_id
+		_bite_debug_spawned = pending.debug_spawned
+	else:
+		var pending := _encounter.pending_catch
+		if pending == null or pending.fishing_method != "boat_fishing":
+			_handle_fight_settlement_failure("single_catch_missing_at_landing")
+			return
+		_active_catch_id = pending.catch_id
+		_active_catch_species_id = pending.species_id
+		_bite_debug_spawned = pending.debug_spawned
+	if not _encounter.begin_retrieval():
+		_handle_fight_settlement_failure("retrieval_transition_rejected")
+		return
+	_fight_landing_elapsed = 0.0
+	_fight_landing_surface_crossed.clear()
+	_fight_landing_start_bait_world = _bait_world
+	_fight_landing_raise_m = FIGHT_LANDING_RISE_METERS
+	var landing_hooks := get_hook_attachment_world_positions()
+	for hook_position in landing_hooks:
+		var surface_y := float(_sample_water(hook_position).get("height", hook_position.y))
+		_fight_landing_raise_m = maxf(_fight_landing_raise_m, surface_y + 0.12 - hook_position.y + FIGHT_LANDING_RISE_METERS)
+	for catch_id in _fight_participant_order:
+		_fight_landing_surface_crossed[catch_id] = false
+	_fight_session_active = false
+	_set_boat_fishing_audio_loop("line_out", false)
+	_set_boat_fishing_audio_loop("reel_in", false)
+	_set_boat_fishing_audio_loop("drag", false)
+	_set_state(CastState.LANDING)
+
+
+func _advance_fight_landing(delta: float) -> void:
+	_fight_landing_elapsed += maxf(0.0, delta)
+	var ordered_ids := _fight_participant_order.duplicate()
+	ordered_ids.sort_custom(func(a: String, b: String) -> bool:
+		var participant_a := _fight_participants_by_catch_id.get(a) as BoatFishingFightParticipant
+		var participant_b := _fight_participants_by_catch_id.get(b) as BoatFishingFightParticipant
+		var hook_a := int(participant_a.get_read_only_snapshot().get("hook_index", 0)) if participant_a != null else 0
+		var hook_b := int(participant_b.get_read_only_snapshot().get("hook_index", 0)) if participant_b != null else 0
+		return hook_a < hook_b
+	)
+	var landing_duration := maxf(FIGHT_LANDING_DURATION_SECONDS, _fight_landing_raise_m / FIGHT_LANDING_RISE_SPEED_MPS)
+	var progress := clampf(_fight_landing_elapsed / maxf(landing_duration, 0.01), 0.0, 1.0)
+	var previous_bait := _bait_world
+	var previous_line_length_m := _line_paid_out_length_m
+	_bait_world = _fight_landing_start_bait_world + Vector3.UP * _fight_landing_raise_m * _smoothstep01(progress)
+	_bait_velocity_world = (_bait_world - previous_bait) / maxf(delta, 0.0001)
+	_update_rig_visual_position()
+	_line_paid_out_length_m = _get_fight_solver_rod_tip_world().distance_to(_get_tackle_line_connection_world())
+	var landing_line_rate_mps := (_line_paid_out_length_m - previous_line_length_m) / maxf(delta, 0.0001)
+	_fight_snapshot["line_length_m"] = _line_paid_out_length_m
+	_fight_snapshot["line_rate_mps"] = landing_line_rate_mps
+	_fight_snapshot["reel_in_rate_mps"] = maxf(-landing_line_rate_mps, 0.0)
+	_fight_snapshot["line_out_rate_mps"] = maxf(landing_line_rate_mps, 0.0)
+	_fight_snapshot["drag_paying_out"] = false
+	var hook_positions := get_hook_attachment_world_positions()
+	for catch_id_variant in ordered_ids:
+		var catch_id := str(catch_id_variant)
+		var participant := _fight_participants_by_catch_id.get(catch_id) as BoatFishingFightParticipant
+		if participant == null:
+			continue
+		var fish_snapshot := participant.get_read_only_snapshot()
+		var hook_index := int(fish_snapshot.get("hook_index", -1))
+		if hook_index < 0 or hook_index >= hook_positions.size():
+			continue
+		var hook_position: Vector3 = hook_positions[hook_index]
+		var visual := _fight_fish_visuals_by_catch_id.get(catch_id) as Node3D
+		if visual != null and is_instance_valid(visual):
+			var species_id := str(fish_snapshot.get("species_id", ""))
+			var body_length_m := float(fish_snapshot.get("body_length_m", 0.3))
+			var profile := _fish_manager.get_species_profile(species_id) if _fish_manager != null else null
+			var target_heading := -_get_hull_outward_horizontal(hook_position)
+			var previous_heading: Vector3 = _fight_fish_heading_by_catch_id.get(catch_id, target_heading)
+			var turn_rate := profile.boat_fishing_turn_rate_deg_s if profile != null else 300.0
+			var landing_heading := _advance_fight_fish_heading(catch_id, previous_heading, target_heading, hook_position, body_length_m, profile, turn_rate, delta)
+			_set_fish_visual_pose_at_hook(
+				visual,
+				species_id,
+				body_length_m,
+				hook_position,
+				landing_heading,
+				sin(_fight_landing_elapsed * 8.0) * 0.10
+			)
+		var surface_y := float(_sample_water(hook_position).get("height", hook_position.y))
+		if hook_position.y >= surface_y and not bool(_fight_landing_surface_crossed.get(catch_id, false)):
+			_fight_landing_surface_crossed[catch_id] = true
+			if Time.get_ticks_msec() * 0.001 - _last_sabiki_splash_time >= 0.32:
+				_last_sabiki_splash_time = Time.get_ticks_msec() * 0.001
+				_show_splash_visual(hook_position)
+				_play_boat_fishing_one_shot("splash")
+	if _fight_landing_elapsed >= landing_duration:
+		_complete_fight_landing()
+
+
+func _complete_fight_landing() -> void:
+	if _encounter == null or _state != CastState.LANDING:
+		return
+	var was_batch := _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI
+	var result := _encounter.complete_retrieval(_active_catch_id)
+	if not bool(result.get("accepted", false)):
+		_handle_fight_settlement_failure(str(result.get("reason", "settlement_rejected")))
+		return
+	if not was_batch:
+		_reset_boat_fight_session(true)
+
+
+func _handle_fight_settlement_failure(reason: String) -> void:
+	_reset_boat_fight_session(true)
+	if _encounter != null:
+		if _encounter.pending_catch != null and _encounter.pending_catch.fishing_method == "boat_fishing":
+			_encounter.cancel_boat_fishing_catch(reason)
+		elif not _encounter.get_sabiki_hook_catches().is_empty():
+			_encounter.cancel_sabiki_catches(reason)
+	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
+		_bite_fish_visual.queue_free()
+	_bite_fish_visual = null
+	_clear_sabiki_hook_visuals()
+	_reset_sabiki_hook_states()
+	_active_catch_id = ""
+	_active_catch_species_id = ""
+	_catch_result_received = false
+	_sabiki_batch_retrieval_active = false
+	_sabiki_batch_catch_count = 0
+	_clear_boat_fishing_audio_loops()
+	_rod_tension = 0.0
+	_rod_bend_angle_deg = 0.0
+	_set_rod_bend_angle(0.0)
+	if _activity_active:
+		_set_state(CastState.WAITING if _bait_has_landed else CastState.READY)
+
+
+func _break_boat_fight(reason: String) -> void:
+	if not _fight_session_active:
+		return
+	_begin_fight_rod_release()
+	_fight_session_active = false
+	_clear_manual_line_controls()
+	set_automatic_control_owned(false)
+	_set_boat_fishing_audio_loop("line_out", false)
+	_set_boat_fishing_audio_loop("reel_in", false)
+	_set_boat_fishing_audio_loop("drag", false)
+	var catch_id := _active_catch_id
+	_active_catch_id = ""
+	_fight_participants_by_catch_id.clear()
+	_fight_participant_order.clear()
+	_fight_fish_visuals_by_catch_id.clear()
+	_fight_fish_heading_by_catch_id.clear()
+	_fight_landing_surface_crossed.clear()
+	_fight_solver.reset_session()
+	_fight_drag_setting = clampf(BOAT_FIGHT_LINE_PROFILE.default_drag_setting, 0.0, 1.0)
+	_fight_snapshot = {}
+	_active_fight_session_id = 0
+	_fight_last_real_tick_usec = -1
+	if _encounter != null:
+		if _encounter.pending_catch != null and _encounter.pending_catch.fishing_method == "boat_fishing":
+			_encounter.cancel_boat_fishing_catch("boat_fishing_line_snapped")
+		elif not _encounter.get_sabiki_hook_catches().is_empty():
+			_encounter.cancel_sabiki_catches("boat_fishing_line_snapped")
+	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
+		_bite_fish_visual.queue_free()
+	_bite_fish_visual = null
+	_clear_sabiki_hook_visuals()
+	_reset_sabiki_hook_states()
+	_sabiki_batch_retrieval_active = false
+	_sabiki_batch_catch_count = 0
+	_catch_result_received = false
+	_rod_tension = 0.0
+	_rod_bend_angle_deg = 0.0
+	_set_rod_bend_angle(0.0)
+	_bait_has_landed = false
+	_bait_instance.visible = false
+	_line_instance.visible = false
+	if _sabiki_rig_root != null:
+		_sabiki_rig_root.visible = false
+	_line_paid_out_length_m = 0.0
+	_line_broken_elapsed = 0.0
+	feedback_requested.emit("hud.boat_fishing.line_snapped")
+	_set_state(CastState.LINE_BROKEN)
+	interaction_updated.emit(get_interaction_snapshot())
+
+
+func _advance_line_broken(delta: float) -> void:
+	_line_broken_elapsed += maxf(0.0, delta)
+	_advance_fight_rod_release(delta)
+	if _line_broken_elapsed >= FIGHT_LINE_BROKEN_DURATION_SECONDS:
+		clear_cast()
+
+
+func _begin_fight_rod_release() -> void:
+	_fight_rod_release_start_deg = _rod_bend_angle_deg
+	_fight_rod_release_elapsed = 0.0
+	_fight_rod_release_active = absf(_fight_rod_release_start_deg) > 0.05
+
+
+func _advance_fight_rod_release(delta: float) -> void:
+	if not _fight_rod_release_active:
+		return
+	_fight_rod_release_elapsed += maxf(0.0, delta)
+	var damped := exp(-_fight_rod_release_elapsed / 0.24)
+	var recoil_deg := -minf(3.5, absf(_fight_rod_release_start_deg) * 0.18) * sin(TAU * 2.8 * _fight_rod_release_elapsed) * damped
+	_rod_bend_angle_deg = _fight_rod_release_start_deg * damped + recoil_deg
+	_set_rod_bend_angle(deg_to_rad(_rod_bend_angle_deg))
+	if _fight_rod_release_elapsed >= 0.9 or absf(_rod_bend_angle_deg) <= 0.03:
+		_rod_bend_angle_deg = 0.0
+		_fight_rod_release_active = false
+		_set_rod_bend_angle(0.0)
+
+
+func _reset_boat_fight_session(keep_visuals: bool = false) -> void:
+	_fight_session_active = false
+	_fight_participants_by_catch_id.clear()
+	_fight_participant_order.clear()
+	_fight_fish_visuals_by_catch_id.clear()
+	_fight_fish_visual_elapsed_by_catch_id.clear()
+	_fight_fish_heading_by_catch_id.clear()
+	_fight_previous_struggle_state_by_catch_id.clear()
+	if not keep_visuals:
+		_fight_sabiki_branch_directions_local.clear()
+	_fight_snapshot = {}
+	_fight_landing_elapsed = 0.0
+	_fight_landing_surface_crossed.clear()
+	_fight_terminal_motion_this_step = false
+	_fight_landing_start_bait_world = Vector3.ZERO
+	_fight_landing_raise_m = FIGHT_LANDING_RISE_METERS
+	_fight_rod_burst_impulse_rad = 0.0
+	_fight_rod_target_bend_deg = 0.0
+	_fight_rod_micro_vibration_deg = 0.0
+	_fight_rod_recoil_amplitude_deg = 0.0
+	_fight_rod_recoil_elapsed = 0.0
+	_fight_visual_elapsed = 0.0
+	_fight_previous_base_bend_deg = 0.0
+	_fight_rod_release_start_deg = 0.0
+	_fight_rod_release_elapsed = 0.0
+	_fight_rod_release_active = false
+	_fight_drag_feedback_remaining = 0.0
+	_fight_drag_feedback_direction = 0
+	_fight_max_mouth_hook_error_m = 0.0
+	_fight_solver.reset_session()
+	_fight_drag_setting = clampf(BOAT_FIGHT_LINE_PROFILE.default_drag_setting, 0.0, 1.0)
+	_active_fight_session_id = 0
+	_fight_last_real_tick_usec = -1
 
 
 func _advance_catch_presentation(delta: float) -> void:
 	_catch_presentation_elapsed += maxf(delta, 0.0)
+	_advance_fight_rod_release(delta)
 	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
-		_set_transient_fish_heading(_bite_fish_visual, _get_rod_tip_world() - _bite_fish_visual.global_position, sin(_catch_presentation_elapsed * 7.0) * 0.08)
-	if _catch_result_received and _fishing_audio_system != null:
-		var snapshot := _fishing_audio_system.get_presentation_snapshot()
-		if str(snapshot.get("source", "")) == "NONE" or str(snapshot.get("phase", "NONE")) == "NONE":
-			clear_cast()
+		var hook_world := _get_single_jig_hook_attachment_world()
+		_set_fish_visual_pose_at_hook(_bite_fish_visual, _active_catch_species_id, _get_pending_catch_body_length_m(), hook_world, -_get_hull_outward_horizontal(hook_world), sin(_catch_presentation_elapsed * 7.0) * 0.08)
+	if _catch_result_received and _catch_presentation_elapsed >= FIGHT_PRESENTATION_DURATION_SECONDS:
+		clear_cast()
 
 
 func _on_authority_catch_succeeded(result: FishingCatchResult) -> void:
@@ -1681,14 +2933,17 @@ func _on_authority_catch_succeeded(result: FishingCatchResult) -> void:
 	if _sabiki_batch_retrieval_active or result.rig_id == str(SABIKI_RIG_PROFILE.rig_id):
 		return
 	_catch_result_received = true
+	_catch_presentation_elapsed = 0.0
+	_reset_boat_fight_session(true)
+	_begin_fight_rod_release()
 	_set_boat_fishing_audio_loop("line_out", false)
 	_set_boat_fishing_audio_loop("reel_in", false)
 	_set_boat_fishing_audio_loop("drag", false)
 	report_catch_succeeded(result.catch_id)
 	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
-		var surface_y := float(_sample_water(_bite_fish_visual.global_position).get("height", _bite_fish_visual.global_position.y))
-		_bite_fish_visual.global_position.y = maxf(_bite_fish_visual.global_position.y, surface_y + 0.08)
-		_show_splash_visual(_bite_fish_visual.global_position)
+		var hook_world := _get_single_jig_hook_attachment_world()
+		_set_fish_visual_pose_at_hook(_bite_fish_visual, result.species_id, _active_catch_body_length_m, hook_world, -_get_hull_outward_horizontal(hook_world))
+		_show_splash_visual(hook_world)
 	_set_state(CastState.CATCH_PRESENTATION)
 
 
@@ -1698,6 +2953,7 @@ func _on_authority_catch_cancelled(catch_id: String, _reason: String) -> void:
 	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
 		_bite_fish_visual.queue_free()
 	_bite_fish_visual = null
+	_reset_boat_fight_session(true)
 	_bite_candidate.clear()
 	_active_catch_id = ""
 	set_automatic_control_owned(false)
@@ -1711,7 +2967,7 @@ func _on_authority_catch_cancelled(catch_id: String, _reason: String) -> void:
 		_reset_sabiki_hook_states()
 		_sabiki_batch_retrieval_active = false
 		_sabiki_batch_catch_count = 0
-	if _activity_active and _state in [CastState.BITE_APPROACH, CastState.FIGHTING]:
+	if _activity_active and _state in [CastState.BITE_APPROACH, CastState.FIGHTING, CastState.LANDING, CastState.SABIKI_HOOKED_WAITING]:
 		_set_state(CastState.WAITING)
 
 
@@ -1733,6 +2989,10 @@ func _on_sabiki_batch_settled(batch_id: String, results: Array) -> void:
 		"total_weight_kg": total_weight_kg,
 	}
 	_catch_result_received = true
+	_catch_presentation_elapsed = 0.0
+	_sabiki_batch_retrieval_active = false
+	_reset_boat_fight_session(true)
+	_begin_fight_rod_release()
 	_set_boat_fishing_audio_loop("line_out", false)
 	_set_boat_fishing_audio_loop("reel_in", false)
 	_set_boat_fishing_audio_loop("drag", false)
@@ -1762,18 +3022,8 @@ func _create_transient_fish_visual(species_id: String, body_length_m: float, hea
 	return fish
 
 
-func _set_transient_fish_heading(fish: Node3D, heading: Vector3, roll_radians: float) -> void:
-	if fish == null or not is_instance_valid(fish):
-		return
-	var profile := _fish_manager.get_species_profile(_active_catch_species_id) if _fish_manager != null and not _active_catch_species_id.is_empty() else null
-	if profile == null:
-		return
-	var direction := heading
-	if direction.length_squared() < 0.001:
-		direction = Vector3.FORWARD
-	var basis := FishSchoolRenderer.basis_for_model_heading(direction, profile.model_forward_axis)
-	basis = basis.rotated(direction.normalized(), roll_radians)
-	fish.global_basis = basis.scaled(Vector3.ONE * _bite_visual_scale)
+static func mouth_anchored_fish_origin(hook_world: Vector3, scaled_fish_basis: Basis, mouth_anchor_local: Vector3) -> Vector3:
+	return hook_world - scaled_fish_basis * mouth_anchor_local
 
 
 func _world_game_time_seconds() -> float:
@@ -1785,7 +3035,70 @@ func _smoothstep01(value: float) -> float:
 	return t * t * (3.0 - 2.0 * t)
 
 
+## Advances a hook on the fixed-length sphere around the straight rod tip.
+## The participant's force still controls payout in the solver; this visual
+## tangential motion can never write to the authoritative line length.
+static func advance_tethered_hook_world(
+	rod_tip_world: Vector3,
+	current_hook_world: Vector3,
+	swim_direction_world: Vector3,
+	swim_speed_mps: float,
+	dt_real: float,
+	line_length_m: float
+) -> Vector3:
+	if not rod_tip_world.is_finite() or not current_hook_world.is_finite() or not swim_direction_world.is_finite():
+		return current_hook_world
+	if not is_finite(swim_speed_mps) or not is_finite(dt_real) or not is_finite(line_length_m):
+		return current_hook_world
+	var radius := maxf(0.0, line_length_m)
+	var radial := current_hook_world - rod_tip_world
+	if radial.length_squared() < 0.000001 or radius <= 0.0001:
+		return rod_tip_world + radial.normalized() * radius if radial.length_squared() > 0.000001 else current_hook_world
+	radial = radial.normalized()
+	var tangent := swim_direction_world - radial * swim_direction_world.dot(radial)
+	if tangent.length_squared() < 0.000001 or swim_speed_mps <= 0.0 or dt_real <= 0.0:
+		return rod_tip_world + radial * radius
+	var moved := radial * radius + tangent.normalized() * swim_speed_mps * dt_real
+	return rod_tip_world + moved.normalized() * radius
+
+
+## Pivots a Sabiki branch around its mainline root within a fixed angular cone.
+static func advance_bounded_branch_direction_world(
+	current_direction_world: Vector3,
+	swim_direction_world: Vector3,
+	swim_speed_mps: float,
+	dt_real: float,
+	branch_length_m: float,
+	rest_direction_world: Vector3,
+	maximum_swing_radians: float
+) -> Vector3:
+	var current := current_direction_world.normalized() if current_direction_world.length_squared() > 0.000001 else rest_direction_world.normalized()
+	var rest := rest_direction_world.normalized() if rest_direction_world.length_squared() > 0.000001 else Vector3.LEFT
+	if not current.is_finite() or not swim_direction_world.is_finite() or not is_finite(swim_speed_mps) or not is_finite(dt_real):
+		return rest
+	var tangent := swim_direction_world - current * swim_direction_world.dot(current)
+	if tangent.length_squared() < 0.000001 or swim_speed_mps <= 0.0 or dt_real <= 0.0:
+		return current
+	var length := maxf(0.04, branch_length_m)
+	var moved := (current + tangent.normalized() * (swim_speed_mps * dt_real / length)).normalized()
+	var angle := acos(clampf(rest.dot(moved), -1.0, 1.0))
+	var maximum_angle := clampf(maximum_swing_radians, 0.0, PI)
+	if angle > maximum_angle and angle > 0.0001:
+		moved = rest.slerp(moved, maximum_angle / angle).normalized()
+	return moved
+
+
 func _update_ready_rod_pose() -> void:
+	if _onboard == null or _rod_visual_root == null:
+		return
+	_update_rod_hand_anchor()
+	_rod_swing.rotation = Vector3.ZERO
+	_rod_back_angle_deg = 0.0
+	_rod_bend_angle_deg = 0.0
+	_set_rod_bend_angle(0.0)
+
+
+func _update_rod_hand_anchor() -> void:
 	if _onboard == null or _rod_visual_root == null:
 		return
 	var player_position := _onboard.get_player_local_position()
@@ -1797,10 +3110,6 @@ func _update_ready_rod_pose() -> void:
 		player_yaw,
 		0.0
 	)
-	_rod_swing.rotation = Vector3.ZERO
-	_rod_back_angle_deg = 0.0
-	_rod_bend_angle_deg = 0.0
-	_set_rod_bend_angle(0.0)
 
 
 func _update_charge_animation(delta: float) -> void:
@@ -1871,6 +3180,13 @@ func _apply_rod_pose() -> void:
 func _set_rod_bend_angle(angle_radians: float) -> void:
 	if _rod_shader_material != null:
 		_rod_shader_material.set_shader_parameter("bend_angle", angle_radians)
+
+
+func _set_rod_bend_direction(direction_local: Vector2) -> void:
+	if _rod_shader_material == null:
+		return
+	var safe_direction := direction_local.normalized() if direction_local.length_squared() > 0.0001 else Vector2.RIGHT
+	_rod_shader_material.set_shader_parameter("bend_direction_local", Vector3(safe_direction.x, 0.0, safe_direction.y))
 
 
 func _update_cast_animation(delta: float) -> void:
@@ -1950,6 +3266,7 @@ func _update_bait_flight(delta: float) -> void:
 		_bait_has_landed = true
 		if _current_rig.rig_type == BoatFishingRigProfile.RigType.SINGLE_JIG:
 			_cast_tackle_entry_complete = true
+		_record_boat_fishing_first_entry()
 		_splash_elapsed = 0.0
 		_splash_instance.position = to_local(_bait_world)
 		_splash_instance.scale = Vector3.ONE * 0.28
@@ -1977,6 +3294,22 @@ func _advance_cast_tackle_water_entry(delta: float) -> void:
 	if _is_tackle_fully_submerged() or _sinker_is_resting_on_seabed():
 		_cast_tackle_entry_complete = true
 		_bait_velocity_world.y = minf(_bait_velocity_world.y, 0.0)
+		_record_boat_fishing_first_entry()
+
+
+func _record_boat_fishing_first_entry() -> void:
+	if _cast_first_entry_recorded or _encounter == null or _current_rig == null:
+		return
+	var entry_position := _get_single_jig_hook_attachment_world()
+	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		var hook_positions := get_hook_attachment_world_positions()
+		if not hook_positions.is_empty():
+			entry_position = Vector3.ZERO
+			for hook_position in hook_positions:
+				entry_position += hook_position
+			entry_position /= float(hook_positions.size())
+	_encounter.begin_boat_fishing_cast_session(entry_position, _current_rig)
+	_cast_first_entry_recorded = true
 
 
 func _sinker_is_resting_on_seabed() -> bool:
@@ -2176,6 +3509,11 @@ func _apply_waiting_rod_pose() -> void:
 func _begin_final_retrieval() -> void:
 	if _state != CastState.WAITING:
 		return
+	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		# A player may reel an empty rig in while a fish is still approaching one
+		# of its hooks. That pending bite is not a landed fish; release its local
+		# Authority reservation and visual before the tackle leaves the water.
+		_cancel_sabiki_approach_reservations()
 	_manual_reeling = false
 	_manual_reeling_from_ui = false
 	_manual_reeling_input_held = false
@@ -2389,7 +3727,7 @@ func _clamp_bait_to_water_column(allow_above_surface: bool = false) -> void:
 
 func _sync_manual_line_controls() -> void:
 	var wants_reel := _manual_reeling_input_held or _manual_reeling_from_ui
-	var wants_release := _manual_line_release_held
+	var wants_release := _manual_line_release_held and not _fight_session_active
 	if wants_reel and wants_release:
 		_line_controls_conflicted = true
 	if _line_controls_conflicted:
@@ -2399,7 +3737,7 @@ func _sync_manual_line_controls() -> void:
 			_line_controls_conflicted = false
 		interaction_updated.emit(get_interaction_snapshot())
 		return
-	var input_valid := _activity_active and _is_waiting_line_state() and not _automatic_control_owned
+	var input_valid := _activity_active and _is_manual_reel_state() and not _automatic_control_owned
 	_manual_reeling = wants_reel and input_valid
 	_manual_line_releasing = wants_release and input_valid
 	interaction_updated.emit(get_interaction_snapshot())
@@ -2407,7 +3745,7 @@ func _sync_manual_line_controls() -> void:
 
 func _get_reel_feedback_line_length() -> float:
 	match _state:
-		CastState.WAITING, CastState.SABIKI_HOOKED_WAITING, CastState.BITE_APPROACH, CastState.FIGHTING, CastState.CATCH_PRESENTATION:
+		CastState.WAITING, CastState.SABIKI_HOOKED_WAITING, CastState.BITE_APPROACH, CastState.FIGHTING, CastState.CATCH_PRESENTATION, CastState.LANDING:
 			return maxf(0.0, _line_paid_out_length_m)
 		CastState.CASTING, CastState.RETRIEVING:
 			if not _bait_flight_started or not is_cast_active():
@@ -2435,6 +3773,7 @@ func _update_reel_visual_and_audio(line_length_before_m: float, line_length_afte
 		(_state == CastState.CASTING and _bait_flight_started and not _bait_has_landed)
 		or (_is_waiting_line_state() and (_manual_reeling or _manual_line_releasing or _automatic_control_owned))
 		or (_state in [CastState.BITE_APPROACH, CastState.FIGHTING, CastState.CATCH_PRESENTATION] and _automatic_control_owned)
+		or (_fight_session_active and _state in [CastState.SABIKI_HOOKED_WAITING, CastState.FIGHTING] and absf(line_delta_m) >= REEL_LINE_DELTA_EPSILON_M)
 		or (_state == CastState.RETRIEVING)
 	)
 	var reel_speed_rad_s := 0.0
@@ -2453,10 +3792,15 @@ func _update_reel_visual_and_audio(line_length_before_m: float, line_length_afte
 
 	var targets := get_boat_fishing_audio_targets(
 		_state, line_delta_m, _manual_reeling, _manual_line_releasing,
-		_automatic_control_owned, _bait_flight_started, _bait_has_landed
+		_automatic_control_owned or _fight_session_active, _bait_flight_started, _bait_has_landed
 	)
+	var audio_line_rate := float(_fight_snapshot.get("line_rate_mps", line_rate_mps)) if _fight_session_active else line_rate_mps
+	var audio_speed_reference := maxf(BOAT_FIGHT_LINE_PROFILE.reel_in_speed_mps, BOAT_FIGHT_LINE_PROFILE.max_line_out_speed_mps)
 	for key_variant in targets.keys():
-		_set_boat_fishing_audio_loop(str(key_variant), bool(targets[key_variant]))
+		var key := str(key_variant)
+		var active := bool(targets[key_variant])
+		var intensity := clampf(absf(audio_line_rate) / maxf(audio_speed_reference, 0.1), 0.08, 1.0) if active else 0.0
+		_set_boat_fishing_audio_loop(key, active, intensity)
 
 
 static func get_boat_fishing_audio_targets(state: int, line_delta_m: float, manual_reeling: bool, manual_releasing: bool, automatic_owned: bool, bait_flying: bool, bait_landed: bool) -> Dictionary:
@@ -2465,9 +3809,10 @@ static func get_boat_fishing_audio_targets(state: int, line_delta_m: float, manu
 	var waiting := state in [CastState.WAITING, CastState.SABIKI_HOOKED_WAITING]
 	var auto_fight := state in [CastState.BITE_APPROACH, CastState.FIGHTING, CastState.CATCH_PRESENTATION]
 	var retrieval_active := state == CastState.RETRIEVING
+	var fight_landing := state == CastState.LANDING
 	return {
 		"line_out": (state == CastState.CASTING and bait_flying and not bait_landed and moving_out) or (waiting and manual_releasing and moving_out),
-		"reel_in": moving_in and ((waiting and (manual_reeling or automatic_owned)) or retrieval_active or auto_fight),
+		"reel_in": moving_in and ((waiting and (manual_reeling or automatic_owned)) or retrieval_active or auto_fight or fight_landing),
 		"drag": automatic_owned and (waiting or retrieval_active or auto_fight) and moving_out,
 	}
 
@@ -2645,17 +3990,22 @@ static func get_reel_visual_speed_rad_s(line_rate_mps: float, line_length_m: flo
 	return -line_rate_mps / maxf(spool_radius, 0.001)
 
 
-func _set_boat_fishing_audio_loop(key: String, active: bool) -> void:
-	if bool(_requested_fishing_audio_loops.get(key, false)) == active:
+func _set_boat_fishing_audio_loop(key: String, active: bool, intensity: float = 1.0) -> void:
+	var safe_intensity := clampf(intensity, 0.0, 1.0) if active and is_finite(intensity) else 0.0
+	var previous_active := bool(_requested_fishing_audio_loops.get(key, false))
+	var previous_intensity := float(_requested_fishing_audio_intensities.get(key, 0.0))
+	if previous_active == active and absf(previous_intensity - safe_intensity) < 0.02:
 		return
 	_requested_fishing_audio_loops[key] = active
+	_requested_fishing_audio_intensities[key] = safe_intensity
 	if is_instance_valid(_fishing_audio_system):
-		_fishing_audio_system.set_external_fishing_audio_loop(BOAT_FISHING_AUDIO_OWNER, key, active)
+		_fishing_audio_system.set_external_fishing_audio_loop(BOAT_FISHING_AUDIO_OWNER, key, active, safe_intensity)
 
 
 func _clear_boat_fishing_audio_loops() -> void:
 	for key_variant in _requested_fishing_audio_loops.keys():
 		_set_boat_fishing_audio_loop(str(key_variant), false)
+	_requested_fishing_audio_intensities = {"line_out": 0.0, "drag": 0.0, "reel_in": 0.0}
 	if is_instance_valid(_fishing_audio_system):
 		_fishing_audio_system.clear_external_fishing_audio_loops(BOAT_FISHING_AUDIO_OWNER)
 
@@ -2714,7 +4064,12 @@ func _get_rod_tip_world() -> Vector3:
 		curved_tip.y = ROD_LENGTH_M * 0.5
 	var rod_basis := Basis(Quaternion(Vector3.UP, ROD_AXIS_LOCAL))
 	var mesh_transform := Transform3D(rod_basis, ROD_AXIS_LOCAL * ROD_LENGTH_M * 0.5)
-	return _rod_swing.to_global(mesh_transform * curved_tip)
+	var directional_tip := Vector3(
+		_rod_bend_direction_local.x * curved_tip.x,
+		curved_tip.y,
+		_rod_bend_direction_local.y * curved_tip.x
+	)
+	return _rod_swing.to_global(mesh_transform * directional_tip)
 
 
 func _update_line_and_bait_visuals() -> void:
@@ -2771,9 +4126,10 @@ func _update_line_and_bait_visuals() -> void:
 			var t := float(point_index) / float(span_segments)
 			var sag := Vector3.ZERO
 			var terminal_curve_clear := not midpoint_over_deck or span_kept_clear
+			var fight_sag_scale := _get_fight_line_visual_slack_ratio() if _fight_session_active else 1.0
 			if terminal_span and not line_should_be_taut and _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI and terminal_curve_clear:
 				var hanging_point := _get_slack_sabiki_line_point(
-					span_start, span_end, arrival_direction, t
+					span_start, span_end, arrival_direction, t, fight_sag_scale
 				)
 				if _bait_airborne_retrieval:
 					var relaxation := exp(-2.6 * maxf(_airborne_retrieval_elapsed, 0.0))
@@ -2782,7 +4138,8 @@ func _update_line_and_bait_visuals() -> void:
 				world_points.append(hanging_point)
 				continue
 			if not over_deck and not line_should_be_taut:
-				sag = Vector3.DOWN * minf(span_delta.length() * 0.018, 0.62) * (1.0 - _rod_tension * 0.9) * sin(t * PI)
+				var sag_scale := _get_fight_line_visual_slack_ratio() if _fight_session_active else (1.0 - _rod_tension * 0.9)
+				sag = Vector3.DOWN * minf(span_delta.length() * 0.018, 0.62) * sag_scale * sin(t * PI)
 				if terminal_span and _bait_airborne_retrieval:
 					# A retrieved lure is no longer pulling a wet, loaded line. Keep a
 					# visible hanging curve and let its side-to-side motion follow the
@@ -2792,7 +4149,14 @@ func _update_line_and_bait_visuals() -> void:
 					var sway_amount := clampf(Vector2(_bait_velocity_world.x, _bait_velocity_world.z).length() * 0.035, 0.0, 0.065) * relaxation
 					var sway := sway_axis * sin(_airborne_retrieval_elapsed * 7.0) * sway_amount * sin(t * PI)
 					sag = Vector3.DOWN * air_sag * sin(t * PI) + sway
-			world_points.append(span_start.lerp(span_end, t) + sag)
+			var line_point := span_start.lerp(span_end, t) + sag
+			if terminal_span and not over_deck and _fight_session_active and _fight_snapshot.has("tension_n"):
+				var vibration_load := clampf(float(_fight_snapshot.get("tension_n", 0.0)) / maxf(line_visual_reference_load_n, 0.001), 0.0, 1.0)
+				var payout_load := clampf(float(_fight_snapshot.get("line_out_rate_mps", 0.0)) / maxf(BOAT_FIGHT_LINE_PROFILE.max_line_out_speed_mps, 0.1), 0.0, 1.0)
+				var vibration_strength := maxf(vibration_load, payout_load * 0.65)
+				var envelope := sin(PI * t)
+				line_point += sway_axis * sin(_fight_visual_elapsed * TAU * line_visual_vibration_frequency_hz + span_index * 1.37 + t * 2.4) * line_visual_vibration_m * vibration_strength * envelope
+			world_points.append(line_point)
 	var points := PackedVector3Array()
 	for point in world_points:
 		points.append(to_local(point))
@@ -2830,7 +4194,8 @@ func _get_slack_sabiki_line_point(
 	span_start: Vector3,
 	span_end: Vector3,
 	arrival_direction: Vector3,
-	progress: float
+	progress: float,
+	sag_scale: float = 1.0
 ) -> Vector3:
 	var t := clampf(progress, 0.0, 1.0)
 	var inverse_t := 1.0 - t
@@ -2855,7 +4220,7 @@ func _get_slack_sabiki_line_point(
 	var sag_limit := SABIKI_SLACK_LINE_MAX_SAG_M if _bait_airborne_retrieval else 0.14
 	var sag_fraction := 0.24 if _bait_airborne_retrieval else 0.12
 	var sag_depth := minf(sag_limit, span_length * sag_fraction)
-	return point + Vector3.DOWN * sag_depth * pow(sin(PI * t), 2.0)
+	return point + Vector3.DOWN * sag_depth * clampf(sag_scale, 0.0, 1.0) * pow(sin(PI * t), 2.0)
 
 
 func _update_rig_visual_selection() -> void:
@@ -2891,7 +4256,14 @@ func _update_rig_visual_position() -> void:
 	if sabiki_active and is_cast_active():
 		var hook_positions := get_hook_world_positions()
 		for hook_index in range(mini(hook_positions.size(), _sabiki_hook_nodes.size())):
-			_sabiki_hook_nodes[hook_index].position = _sabiki_rig_root.to_local(hook_positions[hook_index])
+			var hook_node := _sabiki_hook_nodes[hook_index]
+			hook_node.position = _sabiki_rig_root.to_local(hook_positions[hook_index])
+			var branch_direction: Vector3 = _fight_sabiki_branch_directions_local.get(hook_index, Vector3.LEFT)
+			if _fight_sabiki_branch_directions_local.has(hook_index):
+				branch_direction = branch_direction.normalized()
+				hook_node.basis = Basis(Quaternion(Vector3.LEFT, branch_direction))
+			else:
+				hook_node.basis = Basis.IDENTITY
 	_sabiki_rig_root.visible = sabiki_active and is_cast_active() and _bait_flight_started
 
 
@@ -2911,15 +4283,18 @@ func _should_render_fishing_line_taut() -> bool:
 		return false
 	return (
 		_state == CastState.CASTING
-		or _is_waiting_line_state() and _manual_reeling
-		or _state in [CastState.WAITING, CastState.SABIKI_HOOKED_WAITING, CastState.RETRIEVING, CastState.FIGHTING] and _sabiki_retrieval_taut
+		or _is_waiting_line_state() and _manual_reeling and not _fight_session_active
+		or _state in [CastState.WAITING, CastState.SABIKI_HOOKED_WAITING, CastState.RETRIEVING, CastState.FIGHTING] and _sabiki_retrieval_taut and not _fight_session_active
 		or _state == CastState.RETRIEVING
 	)
 
 
 func _get_sabiki_up_direction_world() -> Vector3:
 	var natural_up := _get_sabiki_up_direction_for_sinker(_bait_world)
-	var toward_rod := _get_rod_tip_world() - _bait_world
+	# Presentation-only rod bend must not feed back into Sabiki hook geometry.
+	# Keep the rig axis tied to the straight solver rod tip during a fight.
+	var rod_tip := _get_fight_solver_rod_tip_world() if _fight_session_active or _state == CastState.LANDING else _get_rod_tip_world()
+	var toward_rod := rod_tip - _bait_world
 	if toward_rod.length_squared() < 0.0001:
 		return natural_up
 	var tether_up := toward_rod.normalized()
@@ -2932,7 +4307,7 @@ func _get_sabiki_up_direction_world() -> Vector3:
 func _get_tackle_water_sample_points() -> Array[Vector3]:
 	var points: Array[Vector3] = [_bait_world]
 	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
-		points.append_array(get_hook_world_positions())
+		points.append_array(get_hook_attachment_world_positions())
 		points.append(_get_tackle_line_connection_world())
 	return points
 
@@ -3023,7 +4398,7 @@ func _set_state(next_state: CastState) -> void:
 		_natural_bite_sample_elapsed = 0.0
 		_natural_bite_pending_real_delta = 0.0
 		if _encounter != null:
-			_encounter.reset_boat_fishing_hazard()
+			_encounter.reset_boat_fishing_trigger_state()
 	_emit_state_changed()
 
 
@@ -3053,6 +4428,12 @@ func _emit_state_changed() -> void:
 		CastState.FIGHTING:
 			status_key = "hud.boat_fishing.state_fighting"
 			hint_key = "hud.boat_fishing.hint_fighting"
+		CastState.LANDING:
+			status_key = "hud.boat_fishing.state_landing"
+			hint_key = "hud.boat_fishing.hint_landing"
+		CastState.LINE_BROKEN:
+			status_key = "hud.boat_fishing.state_line_snapped"
+			hint_key = "hud.boat_fishing.hint_line_snapped"
 		CastState.CATCH_PRESENTATION:
 			status_key = "hud.boat_fishing.state_landed"
 			hint_key = "hud.boat_fishing.hint_landed"
@@ -3097,6 +4478,7 @@ func _build_visuals() -> void:
 	_rod_shader_material = ShaderMaterial.new()
 	_rod_shader_material.shader = ROD_BEND_SHADER
 	_rod_shader_material.set_shader_parameter("bend_angle", 0.0)
+	_rod_shader_material.set_shader_parameter("bend_direction_local", Vector3.RIGHT)
 	_rod_shader_material.set_shader_parameter("rod_length", ROD_LENGTH_M)
 	_rod_shader_material.set_shader_parameter("rod_color", Color(0.07, 0.10, 0.12))
 	_rod_mesh_instance.material_override = _rod_shader_material
@@ -3289,7 +4671,11 @@ func _rod_centerline_point_local(progress: float) -> Vector3:
 		center_y = -ROD_LENGTH_M * 0.5 + ROD_LENGTH_M * sin(angle) / bend_radians
 	var rod_basis := Basis(Quaternion(Vector3.UP, ROD_AXIS_LOCAL))
 	var rod_mesh_transform := Transform3D(rod_basis, ROD_AXIS_LOCAL * ROD_LENGTH_M * 0.5)
-	return rod_mesh_transform * Vector3(center_x, center_y, 0.0)
+	return rod_mesh_transform * Vector3(
+		_rod_bend_direction_local.x * center_x,
+		center_y,
+		_rod_bend_direction_local.y * center_x
+	)
 
 
 func _update_rod_line_guides() -> void:

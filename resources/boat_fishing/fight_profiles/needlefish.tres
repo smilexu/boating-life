@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="BoatFishingFightProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/boat_fishing_fight_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+species_id = "needlefish"
+base_pull_n = 5.5
+burst_multiplier = 2.55
+minimum_burst_multiplier = 1.12
+minimum_burst_stamina_ratio = 0.1
+low_stamina_pull_multiplier = 0.48
+recovery_pull_multiplier = 0.4
+minimum_pull_n = 0.2
+maximum_pull_n = 65.0
+force_rise_time_s = 0.12
+force_fall_time_s = 0.3
+burst_duration_min_s = 0.5
+burst_duration_max_s = 1.05
+burst_interval_min_s = 3.0
+burst_interval_max_s = 5.2
+stamina_drain_rate = 0.22
+stamina_recovery_rate = 0.12
+size_reference_length_m = 0.625
+size_force_exponent = 1.9
+minimum_size_factor = 0.55
+maximum_size_factor = 1.9
+steady_swim_speed_mps = 0.2
+burst_swim_speed_mps = 1.3
+recovery_swim_speed_mps = 0.1

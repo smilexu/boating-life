@@ -119,6 +119,80 @@ func get_schools_near(world_position: Vector3, radius_m: float, include_unavaila
 	return _authority.get_schools_near(world_position, radius_m, include_unavailable) if _authority != null else []
 
 
+func evaluate_ambient_fishing_candidates(context: Dictionary) -> Dictionary:
+	if _authority == null:
+		return {"candidates": [], "reason": "fish_authority_unavailable", "environment_quality": 0.0}
+	return _authority.evaluate_ambient_fishing_candidates(context)
+
+
+func request_ambient_fish_encounter(context: Dictionary) -> Dictionary:
+	if _authority == null:
+		return {"accepted": false, "reason": "fish_authority_unavailable"}
+	var result := _authority.request_ambient_fish_encounter(context)
+	if bool(result.get("accepted", false)):
+		_last_revision = _authority.get_state_revision()
+		resources_changed.emit(_last_revision)
+	return result
+
+
+func get_ambient_fish_encounter(ambient_fish_id: String) -> Dictionary:
+	return _authority.get_ambient_fish_encounter(ambient_fish_id) if _authority != null else {}
+
+
+func confirm_ambient_fish_encounter(ambient_fish_id: String, fishing_session_id: String, hook_index: int) -> bool:
+	if _authority == null:
+		return false
+	var accepted := _authority.confirm_ambient_fish_encounter(ambient_fish_id, fishing_session_id, hook_index)
+	if accepted:
+		_last_revision = _authority.get_state_revision()
+		resources_changed.emit(_last_revision)
+	return accepted
+
+
+func release_ambient_fish_encounter(ambient_fish_id: String, reason: String = "cancelled") -> bool:
+	if _authority == null:
+		return false
+	var released := _authority.release_ambient_fish_encounter(ambient_fish_id, reason)
+	if released:
+		_last_revision = _authority.get_state_revision()
+		resources_changed.emit(_last_revision)
+	return released
+
+
+func release_ambient_fishing_session(fishing_session_id: String, reason: String = "session_ended") -> int:
+	if _authority == null or fishing_session_id.is_empty():
+		return 0
+	var released := _authority.release_ambient_fishing_session(fishing_session_id, reason)
+	if released > 0:
+		_last_revision = _authority.get_state_revision()
+		resources_changed.emit(_last_revision)
+	return released
+
+
+func settle_ambient_fish_encounter(ambient_fish_id: String) -> Dictionary:
+	if _authority == null:
+		return {"accepted": false, "reason": "fish_authority_unavailable"}
+	var result := _authority.settle_ambient_fish_encounter(ambient_fish_id)
+	if bool(result.get("accepted", false)):
+		_last_revision = _authority.get_state_revision()
+		resources_changed.emit(_last_revision)
+	return result
+
+
+func settle_boat_fishing_catch_batch(school_changes: Dictionary, ambient_fish_ids: Array[String]) -> Dictionary:
+	if _authority == null:
+		return {"accepted": false, "reason": "fish_authority_unavailable"}
+	var result := _authority.settle_boat_fishing_catch_batch(school_changes, ambient_fish_ids, _world_game_time_seconds())
+	if bool(result.get("accepted", false)):
+		_last_revision = _authority.get_state_revision()
+		resources_changed.emit(_last_revision)
+	return result
+
+
+func get_ambient_fish_session_snapshot(fishing_session_id: String) -> Array[Dictionary]:
+	return _authority.get_ambient_fish_session_snapshot(fishing_session_id) if _authority != null else []
+
+
 ## Map visibility is intentionally labelled as an ecological prediction.
 ## There is no exploration/sonar system in this prototype.
 func get_map_distribution(species_ids: Array[String] = []) -> Array[Dictionary]:

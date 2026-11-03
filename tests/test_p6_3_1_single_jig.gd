@@ -21,6 +21,8 @@ func _run() -> void:
 	_check(FishingEncounterSystem.boat_fishing_action_weight(0.0) < FishingEncounterSystem.boat_fishing_action_weight(1.5), "lure movement raises action weighting without requiring a button-only bonus")
 	_check(FishingEncounterSystem.rig_matches_profile(ResourceLoader.load("res://resources/fish_species/sea_trout.tres") as FishSpeciesProfile, SINGLE_JIG), "Single Jig compatibility uses the species and rig lure tags")
 	_check(not FishingEncounterSystem.rig_matches_profile(ResourceLoader.load("res://resources/fish_species/herring.tres") as FishSpeciesProfile, SINGLE_JIG), "incompatible Herring cannot enter the single-jig natural candidate pool")
+	var fallback_profile := BoatFishingFightProfileCatalog.load_profile("boat_fish_without_tuned_profile_test", 0.82)
+	_check(fallback_profile != null and fallback_profile.is_valid_for_species("boat_fish_without_tuned_profile_test") and is_equal_approx(fallback_profile.size_reference_length_m, 0.82), "unprofiled boat-fishable species receives a safe generic fight profile")
 
 	var main := MAIN_SCENE.instantiate()
 	root.add_child(main)
@@ -28,6 +30,7 @@ func _run() -> void:
 		await process_frame
 	var manager := main.find_child("FishResourceManager", true, false) as FishResourceManager
 	var casting := main.find_child("BoatFishingCastingSystem", true, false) as BoatFishingCastingSystem
+	var onboard := casting.get("_onboard") as OnboardActivityController if casting != null else null
 	var rod_system := main.find_child("FishingRodSystem", true, false) as FishingRodSystem
 	var boat_controller := main.find_child("MotionRoot", true, false) as Node3D
 	var activities_button := main.find_child("ActivitiesButton", true, false) as Button
@@ -35,7 +38,7 @@ func _run() -> void:
 	var fishing_debug_panel := main.find_child("FishingDebugTab", true, false) as Control
 	var fishing_player_panel := main.find_child("FishingPlayerPanel", true, false) as FishingPlayerPanel
 	var camera_rig := main.find_child("FollowCameraRig", true, false) as BoatFollowCamera
-	_check(manager != null and casting != null and rod_system != null and boat_controller != null, "Main scene exposes the shared Authority, boat cast, and automatic fight controller")
+	_check(manager != null and casting != null and rod_system != null and boat_controller != null and onboard != null, "Main scene exposes the shared Authority, boat cast, and trolling presentation controller")
 	_check(fishing_player_panel != null and camera_rig != null, "Main scene exposes the trolling activity panel and shared camera for mode-isolation checks")
 	_check(fishing_debug_panel != null, "F3 Fishing tab is present in the normal debug UI")
 	if manager == null or casting == null or rod_system == null or boat_controller == null or activities_button == null or boat_fishing_button == null:
@@ -63,23 +66,19 @@ func _run() -> void:
 	var catch_results: Array[FishingCatchResult] = []
 	encounter.fish_hooked.connect(func(pending: FishingPendingCatch) -> void: hooked_events.append(pending.catch_id))
 	encounter.catch_succeeded.connect(func(result: FishingCatchResult) -> void: catch_results.append(result))
-	rod_system.hook_strike_seconds = 0.08
-	rod_system.fish_struggle_seconds = 0.08
-	rod_system.progressive_retrieval_seconds = 0.32
-	rod_system.surface_landing_seconds = 0.24
-	rod_system.catch_presentation_seconds = 0.22
 	_prepare_landed_lure(casting, boat_controller, lure_position)
-	var depth := casting.get_bait_depth_below_surface_m()
-	var diagnostics := encounter.evaluate_boat_fishing_candidates(lure_position, depth, 0.8, SINGLE_JIG)
+	var hook_position: Vector3 = casting.call("_get_single_jig_hook_attachment_world")
+	var depth := float(casting.call("_depth_below_surface_at", hook_position))
+	var diagnostics := encounter.evaluate_boat_fishing_candidates(hook_position, depth, 0.8, SINGLE_JIG)
 	var target_candidate: Dictionary = {}
 	for valid_variant in diagnostics.get("valid_candidates", []):
 		if str(valid_variant.get("school_id", "")) == school_id:
 			target_candidate = valid_variant
 			break
 	_check(not target_candidate.is_empty(), "natural candidate query uses the real lure world position and water depth")
-	var far_diagnostics := encounter.evaluate_boat_fishing_candidates(lure_position + Vector3(100000.0, 0.0, 100000.0), depth, 0.8, SINGLE_JIG)
+	var far_diagnostics := encounter.evaluate_boat_fishing_candidates(hook_position + Vector3(100000.0, 0.0, 100000.0), depth, 0.8, SINGLE_JIG)
 	_check(int(far_diagnostics.get("valid_candidate_count", 0)) == 0, "empty water outside the Authority query cannot produce a natural bite")
-	var wrong_depth := encounter.evaluate_boat_fishing_candidates(lure_position, depth + 10.0, 0.8, SINGLE_JIG)
+	var wrong_depth := encounter.evaluate_boat_fishing_candidates(hook_position - Vector3.UP * 10.0, depth + 10.0, 0.8, SINGLE_JIG)
 	var wrong_depth_has_target := false
 	for wrong_variant in wrong_depth.get("valid_candidates", []):
 		wrong_depth_has_target = wrong_depth_has_target or str(wrong_variant.get("school_id", "")) == school_id
@@ -88,13 +87,14 @@ func _run() -> void:
 		await _finish(main)
 		return
 
-	encounter.reset_boat_fishing_hazard()
-	var deterministic_diagnostics := diagnostics.duplicate(true)
-	deterministic_diagnostics["valid_candidates"] = [target_candidate]
-	deterministic_diagnostics["total_event_rate_per_real_hour"] = float(target_candidate.get("event_rate_per_real_hour", 0.0))
-	var selected_candidate := encounter.advance_boat_fishing_hazard(deterministic_diagnostics, FishingEncounterSystem.SECONDS_PER_GAME_HOUR * 100000.0)
-	_check(not selected_candidate.is_empty(), "real-time hazard selects a candidate from the sampled Authority pool")
-	var chosen := selected_candidate
+	encounter.reset_boat_fishing_trigger_state()
+	var trigger: Dictionary = {}
+	for _sample in range(24):
+		trigger = encounter.advance_boat_fishing_trigger_for_hook(diagnostics, 0.5, 0)
+		if not (trigger.get("candidate", {}) as Dictionary).is_empty():
+			break
+	var chosen: Dictionary = trigger.get("candidate", {})
+	_check(str(trigger.get("trigger_mode", "")) == "SCHOOL_TARGETED" and not chosen.is_empty(), "qualifying real school uses the short targeted response instead of the old hazard roll")
 	_check(str(chosen.get("school_id", "")) == school_id, "deterministic test fixture leaves the selected real school as the sampled candidate")
 	var began := bool(casting.call("_begin_bite_event", chosen, false, false))
 	var natural_pending := encounter.pending_catch
@@ -111,22 +111,69 @@ func _run() -> void:
 		casting.set("_bite_duration", 0.05)
 	while casting.get_casting_state() == BoatFishingCastingSystem.CastState.BITE_APPROACH:
 		await process_frame
+	# Bite confirmation and the fight solver run on successive process frames.
+	await process_frame
 	_check(hooked_events.size() == 1 and encounter.state == FishingEncounterSystem.State.HOOKED, "Authority bite is confirmed once only when the fish reaches the hook")
-	_check(rod_system.get_presentation_source_name() == "REAL_CATCH", "the hook signal starts the existing real automatic fight timeline")
-	_check(rod_system.get_presentation_method() == "boat_fishing", "the shared fight timeline retains Boat Fishing ownership")
+	_check(casting.get_casting_state() == BoatFishingCastingSystem.CastState.FIGHTING and bool(casting.get_debug_snapshot().get("fight_session_active", false)), "confirmed single-jig bite enters the boat fight session")
+	_check(not casting.is_automatic_control_owned(), "the player owns boat-fight reel input instead of the old automatic timeline")
+	_check(rod_system.get_presentation_source_name() == "NONE", "boat catch does not start the trolling rod presentation timeline")
+	_check(not encounter.start_trolling() and encounter.pending_catch == natural_pending, "trolling cannot replace a confirmed boat-fishing catch in the shared Encounter")
+	_check(InputMap.has_action("boat_fishing_drag_loosen") and InputMap.has_action("boat_fishing_drag_tighten"), "boat fight drag adjustment is available through dedicated InputMap actions")
+	var drag_before := float(casting.get_debug_snapshot().get("drag_setting", -1.0))
+	Input.action_press("boat_fishing_drag_tighten")
+	casting.call("_update_fight_controls", 0.5)
+	Input.action_release("boat_fishing_drag_tighten")
+	var drag_after := float(casting.get_debug_snapshot().get("drag_setting", -1.0))
+	_check(drag_after > drag_before, "holding the drag-tighten action raises drag continuously during a fight")
+	Input.action_press("boat_fishing_drag_loosen")
+	casting.call("_update_fight_controls", 0.5)
+	Input.action_release("boat_fishing_drag_loosen")
+	var drag_loosened := float(casting.get_debug_snapshot().get("drag_setting", -1.0))
+	_check(drag_loosened < drag_after, "holding the drag-loosen action lowers drag continuously during a fight")
 	_check(camera_rig == null or camera_rig.get_camera_mode_name() == "onboard_activity", "a Boat Fishing bite keeps the player's onboard first-person camera")
 	_check(fishing_player_panel == null or not fishing_player_panel.is_trolling_active(), "a Boat Fishing bite does not activate the separate Trolling panel")
 	var trolling_mount := main.find_child("FishingRodMountP3", true, false) as Node3D
 	_check(trolling_mount == null or not trolling_mount.visible, "a Boat Fishing bite keeps the fixed Trolling rod hidden")
 	var handheld_rod := casting.get("_rod_visual_root") as Node3D
 	_check(handheld_rod != null and handheld_rod.visible, "the handheld Boat Fishing rod remains visible during the fight")
+	var handheld_rod_mesh := handheld_rod.find_child("FirstPersonFishingRod", true, false) as MeshInstance3D if handheld_rod != null else null
+	_check(handheld_rod_mesh != null and handheld_rod_mesh.is_visible_in_tree(), "the handheld rod mesh itself remains visible during the fight")
+	_check(float(casting.get_debug_snapshot().get("rod_bend_angle_deg", 0.0)) > 0.0, "confirmed fish tension drives a visible handheld rod bend")
+	var rod_visual_snapshot := casting.get_fight_snapshot()
+	_check(float(rod_visual_snapshot.get("rod_visual_target_bend_deg", 0.0)) > 8.0, "ordinary herring load targets a clearly visible rod arc using the visual load reference")
+	_check(float(rod_visual_snapshot.get("rod_visual_actual_bend_deg", 0.0)) > 0.0 and rod_visual_snapshot.has("line_visual_slack_ratio"), "fight exposes smoothed rod bend and tension-driven line slack diagnostics")
+	var fight_geometry := casting.get_fight_snapshot(true)
+	var fight_participants: Array = fight_geometry.get("participants", [])
+	_check(fight_participants.size() == 1, "single-jig fight exposes one live geometry participant")
+	if not fight_participants.is_empty():
+		var mouth_error := float((fight_participants[0] as Dictionary).get("mouth_hook_error_m", -1.0))
+		print("[P6.4.5][SINGLE_GEOMETRY] live mouth-hook error=%.6fm" % mouth_error)
+		_check(mouth_error >= 0.0 and mouth_error <= 0.01, "live single-jig fish mouth stays within 1 cm of its actual hook tip")
+	if handheld_rod != null and onboard != null and onboard.is_first_person_active():
+		onboard.apply_mouse_look(Vector2(32.0, -18.0))
+		await process_frame
+		var expected_heading := Basis(Vector3.UP, onboard.get_player_local_yaw())
+		var expected_rod_position := onboard.get_player_local_position() + expected_heading * Vector3(0.31, 1.13, -0.02)
+		_check(handheld_rod.position.is_equal_approx(expected_rod_position), "the rod hand anchor follows first-person yaw during a fight")
+		_check(is_equal_approx(handheld_rod.rotation.y, onboard.get_player_local_yaw()), "the rod orientation follows the first-person view during a fight")
+		onboard.apply_mouse_look(Vector2(-32.0, 18.0))
+		await process_frame
 	_check(int(manager.get_school(school_id).get("population", 0)) == population_before, "candidate reservation and bite do not consume the school before settlement")
 	var initial_line_length := float(casting.get_interaction_snapshot().get("line_length_m", 0.0))
+	casting.set_manual_reeling(true, true)
 	await create_timer(0.23).timeout
 	var moving_line_length := float(casting.get_interaction_snapshot().get("line_length_m", 0.0))
-	_check(moving_line_length < initial_line_length and moving_line_length > 0.0, "automatic retrieval continuously shortens the real boat-fishing line")
-	await create_timer(1.0).timeout
-	_check(not catch_results.is_empty(), "automatic fight reaches the shared authoritative catch settlement")
+	casting.set_manual_reeling(false, true)
+	_check(moving_line_length < initial_line_length and moving_line_length > 0.0, "player-held reel input shortens the one authoritative boat-fishing line")
+	var safe_minimum := float(casting.call("_get_fight_minimum_line_length_m"))
+	casting.set("_line_paid_out_length_m", safe_minimum)
+	casting.set_manual_reeling(true, true)
+	casting.call("_advance_boat_fight", 0.016)
+	casting.set_manual_reeling(false, true)
+	_check(casting.get_casting_state() == BoatFishingCastingSystem.CastState.LANDING, "reeling the tackle to the hull-safe boundary starts the boat landing phase")
+	var settled_natural := await _wait_until(func() -> bool: return not catch_results.is_empty(), 180)
+	_check(settled_natural, "boat landing reaches the shared authoritative catch settlement")
+	_check(fishing_player_panel == null or fishing_player_panel.get("_last_catch_result") == null, "trolling result panel ignores Boat Fishing settlement events")
 	if not catch_results.is_empty():
 		var natural_result := catch_results[0]
 		_check(natural_result.fishing_method == "boat_fishing" and not natural_result.debug_spawned, "natural CatchResult is identified as a boat-fishing catch")
@@ -154,21 +201,59 @@ func _run() -> void:
 	casting.set("_bite_duration", 0.16)
 	while casting.get_casting_state() == BoatFishingCastingSystem.CastState.BITE_APPROACH:
 		await process_frame
-	_check(rod_system.get_presentation_method() == "boat_fishing", "F3 test fish enters the shared fight timeline as Boat Fishing")
+	_check(casting.get_casting_state() == BoatFishingCastingSystem.CastState.FIGHTING and rod_system.get_presentation_source_name() == "NONE", "F3 test fish enters player-controlled boat fighting without trolling presentation")
 	_check(camera_rig == null or camera_rig.get_camera_mode_name() == "onboard_activity", "clicking the F3 boat test does not switch to the stern trolling view")
 	_check(fishing_player_panel == null or not fishing_player_panel.is_trolling_active(), "F3 Boat Fishing catch does not mark Trolling as active")
 	_check(trolling_mount == null or not trolling_mount.visible, "F3 Boat Fishing catch does not show the fixed trolling rod")
 	_check(handheld_rod != null and handheld_rod.visible, "F3 Boat Fishing catch retains the handheld first-person rod")
-	await create_timer(1.0).timeout
-	_check(catch_results.size() >= 2 and catch_results.back().debug_spawned, "F3 temporary fish runs through the shared automatic retrieval and result event")
+	safe_minimum = float(casting.call("_get_fight_minimum_line_length_m"))
+	casting.set("_line_paid_out_length_m", safe_minimum)
+	casting.set_manual_reeling(true, true)
+	casting.call("_advance_boat_fight", 0.016)
+	casting.set_manual_reeling(false, true)
+	var settled_debug := await _wait_until(func() -> bool: return catch_results.size() >= 2, 180)
+	_check(settled_debug and catch_results.back().debug_spawned, "F3 temporary fish follows player reel, landing, and the shared result event")
 	_check(_total_population(manager) == total_population_before_debug, "debug catch does not decrement any natural Authority population")
-	_check(int(casting.get_debug_snapshot()["fishing_audio_event_counts"].get("catch_success", 0)) == 2, "debug catch produces one batch success cue through the shared path")
+	_check(int(casting.get_debug_snapshot()["fishing_audio_event_counts"].get("catch_success", 0)) == 2, "debug catch produces one success cue through the shared path")
 
 	_prepare_landed_lure(casting, boat_controller, lure_position)
-	var cancellation_result := casting.debug_spawn_test_fish("sea_trout")
-	if bool(cancellation_result.get("accepted", false)):
+	var line_profile := ResourceLoader.load("res://resources/boat_fishing/line_profiles/standard_boat_fishing_line.tres") as BoatFishingLineProfile
+	var solver := casting.get("_fight_solver") as BoatFishingFightSolver
+	var low_break_profile := line_profile.duplicate(true) as BoatFishingLineProfile if line_profile != null else null
+	var previous_max_line := casting.maximum_line_length_m
+	if low_break_profile != null and solver != null:
+		low_break_profile.line_break_force_n = 1.0
+		low_break_profile.drag_min_force_n = 0.0
+		low_break_profile.drag_max_force_n = 0.0
+		low_break_profile.default_drag_setting = 0.0
+		low_break_profile.break_danger_seconds_to_snap = 0.1
+		low_break_profile.transient_peak_gain = 0.0
+		solver.configure(low_break_profile)
+		var snap_result := casting.debug_spawn_test_fish("sea_trout")
+		if bool(snap_result.get("accepted", false)):
+			casting.set("_bite_duration", 0.05)
+			while casting.get_casting_state() == BoatFishingCastingSystem.CastState.BITE_APPROACH:
+				await process_frame
+			var trout_rod_mesh := handheld_rod.find_child("FirstPersonFishingRod", true, false) as MeshInstance3D if handheld_rod != null else null
+			_check(str(casting.get("_active_catch_species_id")) == "sea_trout", "the line-break scenario is fighting the explicitly spawned Sea Trout")
+			_check(handheld_rod != null and handheld_rod.visible and trout_rod_mesh != null and trout_rod_mesh.is_visible_in_tree(), "the handheld rod remains visible in the Sea Trout fight")
+			var results_before_snap := catch_results.size()
+			var line_at_snap_limit := float(casting.get_interaction_snapshot().get("line_length_m", 0.0))
+			casting.maximum_line_length_m = line_at_snap_limit
+			casting.call("_advance_boat_fight", 0.5)
+			_check(casting.get_casting_state() == BoatFishingCastingSystem.CastState.LINE_BROKEN, "overloaded boat line enters the explicit snapped state")
+			_check(encounter.pending_catch == null and catch_results.size() == results_before_snap, "snapping cancels the pending catch without settlement")
+			_check(is_zero_approx(float(casting.get_debug_snapshot().get("paid_out_line_length_m", 1.0))) and not bool(casting.get_debug_snapshot().get("fight_session_active", false)), "snapping clears the fight session and authoritative paid-out line")
+			_check(float(casting.get_debug_snapshot().get("rod_bend_angle_deg", 1.0)) <= 0.001, "snapping releases the handheld rod bend")
+			var recovered := await _wait_until(func() -> bool: return casting.get_casting_state() == BoatFishingCastingSystem.CastState.READY, 120)
+			_check(recovered and not onboard.is_movement_locked(), "snapping returns the player to a ready, movable state")
+		else:
+			_check(false, "F3 test catch starts the line-break integration scenario")
+		casting.maximum_line_length_m = previous_max_line
+	else:
+		_check(false, "standard line profile and boat fight solver load for line-break integration")
+	if casting.is_activity_active():
 		casting.end_activity()
-		_check(encounter.pending_catch == null and not casting.is_automatic_control_owned(), "ending boat fishing cancels and releases an unfinished pending bite")
 	await _finish(main)
 
 
@@ -228,6 +313,14 @@ func _total_population(manager: FishResourceManager) -> int:
 	for school in manager.get_all_school_snapshots():
 		total += int(school.get("population", 0))
 	return total
+
+
+func _wait_until(predicate: Callable, max_frames: int) -> bool:
+	for _frame in range(max_frames):
+		if predicate.call():
+			return true
+		await process_frame
+	return bool(predicate.call())
 
 
 func _check(condition: bool, label: String) -> void:

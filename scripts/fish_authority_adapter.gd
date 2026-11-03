@@ -30,6 +30,45 @@ func get_schools_near(_world_position: Vector3, _radius_m: float, _include_unava
 	return []
 
 
+## Ambient fish are transient authoritative individuals, not fish schools or
+## persistent population. Network adapters must forward these mutations to
+## their server rather than fabricating a local school identity.
+func evaluate_ambient_fishing_candidates(_context: Dictionary) -> Dictionary:
+	return {"candidates": [], "reason": "ambient_authority_unavailable", "environment_quality": 0.0}
+
+
+func request_ambient_fish_encounter(_context: Dictionary) -> Dictionary:
+	return {"accepted": false, "reason": "ambient_authority_unavailable"}
+
+
+func get_ambient_fish_encounter(_ambient_fish_id: String) -> Dictionary:
+	return {}
+
+
+func confirm_ambient_fish_encounter(_ambient_fish_id: String, _fishing_session_id: String, _hook_index: int) -> bool:
+	return false
+
+
+func release_ambient_fish_encounter(_ambient_fish_id: String, _reason: String = "cancelled") -> bool:
+	return false
+
+
+func release_ambient_fishing_session(_fishing_session_id: String, _reason: String = "session_ended") -> int:
+	return 0
+
+
+func settle_ambient_fish_encounter(_ambient_fish_id: String) -> Dictionary:
+	return {"accepted": false, "reason": "ambient_authority_unavailable"}
+
+
+func settle_boat_fishing_catch_batch(_school_changes: Dictionary, _ambient_fish_ids: Array[String], _game_time_seconds: float = -1.0) -> Dictionary:
+	return {"accepted": false, "reason": "boat_catch_batch_authority_unavailable"}
+
+
+func get_ambient_fish_session_snapshot(_fishing_session_id: String) -> Array[Dictionary]:
+	return []
+
+
 func get_map_snapshot(_species_ids: Array[String] = []) -> Array[Dictionary]:
 	return []
 

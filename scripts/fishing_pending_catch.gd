@@ -6,6 +6,10 @@ extends RefCounted
 var catch_id := ""
 var species_id := ""
 var school_id := ""
+## Provenance is "school", "ambient", or "debug". Ambient fish are held by
+## FishAuthorityAdapter and deliberately have no fabricated school_id.
+var source_type := "school"
+var ambient_fish_id := ""
 var lure_id := ""
 var fishing_method := "trolling"
 var debug_spawned := false
@@ -23,6 +27,8 @@ func to_dictionary() -> Dictionary:
 		"catch_id": catch_id,
 		"species_id": species_id,
 		"school_id": school_id,
+		"source_type": source_type,
+		"ambient_fish_id": ambient_fish_id,
 		"lure_id": lure_id,
 		"fishing_method": fishing_method,
 		"debug_spawned": debug_spawned,

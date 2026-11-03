@@ -10,6 +10,8 @@ var rig_id := ""
 var hook_index := -1
 var species_id := ""
 var school_id := ""
+var source_type := "school"
+var ambient_fish_id := ""
 var lure_id := ""
 var fishing_method := "trolling"
 var length_m := 0.0
@@ -29,6 +31,8 @@ func to_dictionary() -> Dictionary:
 		"hook_index": hook_index,
 		"species_id": species_id,
 		"school_id": school_id,
+		"source_type": source_type,
+		"ambient_fish_id": ambient_fish_id,
 		"lure_id": lure_id,
 		"fishing_method": fishing_method,
 		"length_m": length_m,

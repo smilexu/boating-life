@@ -115,6 +115,8 @@ var _trolling_audio_loop_active: Dictionary = {}
 var _trolling_audio_loop_gain: Dictionary = {}
 var _trolling_audio_loop_target: Dictionary = {}
 var _external_fishing_audio_loops: Dictionary = {}
+var _external_fishing_audio_intensities: Dictionary = {}
+var _external_loop_volume_scale: Dictionary = {}
 var _shared_fishing_audio_event_counts: Dictionary = {}
 var _trolling_ambience_bus_states: Dictionary = {}
 var _last_splash_audio_catch_id := ""
@@ -183,12 +185,15 @@ func _exit_tree() -> void:
 ## Public audio seam for other fishing activities. It shares this system's
 ## players, loop streams, fades, SFX bus and ambience ducking without sharing
 ## or changing their gameplay states.
-func set_external_fishing_audio_loop(owner_id: StringName, key: String, active: bool) -> void:
+func set_external_fishing_audio_loop(owner_id: StringName, key: String, active: bool, intensity: float = 1.0) -> void:
 	if not TROLLING_LOOP_VOLUME_DB.has(key) or owner_id == &"":
 		return
 	var requests: Dictionary = _external_fishing_audio_loops.get(owner_id, {})
 	requests[key] = active
 	_external_fishing_audio_loops[owner_id] = requests
+	var intensities: Dictionary = _external_fishing_audio_intensities.get(owner_id, {})
+	intensities[key] = clampf(intensity, 0.0, 1.0) if active and is_finite(intensity) else 0.0
+	_external_fishing_audio_intensities[owner_id] = intensities
 	_sync_trolling_loop_audio(0.0)
 
 
@@ -196,6 +201,7 @@ func clear_external_fishing_audio_loops(owner_id: StringName) -> void:
 	if owner_id == &"":
 		return
 	_external_fishing_audio_loops.erase(owner_id)
+	_external_fishing_audio_intensities.erase(owner_id)
 	_sync_trolling_loop_audio(0.0)
 
 
@@ -601,6 +607,10 @@ func _bind_active_hull() -> void:
 func _on_fish_hooked(pending: FishingPendingCatch) -> void:
 	if pending == null:
 		return
+	# Boat fishing owns its hand-held fight/landing presentation. The encounter
+	# signal is shared, but this trolling rod must never start its timeline for it.
+	if pending.fishing_method == "boat_fishing":
+		return
 	if presentation_source == PresentationSource.DEBUG_SIMULATION:
 		_queued_real_pending = pending
 		return
@@ -651,6 +661,8 @@ func _begin_real_presentation(pending: FishingPendingCatch) -> void:
 func _on_retrieval_started(catch_id: String) -> void:
 	if presentation_source != PresentationSource.REAL_CATCH or _pending == null or catch_id != _pending.catch_id or _retrieval_started_catch_id == catch_id:
 		return
+	if _pending.fishing_method == "boat_fishing":
+		return
 	_retrieval_started_catch_id = catch_id
 	if _fight_elapsed < _hook_and_struggle_duration():
 		# Developer-triggered retrieval may intentionally skip the hook/struggle
@@ -661,7 +673,7 @@ func _on_retrieval_started(catch_id: String) -> void:
 
 
 func _on_catch_succeeded(result: FishingCatchResult) -> void:
-	if presentation_source != PresentationSource.REAL_CATCH or _pending == null or result == null or result.catch_id != _pending.catch_id:
+	if result == null or result.fishing_method == "boat_fishing" or presentation_source != PresentationSource.REAL_CATCH or _pending == null or result.catch_id != _pending.catch_id:
 		return
 	_catch_result = result
 	_settlement_requested = true
@@ -679,6 +691,10 @@ func _on_catch_succeeded(result: FishingCatchResult) -> void:
 
 
 func _on_catch_cancelled(catch_id: String, _reason: String) -> void:
+	var owns_trolling_catch := (_pending != null and catch_id == _pending.catch_id and _pending.fishing_method != "boat_fishing") \
+		or (_queued_real_pending != null and catch_id == _queued_real_pending.catch_id and _queued_real_pending.fishing_method != "boat_fishing")
+	if not owns_trolling_catch:
+		return
 	_request_all_trolling_loops_stop()
 	if _queued_real_pending != null and catch_id == _queued_real_pending.catch_id:
 		_queued_real_pending = null
@@ -1434,16 +1450,26 @@ func _make_trolling_loop_stream(source: AudioStream) -> AudioStream:
 
 func _sync_trolling_loop_audio(delta: float, force_silent: bool = false) -> void:
 	var targets := {} if force_silent else get_trolling_audio_loop_targets(int(visual_state), _reel_spin_speed_for_audio)
+	var external_intensities := {}
 	if not force_silent:
-		for owner_requests_variant in _external_fishing_audio_loops.values():
+		for owner_id_variant in _external_fishing_audio_loops.keys():
+			var owner_requests_variant = _external_fishing_audio_loops[owner_id_variant]
 			var owner_requests: Dictionary = owner_requests_variant
+			var owner_intensities: Dictionary = _external_fishing_audio_intensities.get(owner_id_variant, {})
 			for key_variant in owner_requests.keys():
 				var key := str(key_variant)
 				if bool(owner_requests[key]) and targets.has(key):
 					targets[key] = true
+					external_intensities[key] = maxf(float(external_intensities.get(key, 0.0)), float(owner_intensities.get(key, 1.0)))
+	var trolling_targets := get_trolling_audio_loop_targets(int(visual_state), _reel_spin_speed_for_audio)
 	for key in TROLLING_LOOP_VOLUME_DB.keys():
-		_set_trolling_loop_target(str(key), bool(targets.get(key, false)))
-		_advance_trolling_loop_fade(str(key), delta)
+		var key_string := str(key)
+		# Apply speed-sensitive volume only when this loop is requested by an
+		# external activity and trolling itself is not driving the same loop.
+		var external_only: bool = external_intensities.has(key_string) and not bool(trolling_targets.get(key_string, false))
+		_external_loop_volume_scale[key_string] = lerpf(0.72, 1.15, float(external_intensities.get(key_string, 0.0))) if external_only else 1.0
+		_set_trolling_loop_target(key_string, bool(targets.get(key, false)))
+		_advance_trolling_loop_fade(key_string, delta)
 	_update_trolling_ambience_ducking(_has_trolling_audio_playback(), delta)
 
 
@@ -1521,7 +1547,8 @@ func _advance_trolling_loop_fade(key: String, delta: float) -> void:
 	current = move_toward(current, target, step)
 	_trolling_audio_loop_gain[key] = current
 	var target_db := float(TROLLING_LOOP_VOLUME_DB.get(key, 0.0))
-	player.volume_db = linear_to_db(current) + target_db if current > 0.0001 else -80.0
+	var volume_scale := maxf(0.01, float(_external_loop_volume_scale.get(key, 1.0)))
+	player.volume_db = linear_to_db(current * volume_scale) + target_db if current > 0.0001 else -80.0
 	if target <= 0.0 and current <= 0.0001:
 		player.stop()
 		_trolling_audio_loop_active[key] = false
@@ -1543,6 +1570,8 @@ func _request_all_trolling_loops_stop() -> void:
 
 func _stop_all_trolling_audio() -> void:
 	_external_fishing_audio_loops.clear()
+	_external_fishing_audio_intensities.clear()
+	_external_loop_volume_scale.clear()
 	for player_variant in _trolling_audio_players.values():
 		var player := player_variant as AudioStreamPlayer
 		if player != null:

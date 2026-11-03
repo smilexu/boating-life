@@ -73,6 +73,10 @@ const SURFACE_ACTIVITY_VISUAL_DEPTH_M := 2.0
 @export_file("*.glb") var model_path := ""
 @export_enum("Positive X", "Negative X") var model_forward_axis := 0
 @export_range(-1.0, 1.0, 0.01) var model_head_x := 0.5
+## Editable local-space attachment point for a boat-fishing hook at the mouth.
+## This is model-space, before the rendered catch-size scale is applied.
+@export var boat_fishing_mouth_anchor_local := Vector3.ZERO
+@export_range(60.0, 720.0, 5.0) var boat_fishing_turn_rate_deg_s := 300.0
 @export var visual_enabled := true
 ## Schools deeper than this remain authoritative/map-visible but are not rendered.
 @export_range(0.0, 100.0, 0.25) var logical_depth_threshold_m := 6.0

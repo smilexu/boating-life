@@ -87,12 +87,12 @@ var _boat_fishing_panel: PanelContainer
 var _boat_fishing_status_label: Label
 var _boat_fishing_hint_label: Label
 var _boat_fishing_line_detail_label: Label
+var _boat_fishing_drag_feedback_label: Label
 var _boat_fishing_rig_depth_label: Label
 var _boat_fishing_hooked_count_label: Label
 var _boat_fishing_rig_selector: OptionButton
 var _boat_fishing_end_button: Button
 var _boat_fishing_retrieve_button: Button
-var _boat_fishing_collect_rig_button: Button
 var _cast_charge_panel: PanelContainer
 var _cast_charge_label: Label
 var _cast_charge_bar: ProgressBar
@@ -101,6 +101,11 @@ var _boat_fishing_hint_key := "hud.boat_fishing.view_hint"
 var _activity_feedback_label: Label
 var _activity_feedback_key := ""
 var _activity_feedback_remaining := 0.0
+var _line_snap_notice_panel: PanelContainer
+var _line_snap_notice_label: Label
+var _line_snap_notice_remaining := 0.0
+var _line_snap_notice_key := ""
+const LINE_SNAP_NOTICE_DURATION := 4.0
 var _boat_fishing_active := false
 var _boat_fishing_detail_elapsed := 0.0
 var _onboard_debug_label: Label
@@ -120,6 +125,12 @@ var _fps_label: Label
 var _depth_label: Label
 var _cargo_task_label: Label
 var _debug_panel: PanelContainer
+var _debug_panel_drag_handle: PanelContainer
+var _debug_panel_user_position := Vector2.ZERO
+var _debug_panel_user_moved := false
+var _debug_panel_dragging := false
+var _debug_panel_reference_size := Vector2.ZERO
+var _debug_panel_reference_scale := 1.0
 var _debug_scroll: TabContainer
 var _debug_layout: VBoxContainer
 var _weather_label: Label
@@ -266,7 +277,7 @@ func _ready() -> void:
 	_boat_fishing_casting_system = get_node_or_null("../BoatFishingCastingSystem") as BoatFishingCastingSystem
 	if _boat_fishing_casting_system != null:
 		_boat_fishing_casting_system.state_changed.connect(_on_boat_fishing_state_changed)
-		_boat_fishing_casting_system.feedback_requested.connect(_show_activity_feedback)
+		_boat_fishing_casting_system.feedback_requested.connect(_on_boat_fishing_feedback_requested)
 		_boat_fishing_casting_system.charge_progress_changed.connect(_on_cast_charge_progress_changed)
 	_camera_rig = get_node_or_null("../FollowCameraRig") as BoatFollowCamera
 	if _camera_rig != null:
@@ -372,6 +383,7 @@ func _ready() -> void:
 	_build_catch_result_panel()
 	_build_cast_charge_indicator()
 	_build_vessel_picker()
+	_build_line_snap_notice()
 	_controller.vessel_mode_changed.connect(_on_vessel_mode_changed)
 	var localization_manager := get_node_or_null("/root/LocalizationManager")
 	if localization_manager != null and localization_manager.has_signal("locale_changed"):
@@ -447,6 +459,52 @@ func _build_activity_menu() -> void:
 	_build_controls_help_panel()
 
 
+func _build_line_snap_notice() -> void:
+	_line_snap_notice_panel = PanelContainer.new()
+	_line_snap_notice_panel.name = "BoatFishingLineSnapNotice"
+	_line_snap_notice_panel.visible = false
+	_line_snap_notice_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_line_snap_notice_panel.z_index = 100
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.16, 0.045, 0.028, 0.96)
+	style.border_color = Color(0.98, 0.39, 0.20, 0.96)
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(10)
+	style.content_margin_left = 22.0
+	style.content_margin_right = 22.0
+	style.content_margin_top = 12.0
+	style.content_margin_bottom = 12.0
+	_line_snap_notice_panel.add_theme_stylebox_override("panel", style)
+	_line_snap_notice_label = Label.new()
+	_line_snap_notice_label.name = "BoatFishingLineSnapNoticeText"
+	_line_snap_notice_label.text = tr("hud.boat_fishing.line_snap_notice")
+	_line_snap_notice_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_line_snap_notice_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_line_snap_notice_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_line_snap_notice_label.add_theme_color_override("font_color", Color(1.0, 0.91, 0.82, 1.0))
+	_line_snap_notice_label.add_theme_color_override("font_outline_color", Color(0.10, 0.025, 0.018, 1.0))
+	_line_snap_notice_label.add_theme_constant_override("outline_size", 2)
+	_line_snap_notice_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_line_snap_notice_panel.add_child(_line_snap_notice_label)
+	add_child(_line_snap_notice_panel)
+
+
+func _on_boat_fishing_feedback_requested(message_key: String) -> void:
+	if message_key == "hud.boat_fishing.line_snapped":
+		_show_line_snap_notice()
+		return
+	_show_activity_feedback(message_key)
+
+
+func _show_line_snap_notice() -> void:
+	_line_snap_notice_key = "hud.boat_fishing.line_snap_notice"
+	_line_snap_notice_remaining = LINE_SNAP_NOTICE_DURATION
+	if _line_snap_notice_label != null:
+		_line_snap_notice_label.text = tr(_line_snap_notice_key)
+	if _line_snap_notice_panel != null:
+		_line_snap_notice_panel.visible = true
+
+
 func _build_boat_fishing_panel() -> void:
 	_boat_fishing_panel = PanelContainer.new()
 	_boat_fishing_panel.name = "BoatFishingActivityPanel"
@@ -491,6 +549,12 @@ func _build_boat_fishing_panel() -> void:
 	_boat_fishing_line_detail_label.add_theme_font_size_override("font_size", 12)
 	_boat_fishing_line_detail_label.add_theme_color_override("font_color", Color(0.70, 0.84, 0.81, 1.0))
 	layout.add_child(_boat_fishing_line_detail_label)
+	_boat_fishing_drag_feedback_label = Label.new()
+	_boat_fishing_drag_feedback_label.name = "BoatFishingDragFeedback"
+	_boat_fishing_drag_feedback_label.visible = false
+	_boat_fishing_drag_feedback_label.add_theme_font_size_override("font_size", 16)
+	_boat_fishing_drag_feedback_label.add_theme_color_override("font_color", Color(1.0, 0.82, 0.36, 1.0))
+	layout.add_child(_boat_fishing_drag_feedback_label)
 	_boat_fishing_rig_depth_label = Label.new()
 	_boat_fishing_rig_depth_label.name = "BoatFishingRigDepthDetail"
 	_boat_fishing_rig_depth_label.visible = false
@@ -503,13 +567,6 @@ func _build_boat_fishing_panel() -> void:
 	_boat_fishing_hooked_count_label.add_theme_font_size_override("font_size", 12)
 	_boat_fishing_hooked_count_label.add_theme_color_override("font_color", Color(0.95, 0.82, 0.42, 1.0))
 	layout.add_child(_boat_fishing_hooked_count_label)
-	_boat_fishing_collect_rig_button = Button.new()
-	_boat_fishing_collect_rig_button.name = "RetrieveSabikiRig"
-	_boat_fishing_collect_rig_button.text = tr("hud.boat_fishing.retrieve_rig")
-	_boat_fishing_collect_rig_button.visible = false
-	_boat_fishing_collect_rig_button.focus_mode = Control.FOCUS_NONE
-	_boat_fishing_collect_rig_button.pressed.connect(_request_sabiki_retrieval)
-	layout.add_child(_boat_fishing_collect_rig_button)
 	_boat_fishing_retrieve_button = Button.new()
 	_boat_fishing_retrieve_button.name = "RetrieveBoatFishingCast"
 	_boat_fishing_retrieve_button.text = tr("hud.boat_fishing.reel")
@@ -771,11 +828,6 @@ func _stop_boat_fishing_reel() -> void:
 		_boat_fishing_casting_system.set_manual_reeling(false, true)
 
 
-func _request_sabiki_retrieval() -> void:
-	if _boat_fishing_casting_system != null:
-		_boat_fishing_casting_system.request_sabiki_retrieval()
-
-
 func _on_boat_fishing_state_changed(_state_name: String, status_key: String, hint_key: String) -> void:
 	_boat_fishing_status_key = status_key
 	_boat_fishing_hint_key = hint_key
@@ -785,7 +837,7 @@ func _on_boat_fishing_state_changed(_state_name: String, status_key: String, hin
 		_boat_fishing_hint_label.text = tr(_boat_fishing_hint_key)
 	if _boat_fishing_retrieve_button != null:
 		var cast_state := _boat_fishing_casting_system.get_casting_state() if _boat_fishing_casting_system != null else BoatFishingCastingSystem.CastState.READY
-		var can_retrieve := cast_state in [BoatFishingCastingSystem.CastState.WAITING, BoatFishingCastingSystem.CastState.SABIKI_HOOKED_WAITING]
+		var can_retrieve := cast_state in [BoatFishingCastingSystem.CastState.WAITING, BoatFishingCastingSystem.CastState.SABIKI_HOOKED_WAITING, BoatFishingCastingSystem.CastState.FIGHTING]
 		_boat_fishing_retrieve_button.visible = _boat_fishing_casting_system != null and _boat_fishing_casting_system.is_cast_active()
 		_boat_fishing_retrieve_button.disabled = not can_retrieve
 	_refresh_boat_fishing_rig_selector()
@@ -798,7 +850,7 @@ func _refresh_boat_fishing_line_detail() -> void:
 		return
 	var snapshot := _boat_fishing_casting_system.get_interaction_snapshot()
 	var state_name := str(snapshot.get("state", ""))
-	var visible := bool(snapshot.get("line_active", false)) and state_name in ["WAITING", "SABIKI_HOOKED_WAITING", "FIGHTING", "CATCH_PRESENTATION"]
+	var visible := bool(snapshot.get("line_active", false)) and state_name in ["WAITING", "SABIKI_HOOKED_WAITING", "FIGHTING", "LANDING", "CATCH_PRESENTATION"]
 	_boat_fishing_line_detail_label.visible = visible
 	var rig_snapshot: Dictionary = snapshot.get("rig", {})
 	var depth_range: Dictionary = snapshot.get("hook_depth_range", {})
@@ -808,8 +860,6 @@ func _refresh_boat_fishing_line_detail() -> void:
 	var hook_capacity := int(snapshot.get("sabiki_hook_capacity", 0))
 	var batch_summary: Dictionary = snapshot.get("sabiki_batch_result_summary", {})
 	_boat_fishing_hooked_count_label.visible = visible and sabiki_active
-	_boat_fishing_collect_rig_button.visible = visible and sabiki_active and hooked_count > 0 and state_name in ["WAITING", "SABIKI_HOOKED_WAITING"]
-	_boat_fishing_collect_rig_button.disabled = bool(snapshot.get("sabiki_batch_retrieval_active", false))
 	if _boat_fishing_hooked_count_label.visible:
 		if state_name == "CATCH_PRESENTATION" and int(batch_summary.get("catch_count", 0)) > 0:
 			_boat_fishing_hooked_count_label.text = tr("hud.boat_fishing.batch_caught_format") % [
@@ -820,10 +870,20 @@ func _refresh_boat_fishing_line_detail() -> void:
 			_boat_fishing_hooked_count_label.text = tr("hud.boat_fishing.hooked_count") % [hooked_count, hook_capacity]
 	if not visible:
 		_boat_fishing_line_detail_label.text = ""
+		_boat_fishing_drag_feedback_label.visible = false
+		_boat_fishing_drag_feedback_label.text = ""
 		_boat_fishing_rig_depth_label.text = ""
 		_boat_fishing_hooked_count_label.text = ""
 		return
 	var operation_key := "hud.boat_fishing.line_reeling" if bool(snapshot.get("manual_reeling", false)) else "hud.boat_fishing.line_releasing" if bool(snapshot.get("manual_line_releasing", false)) else "hud.boat_fishing.line_held"
+	var fight_snapshot: Dictionary = snapshot.get("fight_snapshot", {})
+	if bool(snapshot.get("fight_session_active", false)):
+		if float(fight_snapshot.get("line_out_rate_mps", 0.0)) > 0.015:
+			operation_key = "hud.boat_fishing.fight_line_out"
+		elif float(fight_snapshot.get("reel_in_rate_mps", 0.0)) > 0.015:
+			operation_key = "hud.boat_fishing.fight_line_reeling"
+		else:
+			operation_key = "hud.boat_fishing.fight_line_held"
 	var bottom_depth := float(snapshot.get("water_depth_m", -1.0))
 	var bottom_text := ("%.1f m" % bottom_depth) if bottom_depth >= 0.0 else tr("hud.boat_fishing.depth_unknown")
 	var depth_format_key := "hud.boat_fishing.line_detail_sabiki_format" if sabiki_active else "hud.boat_fishing.line_detail_format"
@@ -834,6 +894,18 @@ func _refresh_boat_fishing_line_detail() -> void:
 		bottom_text,
 		tr(operation_key),
 	]
+	if bool(snapshot.get("fight_session_active", false)):
+		var drag_percent := roundi(float(snapshot.get("drag_setting", 0.3)) * 100.0)
+		_boat_fishing_line_detail_label.text += " · " + (tr("hud.boat_fishing.drag_setting_format") % drag_percent)
+		var feedback_remaining := float(snapshot.get("drag_adjustment_feedback_remaining", 0.0))
+		var adjustment_direction := int(snapshot.get("drag_adjustment_direction", 0))
+		_boat_fishing_drag_feedback_label.visible = feedback_remaining > 0.0 and adjustment_direction != 0
+		if _boat_fishing_drag_feedback_label.visible:
+			var feedback_key := "hud.boat_fishing.drag_adjustment_up_format" if adjustment_direction > 0 else "hud.boat_fishing.drag_adjustment_down_format"
+			_boat_fishing_drag_feedback_label.text = tr(feedback_key) % drag_percent
+	else:
+		_boat_fishing_drag_feedback_label.visible = false
+		_boat_fishing_drag_feedback_label.text = ""
 	if _boat_fishing_rig_depth_label.visible:
 		_boat_fishing_rig_depth_label.text = tr("hud.boat_fishing.rig_depth_format") % [
 			float(depth_range.get("shallow_m", 0.0)),
@@ -1018,8 +1090,6 @@ func _on_locale_changed(_locale_id: String) -> void:
 			_boat_fishing_hint_label.text = tr(_boat_fishing_hint_key)
 		if _boat_fishing_retrieve_button != null:
 			_boat_fishing_retrieve_button.text = tr("hud.boat_fishing.reel")
-		if _boat_fishing_collect_rig_button != null:
-			_boat_fishing_collect_rig_button.text = tr("hud.boat_fishing.retrieve_rig")
 		_rebuild_boat_fishing_rig_selector()
 		if _boat_fishing_line_detail_label != null and _boat_fishing_line_detail_label.visible:
 			_refresh_boat_fishing_line_detail()
@@ -1027,6 +1097,8 @@ func _on_locale_changed(_locale_id: String) -> void:
 			_boat_fishing_end_button.text = tr("hud.boat_fishing.end")
 	if _activity_feedback_label != null and not _activity_feedback_key.is_empty():
 		_activity_feedback_label.text = tr(_activity_feedback_key)
+	if _line_snap_notice_label != null and not _line_snap_notice_key.is_empty():
+		_line_snap_notice_label.text = tr(_line_snap_notice_key)
 	var help_title := get_node_or_null("ControlsHelpPanel/VBoxContainer/HBoxContainer/ControlsHelpTitle") as Label
 	if help_title != null:
 		help_title.text = tr("hud.activities.controls_help")
@@ -1042,6 +1114,10 @@ func _on_locale_changed(_locale_id: String) -> void:
 		takeover_button.text = tr("hud.autopilot.manual_takeover")
 	if _fishing_player_panel != null:
 		_fishing_player_panel.refresh_localized_text()
+	if _fishing_debug_panel != null and _fishing_debug_panel.has_method("refresh_localized_text"):
+		_fishing_debug_panel.call("refresh_localized_text")
+	if _debug_scroll != null:
+		_debug_scroll.set_tab_title(2, tr("fishing.debug.tab"))
 	if _fish_finder_display != null and _fish_finder_display.has_method("refresh_localized_text"):
 		_fish_finder_display.call("refresh_localized_text")
 	if _fish_map != null and _fish_map.has_method("refresh_localized_text"):
@@ -2096,6 +2172,12 @@ func _adjust_headsail(direction: int) -> void:
 
 func _process(delta: float) -> void:
 	_advance_catch_result_card(delta)
+	if _line_snap_notice_remaining > 0.0:
+		_line_snap_notice_remaining = maxf(0.0, _line_snap_notice_remaining - delta)
+		if _line_snap_notice_remaining <= 0.0:
+			_line_snap_notice_key = ""
+			if _line_snap_notice_panel != null:
+				_line_snap_notice_panel.visible = false
 	if _activity_feedback_remaining > 0.0:
 		_activity_feedback_remaining = maxf(0.0, _activity_feedback_remaining - delta)
 		if _activity_feedback_remaining <= 0.0:
@@ -2304,6 +2386,20 @@ func _sync_peberholm_debug_control() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if _debug_panel_dragging:
+		if event is InputEventMouseMotion:
+			_move_debug_panel(event.relative)
+			get_viewport().set_input_as_handled()
+			return
+		if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and not event.pressed:
+			_debug_panel_dragging = false
+			get_viewport().set_input_as_handled()
+			return
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT and event.pressed and _debug_panel != null and _debug_panel.visible and _debug_panel_drag_handle != null:
+		if _debug_panel_drag_handle.get_global_rect().has_point(event.position):
+			_debug_panel_dragging = true
+			get_viewport().set_input_as_handled()
+			return
 	if _polar_requested and event is InputEventKey and event.pressed and not event.echo and (event.physical_keycode == KEY_ESCAPE or event.keycode == KEY_ESCAPE):
 		_close_polar_panel()
 		get_viewport().set_input_as_handled()
@@ -2313,6 +2409,27 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo and (event.physical_keycode == KEY_ESCAPE or event.keycode == KEY_ESCAPE):
 		_close_vessel_picker()
 		get_viewport().set_input_as_handled()
+
+
+func _move_debug_panel(mouse_delta: Vector2) -> void:
+	if _debug_panel == null or not _debug_panel.visible:
+		_debug_panel_dragging = false
+		return
+	var viewport_size := get_viewport().get_visible_rect().size
+	var panel_rect := _debug_panel.get_global_rect()
+	var maximum_position := Vector2(
+		maxf(0.0, viewport_size.x - panel_rect.size.x),
+		maxf(0.0, viewport_size.y - panel_rect.size.y)
+	)
+	var next_position := panel_rect.position + mouse_delta
+	next_position.x = clampf(next_position.x, 0.0, maximum_position.x)
+	next_position.y = clampf(next_position.y, 0.0, maximum_position.y)
+	_debug_panel_user_position = next_position
+	_debug_panel_user_moved = true
+	_debug_panel.offset_left = next_position.x
+	_debug_panel.offset_top = next_position.y
+	_debug_panel.offset_right = next_position.x + panel_rect.size.x
+	_debug_panel.offset_bottom = next_position.y + panel_rect.size.y
 
 
 func _unhandled_key_input(event: InputEvent) -> void:
@@ -2407,14 +2524,6 @@ func _update_navigation_depth_status() -> void:
 func _build_debug_panel() -> void:
 	_debug_panel = PanelContainer.new()
 	_debug_panel.name = "DebugPanel"
-	_debug_panel.anchor_left = 1.0
-	_debug_panel.anchor_right = 1.0
-	_debug_panel.anchor_top = 0.0
-	_debug_panel.anchor_bottom = 1.0
-	_debug_panel.offset_left = -414.0
-	_debug_panel.offset_top = 196.0
-	_debug_panel.offset_right = -24.0
-	_debug_panel.offset_bottom = -16.0
 	_debug_panel.custom_minimum_size = Vector2(390.0, 0.0)
 	_debug_panel.visible = false
 	var panel_style := StyleBoxFlat.new()
@@ -2425,12 +2534,39 @@ func _build_debug_panel() -> void:
 	panel_style.content_margin_top = 12.0
 	panel_style.content_margin_bottom = 12.0
 	_debug_panel.add_theme_stylebox_override("panel", panel_style)
+	var panel_content := VBoxContainer.new()
+	panel_content.name = "DebugPanelContent"
+	panel_content.add_theme_constant_override("separation", 8)
+	_debug_panel.add_child(panel_content)
+	_debug_panel_drag_handle = PanelContainer.new()
+	_debug_panel_drag_handle.name = "DebugPanelDragHandle"
+	_debug_panel_drag_handle.custom_minimum_size.y = 30.0
+	_debug_panel_drag_handle.mouse_filter = Control.MOUSE_FILTER_STOP
+	_debug_panel_drag_handle.mouse_default_cursor_shape = Control.CURSOR_MOVE
+	var drag_handle_style := StyleBoxFlat.new()
+	drag_handle_style.bg_color = Color(0.10, 0.23, 0.28, 0.95)
+	drag_handle_style.border_color = Color(0.35, 0.62, 0.64, 0.8)
+	drag_handle_style.set_border_width_all(1)
+	drag_handle_style.set_corner_radius_all(5)
+	drag_handle_style.content_margin_left = 10.0
+	drag_handle_style.content_margin_right = 10.0
+	drag_handle_style.content_margin_top = 4.0
+	drag_handle_style.content_margin_bottom = 4.0
+	_debug_panel_drag_handle.add_theme_stylebox_override("panel", drag_handle_style)
+	var drag_title := Label.new()
+	drag_title.name = "DebugPanelDragTitle"
+	drag_title.text = tr("fishing.debug.window_drag_title")
+	drag_title.set_meta("translation_key", "fishing.debug.window_drag_title")
+	drag_title.add_theme_color_override("font_color", Color(0.88, 0.96, 0.93, 1.0))
+	drag_title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_debug_panel_drag_handle.add_child(drag_title)
+	panel_content.add_child(_debug_panel_drag_handle)
 
 	_debug_scroll = TabContainer.new()
 	_debug_scroll.name = "SailboatDebugTabs"
 	_debug_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_debug_scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	_debug_panel.add_child(_debug_scroll)
+	panel_content.add_child(_debug_scroll)
 	var environment_scroll := ScrollContainer.new()
 	environment_scroll.name = "EnvironmentDebugTab"
 	environment_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -3692,6 +3828,20 @@ func _update_hud_layout() -> void:
 	var ui_scale := float(_quality_manager.call("get_ui_scale_factor")) if _quality_manager != null and _quality_manager.has_method("get_ui_scale_factor") else 1.0
 	var scale := clampf(ui_scale, 0.9, 1.75)
 	var margin := 18.0 * scale
+	if _line_snap_notice_panel != null:
+		var notice_width := minf(620.0 * scale, maxf(1.0, viewport_width - margin * 2.0))
+		var notice_height := 92.0 * scale
+		_line_snap_notice_panel.anchor_left = 0.5
+		_line_snap_notice_panel.anchor_right = 0.5
+		_line_snap_notice_panel.anchor_top = 0.14
+		_line_snap_notice_panel.anchor_bottom = 0.14
+		_line_snap_notice_panel.offset_left = -notice_width * 0.5
+		_line_snap_notice_panel.offset_right = notice_width * 0.5
+		_line_snap_notice_panel.offset_top = 0.0
+		_line_snap_notice_panel.offset_bottom = notice_height
+		_line_snap_notice_panel.custom_minimum_size = Vector2(notice_width, notice_height)
+		_line_snap_notice_label.add_theme_font_size_override("font_size", roundi(23.0 * scale))
+		_line_snap_notice_label.custom_minimum_size = Vector2(maxf(1.0, notice_width - 48.0 * scale), 0.0)
 	var status_width := minf(300.0 * scale, maxf(220.0 * scale, viewport_width * 0.30))
 	status_width = minf(status_width, maxf(160.0 * scale, viewport_width - margin * 2.0))
 	_status_panel.anchor_left = 0.0
@@ -3819,13 +3969,35 @@ func _update_hud_layout() -> void:
 		_sailing_panel.offset_top = -sailing_height - margin
 		_sailing_panel.offset_bottom = -margin
 	if _debug_panel != null:
-		var debug_width := minf(390.0 * scale, maxf(280.0, viewport_width - 48.0 * scale))
-		_debug_panel.custom_minimum_size.x = debug_width
-		_debug_panel.offset_left = -debug_width - margin
-		_debug_panel.offset_right = -margin
-		_debug_panel.offset_top = minf(196.0 * scale, maxf(80.0 * scale, viewport_size.y * 0.2))
-		_debug_panel.offset_bottom = -16.0 * scale
-		_debug_panel.custom_minimum_size.y = 0.0
+		var default_width := minf(390.0 * scale, maxf(280.0, viewport_width - 48.0 * scale))
+		var default_top := minf(196.0 * scale, maxf(80.0 * scale, viewport_size.y * 0.2))
+		var default_height := maxf(180.0 * scale, viewport_size.y - default_top - 16.0 * scale)
+		if _debug_panel_reference_size == Vector2.ZERO:
+			_debug_panel_reference_size = Vector2(default_width, default_height)
+			_debug_panel_reference_scale = scale
+		var debug_size := _debug_panel_reference_size * (scale / maxf(_debug_panel_reference_scale, 0.01))
+		var available_size := Vector2(
+			maxf(1.0, viewport_width - margin * 2.0),
+			maxf(1.0, viewport_size.y - margin * 2.0)
+		)
+		var fit_scale := minf(1.0, minf(available_size.x / debug_size.x, available_size.y / debug_size.y))
+		debug_size *= fit_scale
+		_debug_panel.anchor_left = 0.0
+		_debug_panel.anchor_right = 0.0
+		_debug_panel.anchor_top = 0.0
+		_debug_panel.anchor_bottom = 0.0
+		_debug_panel.custom_minimum_size = debug_size
+		if _debug_panel_drag_handle != null:
+			_debug_panel_drag_handle.custom_minimum_size.y = 30.0 * scale
+		var debug_position := _debug_panel_user_position if _debug_panel_user_moved else Vector2(viewport_width - debug_size.x - margin, default_top)
+		debug_position.x = clampf(debug_position.x, 0.0, maxf(0.0, viewport_width - debug_size.x))
+		debug_position.y = clampf(debug_position.y, 0.0, maxf(0.0, viewport_size.y - debug_size.y))
+		if _debug_panel_user_moved:
+			_debug_panel_user_position = debug_position
+		_debug_panel.offset_left = debug_position.x
+		_debug_panel.offset_top = debug_position.y
+		_debug_panel.offset_right = debug_position.x + debug_size.x
+		_debug_panel.offset_bottom = debug_position.y + debug_size.y
 		_debug_scroll.custom_minimum_size.y = 0.0
 	if _catch_result_panel != null:
 		var catch_scale := scale

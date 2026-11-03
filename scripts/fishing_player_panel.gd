@@ -23,6 +23,7 @@ var _action_button: Button
 var _feedback_label: Label
 var _title_label: Label
 var _last_catch_result: FishingCatchResult
+var _active_trolling_catch_ids: Dictionary = {}
 var _feedback_key := ""
 var _start_block_reason_key := ""
 var _content: VBoxContainer
@@ -194,6 +195,7 @@ func _resolve_encounter() -> void:
 		if _encounter.catch_succeeded.is_connected(_on_catch_succeeded): _encounter.catch_succeeded.disconnect(_on_catch_succeeded)
 		if _encounter.fish_hooked.is_connected(_on_fish_hooked): _encounter.fish_hooked.disconnect(_on_fish_hooked)
 		if _encounter.catch_cancelled.is_connected(_on_catch_cancelled): _encounter.catch_cancelled.disconnect(_on_catch_cancelled)
+	_active_trolling_catch_ids.clear()
 	_encounter = found
 	if _encounter == null:
 		return
@@ -248,19 +250,26 @@ func _on_action_pressed() -> void:
 	_update_panel()
 
 
-func _on_fish_hooked(_pending: FishingPendingCatch) -> void:
+func _on_fish_hooked(pending: FishingPendingCatch) -> void:
+	if pending == null or pending.fishing_method != "trolling":
+		return
+	_active_trolling_catch_ids[pending.catch_id] = true
 	_show_feedback("fishing.ui.hooked")
 
 
 func _on_catch_succeeded(result: FishingCatchResult) -> void:
-	if result == null:
+	if result == null or result.fishing_method != "trolling":
 		return
+	_active_trolling_catch_ids.erase(result.catch_id)
 	_last_catch_result = result
 	_refresh_last_catch_summary()
 	_update_panel()
 
 
-func _on_catch_cancelled(_catch_id: String, _reason: String) -> void:
+func _on_catch_cancelled(catch_id: String, _reason: String) -> void:
+	if not _active_trolling_catch_ids.has(catch_id):
+		return
+	_active_trolling_catch_ids.erase(catch_id)
 	_show_feedback("fishing.ui.cancelled")
 	_update_panel()
 

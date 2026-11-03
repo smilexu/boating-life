@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="BoatFishingFightProfile" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/boat_fishing_fight_profile.gd" id="1_profile"]
+
+[resource]
+script = ExtResource("1_profile")
+species_id = "herring"
+base_pull_n = 2.2
+burst_multiplier = 2.35
+minimum_burst_multiplier = 1.12
+minimum_burst_stamina_ratio = 0.08
+low_stamina_pull_multiplier = 0.5
+recovery_pull_multiplier = 0.45
+minimum_pull_n = 0.1
+maximum_pull_n = 20.0
+force_rise_time_s = 0.1
+force_fall_time_s = 0.22
+burst_duration_min_s = 0.32
+burst_duration_max_s = 0.62
+burst_interval_min_s = 2.4
+burst_interval_max_s = 4.2
+stamina_drain_rate = 0.26
+stamina_recovery_rate = 0.16
+size_reference_length_m = 0.3
+size_force_exponent = 1.8
+minimum_size_factor = 0.6
+maximum_size_factor = 1.7
+steady_swim_speed_mps = 0.12
+burst_swim_speed_mps = 0.72
+recovery_swim_speed_mps = 0.07

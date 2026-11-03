@@ -31,6 +31,10 @@ var _step_accumulator := 0.0
 var _simulation_seconds := 0.0
 var _current_game_time_seconds := 0.0
 var _state_revision := 1
+var _ambient_rng := RandomNumberGenerator.new()
+var _ambient_encounter_sequence := 1
+var _ambient_fish_by_id: Dictionary = {}
+var _settled_ambient_fish_ids: Dictionary = {}
 
 
 func authority_source_name() -> String:
@@ -40,6 +44,10 @@ func authority_source_name() -> String:
 func initialize(seed: int, bathymetry: BathymetryManager, georeference: GeoReference, profiles: Array[FishSpeciesProfile], initial_game_time_seconds: float = 0.0) -> void:
 	_seed = seed
 	_current_game_time_seconds = maxf(0.0, initial_game_time_seconds) if is_finite(initial_game_time_seconds) else 0.0
+	_ambient_rng.seed = maxi(1, seed ^ 0x4A17B29D)
+	_ambient_encounter_sequence = 1
+	_ambient_fish_by_id.clear()
+	_settled_ambient_fish_ids.clear()
 	_bathymetry = bathymetry
 	_georeference = georeference
 	_profiles_by_id.clear()
@@ -107,6 +115,328 @@ func get_schools_near(world_position: Vector3, radius_m: float, include_unavaila
 				if dx * dx + dz * dz <= radius_squared:
 					result.append(_snapshot_for_state(state))
 	return result
+
+
+## Returns legal transient catch sources for one actual submerged hook. Species
+## eligibility reuses this authority's ecological profile and local bathymetry;
+## it never searches for or invents a school.
+func evaluate_ambient_fishing_candidates(context: Dictionary) -> Dictionary:
+	var hook_position_value: Variant = context.get("hook_world_position", null)
+	if not hook_position_value is Vector3:
+		return {"candidates": [], "reason": "invalid_hook_position", "environment_quality": 0.0}
+	var hook_position: Vector3 = hook_position_value
+	var hook_depth := maxf(0.0, float(context.get("hook_depth_m", 0.0)))
+	var water_column := maxf(0.0, float(context.get("water_column_m", 0.0)))
+	var action_weight := clampf(float(context.get("action_weight", 0.0)), 0.0, 1.0)
+	var action_qualified := bool(context.get("action_qualified", false))
+	var rig_type := str(context.get("rig_type", ""))
+	var compatible_species := _string_array(context.get("rig_compatible_species_ids", []))
+	var compatible_tags := _string_array(context.get("rig_compatible_lure_tags", []))
+	var depth_data := _bathymetry.get_depth_at_world_position(hook_position) if _bathymetry != null else {"valid": false, "reason": "bathymetry_unavailable"}
+	if not bool(depth_data.get("valid", false)):
+		return {"candidates": [], "reason": str(depth_data.get("reason", "bathymetry_unavailable")), "environment_quality": 0.0}
+	var seabed_depth := maxf(0.0, float(depth_data.get("depth_m", 0.0)))
+	if water_column <= 0.0:
+		water_column = maxf(0.0, seabed_depth + hook_position.y)
+	var candidates: Array[Dictionary] = []
+	var best_environment_quality := 0.0
+	var rejected_reason := "no_legal_species"
+	for profile in _ordered_species_profiles:
+		if not profile.supported_fishing_methods.has("boat_fishing"):
+			continue
+		if not _ambient_rig_matches(profile, rig_type, compatible_species, compatible_tags):
+			rejected_reason = "method_or_rig_mismatch"
+			continue
+		if not action_qualified:
+			rejected_reason = "action_requirement_not_met"
+			continue
+		if water_column < profile.minimum_water_column_m:
+			rejected_reason = "insufficient_water_column"
+			continue
+		var habitat_suitability := profile.suitability_for_depth(seabed_depth)
+		if habitat_suitability <= 0.04:
+			rejected_reason = "habitat_depth_mismatch"
+			continue
+		var activity_depth_weight := _ambient_activity_depth_weight(profile, hook_depth, water_column)
+		if activity_depth_weight <= 0.0:
+			rejected_reason = "activity_depth_mismatch"
+			continue
+		var vegetation_factor := 1.0
+		if profile.eelgrass_spawn_boost > 0.0:
+			var east := hook_position.x
+			var north := -hook_position.z
+			var seagrass_weight := _seagrass_weight_at(east, north)
+			if profile.vegetation_spawn_mode == "edge_preference":
+				var edge_suitability := 1.0 - absf(seagrass_weight - 0.46) / 0.54
+				vegetation_factor = 0.76 + clampf(edge_suitability, 0.0, 1.0) * profile.eelgrass_spawn_boost
+			else:
+				vegetation_factor = 1.0 + seagrass_weight * profile.eelgrass_spawn_boost
+		var environment_quality := clampf(habitat_suitability * activity_depth_weight * lerpf(0.75, 1.0, action_weight), 0.0, 1.0)
+		var ecological_weight := maxf(0.0, profile.spawn_chance * habitat_suitability * activity_depth_weight * vegetation_factor * profile.relative_bite_tendency)
+		if ecological_weight <= 0.0:
+			rejected_reason = "zero_ecological_weight"
+			continue
+		best_environment_quality = maxf(best_environment_quality, environment_quality)
+		candidates.append({
+			"species_id": profile.species_id,
+			"ecological_weight": ecological_weight,
+			"spawn_chance": profile.spawn_chance,
+			"habitat_suitability": habitat_suitability,
+			"activity_depth_weight": activity_depth_weight,
+			"action_weight": action_weight,
+			"environment_quality": environment_quality,
+			"chart_depth_m": seabed_depth,
+			"water_column_m": water_column,
+			"hook_depth_m": hook_depth,
+			"habitat_region": _habitat_region_for_depth(seabed_depth),
+		})
+	if candidates.is_empty():
+		return {"candidates": [], "reason": rejected_reason, "environment_quality": 0.0, "chart_depth_m": seabed_depth, "water_column_m": water_column}
+	return {
+		"candidates": candidates,
+		"reason": "ambient_species_available",
+		"environment_quality": best_environment_quality,
+		"chart_depth_m": seabed_depth,
+		"water_column_m": water_column,
+		"hook_depth_m": hook_depth,
+	}
+
+
+## The authority selects and registers exactly one temporary natural individual
+## after the hazard fires. The returned fish has no School ID or population cost.
+func request_ambient_fish_encounter(context: Dictionary) -> Dictionary:
+	var fishing_session_id := str(context.get("fishing_session_id", ""))
+	var cast_session_id := str(context.get("cast_session_id", ""))
+	var hook_index := int(context.get("hook_index", -1))
+	if fishing_session_id.is_empty() or cast_session_id.is_empty() or hook_index < 0:
+		return {"accepted": false, "reason": "fishing_session_or_hook_invalid"}
+	for existing in _ambient_fish_by_id.values():
+		var record: Dictionary = existing
+		if str(record.get("fishing_session_id", "")) == fishing_session_id and int(record.get("hook_index", -1)) == hook_index and str(record.get("lifecycle_state", "")) in ["reserved", "hooked"]:
+			return {"accepted": false, "reason": "hook_already_has_ambient_fish", "ambient_fish_id": str(record.get("ambient_fish_id", ""))}
+	var evaluation := evaluate_ambient_fishing_candidates(context)
+	var candidates: Array = evaluation.get("candidates", [])
+	if candidates.is_empty():
+		return {"accepted": false, "reason": str(evaluation.get("reason", "no_legal_species")), "evaluation": evaluation}
+	var selected: Dictionary = _weighted_ambient_species(candidates)
+	var species_id := str(selected.get("species_id", ""))
+	var profile := _profiles_by_id.get(species_id) as FishSpeciesProfile
+	if profile == null:
+		return {"accepted": false, "reason": "species_profile_unavailable"}
+	var sequence := _ambient_encounter_sequence
+	_ambient_encounter_sequence += 1
+	var ambient_fish_id := "ambient_fish_%d_%08d" % [_seed, sequence]
+	var identity_seed := _seed ^ (sequence * 2654435761) ^ _stable_species_hash(species_id)
+	var identity_rng := RandomNumberGenerator.new()
+	identity_rng.seed = maxi(1, identity_seed)
+	var body_length_m := identity_rng.randf_range(profile.body_length_range_m.x, profile.body_length_range_m.y)
+	var hook_position: Vector3 = context.get("hook_world_position", Vector3.ZERO)
+	var outward := context.get("ambient_spawn_direction", Vector3.ZERO) as Vector3
+	outward.y = 0.0
+	if outward.length_squared() < 0.001:
+		var angle := identity_rng.randf_range(-PI, PI)
+		outward = Vector3(cos(angle), 0.0, sin(angle))
+	else:
+		outward = outward.normalized()
+	var start_distance := identity_rng.randf_range(2.8, 5.0)
+	var spawn_position := hook_position - outward * start_distance
+	spawn_position.y = hook_position.y
+	var record := {
+		"ambient_fish_id": ambient_fish_id,
+		"source_type": "ambient",
+		"species_id": species_id,
+		"body_length_m": body_length_m,
+		"fishing_session_id": fishing_session_id,
+		"cast_session_id": cast_session_id,
+		"hook_index": hook_index,
+		"lifecycle_state": "reserved",
+		"hook_world_position": [hook_position.x, hook_position.y, hook_position.z],
+		"spawn_world_position": [spawn_position.x, spawn_position.y, spawn_position.z],
+		"hook_depth_m": maxf(0.0, float(context.get("hook_depth_m", 0.0))),
+		"chart_depth_m": float(selected.get("chart_depth_m", 0.0)),
+		"habitat_region": str(selected.get("habitat_region", "unknown")),
+		"ecological_weight": float(selected.get("ecological_weight", 0.0)),
+		"identity_seed": identity_seed,
+		"created_game_time_seconds": _current_game_time_seconds,
+	}
+	_ambient_fish_by_id[ambient_fish_id] = record
+	_state_revision += 1
+	return {"accepted": true, "fish": record.duplicate(true), "evaluation": evaluation}
+
+
+func get_ambient_fish_encounter(ambient_fish_id: String) -> Dictionary:
+	var record: Variant = _ambient_fish_by_id.get(ambient_fish_id, null)
+	return (record as Dictionary).duplicate(true) if record is Dictionary else {}
+
+
+func confirm_ambient_fish_encounter(ambient_fish_id: String, fishing_session_id: String, hook_index: int) -> bool:
+	if not _ambient_fish_by_id.has(ambient_fish_id):
+		return false
+	var record: Dictionary = _ambient_fish_by_id[ambient_fish_id]
+	if str(record.get("fishing_session_id", "")) != fishing_session_id or int(record.get("hook_index", -1)) != hook_index or str(record.get("lifecycle_state", "")) != "reserved":
+		return false
+	record["lifecycle_state"] = "hooked"
+	_ambient_fish_by_id[ambient_fish_id] = record
+	_state_revision += 1
+	return true
+
+
+func release_ambient_fish_encounter(ambient_fish_id: String, _reason: String = "cancelled") -> bool:
+	if not _ambient_fish_by_id.has(ambient_fish_id) or _settled_ambient_fish_ids.has(ambient_fish_id):
+		return false
+	_ambient_fish_by_id.erase(ambient_fish_id)
+	_state_revision += 1
+	return true
+
+
+func release_ambient_fishing_session(fishing_session_id: String, _reason: String = "session_ended") -> int:
+	var released := 0
+	for ambient_fish_id in _ambient_fish_by_id.keys():
+		var record: Dictionary = _ambient_fish_by_id[ambient_fish_id]
+		if str(record.get("fishing_session_id", "")) == fishing_session_id:
+			_ambient_fish_by_id.erase(ambient_fish_id)
+			released += 1
+	if released > 0:
+		_state_revision += 1
+	return released
+
+
+func settle_ambient_fish_encounter(ambient_fish_id: String) -> Dictionary:
+	if _settled_ambient_fish_ids.has(ambient_fish_id):
+		return {"accepted": false, "reason": "ambient_fish_already_settled"}
+	var record: Variant = _ambient_fish_by_id.get(ambient_fish_id, null)
+	if not record is Dictionary or str(record.get("lifecycle_state", "")) != "hooked":
+		return {"accepted": false, "reason": "ambient_fish_not_hooked"}
+	_ambient_fish_by_id.erase(ambient_fish_id)
+	_settled_ambient_fish_ids[ambient_fish_id] = true
+	_trim_settled_ambient_ids()
+	_state_revision += 1
+	return {"accepted": true, "fish": (record as Dictionary).duplicate(true), "state_revision": _state_revision}
+
+
+## Validates school reductions and temporary fish consumption together before
+## committing either side, so mixed Sabiki batches cannot partially settle.
+func settle_boat_fishing_catch_batch(school_changes: Dictionary, ambient_fish_ids: Array[String], game_time_seconds: float = -1.0) -> Dictionary:
+	if is_finite(game_time_seconds) and game_time_seconds >= 0.0:
+		_current_game_time_seconds = game_time_seconds
+	var normalized: Dictionary = {}
+	for school_id_variant in school_changes.keys():
+		var school_id := str(school_id_variant)
+		var delta := int(school_changes[school_id_variant])
+		var school := _schools.get(school_id) as FishSchoolState
+		if school_id.is_empty() or delta >= 0 or school == null or school.resource_state != "available" or school.population < -delta:
+			return {"accepted": false, "reason": "school_batch_invalid", "school_id": school_id}
+		normalized[school_id] = delta
+	var unique_ambient_ids: Array[String] = []
+	for ambient_fish_id in ambient_fish_ids:
+		if unique_ambient_ids.has(ambient_fish_id) or _settled_ambient_fish_ids.has(ambient_fish_id):
+			return {"accepted": false, "reason": "ambient_fish_duplicate_or_settled", "ambient_fish_id": ambient_fish_id}
+		var record: Variant = _ambient_fish_by_id.get(ambient_fish_id, null)
+		if not record is Dictionary or str(record.get("lifecycle_state", "")) != "hooked":
+			return {"accepted": false, "reason": "ambient_fish_not_hooked", "ambient_fish_id": ambient_fish_id}
+		unique_ambient_ids.append(ambient_fish_id)
+	if normalized.is_empty() and unique_ambient_ids.is_empty():
+		return {"accepted": false, "reason": "empty_natural_catch_batch"}
+	var populations: Dictionary = {}
+	for school_id in normalized:
+		var school := _schools[school_id] as FishSchoolState
+		var effective_population := float(school.population) + school.recovery_fractional_population
+		effective_population = clampf(effective_population + float(normalized[school_id]), 0.0, float(school.baseline_population))
+		school.population = floori(effective_population)
+		school.recovery_fractional_population = effective_population - float(school.population)
+		school.resource_state = "depleted" if school.population == 0 else "available"
+		school.last_population_update_game_time_seconds = _current_game_time_seconds
+		school.last_updated_unix = int(Time.get_unix_time_from_system())
+		populations[school_id] = school.population
+	var ambient_records: Array[Dictionary] = []
+	for ambient_fish_id in unique_ambient_ids:
+		var record: Dictionary = _ambient_fish_by_id[ambient_fish_id]
+		ambient_records.append(record.duplicate(true))
+		_ambient_fish_by_id.erase(ambient_fish_id)
+		_settled_ambient_fish_ids[ambient_fish_id] = true
+	if not normalized.is_empty() or not unique_ambient_ids.is_empty():
+		_state_revision += 1
+	_trim_settled_ambient_ids()
+	return {"accepted": true, "populations": populations, "ambient_fish": ambient_records, "state_revision": _state_revision}
+
+
+func get_ambient_fish_session_snapshot(fishing_session_id: String) -> Array[Dictionary]:
+	var result: Array[Dictionary] = []
+	for record_value in _ambient_fish_by_id.values():
+		var record: Dictionary = record_value
+		if str(record.get("fishing_session_id", "")) == fishing_session_id:
+			result.append(record.duplicate(true))
+	return result
+
+
+func _ambient_rig_matches(profile: FishSpeciesProfile, rig_type: String, compatible_species: Array[String], compatible_tags: Array[String]) -> bool:
+	if profile == null:
+		return false
+	if not compatible_species.is_empty():
+		return compatible_species.has(profile.species_id)
+	if compatible_tags.is_empty():
+		return false
+	for tag in compatible_tags:
+		if profile.compatible_lure_tags.has(tag):
+			return true
+	return false
+
+
+func _ambient_activity_depth_weight(profile: FishSpeciesProfile, hook_depth_m: float, water_column_m: float) -> float:
+	var intervals: Array[Vector2] = []
+	if profile.surface_activity_cycle_enabled:
+		intervals.append(profile.surface_activity_depth_m)
+		intervals.append(profile.deep_activity_depth_m)
+	elif profile.vertical_layer == "surface":
+		intervals.append(profile.preferred_swim_depth_m)
+	else:
+		var fraction_min := 0.2 if profile.vertical_layer == "midwater" else 0.65
+		var fraction_max := 0.75 if profile.vertical_layer == "midwater" else 0.98
+		intervals.append(Vector2(maxf(0.4, water_column_m * fraction_min), maxf(0.5, water_column_m * fraction_max)))
+	var tolerance := clampf(profile.school_activity_radius_m * 0.7, 1.2, 3.0)
+	var best_weight := 0.0
+	for interval in intervals:
+		var low := maxf(0.0, interval.x)
+		var high := minf(maxf(low, interval.y), maxf(water_column_m - 0.35, 0.0))
+		var gap := maxf(maxf(low - hook_depth_m, hook_depth_m - high), 0.0)
+		var weight := 1.0 - smoothstep(0.0, tolerance, gap)
+		best_weight = maxf(best_weight, weight)
+	return best_weight
+
+
+func _weighted_ambient_species(candidates: Array) -> Dictionary:
+	var total := 0.0
+	for value in candidates:
+		if value is Dictionary:
+			total += maxf(0.0, float((value as Dictionary).get("ecological_weight", 0.0)))
+	if total <= 0.0:
+		return {}
+	var roll := _ambient_rng.randf() * total
+	for value in candidates:
+		if not value is Dictionary:
+			continue
+		var candidate: Dictionary = value
+		roll -= maxf(0.0, float(candidate.get("ecological_weight", 0.0)))
+		if roll <= 0.0:
+			return candidate
+	return candidates.back() as Dictionary
+
+
+func _string_array(value: Variant) -> Array[String]:
+	var result: Array[String] = []
+	if value is Array or value is PackedStringArray:
+		for entry in value:
+			result.append(str(entry))
+	return result
+
+
+func _trim_settled_ambient_ids() -> void:
+	if _settled_ambient_fish_ids.size() <= 512:
+		return
+	var keys: Array = _settled_ambient_fish_ids.keys()
+	keys.sort()
+	for index in range(keys.size() - 512):
+		_settled_ambient_fish_ids.erase(keys[index])
 
 
 func get_map_snapshot(species_ids: Array[String] = []) -> Array[Dictionary]:

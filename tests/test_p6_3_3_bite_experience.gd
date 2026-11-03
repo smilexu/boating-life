@@ -5,9 +5,6 @@ const SABIKI_RIG: BoatFishingRigProfile = preload("res://resources/boat_fishing/
 const SINGLE_JIG: BoatFishingRigProfile = preload("res://resources/boat_fishing/single_jig.tres")
 const HERRING_PROFILE: FishSpeciesProfile = preload("res://resources/fish_species/herring.tres")
 const SEA_TROUT_PROFILE: FishSpeciesProfile = preload("res://resources/fish_species/sea_trout.tres")
-const SAMPLE_INTERVAL_SECONDS := 0.5
-const STAT_SAMPLE_COUNT := 10000
-const STAT_OBSERVATION_WINDOW_SECONDS := 120.0
 
 
 class FakeFishingManager extends Node:
@@ -58,6 +55,37 @@ class FakeFishingManager extends Node:
 				rows.append(school.duplicate(true))
 		return rows
 
+	func evaluate_ambient_fishing_candidates(context: Dictionary) -> Dictionary:
+		if not bool(context.get("action_qualified", false)):
+			return {"candidates": [], "reason": "action_requirement_not_met", "environment_quality": 0.0}
+		var rig_species: Array = context.get("rig_compatible_species_ids", [])
+		var rig_tags: Array = context.get("rig_compatible_lure_tags", [])
+		var hook_depth := float(context.get("hook_depth_m", 0.0))
+		var candidates: Array[Dictionary] = []
+		for species_variant in profiles.keys():
+			var species_id := str(species_variant)
+			var profile := profiles[species_variant] as FishSpeciesProfile
+			if profile == null or not profile.supported_fishing_methods.has("boat_fishing"):
+				continue
+			var compatible := rig_species.has(species_id)
+			if rig_species.is_empty():
+				for tag in rig_tags:
+					compatible = compatible or profile.compatible_lure_tags.has(str(tag))
+			if not compatible:
+				continue
+			var depth_match := false
+			if profile.surface_activity_cycle_enabled:
+				depth_match = (hook_depth >= profile.surface_activity_depth_m.x and hook_depth <= profile.surface_activity_depth_m.y) or (hook_depth >= profile.deep_activity_depth_m.x and hook_depth <= profile.deep_activity_depth_m.y)
+			elif profile.vertical_layer == "surface":
+				depth_match = hook_depth <= profile.preferred_swim_depth_m.y
+			else:
+				depth_match = hook_depth <= 30.0
+			if depth_match:
+				candidates.append({"species_id": species_id, "ecological_weight": maxf(profile.spawn_chance, 0.001), "environment_quality": 1.0})
+		if candidates.is_empty():
+			return {"candidates": [], "reason": "activity_depth_mismatch", "environment_quality": 0.0}
+		return {"candidates": candidates, "reason": "ambient_species_available", "environment_quality": 1.0}
+
 
 var _failures := 0
 
@@ -102,12 +130,14 @@ func _test_distance_surface_and_rate_models() -> void:
 	root.add_child(encounter)
 	encounter.configure(fake, null)
 	encounter.set_process(false)
+	encounter.begin_boat_fishing_session()
+	encounter.begin_boat_fishing_cast_session(Vector3.ZERO, SABIKI_RIG)
 	fake.set_school("surface", "herring", Vector3(15.0, 0.0, 0.0), 1.6, 64)
 	var sabiki := encounter.evaluate_boat_fishing_candidates(Vector3.ZERO, 1.6, 0.0, SABIKI_RIG)
 	var school: Dictionary = sabiki.get("candidate_schools", [])[0]
 	_check(is_equal_approx(fake.query_radius_m, 50.0), "candidate query remains 50 m")
 	_check(is_equal_approx(float(school.get("surface_activity_multiplier", 0.0)), 1.6), "surface multiplier is part of natural Sabiki event evaluation")
-	_check(is_equal_approx(float(sabiki.get("base_event_rate_per_real_hour", 0.0)), 50.0), "Sabiki keeps its own 50/h per-hook base")
+	_check(str(sabiki.get("trigger_mode", "")) == "AMBIENT_ENCOUNTER" and float(sabiki.get("ambient_event_rate_per_real_hour", 0.0)) > 0.0, "out-of-volume hooks may use Authority-filtered ambient eligibility")
 	fake.set_school("empty", "herring", Vector3(2.0, 0.0, 0.0), 1.6, 0, "near_surface", "depleted")
 	var unavailable := encounter.evaluate_boat_fishing_candidates(Vector3.ZERO, 1.6, 0.0, SABIKI_RIG, true)
 	var found_empty := false
@@ -122,7 +152,7 @@ func _test_distance_surface_and_rate_models() -> void:
 	var debug_outside := encounter.evaluate_boat_fishing_candidates(Vector3.ZERO, 1.6, 0.0, SABIKI_RIG, true)
 	var outside_row: Dictionary = debug_outside.get("candidate_schools", [])[0] if int(debug_outside.get("candidate_school_count", 0)) > 0 else {}
 	_check(is_equal_approx(fake.query_radius_m, 65.0), "F3-only school scan uses its 65 m diagnostic radius")
-	_check(str(outside_row.get("rejection_reason", "")) == "lure_outside_school" and float(debug_outside.get("total_event_rate_per_real_hour", 0.0)) == 0.0, "a school at 55 m is diagnosed but cannot add natural bite hazard")
+	_check(str(outside_row.get("rejection_reason", "")) == "outside_horizontal_range" and str(debug_outside.get("trigger_mode", "")) == "AMBIENT_ENCOUNTER" and float(debug_outside.get("ambient_event_rate_per_real_hour", 0.0)) > 0.0, "a school at 55 m is excluded while open-water ambient eligibility remains independent")
 	encounter.queue_free()
 	fake.queue_free()
 
@@ -131,14 +161,19 @@ func _test_real_time_hazard_units() -> void:
 	var fake := FakeFishingManager.new()
 	fake.profiles = {"herring": HERRING_PROFILE}
 	root.add_child(fake)
+	fake.set_school("ambient_school", "herring", Vector3(15.0, 0.0, 0.0), 1.6, 64)
 	var encounter := FishingEncounterSystem.new()
 	root.add_child(encounter)
 	encounter.configure(fake, null)
 	encounter.set_process(false)
-	encounter.set("_boat_hazard_threshold", 100.0)
-	encounter.set("_boat_hazard_accumulated", 0.0)
-	encounter.advance_boat_fishing_hazard({"total_event_rate_per_real_hour": 3600.0, "valid_candidates": []}, 0.5)
-	_check(is_equal_approx(float(encounter.get("_boat_hazard_accumulated")), 0.5), "boat hazard integrates a half real second without a world-time multiplier")
+	encounter.begin_boat_fishing_session()
+	encounter.begin_boat_fishing_cast_session(Vector3.ZERO, SABIKI_RIG)
+	var evaluation := encounter.evaluate_boat_fishing_candidates(Vector3.ZERO, 1.6, 0.0, SABIKI_RIG)
+	var ambient_rate := float(evaluation.get("ambient_event_rate_per_real_hour", 0.0))
+	encounter.set("_boat_ambient_hazard_threshold", 100.0)
+	encounter.set("_boat_ambient_hazard_accumulated", 0.0)
+	var hazard := encounter.advance_boat_fishing_ambient_hazard([evaluation], 0.5)
+	_check(is_equal_approx(float(hazard.get("hazard_accumulated", -1.0)), ambient_rate * 0.5 / 3600.0), "shared ambient hazard integrates a half real second without a world-time multiplier")
 	encounter.queue_free()
 	fake.queue_free()
 
@@ -227,67 +262,56 @@ func _test_bite_time_statistics() -> void:
 	root.add_child(encounter)
 	encounter.configure(fake, null)
 	encounter.set_process(false)
-	var scenarios := [
-		{"name": "surface Sabiki 5 m", "distance": 5.0, "school_depth": 1.6, "lure_depth": 1.6, "population": 64, "state": "near_surface", "species": "herring", "rig": SABIKI_RIG, "hooks": 5},
-		{"name": "surface Sabiki 15 m", "distance": 15.0, "school_depth": 1.6, "lure_depth": 1.6, "population": 64, "state": "near_surface", "species": "herring", "rig": SABIKI_RIG, "hooks": 5},
-		{"name": "surface Sabiki 30 m", "distance": 30.0, "school_depth": 1.6, "lure_depth": 1.6, "population": 64, "state": "near_surface", "species": "herring", "rig": SABIKI_RIG, "hooks": 5},
-		{"name": "deep Sabiki 15 m", "distance": 15.0, "school_depth": 15.0, "lure_depth": 15.0, "population": 64, "state": "deep", "species": "herring", "rig": SABIKI_RIG, "hooks": 5},
-		{"name": "surface Sabiki wrong layer", "distance": 15.0, "school_depth": 1.6, "lure_depth": 10.0, "population": 64, "state": "near_surface", "species": "herring", "rig": SABIKI_RIG, "hooks": 5},
-		{"name": "incompatible Sabiki", "distance": 5.0, "school_depth": 1.6, "lure_depth": 1.6, "population": 64, "state": "near_surface", "species": "sea_trout", "rig": SABIKI_RIG, "hooks": 5},
-		{"name": "surface Sabiki only two fish", "distance": 5.0, "school_depth": 1.6, "lure_depth": 1.6, "population": 2, "state": "near_surface", "species": "herring", "rig": SABIKI_RIG, "hooks": 5},
-		{"name": "surface Single Jig 10 m", "distance": 10.0, "school_depth": 1.6, "lure_depth": 1.6, "population": 64, "state": "near_surface", "species": "sea_trout", "rig": SINGLE_JIG, "hooks": 1},
+	encounter.begin_boat_fishing_session()
+	encounter.begin_boat_fishing_cast_session(Vector3.ZERO, SABIKI_RIG)
+	var origin := Vector3(0.0, -1.6, 0.0)
+	var core_scenarios := [
+		{"name": "surface core", "horizontal": 1.0, "depth": 1.6, "lure_depth": 1.6, "min": 2.0, "max": 5.0},
+		{"name": "surface edge", "horizontal": 2.16, "depth": 1.6, "lure_depth": 1.6, "min": 5.0, "max": 10.0},
+		{"name": "deep core", "horizontal": 1.0, "depth": 15.0, "lure_depth": 15.0, "min": 2.0, "max": 5.0},
 	]
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 639033
-	for scenario in scenarios:
+	for scenario in core_scenarios:
 		fake.schools.clear()
-		fake.set_school("scenario_school", str(scenario["species"]), Vector3(float(scenario["distance"]), 0.0, 0.0), float(scenario["school_depth"]), int(scenario["population"]), str(scenario["state"]))
-		var diagnostics := encounter.evaluate_boat_fishing_candidates(Vector3.ZERO, float(scenario["lure_depth"]), 0.0, scenario["rig"])
-		var per_hook_rate := float(diagnostics.get("total_event_rate_per_real_hour", 0.0))
-		var aggregate_rate := per_hook_rate * int(scenario["hooks"])
-		if aggregate_rate > 0.0:
-			var distribution := _sample_quantized_first_bite_times(aggregate_rate, rng)
-			print("[P6.3.3][STAT] %s rate=%.2f/h median=%.2fs p90=%.2fs no_bite_120s=%.2f%%" % [str(scenario["name"]), aggregate_rate, float(distribution["median"]), float(distribution["p90"]), float(distribution["no_bite_percent"])])
-			_check(float(distribution["no_bite_percent"]) < 1.0, "%s has a non-zero natural bite probability" % str(scenario["name"]))
-			if str(scenario["name"]) == "surface Sabiki 5 m":
-				_check(float(distribution["median"]) >= 1.0 and float(distribution["median"]) <= 3.5, "near surface 5 m first Sabiki bite median is within the 1–3 s target, allowing 0.5 s sampling quantization")
-			elif str(scenario["name"]) == "surface Sabiki 15 m":
-				_check(float(distribution["median"]) >= 2.0 and float(distribution["median"]) <= 5.5, "surface 15 m first Sabiki bite median is within the 2–5 s target, allowing sampling quantization")
-			elif str(scenario["name"]) == "surface Sabiki 30 m":
-				_check(float(distribution["median"]) >= 5.0 and float(distribution["median"]) <= 12.0, "surface 30 m first Sabiki bite median is within the 5–12 s target")
-			elif str(scenario["name"]) == "deep Sabiki 15 m":
-				_check(float(distribution["median"]) > 3.0, "deep school bites slower than the matching surface case")
-		else:
-			_check(int(diagnostics.get("valid_candidate_count", 0)) == 0, "%s cannot naturally bite" % str(scenario["name"]))
-			print("[P6.3.3][STAT] %s rate=0.00/h median=none p90=none no_bite_120s=100.00%%" % str(scenario["name"]))
+		fake.set_school("scenario_school", "herring", Vector3(float(scenario["horizontal"]), 0.0, 0.0), float(scenario["depth"]), 64, "near_surface" if float(scenario["depth"]) < 6.0 else "deep")
+		var hook_position := Vector3(origin.x, -float(scenario["lure_depth"]), origin.z)
+		var diagnostics := encounter.evaluate_boat_fishing_candidates(hook_position, float(scenario["lure_depth"]), 0.0, SABIKI_RIG, false, 0)
+		_check(str(diagnostics.get("trigger_mode", "")) == "SCHOOL_TARGETED" and int(diagnostics.get("targeted_candidate_count", 0)) == 1, "%s enters targeted mode only inside the 3D school volume" % str(scenario["name"]))
+		encounter.reset_boat_fishing_trigger_state()
+		var trigger: Dictionary = {}
+		for _sample in range(24):
+			trigger = encounter.advance_boat_fishing_trigger_for_hook(diagnostics, 0.5, 0)
+			if not (trigger.get("candidate", {}) as Dictionary).is_empty():
+				break
+		var reaction_seconds := float(trigger.get("reaction_total_seconds", -1.0))
+		_check(reaction_seconds >= float(scenario["min"]) and reaction_seconds <= float(scenario["max"]), "%s natural response is inside its configured %s–%s s range" % [str(scenario["name"]), scenario["min"], scenario["max"]])
+		print("[P6.3.3][TARGET] %s zone=%s reaction=%.2fs visual_approach=%.2fs" % [str(scenario["name"]), str(trigger.get("school_zone", "")), reaction_seconds, float(trigger.get("visual_approach_estimate_seconds", 0.0))])
+
+	fake.schools.clear()
+	fake.set_school("ambient_school", "herring", Vector3(15.0, 0.0, 0.0), 1.6, 64, "near_surface")
+	var ambient_eval := encounter.evaluate_boat_fishing_candidates(origin, 1.6, 0.0, SABIKI_RIG)
+	var ambient_rate := float(ambient_eval.get("ambient_event_rate_per_real_hour", 0.0))
+	var ambient_mean_minutes := 60.0 / ambient_rate if ambient_rate > 0.0 else INF
+	_check(str(ambient_eval.get("trigger_mode", "")) == "AMBIENT_ENCOUNTER" and ambient_mean_minutes >= 20.0 and ambient_mean_minutes <= 40.0, "an eligible open-water Herring ambient source has a 20–40 min mean at the configured base rate")
+	print("[P6.3.3][AMBIENT] lambda=%.2f/h mean=%.1f real minutes" % [ambient_rate, ambient_mean_minutes])
+
+	fake.schools.clear()
+	fake.set_school("wrong_layer", "herring", Vector3(1.0, 0.0, 0.0), 1.6, 64, "near_surface")
+	var wrong_layer := encounter.evaluate_boat_fishing_candidates(origin, 5.0, 0.0, SABIKI_RIG)
+	_check(int(wrong_layer.get("valid_candidate_count", 0)) == 0, "wrong water layer cannot use either targeted or ambient mode")
+
+	fake.schools.clear()
+	fake.set_school("incompatible", "sea_trout", Vector3(1.0, 0.0, 0.0), 2.0, 64, "near_surface")
+	var incompatible := encounter.evaluate_boat_fishing_candidates(Vector3(0.0, -2.0, 0.0), 2.0, 0.0, SABIKI_RIG)
+	_check(int(incompatible.get("valid_candidate_count", 0)) == 0, "incompatible Sabiki target cannot use either mode")
+
+	fake.schools.clear()
+	fake.set_school("single_jig_school", "sea_trout", Vector3(1.0, 0.0, 0.0), 2.0, 8, "near_surface")
+	var still_jig := encounter.evaluate_boat_fishing_candidates(Vector3(0.0, -2.0, 0.0), 2.0, 0.0, SINGLE_JIG)
+	var moving_jig := encounter.evaluate_boat_fishing_candidates(Vector3(0.0, -2.0, 0.0), 2.0, 0.2, SINGLE_JIG)
+	_check(int(still_jig.get("targeted_candidate_count", 0)) == 0 and int(moving_jig.get("targeted_candidate_count", 0)) == 1, "Single Jig requires a small amount of real lure movement for targeted school mode")
 	encounter.queue_free()
 	fake.queue_free()
 	await process_frame
-
-
-func _sample_quantized_first_bite_times(rate_per_real_hour: float, rng: RandomNumberGenerator) -> Dictionary:
-	var times: Array[float] = []
-	var no_bite_count := 0
-	var lambda_per_second := rate_per_real_hour / 3600.0
-	for _index in range(STAT_SAMPLE_COUNT):
-		var exponential_time := -log(maxf(0.000000001, 1.0 - rng.randf())) / lambda_per_second
-		var sampled_time := ceilf(exponential_time / SAMPLE_INTERVAL_SECONDS) * SAMPLE_INTERVAL_SECONDS
-		if sampled_time > STAT_OBSERVATION_WINDOW_SECONDS:
-			no_bite_count += 1
-		else:
-			times.append(sampled_time)
-	times.sort()
-	return {
-		"median": _quantile(times, 0.50),
-		"p90": _quantile(times, 0.90),
-		"no_bite_percent": float(no_bite_count) * 100.0 / float(STAT_SAMPLE_COUNT),
-	}
-
-
-func _quantile(sorted_values: Array[float], quantile: float) -> float:
-	if sorted_values.is_empty():
-		return INF
-	return sorted_values[clampi(floori(float(sorted_values.size() - 1) * quantile), 0, sorted_values.size() - 1)]
 
 
 func _check(condition: bool, message: String) -> void:
