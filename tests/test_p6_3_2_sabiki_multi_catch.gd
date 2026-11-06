@@ -372,9 +372,71 @@ func _test_live_boat_fishing_and_f3() -> void:
 	f3_selected.pressed.emit()
 	var reached_three := await _wait_until(func() -> bool: return casting.get_sabiki_hooked_count() == 3, 360)
 	_check(reached_three and casting.get_casting_state() == BoatFishingCastingSystem.CastState.SABIKI_HOOKED_WAITING, "three independent hooks can accumulate while the remaining hooks wait")
+	if reached_three:
+		var paid_before_fight_step := float(casting.get("_line_paid_out_length_m"))
+		var rig_length_m := SABIKI_RIG.get_line_attachment_height_m()
+		casting.call("_advance_boat_fight", 1.0 / 60.0)
+		var fight_line_snapshot := casting.get_fight_snapshot()
+		var rod_tip_world: Vector3 = casting.call("_get_fight_solver_rod_tip_world")
+		var sinker_world: Vector3 = casting.get("_bait_world")
+		var paid_after_fight_step := float(casting.get("_line_paid_out_length_m"))
+		var effective_after_fight_step := paid_after_fight_step + rig_length_m
+		var solver_input_length := float(fight_line_snapshot.get("solver_current_line_length_m", -1.0))
+		var solver_direction: Vector3 = fight_line_snapshot.get("mainline_outward_direction_world", Vector3.ZERO)
+		var solver_length_consistent := absf(solver_input_length - (paid_before_fight_step + rig_length_m)) <= 0.002
+		var expected_paid_after_solver := clampf(
+			paid_before_fight_step + float(fight_line_snapshot.get("line_delta_m", 0.0)),
+			float(casting.call("_get_fight_minimum_line_length_m")),
+			casting.maximum_line_length_m
+		)
+		solver_length_consistent = solver_length_consistent and absf(paid_after_fight_step - expected_paid_after_solver) <= 0.002
+		var solver_endpoint_reachable := rod_tip_world.distance_to(sinker_world) <= effective_after_fight_step + 0.01
+		var solver_direction_valid := solver_direction.is_finite() and absf(solver_direction.length() - 1.0) < 0.002
+		_check(solver_length_consistent and solver_endpoint_reachable and solver_direction_valid,
+			"three-fish Sabiki fight passes total paid-plus-rig length and A-to-C pull direction while Solver output updates only paid length")
+		print("[P6.4.6.1.3][SABIKI_FIGHT] participants=%d A=%s C=%s L_paid_before=%.4f L_paid_after=%.4f L_rig=%.4f L_total_after=%.4f solver_input=%.4f solver_delta=%.6f direction=%s endpoint_m=%.4f reachable=%s" % [
+			fight_line_snapshot.get("participant_count", -1), rod_tip_world, sinker_world,
+			paid_before_fight_step, paid_after_fight_step, rig_length_m, effective_after_fight_step,
+			solver_input_length, float(fight_line_snapshot.get("line_delta_m", 0.0)), solver_direction,
+			rod_tip_world.distance_to(sinker_world), str(solver_endpoint_reachable)
+		])
 	var sabiki_fight_snapshot := casting.get_fight_snapshot()
 	_check((sabiki_fight_snapshot.get("participants", []) as Array).size() == 3, "each confirmed Sabiki hook owns an independent fight participant")
 	var sabiki_geometry_snapshot := casting.get_fight_snapshot(true)
+	if DisplayServer.get_name() != "headless":
+		if onboard.profile != null:
+			var view_player := onboard.find_child("OnboardActivityPlayer", true, false) as CharacterBody3D
+			var view_head := onboard.find_child("HeadPivot", true, false) as Node3D
+			var view_position := Vector3(0.53, onboard.profile.deck_height_m, 1.28)
+			onboard.set("_player_local_position", view_position)
+			onboard.set("_player_local_yaw", -PI * 0.5)
+			onboard.set("_look_pitch", -0.34)
+			if view_player != null:
+				view_player.position = view_position
+			if view_head != null:
+				view_head.rotation.x = -0.34
+			onboard.call("_set_player_transform_from_hull")
+		var fight_camera := onboard.get_activity_camera()
+		var original_fov := fight_camera.fov if fight_camera != null else 70.0
+		var original_camera_transform := fight_camera.global_transform if fight_camera != null else Transform3D.IDENTITY
+		await process_frame
+		if fight_camera != null:
+			var hook_positions: Array = casting.call("get_hook_attachment_world_positions")
+			if not hook_positions.is_empty():
+				var view_target: Vector3 = hook_positions[0]
+				if hook_positions.size() > 1:
+					view_target = hook_positions[0].lerp(hook_positions[hook_positions.size() - 1], 0.5)
+				fight_camera.global_position = view_target + Vector3(2.2, 1.4, 4.0)
+				fight_camera.look_at(view_target, Vector3.UP)
+			fight_camera.fov = 42.0
+		await RenderingServer.frame_post_draw
+		var fight_image := root.get_texture().get_image()
+		var fight_capture_directory := "res://reports/p6_4_6_1_3/after"
+		DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(fight_capture_directory))
+		fight_image.save_png(ProjectSettings.globalize_path(fight_capture_directory.path_join("sabiki_three_fish_fight.png")))
+		if fight_camera != null:
+			fight_camera.global_transform = original_camera_transform
+			fight_camera.fov = original_fov
 	var sabiki_geometry_participants: Array = sabiki_geometry_snapshot.get("participants", [])
 	var all_mouths_at_hooks := sabiki_geometry_participants.size() == 3
 	var maximum_sabiki_mouth_error_m := 0.0
@@ -443,13 +505,20 @@ func _test_live_boat_fishing_and_f3() -> void:
 	_check(full_rig_hooked and casting.get_casting_state() == BoatFishingCastingSystem.CastState.SABIKI_HOOKED_WAITING, "filling all empty hooks leaves a full rig under player control")
 	_check(not casting.is_automatic_control_owned() and batches.size() == 1, "a full five-hook rig neither locks controls nor starts automatic retrieval")
 	safe_minimum = float(casting.call("_get_fight_minimum_line_length_m"))
-	casting.set("_line_paid_out_length_m", safe_minimum)
+	casting.set("_line_paid_out_length_m", safe_minimum + BoatFishingCastingSystem.SABIKI_FIGHT_LANDING_LINE_BUFFER_M)
 	casting.set_manual_reeling(true, true)
 	casting.call("_advance_boat_fight", 0.016)
 	casting.set_manual_reeling(false, true)
-	_check(casting.get_casting_state() == BoatFishingCastingSystem.CastState.LANDING, "a full rig enters landing only after the player reels to the hull-safe boundary")
+	var full_rig_landing_line := float(casting.get("_line_paid_out_length_m"))
+	_check(
+		casting.get_casting_state() == BoatFishingCastingSystem.CastState.LANDING
+		and full_rig_landing_line >= safe_minimum
+		and full_rig_landing_line <= safe_minimum + BoatFishingCastingSystem.SABIKI_FIGHT_LANDING_LINE_BUFFER_M + 0.001,
+		"a full five-hook rig enters catch landing with a 35 cm line buffer before the hull-safe minimum"
+	)
 	var full_batch_settled := await _wait_until(func() -> bool: return batches.size() >= 2, 240)
 	_check(full_batch_settled, "full five-hook rig completes one shared Authority settlement after landing")
+	_check(casting.get_casting_state() == BoatFishingCastingSystem.CastState.CATCH_PRESENTATION, "the buffered five-hook landing proceeds into the existing catch presentation")
 	if batches.size() >= 2:
 		var full_results: Array = batches[1]["results"]
 		_check(full_results.size() == SABIKI_RIG.maximum_catch_count, "full batch settles exactly the rig's configured maximum fish")

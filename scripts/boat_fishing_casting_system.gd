@@ -25,17 +25,6 @@ const SABIKI_MOTION_AXIS_RESPONSE_SPEED_MPS := 8.0
 const SABIKI_MOTION_AXIS_MAX_LEAN := 0.48
 # Presentation-only ratio for how much existing rod/line load tilts the whole
 # terminal rig toward the rod while gravity still contributes to its orientation.
-const SABIKI_LINE_LOAD_AXIS_RESPONSE := 1.0
-const SABIKI_AIRBORNE_CAST_ALIGNMENT_WEIGHT := 0.94
-const SABIKI_AIRBORNE_RETRIEVAL_ALIGNMENT_WEIGHT := 0.92
-const SABIKI_AIRBORNE_LINE_DIRECTION_MIN_LENGTH_M := 0.12
-const SABIKI_AIRBORNE_LINE_DIRECTION_FULL_LENGTH_M := 0.55
-const SABIKI_AIRBORNE_SPEED_MIN_MPS := 1.0
-const SABIKI_AIRBORNE_SPEED_FULL_MPS := 4.0
-const SABIKI_AIRBORNE_RELEASE_RAMP_SECONDS := 0.055
-const SABIKI_AIRBORNE_EMERGENCE_CLEARANCE_M := 0.025
-const SABIKI_AIRBORNE_BACKBONE_CURVE_SEGMENTS := 16
-const SABIKI_AIRBORNE_BACKBONE_CURVE_SOLVE_STEPS := 7
 const BAIT_SINK_ACCELERATION_MPS2 := 2.6
 const AIRBORNE_BAIT_GRAVITY_MPS2 := 5.2
 const AIRBORNE_BAIT_DAMPING_PER_SECOND := 1.65
@@ -74,6 +63,8 @@ const FIGHT_LANDING_FISH_RISE_SECONDS := 0.72
 const FIGHT_LANDING_RISE_METERS := 0.62
 const FIGHT_LANDING_RISE_SPEED_MPS := 0.85
 const FIGHT_HULL_SAFETY_MARGIN_M := 0.28
+const SABIKI_FIGHT_LANDING_LINE_BUFFER_M := 0.35
+const SABIKI_EMPTY_RETRIEVAL_APPROACH_MARGIN_M := 0.35
 const FIGHT_LINE_BROKEN_DURATION_SECONDS := 0.9
 const BOAT_FISHING_BITE_CONTACT_RADIUS_M := 0.08
 const FIGHT_DEFAULT_DRAG_ADJUST_RATE_PER_SECOND := 0.35
@@ -160,7 +151,13 @@ var _splash_elapsed := 0.0
 var _bait_world := Vector3.ZERO
 var _bait_velocity_world := Vector3.ZERO
 var _retrieve_start_world := Vector3.ZERO
+var _retrieve_start_paid_length_m := 0.0
 var _line_paid_out_length_m := 0.0
+var _last_sabiki_endpoint_excess_before_constraint_m := 0.0
+var _maximum_sabiki_active_endpoint_excess_m := 0.0
+var _sabiki_reachability_constraint_feasible := true
+var _main_line_path_snapshot: Dictionary = {}
+var _line_path_input_key: Array = []
 var _manual_reeling := false
 var _manual_reeling_from_ui := false
 var _manual_reeling_input_held := false
@@ -198,9 +195,7 @@ var _fishing_audio_event_counts := {"splash": 0, "catch_success": 0}
 var _played_success_audio_batches: Dictionary = {}
 var _success_audio_batch_order: Array[String] = []
 var _line_mesh: ImmediateMesh
-var _sabiki_backbone_mesh: ImmediateMesh
 var _line_instance: MeshInstance3D
-var _sabiki_backbone_instance: MeshInstance3D
 var _line_material: StandardMaterial3D
 var _cast_aim_marker: Node3D
 var _cast_aim_marker_material: StandardMaterial3D
@@ -208,7 +203,6 @@ var _cast_aim_preview_elapsed := 0.0
 var _bait_instance: MeshInstance3D
 var _bait_material: StandardMaterial3D
 var _sabiki_rig_root: Node3D
-var _sabiki_top_eye: MeshInstance3D
 var _sabiki_sinker_instance: MeshInstance3D
 var _sabiki_hook_nodes: Array[Node3D] = []
 var _sabiki_hook_states: Array[Dictionary] = []
@@ -403,6 +397,10 @@ func clear_cast() -> void:
 	_cast_target_drift_velocity_world = Vector3.ZERO
 	_bait_velocity_world = Vector3.ZERO
 	_line_paid_out_length_m = 0.0
+	_retrieve_start_paid_length_m = 0.0
+	_last_sabiki_endpoint_excess_before_constraint_m = 0.0
+	_maximum_sabiki_active_endpoint_excess_m = 0.0
+	_sabiki_reachability_constraint_feasible = true
 	_manual_reeling = false
 	_manual_reeling_from_ui = false
 	_manual_reeling_input_held = false
@@ -879,7 +877,7 @@ func get_hook_world_positions() -> Array[Vector3]:
 		return []
 	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SINGLE_JIG:
 		return [_bait_world]
-	return get_rig_hook_positions(_bait_world, _get_sabiki_up_direction_world())
+	return get_rig_hook_positions()
 
 
 ## Actual hook tips are distinct from Sabiki branch roots returned above.
@@ -913,25 +911,16 @@ func _get_sabiki_hook_attachment_world_position(hook_index: int) -> Vector3:
 	return hook_node.global_transform * local_hook_tip
 
 
-func get_rig_hook_positions(sinker_world_position: Vector3, rig_up_direction: Vector3) -> Array[Vector3]:
-	## Structural order is stable: returned entries are Hook 1 (rod side) through Hook 5 (sinker side).
+func get_rig_hook_positions() -> Array[Vector3]:
 	var positions: Array[Vector3] = []
-	if _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI:
+	if _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI or not is_cast_active():
 		return positions
-	if _uses_sabiki_airborne_backbone_curve(sinker_world_position):
-		var backbone_curve := _get_sabiki_airborne_backbone_curve(sinker_world_position)
-		var cumulative_lengths := _get_polyline_cumulative_lengths(backbone_curve)
-		var total_curve_length := cumulative_lengths[-1] if not cumulative_lengths.is_empty() else 0.0
-		for hook_index in range(_current_rig.hook_count):
-			var height_from_sinker := _current_rig.bottom_leader_length_m + float(_current_rig.hook_count - hook_index - 1) * _current_rig.hook_spacing_m
-			positions.append(_sample_polyline_at_distance(backbone_curve, cumulative_lengths, maxf(0.0, total_curve_length - height_from_sinker)))
-		return positions
-	var up_direction := rig_up_direction.normalized()
-	if up_direction.length_squared() < 0.5:
-		up_direction = Vector3.UP
+	_ensure_fishing_line_path_snapshot()
+	var stations: Dictionary = _main_line_path_snapshot.get("stations", {})
 	for hook_index in range(_current_rig.hook_count):
-		var height_from_sinker := _current_rig.bottom_leader_length_m + float(_current_rig.hook_count - hook_index - 1) * _current_rig.hook_spacing_m
-		positions.append(sinker_world_position + up_direction * height_from_sinker)
+		var name := "hook_%d" % (hook_index + 1)
+		if stations.has(name):
+			positions.append(stations[name]["position"])
 	return positions
 
 
@@ -1073,7 +1062,7 @@ func get_bait_depth_below_surface_m() -> float:
 
 func get_debug_snapshot() -> Dictionary:
 	var line_start := _get_rod_tip_world() if _rod_visual_root != null else Vector3.ZERO
-	var line_connection := _get_tackle_line_connection_world() if _rod_visual_root != null else Vector3.ZERO
+	var line_connection := _get_main_line_terminal_world() if _rod_visual_root != null else Vector3.ZERO
 	var cast_delta := _cast_target_world - _cast_start_world
 	return {
 		"activity_active": _activity_active,
@@ -1089,8 +1078,14 @@ func get_debug_snapshot() -> Dictionary:
 		"rod_back_angle_deg": _rod_back_angle_deg,
 		"rod_bend_angle_deg": _rod_bend_angle_deg,
 		"actual_line_length_m": line_start.distance_to(line_connection) if is_cast_active() else 0.0,
+		"endpoint_chord_m": line_start.distance_to(line_connection) if is_cast_active() else 0.0,
 		"maximum_line_length_m": maximum_line_length_m,
 		"paid_out_line_length_m": _line_paid_out_length_m,
+		"effective_physical_line_length_m": _get_effective_main_line_length_m(),
+		"sabiki_endpoint_excess_before_constraint_m": _last_sabiki_endpoint_excess_before_constraint_m,
+		"sabiki_max_active_endpoint_excess_m": _maximum_sabiki_active_endpoint_excess_m,
+		"sabiki_reachability_constraint_feasible": _sabiki_reachability_constraint_feasible,
+		"visual_free_line_geometry_length_m": float(_main_line_path_snapshot.get("free_line_geometry_length_m", 0.0)),
 		"line_length_m": _line_paid_out_length_m,
 		"bait_depth_below_surface_m": _get_bait_depth_below_surface_m(),
 		"sinker_depth_below_surface_m": get_sinker_depth_below_surface_m(),
@@ -1126,7 +1121,7 @@ func get_debug_snapshot() -> Dictionary:
 		"bait_world_position": _bait_world,
 		"sinker_world_position": get_sinker_world_position(),
 		"rod_tip_world_position": line_start,
-		"line_connection_world_position": line_connection,
+		"line_terminal_world_position": line_connection,
 		"hook_world_positions": get_hook_attachment_world_positions(),
 		"sabiki_hooks": get_sabiki_hook_states_snapshot(),
 		"sabiki_hooked_count": get_sabiki_hooked_count(),
@@ -1140,12 +1135,14 @@ func get_debug_snapshot() -> Dictionary:
 
 func get_interaction_snapshot() -> Dictionary:
 	var tip := (_get_fight_solver_rod_tip_world() if _fight_session_active or _state == CastState.LANDING else _get_rod_tip_world()) if _rod_visual_root != null else Vector3.ZERO
-	var line_connection := _get_tackle_line_connection_world() if _rod_visual_root != null else Vector3.ZERO
+	var line_connection := _get_main_line_terminal_world() if _rod_visual_root != null else Vector3.ZERO
 	return {
 		"state": get_casting_state_name(),
 		"line_active": is_cast_active(),
 		"actual_line_length_m": tip.distance_to(line_connection) if is_cast_active() else 0.0,
+		"endpoint_chord_m": tip.distance_to(line_connection) if is_cast_active() else 0.0,
 		"paid_out_line_length_m": _line_paid_out_length_m if is_cast_active() else 0.0,
+		"effective_physical_line_length_m": _get_effective_main_line_length_m() if is_cast_active() else 0.0,
 		"line_length_m": _line_paid_out_length_m if is_cast_active() else 0.0,
 		"bait_depth_below_surface_m": _get_bait_depth_below_surface_m() if is_cast_active() else 0.0,
 		"sinker_depth_below_surface_m": get_sinker_depth_below_surface_m() if is_cast_active() else 0.0,
@@ -1153,7 +1150,7 @@ func get_interaction_snapshot() -> Dictionary:
 		"seabed_valid": bool(_sample_seabed(_bait_world).get("valid", false)) if is_cast_active() else false,
 		"lure_world_position": _bait_world,
 		"sinker_world_position": get_sinker_world_position(),
-		"line_connection_world_position": line_connection,
+		"line_terminal_world_position": line_connection,
 		"hook_world_positions": get_hook_attachment_world_positions(),
 		"lure_velocity_world_mps": _bait_velocity_world,
 		"manual_reeling": _manual_reeling,
@@ -1866,7 +1863,7 @@ func _advance_sabiki_hook_approaches(delta: float) -> void:
 		if hook_state.get("visual") == null:
 			var hook_positions := get_hook_attachment_world_positions()
 			if hook_index < hook_positions.size():
-				var heading := _get_sabiki_up_direction_world()
+				var heading := _get_sabiki_rig_up_direction_world()
 				var visual := _create_sabiki_fish_visual(pending.species_id, pending.body_length_m, heading)
 				if visual != null:
 					visual.name = "SabikiHookFish_%02d" % (hook_index + 1)
@@ -2474,7 +2471,7 @@ func _confirm_boat_bite() -> void:
 	_fight_start_bait_world = _bait_world
 	_fight_start_bait_depth_m = _get_bait_depth_below_surface_m()
 	_fight_line_burst_offset_m = 0.0
-	var fight_connection := _get_tackle_line_connection_world()
+	var fight_connection := _get_main_line_terminal_world()
 	var horizontal := Vector3(fight_connection.x - _get_fight_solver_rod_tip_world().x, 0.0, fight_connection.z - _get_fight_solver_rod_tip_world().z)
 	_fight_start_horizontal_distance_m = horizontal.length()
 	_fight_radial_direction = horizontal.normalized() if horizontal.length_squared() > 0.001 else -_boat_controller.global_basis.z.normalized() if _boat_controller != null else Vector3.FORWARD
@@ -2646,7 +2643,7 @@ func _advance_boat_fight(delta: float) -> void:
 	if fish_snapshots.is_empty():
 		return
 	var rod_tip := _get_fight_solver_rod_tip_world()
-	var line_direction := _get_tackle_line_connection_world() - rod_tip
+	var line_direction := _get_main_line_terminal_world() - rod_tip
 	if line_direction.length_squared() < 0.000001:
 		line_direction = _fight_radial_direction
 	if line_direction.length_squared() < 0.000001:
@@ -2654,11 +2651,12 @@ func _advance_boat_fight(delta: float) -> void:
 	line_direction = line_direction.normalized()
 	var safe_minimum_line_m := _get_fight_minimum_line_length_m()
 	var line_before := _line_paid_out_length_m
+	var fixed_rig_length_m := _get_fixed_rig_line_length_m()
 	var solved := _fight_solver.solve_step(
 		delta,
-		line_before,
-		safe_minimum_line_m,
-		maximum_line_length_m,
+		line_before + fixed_rig_length_m,
+		safe_minimum_line_m + fixed_rig_length_m,
+		maximum_line_length_m + fixed_rig_length_m,
 		_manual_reeling,
 		_fight_drag_setting,
 		fish_snapshots,
@@ -2671,6 +2669,12 @@ func _advance_boat_fight(delta: float) -> void:
 	_fight_snapshot = solved.duplicate(true)
 	_fight_snapshot["line_length_m"] = _line_paid_out_length_m
 	_fight_snapshot["line_minimum_m"] = safe_minimum_line_m
+	_fight_snapshot["paid_line_length_m"] = _line_paid_out_length_m
+	_fight_snapshot["effective_physical_line_length_m"] = _get_effective_main_line_length_m()
+	_fight_snapshot["solver_current_line_length_m"] = line_before + fixed_rig_length_m
+	_fight_snapshot["solver_minimum_line_length_m"] = safe_minimum_line_m + fixed_rig_length_m
+	_fight_snapshot["solver_maximum_line_length_m"] = maximum_line_length_m + fixed_rig_length_m
+	_fight_snapshot["mainline_outward_direction_world"] = line_direction
 	_fight_snapshot["drag_setting"] = _fight_drag_setting
 	_fight_snapshot["drag_threshold_n"] = BOAT_FIGHT_LINE_PROFILE.get_drag_threshold_n(_fight_drag_setting)
 	_fight_visual_elapsed += delta
@@ -2733,7 +2737,12 @@ func _advance_boat_fight(delta: float) -> void:
 	if bool(solved.get("snapped", false)):
 		_break_boat_fight(str(solved.get("break_reason", "line_overload")))
 		return
-	if _line_paid_out_length_m <= safe_minimum_line_m + 0.025 and (_manual_reeling or line_delta_m < -0.0001):
+	var landing_line_buffer_m := (
+		SABIKI_FIGHT_LANDING_LINE_BUFFER_M
+		if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI
+		else 0.025
+	)
+	if _line_paid_out_length_m <= safe_minimum_line_m + landing_line_buffer_m and (_manual_reeling or line_delta_m < -0.0001):
 		_begin_fight_landing()
 
 
@@ -2754,8 +2763,8 @@ func _fight_hook_position_for_index(hook_index: int) -> Vector3:
 func _apply_fight_terminal_line_position(line_delta_m: float, minimum_line_m: float, delta: float) -> void:
 	var previous := _bait_world
 	var rod_tip := _get_fight_solver_rod_tip_world()
-	var connection_offset := _get_tackle_line_connection_offset_world()
-	var current_connection := _get_tackle_line_connection_world()
+	var connection_offset := _get_main_line_terminal_offset_world()
+	var current_connection := _get_main_line_terminal_world()
 	var direction := current_connection - rod_tip
 	if direction.length_squared() < 0.000001:
 		direction = _fight_radial_direction
@@ -2763,13 +2772,19 @@ func _apply_fight_terminal_line_position(line_delta_m: float, minimum_line_m: fl
 		direction = Vector3.DOWN
 	direction = direction.normalized()
 	var target_connection: Vector3
+	var effective_line_length_m := _get_effective_main_line_length_m()
 	if _line_paid_out_length_m <= minimum_line_m + 0.01:
 		target_connection = _get_fight_safe_hull_edge_target_world()
 	else:
-		target_connection = rod_tip + direction * _line_paid_out_length_m
-	target_connection = _constrain_fight_connection_to_terminal_water_column(target_connection, rod_tip, _line_paid_out_length_m, connection_offset)
+		target_connection = rod_tip + direction * effective_line_length_m
+	target_connection = _constrain_fight_connection_to_terminal_water_column(target_connection, rod_tip, effective_line_length_m, connection_offset)
 	_bait_world = target_connection - connection_offset
 	_bait_velocity_world = (_bait_world - previous) / maxf(delta, 0.0001)
+	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		var endpoint_excess := maxf(0.0, rod_tip.distance_to(_bait_world) - effective_line_length_m)
+		_last_sabiki_endpoint_excess_before_constraint_m = endpoint_excess
+		_maximum_sabiki_active_endpoint_excess_m = maxf(_maximum_sabiki_active_endpoint_excess_m, endpoint_excess)
+		_sabiki_reachability_constraint_feasible = endpoint_excess <= 0.0001
 	_fight_terminal_motion_this_step = absf(line_delta_m) > 0.0001
 	var line_direction := target_connection - rod_tip
 	if line_direction.length_squared() > 0.000001:
@@ -2854,7 +2869,7 @@ func _advance_single_jig_tackle_for_fish(direction: Vector3, speed: float, delta
 	if speed <= 0.0 or delta <= 0.0:
 		return
 	var rod_tip := _get_fight_solver_rod_tip_world()
-	var previous_connection := _get_tackle_line_connection_world()
+	var previous_connection := _get_main_line_terminal_world()
 	var safe_direction := _remove_inward_hull_swim(direction, previous_connection)
 	var connection := advance_tethered_hook_world(
 		rod_tip,
@@ -2868,16 +2883,16 @@ func _advance_single_jig_tackle_for_fish(direction: Vector3, speed: float, delta
 		connection,
 		rod_tip,
 		_line_paid_out_length_m,
-		_get_tackle_line_connection_offset_world()
+		_get_main_line_terminal_offset_world()
 	)
 	connection = _constrain_fight_connection_to_line_and_hull(
 		connection,
 		rod_tip,
 		_line_paid_out_length_m,
-		_get_tackle_line_connection_offset_world()
+		_get_main_line_terminal_offset_world()
 	)
-	_bait_world = connection - _get_tackle_line_connection_offset_world()
-	_bait_velocity_world = (_bait_world - (previous_connection - _get_tackle_line_connection_offset_world())) / maxf(delta, 0.0001)
+	_bait_world = connection - _get_main_line_terminal_offset_world()
+	_bait_velocity_world = (_bait_world - (previous_connection - _get_main_line_terminal_offset_world())) / maxf(delta, 0.0001)
 	var final_radial := connection - rod_tip
 	if final_radial.length_squared() > 0.000001:
 		_fight_radial_direction = final_radial.normalized()
@@ -3046,7 +3061,8 @@ func _project_fight_position_outside_hull(position: Vector3, extra_margin_m: flo
 
 
 func _get_fight_minimum_line_length_m() -> float:
-	return maxf(MINIMUM_MANUAL_RETRIEVAL_LINE_M, float(_get_fight_safe_hull_edge_data().get("distance_m", MINIMUM_MANUAL_RETRIEVAL_LINE_M)))
+	var minimum_endpoint_distance := float(_get_fight_safe_hull_edge_data().get("distance_m", MINIMUM_MANUAL_RETRIEVAL_LINE_M))
+	return maxf(MINIMUM_MANUAL_RETRIEVAL_LINE_M, minimum_endpoint_distance - _get_fixed_rig_line_length_m())
 
 
 func _get_fight_safe_hull_edge_target_world() -> Vector3:
@@ -3057,9 +3073,9 @@ func _get_fight_safe_hull_edge_target_world() -> Vector3:
 func _get_fight_safe_hull_edge_data() -> Dictionary:
 	var tip := _get_fight_solver_rod_tip_world()
 	if _boat_controller == null or not _boat_controller.has_method("get_vessel_length_m") or not _boat_controller.has_method("get_vessel_beam_m"):
-		return {"position": _get_tackle_line_connection_world(), "distance_m": MINIMUM_MANUAL_RETRIEVAL_LINE_M}
+		return {"position": _get_main_line_terminal_world(), "distance_m": MINIMUM_MANUAL_RETRIEVAL_LINE_M}
 	var local_tip := _boat_controller.to_local(tip)
-	var local_connection := _boat_controller.to_local(_get_tackle_line_connection_world())
+	var local_connection := _boat_controller.to_local(_get_main_line_terminal_world())
 	var half_beam := maxf(0.5, float(_boat_controller.call("get_vessel_beam_m")) * 0.5 + FIGHT_HULL_SAFETY_MARGIN_M)
 	var half_length := maxf(1.0, float(_boat_controller.call("get_vessel_length_m")) * 0.5 + FIGHT_HULL_SAFETY_MARGIN_M)
 	var start_value := local_tip.x * local_tip.x / (half_beam * half_beam) + local_tip.z * local_tip.z / (half_length * half_length)
@@ -3155,16 +3171,13 @@ func _advance_fight_landing(delta: float) -> void:
 	var landing_duration := maxf(FIGHT_LANDING_DURATION_SECONDS, _fight_landing_raise_m / FIGHT_LANDING_RISE_SPEED_MPS)
 	var progress := clampf(_fight_landing_elapsed / maxf(landing_duration, 0.01), 0.0, 1.0)
 	var previous_bait := _bait_world
-	var previous_line_length_m := _line_paid_out_length_m
 	_bait_world = _fight_landing_start_bait_world + Vector3.UP * _fight_landing_raise_m * _smoothstep01(progress)
 	_bait_velocity_world = (_bait_world - previous_bait) / maxf(delta, 0.0001)
 	_update_rig_visual_position()
-	_line_paid_out_length_m = _get_fight_solver_rod_tip_world().distance_to(_get_tackle_line_connection_world())
-	var landing_line_rate_mps := (_line_paid_out_length_m - previous_line_length_m) / maxf(delta, 0.0001)
 	_fight_snapshot["line_length_m"] = _line_paid_out_length_m
-	_fight_snapshot["line_rate_mps"] = landing_line_rate_mps
-	_fight_snapshot["reel_in_rate_mps"] = maxf(-landing_line_rate_mps, 0.0)
-	_fight_snapshot["line_out_rate_mps"] = maxf(landing_line_rate_mps, 0.0)
+	_fight_snapshot["line_rate_mps"] = 0.0
+	_fight_snapshot["reel_in_rate_mps"] = 0.0
+	_fight_snapshot["line_out_rate_mps"] = 0.0
 	_fight_snapshot["drag_paying_out"] = false
 	var hook_positions := get_hook_attachment_world_positions()
 	for catch_id_variant in ordered_ids:
@@ -3677,7 +3690,7 @@ func _update_rod_bend_direction_from_visual_line() -> void:
 		return
 	# The Solver deliberately keeps its straight rod reference. Presentation must
 	# use the deformed tip because the rendered mainline also starts there.
-	var line_pull_world := _get_tackle_line_connection_world() - _get_rod_tip_world()
+	var line_pull_world := _get_main_line_terminal_world() - _get_rod_tip_world()
 	if line_pull_world.length_squared() <= 0.000001:
 		return
 	var mesh_basis := _rod_mesh_instance.global_basis
@@ -3720,19 +3733,19 @@ func _update_cast_animation(delta: float) -> void:
 		_rod_aim_yaw_deg = 0.0
 		_rod_aim_pitch_deg = 0.0
 		minimum_paid_line_m = 0.55
-		var line_connection := _get_tackle_line_connection_world()
+		var line_connection := _get_main_line_terminal_world()
 		_previous_line_connection_world = line_connection
 		_has_previous_line_connection = true
 		_set_state(CastState.WAITING)
 	if _bait_flight_started:
-		# Casting pays line out as the terminal connection moves away. Keep the
-		# one authoritative length in sync each frame instead of leaving it at 0 m
-		# until CASTING ends while rendering a visibly extended taut line.
+		# The Sabiki's fixed rig length is part of endpoint reach, not reel payout.
+		var endpoint_distance := _get_rod_tip_world().distance_to(_get_main_line_terminal_world())
 		_line_paid_out_length_m = clampf(
-			_get_rod_tip_world().distance_to(_get_tackle_line_connection_world()),
+			maxf(0.0, endpoint_distance - _get_fixed_rig_line_length_m()),
 			minimum_paid_line_m,
 			maximum_line_length_m
 		)
+		_constrain_sabiki_terminal_to_active_length()
 
 
 func _start_bait_flight() -> void:
@@ -3898,6 +3911,22 @@ func _update_waiting_bait(delta: float) -> void:
 	if _bait_airborne_retrieval:
 		_airborne_retrieval_elapsed += maxf(delta, 0.0)
 	_apply_waiting_rod_pose()
+	if (
+		_manual_reeling
+		and _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI
+		and get_sabiki_hooked_count() == 0
+	):
+		var recovery_margin_m := maxf(terminal_tackle_recovery_margin_m, SABIKI_EMPTY_RETRIEVAL_APPROACH_MARGIN_M)
+		var next_paid_line_length_m := maxf(
+			MINIMUM_MANUAL_RETRIEVAL_LINE_M,
+			_line_paid_out_length_m - manual_reel_speed_mps * maxf(delta, 0.0)
+		)
+		if next_paid_line_length_m <= recovery_margin_m:
+			# Transition before this frame's tackle inertia advances while the last
+			# few centimetres are reeled. At low render rates one delta can move the
+			# airborne rig much farther than the recovery margin.
+			_begin_final_retrieval()
+			return
 	var boat_velocity := _boat_velocity_estimate_world
 	var horizontal_velocity := Vector3(_bait_velocity_world.x, 0.0, _bait_velocity_world.z)
 	var target_velocity := Vector3(boat_velocity.x, 0.0, boat_velocity.z) * BAIT_WATER_DRAG_FOLLOW
@@ -3922,7 +3951,7 @@ func _update_waiting_bait(delta: float) -> void:
 			BAIT_SINK_ACCELERATION_MPS2 * delta
 		)
 	_bait_world += _bait_velocity_world * delta
-	var line_connection := _get_tackle_line_connection_world()
+	var line_connection := _get_main_line_terminal_world()
 	var tip_delta := Vector3.ZERO
 	if _has_previous_line_connection and delta > 0.0001:
 		tip_delta = line_connection - _previous_line_connection_world
@@ -3940,10 +3969,11 @@ func _update_waiting_bait(delta: float) -> void:
 	# F payout control changes it here. Automatic fight line bursts are handled
 	# by the separate fight authority path.
 	var rod_tip := _get_rod_tip_world()
-	line_connection = _get_tackle_line_connection_world()
+	line_connection = _get_main_line_terminal_world()
 	var line_distance := rod_tip.distance_to(line_connection)
+	var effective_line_length_m := _get_effective_main_line_length_m()
 	var tension_target := clampf(
-		(line_distance - _line_paid_out_length_m + line_tension_slack_m * 0.5) / maxf(line_tension_slack_m, 0.01),
+		(line_distance - effective_line_length_m + line_tension_slack_m * 0.5) / maxf(line_tension_slack_m, 0.01),
 		0.0,
 		1.0
 	)
@@ -3954,9 +3984,10 @@ func _update_waiting_bait(delta: float) -> void:
 	_rod_tension = lerpf(_rod_tension, tension_target, 1.0 - exp(-7.0 * delta))
 	if _rod_tension > 0.12 and tip_delta.length_squared() > 0.0:
 		_bait_world += tip_delta.limit_length(0.22) * _rod_tension * 0.32
-	line_connection = _get_tackle_line_connection_world()
+	line_connection = _get_main_line_terminal_world()
 	line_distance = rod_tip.distance_to(line_connection)
-	var line_excess := line_distance - _line_paid_out_length_m
+	effective_line_length_m = _get_effective_main_line_length_m()
+	var line_excess := line_distance - effective_line_length_m
 	if line_excess > 0.001:
 		var toward_rod := (rod_tip - line_connection).normalized()
 		var pull_amount := minf(line_excess, line_pull_response * _rod_tension * delta)
@@ -3982,8 +4013,12 @@ func _update_waiting_bait(delta: float) -> void:
 			rod_right.y = 0.0
 			if rod_right.length_squared() > 0.001:
 				_bait_velocity_world += rod_right.normalized() * 0.28
-	line_connection = _get_tackle_line_connection_world()
-	if _manual_reeling and line_connection.distance_to(rod_tip) <= terminal_tackle_recovery_margin_m:
+	_constrain_sabiki_terminal_to_active_length()
+	line_connection = _get_main_line_terminal_world()
+	var recovery_margin_m := terminal_tackle_recovery_margin_m
+	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI and get_sabiki_hooked_count() == 0:
+		recovery_margin_m = maxf(recovery_margin_m, SABIKI_EMPTY_RETRIEVAL_APPROACH_MARGIN_M)
+	if _manual_reeling and (_line_paid_out_length_m <= recovery_margin_m if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI and get_sabiki_hooked_count() == 0 else line_connection.distance_to(rod_tip) <= recovery_margin_m):
 		if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI and get_sabiki_hooked_count() > 0:
 			request_sabiki_retrieval()
 		else:
@@ -4033,6 +4068,7 @@ func _begin_final_retrieval() -> void:
 	_line_controls_conflicted = false
 	_rod_aim_active = false
 	_retrieve_start_world = _bait_world
+	_retrieve_start_paid_length_m = _line_paid_out_length_m
 	_state_elapsed = 0.0
 	_set_state(CastState.RETRIEVING)
 
@@ -4042,10 +4078,11 @@ func _update_retrieve_animation(delta: float) -> void:
 	if _bait_airborne_retrieval:
 		_airborne_retrieval_elapsed += maxf(delta, 0.0)
 	var progress := clampf(_state_elapsed / RETRIEVE_DURATION_SECONDS, 0.0, 1.0)
-	var retrieval_target := _get_tackle_retrieval_target_world()
+	var retrieval_target := _get_retrieval_target_bait_world()
 	_bait_world = _retrieve_start_world.lerp(retrieval_target, _ease_in_out(progress))
-	# Keep the reel's visual line length tied to the tackle's actual final travel.
-	_line_paid_out_length_m = _get_rod_tip_world().distance_to(_get_tackle_line_connection_world())
+	# The presentation phase consumes the saved reel payout by animation progress;
+	# sinker position and visual path never feed back into the physical line value.
+	_line_paid_out_length_m = lerpf(_retrieve_start_paid_length_m, 0.0, _ease_in_out(progress))
 	_rod_swing.rotation.z = sin(progress * PI * 5.0) * 0.045 * (1.0 - progress)
 	if progress >= 1.0:
 		_rod_swing.rotation = Vector3.ZERO
@@ -4055,6 +4092,7 @@ func _update_retrieve_animation(delta: float) -> void:
 		_line_instance.visible = false
 		_bait_velocity_world = Vector3.ZERO
 		_line_paid_out_length_m = 0.0
+		_retrieve_start_paid_length_m = 0.0
 		_rod_tension = 0.0
 		_rod_aim_yaw_deg = 0.0
 		_rod_aim_pitch_deg = 0.0
@@ -4235,6 +4273,51 @@ func _clamp_bait_to_water_column(allow_above_surface: bool = false) -> void:
 		_bait_velocity_world.y = maxf(0.0, _bait_velocity_world.y)
 
 
+func _constrain_sabiki_terminal_to_active_length() -> bool:
+	if _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI or not _state in [CastState.CASTING, CastState.WAITING, CastState.SABIKI_HOOKED_WAITING, CastState.BITE_APPROACH]:
+		return true
+	var rod_tip := _get_rod_tip_world()
+	var radius := _get_effective_main_line_length_m()
+	var radial := _bait_world - rod_tip
+	var endpoint_excess := maxf(0.0, radial.length() - radius)
+	_last_sabiki_endpoint_excess_before_constraint_m = endpoint_excess
+	_maximum_sabiki_active_endpoint_excess_m = maxf(_maximum_sabiki_active_endpoint_excess_m, endpoint_excess)
+	if endpoint_excess <= 0.00001:
+		_sabiki_reachability_constraint_feasible = true
+		return true
+	var water := _sample_water(_bait_world)
+	var surface_y := float(water.get("height", _bait_world.y)) + 0.018
+	var minimum_y := -1000000.0
+	var seabed := _sample_seabed(_bait_world)
+	if bool(seabed.get("valid", false)):
+		minimum_y = float(seabed["bottom_world_y"]) + SEABED_CLEARANCE_M
+	var allow_above_surface := (_state == CastState.CASTING and not _bait_has_landed) or _bait_airborne_retrieval
+	var maximum_y := 1000000.0 if allow_above_surface else surface_y
+	if minimum_y > maximum_y:
+		_sabiki_reachability_constraint_feasible = false
+		return false
+	var target_y := clampf(_bait_world.y, minimum_y, maximum_y)
+	var vertical_delta := target_y - rod_tip.y
+	if absf(vertical_delta) > radius:
+		# The allowed water column and the endpoint reach sphere do not intersect.
+		# Keep the closest environmentally valid position and expose the conflict.
+		_bait_world = Vector3(rod_tip.x, target_y, rod_tip.z)
+		_sabiki_reachability_constraint_feasible = false
+		return false
+	var horizontal := Vector3(_bait_world.x - rod_tip.x, 0.0, _bait_world.z - rod_tip.z)
+	var maximum_horizontal := sqrt(maxf(0.0, radius * radius - vertical_delta * vertical_delta))
+	if horizontal.length() > maximum_horizontal:
+		var direction := horizontal.normalized() if horizontal.length_squared() > 0.000001 else Vector3.FORWARD
+		horizontal = direction * maximum_horizontal
+	_bait_world = Vector3(rod_tip.x + horizontal.x, target_y, rod_tip.z + horizontal.z)
+	var outward := (_bait_world - rod_tip).normalized()
+	var outward_speed := _bait_velocity_world.dot(outward)
+	if outward_speed > 0.0:
+		_bait_velocity_world -= outward * outward_speed
+	_sabiki_reachability_constraint_feasible = true
+	return true
+
+
 func _sync_manual_line_controls() -> void:
 	var wants_reel := _manual_reeling_input_held or _manual_reeling_from_ui
 	var wants_release := _manual_line_release_held and not _fight_session_active
@@ -4255,12 +4338,16 @@ func _sync_manual_line_controls() -> void:
 
 func _get_reel_feedback_line_length() -> float:
 	match _state:
-		CastState.WAITING, CastState.SABIKI_HOOKED_WAITING, CastState.BITE_APPROACH, CastState.FIGHTING, CastState.CATCH_PRESENTATION, CastState.LANDING:
-			return maxf(0.0, _line_paid_out_length_m)
 		CastState.CASTING, CastState.RETRIEVING:
 			if not _bait_flight_started or not is_cast_active():
 				return 0.0
-			return _get_rod_tip_world().distance_to(_get_tackle_line_connection_world())
+			if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+				return maxf(0.0, _line_paid_out_length_m)
+			# Preserve the Single Jig reel visualization's previous endpoint-based
+			# measurement. Sabiki instead exposes only its player-paid outer length.
+			return _get_rod_tip_world().distance_to(_get_main_line_terminal_world())
+		CastState.WAITING, CastState.SABIKI_HOOKED_WAITING, CastState.BITE_APPROACH, CastState.FIGHTING, CastState.CATCH_PRESENTATION, CastState.LANDING:
+			return maxf(0.0, _line_paid_out_length_m)
 		_:
 			return 0.0
 
@@ -4582,10 +4669,15 @@ func _get_rod_tip_world() -> Vector3:
 	return _rod_swing.to_global(mesh_transform * directional_tip)
 
 
-func _update_line_and_bait_visuals() -> void:
-	if not is_cast_active() or not _bait_flight_started:
-		return
-	_update_single_jig_visual(maxf(get_process_delta_time(), 0.0))
+func _line_tackle_above_surface(terminal_position: Vector3) -> bool:
+	# Endpoint-only geometry input avoids a path -> hook getter -> path cycle.
+	for point in [_bait_world, terminal_position]:
+		if point.y < float(_sample_water(point).get("height", point.y)):
+			return false
+	return true
+
+
+func _ensure_fishing_line_path_snapshot() -> void:
 	var line_visual_state := _get_main_line_visual_state()
 	line_visual_state["airborne_elapsed_seconds"] = _airborne_retrieval_elapsed
 	line_visual_state["bait_velocity_world"] = _bait_velocity_world
@@ -4598,10 +4690,16 @@ func _update_line_and_bait_visuals() -> void:
 	line_visual_state["line_visual_vibration_frequency_hz"] = line_visual_vibration_frequency_hz
 	line_visual_state["line_visual_vibration_m"] = line_visual_vibration_m
 	var start := _get_rod_tip_world()
-	var end := _get_tackle_line_connection_world()
-	# Low rod load is not spare line: an airborne reeling span at its paid length
-	# cannot acquire the old tension-only decorative sag and sideways sway.
-	line_visual_state["airborne_reel_constraint"] = (_manual_reeling or _state == CastState.RETRIEVING) and not _fight_session_active and _line_paid_out_length_m <= start.distance_to(end) + 0.01 and (_bait_airborne_retrieval or _is_tackle_fully_above_surface(0.0))
+	var end := _get_main_line_terminal_world()
+	var effective_length := _get_effective_main_line_length_m()
+	line_visual_state["airborne_reel_constraint"] = (_manual_reeling or _state == CastState.RETRIEVING) and not _fight_session_active and effective_length <= start.distance_to(end) + 0.01 and (_bait_airborne_retrieval or _line_tackle_above_surface(end))
+	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		line_visual_state["sabiki_rig"] = {
+			"length_m": _current_rig.get_line_attachment_height_m(),
+			"bottom_leader_m": _current_rig.bottom_leader_length_m,
+			"hook_spacing_m": _current_rig.hook_spacing_m,
+			"hook_count": _current_rig.hook_count,
+		}
 	_update_rod_line_guides()
 	var prefix_world := PackedVector3Array([_get_reel_line_exit_world(), _get_reel_line_guide_world()])
 	for guide in _rod_line_guides:
@@ -4617,54 +4715,82 @@ func _update_line_and_bait_visuals() -> void:
 	else:
 		tail_route_local.append(start)
 		tail_route_local.append(end)
-	if not bool(line_visual_state.get("taut", false)) and _onboard != null and _onboard.profile != null:
+	# Sabiki is one free A-to-C span. Hull clearance remains a soft visual concern;
+	# inserting mandatory gunwale waypoints would recreate a third path constraint.
+	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SINGLE_JIG and not bool(line_visual_state.get("taut", false)) and _onboard != null and _onboard.profile != null:
 		deck_polygon = _onboard.profile.walkable_polygon_xz
 		deck_height = _onboard.profile.deck_height_m
 		tail_route_local = get_hull_clearance_line_route(
 			tail_route_local[0], tail_route_local[1], deck_polygon, deck_height
 		)
-	var route_world: Array[Vector3] = []
+	var route_world := PackedVector3Array()
+	var route_local := PackedVector3Array()
 	for route_point in tail_route_local:
 		route_world.append(_onboard.to_global(route_point) if _onboard != null else route_point)
-	var route_world_packed := PackedVector3Array()
-	var route_local_packed := PackedVector3Array()
-	for route_index in range(route_world.size()):
-		route_world_packed.append(route_world[route_index])
-		route_local_packed.append(tail_route_local[route_index])
-	var centerline_world := calculate_common_main_line_visual_path(
+		route_local.append(route_point)
+	var key: Array = [start, end, _bait_world, _current_rig, _current_rig.hook_count, _current_rig.hook_spacing_m, _current_rig.top_leader_length_m, _current_rig.bottom_leader_length_m, _onboard.global_transform if _onboard != null else Transform3D.IDENTITY, _state, _line_paid_out_length_m, _rod_tension, _bait_velocity_world, _airborne_retrieval_elapsed, _fight_visual_elapsed, line_visual_state]
+	if key == _line_path_input_key and not _main_line_path_snapshot.is_empty():
+		return
+	_line_path_input_key = key.duplicate(true)
+	_main_line_path_snapshot = generate_fishing_line_path(
 		prefix_world,
-		route_world_packed,
-		route_local_packed,
+		route_world,
+		route_local,
 		deck_polygon,
 		deck_height,
 		line_visual_state
 	)
-	var main_line_points := PackedVector3Array()
-	for point in centerline_world:
-		main_line_points.append(to_local(point))
-	_rebuild_line_tube_mesh(_line_mesh, main_line_points)
+	_main_line_path_snapshot["generated_frame"] = Engine.get_process_frames()
+	_main_line_path_snapshot["authority_paid_length_m"] = _line_paid_out_length_m
+	_main_line_path_snapshot["rig_config_length_m"] = _current_rig.get_line_attachment_height_m() if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI else 0.0
+	_main_line_path_snapshot["endpoint_chord_m"] = start.distance_to(end)
+
+
+func _update_line_and_bait_visuals() -> void:
+	if not is_cast_active() or not _bait_flight_started:
+		return
+	_update_single_jig_visual(maxf(get_process_delta_time(), 0.0))
+	_ensure_fishing_line_path_snapshot()
+	_render_complete_line_path(_line_mesh, self)
 	_line_instance.visible = true
 	_bait_instance.global_position = _bait_world
 	_bait_instance.global_basis = _lure_visual_basis_world
 	_bait_instance.visible = _current_rig.rig_type == BoatFishingRigProfile.RigType.SINGLE_JIG
-	var rig_up_direction := _update_rig_visual_position()
-	_update_sabiki_backbone_visual(_current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI, rig_up_direction)
+	_update_rig_visual_position()
+	_reanchor_sabiki_hooked_fish_visuals_to_hooks()
 
 
-static func calculate_common_main_line_visual_path(
+func _render_complete_line_path(mesh: ImmediateMesh, owner: Node3D) -> void:
+	if mesh == null or owner == null or _main_line_path_snapshot.is_empty():
+		return
+	var points: PackedVector3Array = _main_line_path_snapshot["centerline_points"]
+	var tangents: PackedVector3Array = _main_line_path_snapshot["tangents"]
+	var sides: PackedVector3Array = _main_line_path_snapshot["sides"]
+	var local_points := PackedVector3Array()
+	var local_tangents := PackedVector3Array()
+	var local_sides := PackedVector3Array()
+	var inverse := owner.global_basis.inverse()
+	for index in range(points.size()):
+		local_points.append(owner.to_local(points[index]))
+		local_tangents.append((inverse * tangents[index]).normalized())
+		local_sides.append((inverse * sides[index]).normalized())
+	_rebuild_line_tube_mesh(mesh, local_points, local_tangents, local_sides)
+
+
+static func generate_fishing_line_path(
 	prefix_world: PackedVector3Array,
 	route_world: PackedVector3Array,
 	route_local: PackedVector3Array,
 	deck_polygon: PackedVector2Array,
 	deck_height_m: float,
 	visual_state: Dictionary
-) -> PackedVector3Array:
+) -> Dictionary:
 	var points := PackedVector3Array()
 	for prefix_point in prefix_world:
 		if prefix_point.is_finite() and (points.is_empty() or points[-1].distance_to(prefix_point) > 0.0001):
 			points.append(prefix_point)
 	if route_world.is_empty():
-		return points
+		return _finalize_line_path(points, route_world)
 	if points.is_empty() or points[-1].distance_to(route_world[0]) > 0.0001:
 		points.append(route_world[0])
 	var taut := bool(visual_state.get("taut", false))
@@ -4680,43 +4806,172 @@ static func calculate_common_main_line_visual_path(
 	var fight_visual_elapsed := float(visual_state.get("fight_visual_elapsed_seconds", 0.0))
 	var vibration_frequency_hz := maxf(0.0, float(visual_state.get("line_visual_vibration_frequency_hz", 0.0)))
 	var vibration_amplitude_m := maxf(0.0, float(visual_state.get("line_visual_vibration_m", 0.0)))
-	var route_span_count := maxi(0, route_world.size() - 1)
-	if route_span_count == 0:
-		return points
-	var span_segments := maxi(2, int(ceil(float(LINE_SEGMENTS) / float(route_span_count))))
-	for span_index in range(route_span_count):
+	var sabiki_rig: Dictionary = visual_state.get("sabiki_rig", {})
+	var span_count := maxi(0, route_world.size() - 1)
+	if span_count == 0:
+		return _finalize_line_path(points, route_world)
+	var sabiki_visual_sag := 0.0
+	if not sabiki_rig.is_empty() and span_count == 1:
+		var chord_length := route_world[0].distance_to(route_world[1])
+		var rig_length := maxf(0.0, float(sabiki_rig.get("length_m", 0.0)))
+		if chord_length < rig_length:
+			sabiki_visual_sag = 0.55 * sqrt(maxf(0.0, rig_length * rig_length - chord_length * chord_length))
+	var segments_per_span := maxi(2, int(ceil(float(LINE_SEGMENTS) / float(span_count))))
+	for span_index in range(span_count):
 		var span_start := route_world[span_index]
 		var span_end := route_world[span_index + 1]
 		var span_delta := span_end - span_start
+		var span_length := span_delta.length()
 		var local_start := route_local[span_index] if route_local.size() == route_world.size() else span_start
 		var local_end := route_local[span_index + 1] if route_local.size() == route_world.size() else span_end
 		var midpoint_local := (local_start + local_end) * 0.5
 		var midpoint_over_deck := not deck_polygon.is_empty() and Geometry2D.is_point_in_polygon(Vector2(midpoint_local.x, midpoint_local.z), deck_polygon)
-		var clearance_height := deck_height_m + 1.34
-		var span_kept_clear := not deck_polygon.is_empty() and local_start.y >= clearance_height and local_end.y >= clearance_height
-		var over_deck := midpoint_over_deck or span_kept_clear
-		var terminal_span := span_index == route_span_count - 1
+		var over_deck := false
+		if sabiki_rig.is_empty():
+			var clearance_height := deck_height_m + 1.34
+			var span_kept_clear := not deck_polygon.is_empty() and local_start.y >= clearance_height and local_end.y >= clearance_height
+			over_deck = midpoint_over_deck or span_kept_clear
+		var terminal_span := span_index == span_count - 1
+		var sag_allowed := not over_deck and not taut and not bool(visual_state.get("airborne_reel_constraint", false))
+		var sag := calculate_main_line_visual_sag_depth(span_length, slack_ratio, airborne) if sag_allowed else 0.0
+		if not sabiki_rig.is_empty():
+			sag = maxf(sag, sabiki_visual_sag)
+		var sag_offset := Vector3.DOWN * sag
 		var sway_axis := span_delta.cross(Vector3.DOWN).normalized()
 		if sway_axis.length_squared() < 0.001:
 			sway_axis = Vector3.RIGHT
-		for point_index in range(1, span_segments + 1):
-			var t := float(point_index) / float(span_segments)
-			var apply_slack_curve := not over_deck and not taut and not bool(visual_state.get("airborne_reel_constraint", false))
-			var sag_depth := calculate_main_line_visual_sag_depth(span_delta.length(), slack_ratio, airborne) if apply_slack_curve else 0.0
-			var line_point := calculate_main_line_visual_span_point(span_start, span_end, t, sag_depth)
-			if apply_slack_curve and terminal_span and airborne:
+		for point_index in range(1, segments_per_span + 1):
+			var t := float(point_index) / float(segments_per_span)
+			var line_point := _line_path_span(span_start, span_end, span_delta, span_delta, sag_offset, t)
+			var envelope := pow(sin(PI * t), 2.0)
+			if sag_allowed and airborne and terminal_span and not over_deck:
 				var relaxation := exp(-2.6 * airborne_elapsed)
-				var sway_amount := clampf(Vector2(bait_velocity.x, bait_velocity.z).length() * 0.035, 0.0, 0.065) * relaxation
-				line_point += sway_axis * sin(airborne_elapsed * 7.0) * sway_amount * pow(sin(t * PI), 2.0)
-			if terminal_span and not over_deck and fight_session_active:
-				var vibration_load := clampf(fight_tension_n / reference_load_n, 0.0, 1.0)
-				var payout_load := clampf(line_out_rate_mps / max_line_out_speed_mps, 0.0, 1.0)
-				var vibration_strength := maxf(vibration_load, payout_load * 0.65)
-				var envelope := pow(sin(PI * t), 2.0)
-				line_point += sway_axis * sin(fight_visual_elapsed * TAU * vibration_frequency_hz + span_index * 1.37 + t * 2.4) * vibration_amplitude_m * vibration_strength * envelope
+				var sway_scale := 0.012 if not sabiki_rig.is_empty() else 0.035
+				var sway_limit := 0.025 if not sabiki_rig.is_empty() else 0.065
+				var sway_amount := clampf(Vector2(bait_velocity.x, bait_velocity.z).length() * sway_scale, 0.0, sway_limit) * relaxation
+				line_point += sway_axis * sin(airborne_elapsed * 7.0) * sway_amount * envelope
+			if fight_session_active and terminal_span and not over_deck:
+				var strength := maxf(clampf(fight_tension_n / reference_load_n, 0.0, 1.0), clampf(line_out_rate_mps / max_line_out_speed_mps, 0.0, 1.0) * 0.65)
+				line_point += sway_axis * sin(fight_visual_elapsed * TAU * vibration_frequency_hz + span_index * 1.37 + t * 2.4) * vibration_amplitude_m * strength * envelope
 			if points.is_empty() or points[-1].distance_to(line_point) > 0.0001:
 				points.append(line_point)
-	return points
+	var result := _finalize_line_path(points, route_world)
+	if not sabiki_rig.is_empty():
+		var stations: Dictionary = result["stations"]
+		var rod_station: Dictionary = stations.get("rod_tip", {})
+		var end_station: Dictionary = stations.get("line_end", {})
+		if rod_station.is_empty() or end_station.is_empty():
+			result["valid"] = false
+			return result
+		var rod_s := float(rod_station["arc_length_m"])
+		var end_s := float(end_station["arc_length_m"])
+		var hook_count := maxi(0, int(sabiki_rig.get("hook_count", 0)))
+		var bottom_leader := maxf(0.0, float(sabiki_rig.get("bottom_leader_m", 0.0)))
+		var hook_spacing := maxf(0.0, float(sabiki_rig.get("hook_spacing_m", 0.0)))
+		var rig_length := maxf(0.0, float(sabiki_rig.get("length_m", 0.0)))
+		var hook_span_length := bottom_leader + float(maxi(0, hook_count - 1)) * hook_spacing
+		var station_scale_length := maxf(rig_length, hook_span_length)
+		var available_geometry_length := maxf(0.0, end_s - rod_s)
+		var rig_visual_station_scale := 1.0
+		if station_scale_length > 0.0001:
+			rig_visual_station_scale = minf(1.0, available_geometry_length / station_scale_length)
+		var hook_stations: Array[Dictionary] = []
+		for hook_index in range(hook_count):
+			var profile_material_distance := bottom_leader + float(hook_count - hook_index - 1) * hook_spacing
+			var visual_path_distance := profile_material_distance * rig_visual_station_scale
+			var wanted_s := end_s - visual_path_distance
+			var station := _line_path_station_at_distance(result, wanted_s)
+			station["profile_material_distance_from_sinker_m"] = profile_material_distance
+			station["visual_path_distance_from_sinker_m"] = visual_path_distance
+			stations["hook_%d" % (hook_index + 1)] = station
+			hook_stations.append(station)
+		stations["sinker"] = end_station
+		result["stations"] = stations
+		result["rig_config_length_m"] = rig_length
+		result["rig_visual_station_scale"] = rig_visual_station_scale
+		result["rig_hook_station_count"] = hook_stations.size()
+		result["free_line_geometry_length_m"] = end_s - rod_s
+	return result
+
+
+static func _line_path_station(snapshot: Dictionary, index: int) -> Dictionary:
+	return {"index": index, "position": snapshot["centerline_points"][index], "arc_length_m": snapshot["cumulative_lengths"][index], "tangent": snapshot["tangents"][index], "side": snapshot["sides"][index]}
+
+
+static func _line_path_station_at_distance(snapshot: Dictionary, distance: float) -> Dictionary:
+	var points: PackedVector3Array = snapshot["centerline_points"]
+	var lengths: PackedFloat32Array = snapshot["cumulative_lengths"]
+	for index in range(1, points.size()):
+		if distance <= lengths[index]:
+			var t := clampf((distance - lengths[index - 1]) / maxf(lengths[index] - lengths[index - 1], 0.000001), 0.0, 1.0)
+			var tangent: Vector3 = snapshot["tangents"][index - 1].lerp(snapshot["tangents"][index], t).normalized()
+			var side: Vector3 = snapshot["sides"][index - 1].lerp(snapshot["sides"][index], t)
+			side = calculate_line_tube_side_direction(tangent, side)
+			return {"index": index - 1, "fraction": t, "position": points[index - 1].lerp(points[index], t), "arc_length_m": distance, "tangent": tangent, "side": side}
+	return _line_path_station(snapshot, points.size() - 1)
+
+
+static func _line_path_span(a: Vector3, b: Vector3, incoming: Vector3, outgoing: Vector3, offset: Vector3, t: float) -> Vector3:
+	var t2 := t * t
+	var t3 := t2 * t
+	if incoming == b - a and outgoing == b - a:
+		return a.lerp(b, t) + offset * pow(sin(PI * t), 2.0)
+	return a + (b - a) * (-2.0 * t3 + 3.0 * t2) + incoming * (t3 - 2.0 * t2 + t) + outgoing * (t3 - t2) + offset * pow(sin(PI * t), 2.0)
+
+
+static func _finalize_line_path(points: PackedVector3Array, route: PackedVector3Array) -> Dictionary:
+	var lengths := PackedFloat32Array()
+	var tangents := PackedVector3Array()
+	var sides := PackedVector3Array()
+	var previous_side := Vector3.ZERO
+	for index in range(points.size()):
+		lengths.append(0.0 if index == 0 else lengths[-1] + points[index - 1].distance_to(points[index]))
+		var direction := points[mini(index + 1, points.size() - 1)] - points[maxi(0, index - 1)]
+		if direction.length_squared() < 0.000001:
+			direction = tangents[-1] if not tangents.is_empty() else Vector3.DOWN
+		direction = direction.normalized()
+		tangents.append(direction)
+		previous_side = calculate_line_tube_side_direction(direction, previous_side)
+		sides.append(previous_side)
+	var stations := {}
+	if not route.is_empty() and not points.is_empty():
+		for name in ["rod_tip", "line_end"]:
+			var target: Vector3 = route[0] if name == "rod_tip" else route[-1]
+			var closest := 0
+			for index in range(points.size()):
+				if points[index].distance_squared_to(target) < points[closest].distance_squared_to(target):
+					closest = index
+			stations[name] = _line_path_station_from_arrays(points, lengths, tangents, sides, closest)
+	var free_length := 0.0
+	if stations.has("rod_tip") and stations.has("line_end"):
+		free_length = float(stations["line_end"]["arc_length_m"]) - float(stations["rod_tip"]["arc_length_m"])
+	return {
+		"free_line_geometry_length_m": free_length,
+		"centerline_points": points,
+		"cumulative_lengths": lengths,
+		"tangents": tangents,
+		"sides": sides,
+		"stations": stations,
+		"generated": true,
+		"valid": points.size() >= 2,
+		"endpoints_coincident": points.size() < 2 or points[0].distance_to(points[-1]) < 0.0001,
+	}
+
+
+static func _line_path_station_from_arrays(
+	points: PackedVector3Array,
+	lengths: PackedFloat32Array,
+	tangents: PackedVector3Array,
+	sides: PackedVector3Array,
+	index: int
+) -> Dictionary:
+	return {
+		"index": index,
+		"position": points[index],
+		"arc_length_m": lengths[index],
+		"tangent": tangents[index],
+		"side": sides[index],
+	}
 
 
 static func calculate_main_line_visual_sag_depth(
@@ -4734,16 +4989,6 @@ static func calculate_main_line_visual_sag_depth(
 	return natural_sag * safe_slack
 
 
-static func calculate_main_line_visual_span_point(
-	span_start: Vector3,
-	span_end: Vector3,
-	progress: float,
-	sag_depth_m: float
-) -> Vector3:
-	var t := clampf(progress, 0.0, 1.0) if is_finite(progress) else 0.0
-	var chord_point := span_start.lerp(span_end, t)
-	var safe_sag := maxf(0.0, sag_depth_m) if is_finite(sag_depth_m) else 0.0
-	return chord_point + Vector3.DOWN * safe_sag * pow(sin(PI * t), 2.0)
 
 
 static func calculate_line_tube_side_direction(segment_direction: Vector3, previous_side_direction: Vector3) -> Vector3:
@@ -4761,7 +5006,7 @@ static func calculate_line_tube_side_direction(segment_direction: Vector3, previ
 	return side.normalized() if side.length_squared() > 0.000001 else Vector3.FORWARD
 
 
-func _rebuild_line_tube_mesh(mesh: ImmediateMesh, points: PackedVector3Array) -> void:
+func _rebuild_line_tube_mesh(mesh: ImmediateMesh, points: PackedVector3Array, tangents: PackedVector3Array = PackedVector3Array(), sides: PackedVector3Array = PackedVector3Array()) -> void:
 	if mesh == null:
 		return
 	mesh.clear_surfaces()
@@ -4782,11 +5027,22 @@ func _rebuild_line_tube_mesh(mesh: ImmediateMesh, points: PackedVector3Array) ->
 			var angle_b := TAU * float(side_index + 1) / float(LINE_SIDES)
 			var offset_a := side * cos(angle_a) + other * sin(angle_a)
 			var offset_b := side * cos(angle_b) + other * sin(angle_b)
+			var end_offset_a := offset_a
+			var end_offset_b := offset_b
+			if sides.size() == points.size() and tangents.size() == points.size():
+				var side_a := sides[point_index] * LINE_RADIUS_M
+				var other_a := tangents[point_index].cross(sides[point_index]).normalized() * LINE_RADIUS_M
+				var side_b := sides[point_index + 1] * LINE_RADIUS_M
+				var other_b := tangents[point_index + 1].cross(sides[point_index + 1]).normalized() * LINE_RADIUS_M
+				offset_a = side_a * cos(angle_a) + other_a * sin(angle_a)
+				offset_b = side_a * cos(angle_b) + other_a * sin(angle_b)
+				end_offset_a = side_b * cos(angle_a) + other_b * sin(angle_a)
+				end_offset_b = side_b * cos(angle_b) + other_b * sin(angle_b)
 			mesh.surface_add_vertex(a + offset_a)
-			mesh.surface_add_vertex(b + offset_a)
-			mesh.surface_add_vertex(b + offset_b)
+			mesh.surface_add_vertex(b + end_offset_a)
+			mesh.surface_add_vertex(b + end_offset_b)
 			mesh.surface_add_vertex(a + offset_a)
-			mesh.surface_add_vertex(b + offset_b)
+			mesh.surface_add_vertex(b + end_offset_b)
 			mesh.surface_add_vertex(a + offset_b)
 	mesh.surface_end()
 
@@ -4794,15 +5050,8 @@ func _rebuild_line_tube_mesh(mesh: ImmediateMesh, points: PackedVector3Array) ->
 func _update_rig_visual_selection() -> void:
 	if _sabiki_rig_root == null:
 		return
-	var rig_height := _current_rig.get_line_attachment_height_m()
-	if _sabiki_top_eye != null:
-		_sabiki_top_eye.position.y = rig_height
 	for index in range(_sabiki_hook_nodes.size()):
-		var hook := _sabiki_hook_nodes[index]
-		hook.visible = index < _current_rig.hook_count
-		if hook.visible:
-			var hook_height := _current_rig.bottom_leader_length_m + float(_current_rig.hook_count - index - 1) * _current_rig.hook_spacing_m
-			hook.position = Vector3(0.0, hook_height, 0.0)
+		_sabiki_hook_nodes[index].visible = index < _current_rig.hook_count
 	_update_rig_visual_position()
 
 
@@ -4810,47 +5059,26 @@ func _update_rig_visual_position() -> Vector3:
 	if _sabiki_rig_root == null:
 		return Vector3.UP
 	var sabiki_active := _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI
-	var rig_up_direction := _get_sabiki_up_direction_world()
+	var rig_up_direction := _get_sabiki_rig_up_direction_world()
 	_sabiki_rig_root.global_position = _bait_world
 	_sabiki_rig_root.global_basis = Basis(Quaternion(Vector3.UP, rig_up_direction))
-	if _sabiki_top_eye != null:
-		_sabiki_top_eye.position = _sabiki_rig_root.to_local(_get_tackle_line_connection_world())
 	if sabiki_active and is_cast_active():
-		var hook_positions := get_rig_hook_positions(_bait_world, rig_up_direction)
-		for hook_index in range(mini(hook_positions.size(), _sabiki_hook_nodes.size())):
+		var stations: Dictionary = _main_line_path_snapshot.get("stations", {})
+		var root_inverse := _sabiki_rig_root.global_basis.inverse()
+		for hook_index in range(mini(_current_rig.hook_count, _sabiki_hook_nodes.size())):
+			var station_name := "hook_%d" % (hook_index + 1)
+			if not stations.has(station_name):
+				continue
+			var station: Dictionary = stations[station_name]
 			var hook_node := _sabiki_hook_nodes[hook_index]
-			hook_node.position = _sabiki_rig_root.to_local(hook_positions[hook_index])
-			var branch_direction: Vector3 = _fight_sabiki_branch_directions_local.get(hook_index, Vector3.LEFT)
-			if _fight_sabiki_branch_directions_local.has(hook_index):
-				branch_direction = branch_direction.normalized()
-				hook_node.basis = Basis(Quaternion(Vector3.LEFT, branch_direction))
-			else:
-				hook_node.basis = Basis.IDENTITY
+			hook_node.position = _sabiki_rig_root.to_local(station["position"])
+			var default_branch_world: Vector3 = station.get("side", Vector3.RIGHT)
+			var default_branch_local: Vector3 = (root_inverse * default_branch_world).normalized()
+			var branch_direction: Vector3 = _fight_sabiki_branch_directions_local.get(hook_index, default_branch_local)
+			branch_direction = branch_direction.normalized() if branch_direction.length_squared() > 0.0001 else default_branch_local
+			hook_node.basis = Basis(Quaternion(Vector3.LEFT, branch_direction))
 	_sabiki_rig_root.visible = sabiki_active and is_cast_active() and _bait_flight_started
 	return rig_up_direction
-
-
-func _update_sabiki_backbone_visual(sabiki_active: bool, rig_up_direction: Vector3) -> void:
-	if _sabiki_backbone_mesh == null or _sabiki_backbone_instance == null or _sabiki_rig_root == null:
-		return
-	_sabiki_backbone_mesh.clear_surfaces()
-	if not sabiki_active or not is_cast_active() or not _bait_flight_started:
-		_sabiki_backbone_instance.visible = false
-		return
-	var backbone_points := PackedVector3Array()
-	if _uses_sabiki_airborne_backbone_curve(_bait_world):
-		for world_point in _get_sabiki_airborne_backbone_curve(_bait_world):
-			backbone_points.append(_sabiki_rig_root.to_local(world_point))
-	else:
-		backbone_points.append(_sabiki_top_eye.position)
-		for hook_position in get_rig_hook_positions(_bait_world, rig_up_direction):
-			var local_hook_position := _sabiki_rig_root.to_local(hook_position)
-			if backbone_points[-1].distance_to(local_hook_position) > 0.0001:
-				backbone_points.append(local_hook_position)
-		if backbone_points[backbone_points.size() - 1].distance_to(Vector3.ZERO) > 0.0001:
-			backbone_points.append(Vector3.ZERO)
-	_rebuild_line_tube_mesh(_sabiki_backbone_mesh, backbone_points)
-	_sabiki_backbone_instance.visible = backbone_points.size() > 1
 
 
 func _get_main_line_visual_state() -> Dictionary:
@@ -4869,297 +5097,22 @@ func _get_main_line_visual_state() -> Dictionary:
 	return {"taut": taut, "slack_ratio": clampf(slack_ratio, 0.0, 1.0), "airborne": airborne}
 
 
-func _get_sabiki_up_direction_world() -> Vector3:
-	var natural_up := _get_sabiki_natural_up_direction_world()
-	if not is_cast_active() or _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI:
-		return natural_up
-	var airborne_pose := _get_sabiki_airborne_pose(natural_up)
-	var pose_up: Vector3 = airborne_pose.get("up_direction", natural_up)
-	var alignment_weight := clampf(float(airborne_pose.get("alignment_weight", 0.0)), 0.0, 1.0)
-	if alignment_weight > 0.001:
-		natural_up = _blend_unit_directions(natural_up, pose_up, alignment_weight)
-	if _state == CastState.CASTING:
-		return natural_up
-	var line_load := clampf(_rod_tension, 0.0, 1.0)
-	var line_state := _get_main_line_visual_state()
-	if not bool(line_state.get("taut", false)):
-		line_load *= 1.0 - clampf(float(line_state.get("slack_ratio", 1.0)), 0.0, 1.0)
-	if line_load <= 0.001:
-		return natural_up
-	# Mainline force is applied at the Sabiki top eye, not at the sinker origin.
-	# Estimate that eye using the unloaded pose to avoid a circular dependency
-	# between the terminal axis and its connection point.
-	var neutral_line_eye := _bait_world + natural_up * _current_rig.get_line_attachment_height_m()
-	var toward_rod := _get_rod_tip_world() - neutral_line_eye
-	if toward_rod.length_squared() <= 0.000001:
-		return natural_up
-	# The existing normalized rod-tension value is the only non-fight load proxy;
-	# during a fight it is smoothed from the solver tension ratio. Blend the
-	# actual top-eye line direction with gravity/boat flow. All terminal geometry
-	# reads this shared axis; this response does not change paid line length or
-	# solver force.
-	return (natural_up + toward_rod.normalized() * line_load * SABIKI_LINE_LOAD_AXIS_RESPONSE).normalized()
-
-
-func _get_sabiki_airborne_pose(natural_up: Vector3) -> Dictionary:
-	var attachment_height := _current_rig.get_line_attachment_height_m()
-	var rod_tip := _get_rod_tip_world()
-	var root_outward := _bait_world - rod_tip
-	var root_distance := root_outward.length()
-	var line_direction_confidence := smoothstep(
-		SABIKI_AIRBORNE_LINE_DIRECTION_MIN_LENGTH_M,
-		SABIKI_AIRBORNE_LINE_DIRECTION_FULL_LENGTH_M,
-		root_distance
-	)
-	var velocity := _bait_velocity_world
-	var speed := velocity.length()
-	var motion_direction_confidence := smoothstep(
-		SABIKI_AIRBORNE_SPEED_MIN_MPS,
-		SABIKI_AIRBORNE_SPEED_FULL_MPS,
-		speed
-	)
-	var outward_direction := root_outward / root_distance if root_distance > 0.0001 else Vector3.ZERO
-	if outward_direction.length_squared() > 0.5:
-		if motion_direction_confidence > 0.0 and speed > 0.0001:
-			var velocity_direction := velocity / speed
-			# The sinker's radial direction remains authoritative when it is valid.
-			# Use flight/retrieval velocity only as a small agreeing cue; a slow
-			# opposing velocity must never replace a reliable rod-to-sinker axis.
-			if outward_direction.dot(velocity_direction) > 0.35:
-				outward_direction = _blend_unit_directions(
-					outward_direction,
-					velocity_direction,
-					0.12 * motion_direction_confidence
-				)
-	elif speed > 0.0001 and motion_direction_confidence > 0.0:
-		outward_direction = velocity / speed
-	var direction_confidence := maxf(line_direction_confidence, motion_direction_confidence)
-	# The line eye's available offset is geometric: it cannot extend farther
-	# toward the rod than the current rod-tip-to-sinker span. Keeping this
-	# independent of _line_paid_out_length_m avoids a feedback loop where cast
-	# line length moves the eye, then the moved eye changes the next line length.
-	var attachment_span := clampf(root_distance, 0.0, attachment_height)
-	var mainline_length := maxf(0.0, root_distance - _line_paid_out_length_m)
-	var alignment_weight := 0.0
-	var pose_mode := "natural"
-	var casting_flight := _state == CastState.CASTING and _bait_flight_started
-	var retrieving := _state == CastState.RETRIEVING or (
-		_is_waiting_line_state() and _manual_reeling and not _fight_session_active
-	)
-	var emergence_weight := 0.0
-	if casting_flight:
-		pose_mode = "cast_flight"
-		if _bait_has_landed:
-			# Keep the same stretch while the entire rig is still clear, then ease
-			# back toward its underwater hanging pose as the sinker enters.
-			emergence_weight = _get_sabiki_surface_emergence_weight(natural_up)
-			alignment_weight = SABIKI_AIRBORNE_CAST_ALIGNMENT_WEIGHT * emergence_weight
-			pose_mode = "cast_water_entry"
-		else:
-			var release_ramp := smoothstep(
-				0.0,
-				SABIKI_AIRBORNE_RELEASE_RAMP_SECONDS,
-				_bait_flight_elapsed
-			)
-			var flight_progress := clampf(_bait_flight_elapsed / maxf(_bait_flight_duration, 0.01), 0.0, 1.0)
-			var end_fade := lerpf(1.0, 0.92, smoothstep(0.78, 1.0, flight_progress))
-			alignment_weight = SABIKI_AIRBORNE_CAST_ALIGNMENT_WEIGHT * direction_confidence * release_ramp * end_fade
-	elif retrieving:
-		pose_mode = "retrieval_emergence"
-		emergence_weight = _get_sabiki_surface_emergence_weight(natural_up)
-		alignment_weight = SABIKI_AIRBORNE_RETRIEVAL_ALIGNMENT_WEIGHT * emergence_weight * direction_confidence
-		if _state == CastState.RETRIEVING:
-			# Keep the existing extension until the top eye reaches the rod and the
-			# normal completion path hides the rig. Fading toward world-up here
-			# rotated the moving retrieval target during the last visible frames.
-			pose_mode = "stowing"
-	if outward_direction.length_squared() < 0.5:
-		alignment_weight = 0.0
-	return {
-		"up_direction": -outward_direction if outward_direction.length_squared() > 0.5 else natural_up,
-		"outward_direction": outward_direction,
-		"alignment_weight": clampf(alignment_weight, 0.0, 1.0),
-		"line_direction_confidence": line_direction_confidence,
-		"motion_direction_confidence": motion_direction_confidence,
-		"emergence_weight": emergence_weight,
-		"stow_progress": smoothstep(
-			0.0,
-			RETRIEVE_DURATION_SECONDS,
-			_state_elapsed
-		) if _state == CastState.RETRIEVING else 0.0,
-		"mode": pose_mode,
-		"attachment_span_m": attachment_span,
-		"mainline_length_m": mainline_length,
-	}
-
-
-func _get_sabiki_surface_emergence_weight(natural_up: Vector3) -> float:
-	var water_sample := _sample_water(_bait_world)
-	var water_height := float(water_sample.get("height", _bait_world.y))
-	var vertical_rig_extent := _current_rig.get_line_attachment_height_m() * maxf(natural_up.y, 0.0)
-	var transition_depth := maxf(vertical_rig_extent + SABIKI_AIRBORNE_EMERGENCE_CLEARANCE_M, 0.05)
-	var submerged_to_emerged := clampf(
-		(_bait_world.y - water_height + vertical_rig_extent) / transition_depth,
-		0.0,
-		1.0
-	)
-	return submerged_to_emerged * submerged_to_emerged * (3.0 - 2.0 * submerged_to_emerged)
-
-
-func _blend_unit_directions(from_direction: Vector3, to_direction: Vector3, weight: float) -> Vector3:
-	var from := from_direction.normalized() if from_direction.length_squared() > 0.000001 else Vector3.UP
-	var to := to_direction.normalized() if to_direction.length_squared() > 0.000001 else from
-	var t := clampf(weight, 0.0, 1.0)
-	if t <= 0.0:
-		return from
-	if t >= 1.0:
-		return to
-	var dot_value := clampf(from.dot(to), -1.0, 1.0)
-	if dot_value > 0.9995:
-		return from.lerp(to, t).normalized()
-	if dot_value < -0.995:
-		var stable_axis := _sabiki_rig_root.global_basis.x if _sabiki_rig_root != null else Vector3.RIGHT
-		stable_axis -= from * stable_axis.dot(from)
-		if stable_axis.length_squared() < 0.0001:
-			stable_axis = from.cross(Vector3.RIGHT)
-		if stable_axis.length_squared() < 0.0001:
-			stable_axis = from.cross(Vector3.FORWARD)
-		stable_axis = stable_axis.normalized()
-		var midpoint := (Quaternion(stable_axis, PI * 0.5) * from).normalized()
-		if t <= 0.5:
-			return _blend_unit_directions_regular(from, midpoint, t * 2.0)
-		return _blend_unit_directions_regular(midpoint, to, (t - 0.5) * 2.0)
-	return _blend_unit_directions_regular(from, to, t)
-
-
-func _blend_unit_directions_regular(from: Vector3, to: Vector3, weight: float) -> Vector3:
-	var dot_value := clampf(from.dot(to), -1.0, 1.0)
-	if dot_value > 0.9995:
-		return from.lerp(to, clampf(weight, 0.0, 1.0)).normalized()
-	var angle := acos(dot_value)
-	var sine := sin(angle)
-	if absf(sine) <= 0.00001:
-		return to
-	var t := clampf(weight, 0.0, 1.0)
-	return (
-		from * (sin((1.0 - t) * angle) / sine)
-		+ to * (sin(t * angle) / sine)
-	).normalized()
-
-
-func _uses_sabiki_airborne_backbone_curve(sinker_world_position: Vector3) -> bool:
-	if (
-		_current_rig == null
-		or _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI
-		or not is_cast_active()
-		or sinker_world_position.distance_to(_bait_world) > 0.001
-	):
-		return false
-	var natural_up := _get_sabiki_natural_up_direction_world()
-	var pose: Dictionary = _get_sabiki_airborne_pose(natural_up)
-	var pose_mode := str(pose.get("mode", "natural"))
-	return pose_mode in ["cast_flight", "cast_water_entry", "retrieval_emergence"] or (
-		pose_mode == "stowing" and float(pose.get("alignment_weight", 0.0)) > 0.0
-	)
-
-
-func _get_sabiki_airborne_backbone_curve(sinker_world_position: Vector3) -> PackedVector3Array:
-	var start := _get_tackle_line_connection_world()
-	var end := sinker_world_position
-	var chord := end - start
-	var chord_length := chord.length()
-	var points := PackedVector3Array()
-	if chord_length <= 0.0001:
-		points.append(start)
-		points.append(end)
-		return points
-	var target_length := maxf(chord_length, _current_rig.get_line_attachment_height_m())
-	var chord_direction := chord / chord_length
-	var bend_direction := Vector3.DOWN - chord_direction * Vector3.DOWN.dot(chord_direction)
-	if bend_direction.length_squared() < 0.0001:
-		var stable_side := _rod_swing.global_basis.x if _rod_swing != null else Vector3.RIGHT
-		bend_direction = stable_side - chord_direction * stable_side.dot(chord_direction)
-	if bend_direction.length_squared() < 0.0001:
-		bend_direction = chord_direction.cross(Vector3.FORWARD)
-	bend_direction = bend_direction.normalized()
-	var amplitude := 0.0
-	if chord_length < target_length - 0.0001:
-		var low := 0.0
-		var high := target_length * 2.0
-		for _iteration in range(SABIKI_AIRBORNE_BACKBONE_CURVE_SOLVE_STEPS):
-			var middle := (low + high) * 0.5
-			if _measure_sabiki_airborne_curve_length(start, end, bend_direction, middle) < target_length:
-				low = middle
-			else:
-				high = middle
-		amplitude = (low + high) * 0.5
-	for point_index in range(SABIKI_AIRBORNE_BACKBONE_CURVE_SEGMENTS + 1):
-		var t := float(point_index) / float(SABIKI_AIRBORNE_BACKBONE_CURVE_SEGMENTS)
-		points.append(_get_sabiki_airborne_curve_point(start, end, bend_direction, amplitude, t))
-	return points
-
-
-func _get_sabiki_airborne_curve_point(
-	start: Vector3,
-	end: Vector3,
-	bend_direction: Vector3,
-	amplitude: float,
-	progress: float
-) -> Vector3:
-	var t := clampf(progress, 0.0, 1.0)
-	return start.lerp(end, t) + bend_direction * amplitude * pow(sin(PI * t), 2.0)
-
-
-func _measure_sabiki_airborne_curve_length(
-	start: Vector3,
-	end: Vector3,
-	bend_direction: Vector3,
-	amplitude: float
-) -> float:
-	var length := 0.0
-	var previous := start
-	for point_index in range(1, SABIKI_AIRBORNE_BACKBONE_CURVE_SEGMENTS + 1):
-		var t := float(point_index) / float(SABIKI_AIRBORNE_BACKBONE_CURVE_SEGMENTS)
-		var point := _get_sabiki_airborne_curve_point(start, end, bend_direction, amplitude, t)
-		length += previous.distance_to(point)
-		previous = point
-	return length
-
-
-func _get_polyline_cumulative_lengths(points: PackedVector3Array) -> PackedFloat32Array:
-	var cumulative := PackedFloat32Array()
-	if points.is_empty():
-		return cumulative
-	cumulative.append(0.0)
-	for point_index in range(1, points.size()):
-		cumulative.append(cumulative[-1] + points[point_index - 1].distance_to(points[point_index]))
-	return cumulative
-
-
-func _sample_polyline_at_distance(
-	points: PackedVector3Array,
-	cumulative_lengths: PackedFloat32Array,
-	distance_from_start: float
-) -> Vector3:
-	if points.is_empty():
-		return _bait_world
-	if points.size() == 1 or cumulative_lengths.size() != points.size():
-		return points[0]
-	var distance := clampf(distance_from_start, 0.0, cumulative_lengths[-1])
-	for segment_index in range(points.size() - 1):
-		var segment_end_distance := cumulative_lengths[segment_index + 1]
-		if distance <= segment_end_distance or segment_index == points.size() - 2:
-			var segment_length := segment_end_distance - cumulative_lengths[segment_index]
-			var t := (distance - cumulative_lengths[segment_index]) / segment_length if segment_length > 0.0001 else 0.0
-			return points[segment_index].lerp(points[segment_index + 1], t)
-	return points[-1]
+func _get_sabiki_rig_up_direction_world() -> Vector3:
+	if _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI or not is_cast_active():
+		return _get_sabiki_natural_up_direction_world()
+	_ensure_fishing_line_path_snapshot()
+	var station: Dictionary = _main_line_path_snapshot.get("stations", {}).get("sinker", {})
+	var tangent: Vector3 = station.get("tangent", Vector3.ZERO)
+	if tangent.length_squared() > 0.0001 and tangent.is_finite():
+		return -tangent.normalized()
+	var toward_rod := _get_rod_tip_world() - _bait_world
+	return toward_rod.normalized() if toward_rod.length_squared() > 0.0001 else Vector3.UP
 
 
 func _get_tackle_water_sample_points() -> Array[Vector3]:
 	var points: Array[Vector3] = [_bait_world]
 	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
 		points.append_array(get_hook_attachment_world_positions())
-		points.append(_get_tackle_line_connection_world())
 	return points
 
 
@@ -5180,10 +5133,6 @@ func _is_tackle_fully_above_surface(clearance_m: float) -> bool:
 
 
 func _get_sabiki_natural_up_direction_world() -> Vector3:
-	# This is the unloaded orientation baseline. During CASTING, the terminal rig
-	# trails its actual motion; outside the cast, gravity and boat flow define its
-	# neutral pose. _get_sabiki_up_direction_world adds the existing line-load
-	# response once the rig is connected to a loaded mainline.
 	var boat_flow := Vector3(_boat_velocity_estimate_world.x, 0.0, _boat_velocity_estimate_world.z)
 	if boat_flow.length_squared() > 0.01:
 		boat_flow = boat_flow.normalized() * clampf(boat_flow.length() / 18.0 * 0.22, 0.0, 0.22)
@@ -5192,40 +5141,35 @@ func _get_sabiki_natural_up_direction_world() -> Vector3:
 		0.0,
 		_bait_velocity_world.z - _boat_velocity_estimate_world.z * BAIT_WATER_DRAG_FOLLOW
 	)
-	var terminal_load_lean := Vector3.ZERO
+	var motion_lean := Vector3.ZERO
 	if _state == CastState.CASTING and relative_motion.length_squared() > 0.0025:
-		# The sinker leads during the cast, so the top eye and hook train trail
-		# toward the rod instead of leaning in the direction of travel.
-		var cast_response := clampf(relative_motion.length() / SABIKI_MOTION_AXIS_RESPONSE_SPEED_MPS, 0.0, SABIKI_MOTION_AXIS_MAX_LEAN)
-		terminal_load_lean = -relative_motion.normalized() * cast_response
-	var lean := boat_flow + terminal_load_lean
-	return (Vector3.UP + lean).normalized()
+		var response := clampf(relative_motion.length() / SABIKI_MOTION_AXIS_RESPONSE_SPEED_MPS, 0.0, SABIKI_MOTION_AXIS_MAX_LEAN)
+		motion_lean = -relative_motion.normalized() * response
+	return (Vector3.UP + boat_flow + motion_lean).normalized()
 
 
-func _get_tackle_line_connection_offset_world() -> Vector3:
+func _get_main_line_terminal_offset_world() -> Vector3:
 	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
-		# Keep the top eye at its profile station. Airborne alignment changes the
-		# shared axis only. When the straight rod-to-sinker span is shorter than
-		# the profile length, the terminal line bends while preserving its full
-		# arc length; it does not compress hook stations.
-		var attachment_height := _current_rig.get_line_attachment_height_m()
-		var pose: Dictionary = _get_sabiki_airborne_pose(_get_sabiki_natural_up_direction_world())
-		var alignment_weight := clampf(float(pose.get("alignment_weight", 0.0)), 0.0, 1.0)
-		var attachment_span := lerpf(
-			attachment_height,
-			float(pose.get("attachment_span_m", attachment_height)),
-			alignment_weight
-		)
-		return _get_sabiki_up_direction_world() * attachment_span
+		return Vector3.ZERO
 	return _lure_visual_basis_world * Vector3.UP * SPOON_LINE_EYE_Y_M
 
 
-func _get_tackle_line_connection_world() -> Vector3:
-	return _bait_world + _get_tackle_line_connection_offset_world()
+func _get_fixed_rig_line_length_m() -> float:
+	return _current_rig.get_line_attachment_height_m() if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI else 0.0
 
 
-func _get_tackle_retrieval_target_world() -> Vector3:
-	return _get_rod_tip_world() - _get_tackle_line_connection_offset_world()
+func _get_effective_main_line_length_m() -> float:
+	return maxf(0.0, _line_paid_out_length_m) + _get_fixed_rig_line_length_m()
+
+
+func _get_main_line_terminal_world() -> Vector3:
+	return _bait_world + _get_main_line_terminal_offset_world()
+
+
+func _get_retrieval_target_bait_world() -> Vector3:
+	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		return _get_rod_tip_world() - _get_sabiki_natural_up_direction_world() * _current_rig.get_line_attachment_height_m()
+	return _get_rod_tip_world() - _get_main_line_terminal_offset_world()
 
 
 func _update_single_jig_visual(delta: float) -> void:
@@ -5587,25 +5531,6 @@ func _build_sabiki_visuals() -> void:
 	_sabiki_rig_root.name = "SabikiRigVisual"
 	_sabiki_rig_root.visible = false
 	add_child(_sabiki_rig_root)
-	_sabiki_backbone_mesh = ImmediateMesh.new()
-	_sabiki_backbone_instance = MeshInstance3D.new()
-	_sabiki_backbone_instance.name = "SabikiBackboneLine"
-	_sabiki_backbone_instance.mesh = _sabiki_backbone_mesh
-	_sabiki_backbone_instance.material_override = _line_material
-	_sabiki_backbone_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_sabiki_backbone_instance.visible = false
-	_sabiki_rig_root.add_child(_sabiki_backbone_instance)
-	_sabiki_top_eye = MeshInstance3D.new()
-	_sabiki_top_eye.name = "SabikiRodSideEye"
-	var top_eye_mesh := TorusMesh.new()
-	top_eye_mesh.inner_radius = 0.003
-	top_eye_mesh.outer_radius = 0.0055
-	top_eye_mesh.rings = 5
-	top_eye_mesh.ring_segments = 8
-	_sabiki_top_eye.mesh = top_eye_mesh
-	_sabiki_top_eye.material_override = _make_material(Color(0.81, 0.87, 0.85), 0.76)
-	_sabiki_top_eye.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_sabiki_rig_root.add_child(_sabiki_top_eye)
 	var bead_material := _make_material(Color(0.95, 0.78, 0.31), 0.14)
 	var feather_materials := [
 		_make_material(Color(0.92, 0.90, 0.75), 0.05),
