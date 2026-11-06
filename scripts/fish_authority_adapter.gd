@@ -30,6 +30,17 @@ func get_schools_near(_world_position: Vector3, _radius_m: float, _include_unava
 	return []
 
 
+## Advances the Authority-owned vessel disturbance state for nearby schools.
+## `school_samples` contains only spatially local schools plus schools whose
+## disturbance is still recovering; renderers never calculate this state.
+func update_school_disturbance(_vessel_snapshot: Dictionary, _school_samples: Array[Dictionary], _delta_real_seconds: float, _config: Dictionary) -> bool:
+	return false
+
+
+func get_disturbed_school_ids() -> Array[String]:
+	return []
+
+
 ## Ambient fish are transient authoritative individuals, not fish schools or
 ## persistent population. Network adapters must forward these mutations to
 ## their server rather than fabricating a local school identity.

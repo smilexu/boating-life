@@ -102,6 +102,7 @@ func _run() -> void:
 	_test_depth_action_and_query_limits(encounter, manager)
 	_test_sabiki_hook_independence_and_population_limit(encounter, manager)
 	_test_ambient_real_time_and_mode_reset(encounter, manager)
+	_test_authority_bite_willingness(encounter, manager)
 	encounter.queue_free()
 	manager.queue_free()
 	await process_frame
@@ -123,7 +124,7 @@ func _test_core_edge_and_ambient_modes(encounter: FishingEncounterSystem, manage
 	_check(str(core_trigger.get("trigger_mode", "")) == "SCHOOL_TARGETED" and not (core_trigger.get("candidate", {}) as Dictionary).is_empty(), "core candidate starts a bite without a random hazard roll")
 	var core_total := float(core_trigger.get("reaction_total_seconds", -1.0))
 	var core_approach := float(core_trigger.get("visual_approach_estimate_seconds", -1.0))
-	_check(core_total >= 2.0 and core_total <= 5.0 and core_approach > 0.0, "shallow core target accounts for the existing approach animation within the 2–5 s target")
+	_check(core_total >= 2.0 and core_total <= 10.0 and core_approach > 0.0, "target response time interpolates continuously across the pursuit sphere and estimates physical swim time")
 
 	manager.schools.clear()
 	manager.set_school("herring_edge", "herring", Vector3(2.16, 0.0, 0.0), 1.6, 40)
@@ -133,7 +134,7 @@ func _test_core_edge_and_ambient_modes(encounter: FishingEncounterSystem, manage
 	encounter.reset_boat_fishing_trigger_state()
 	var edge_trigger := _advance_until_trigger(encounter, edge, 1, 24)
 	var edge_total := float(edge_trigger.get("reaction_total_seconds", -1.0))
-	_check(str(edge_trigger.get("trigger_mode", "")) == "SCHOOL_TARGETED" and edge_total >= 5.0 and edge_total <= 10.0, "edge response uses the longer bounded 5–10 s reaction")
+	_check(str(edge_trigger.get("trigger_mode", "")) == "SCHOOL_TARGETED" and edge_total >= 2.0 and edge_total <= 10.0, "pursuit response remains within continuous near-to-edge bounds")
 
 	manager.schools.clear()
 	manager.schools.clear()
@@ -178,8 +179,8 @@ func _test_sabiki_hook_independence_and_population_limit(encounter: FishingEncou
 	manager.schools.clear()
 	manager.set_school("herring_small_school", "herring", Vector3(1.0, 0.0, 0.0), 1.6, 2)
 	var hook_one := encounter.evaluate_boat_fishing_candidates(origin, 1.6, 0.0, SABIKI_RIG, false, 0)
-	var hook_three := encounter.evaluate_boat_fishing_candidates(origin + Vector3(3.5, 0.0, 0.0), 1.6, 0.0, SABIKI_RIG, false, 2)
-	_check(int(hook_one.get("targeted_candidate_count", 0)) == 1 and int(hook_three.get("targeted_candidate_count", 0)) == 0, "Sabiki hooks classify their own real positions instead of the rig center")
+	var hook_three := encounter.evaluate_boat_fishing_candidates(origin + Vector3(14.5, 0.0, 0.0), 1.6, 0.0, SABIKI_RIG, false, 2)
+	_check(int(hook_one.get("targeted_candidate_count", 0)) == 1 and int(hook_three.get("targeted_candidate_count", 0)) == 0, "Sabiki hooks independently classify their real positions against the species pursuit sphere")
 	var candidate: Dictionary = hook_one.get("school_targeted_candidates", [])[0]
 	var first := encounter.reserve_sabiki_hook(candidate, SABIKI_RIG, 0)
 	var second := encounter.reserve_sabiki_hook(candidate, SABIKI_RIG, 1)
@@ -207,6 +208,21 @@ func _test_ambient_real_time_and_mode_reset(encounter: FishingEncounterSystem, m
 	encounter.advance_boat_fishing_trigger_for_hook(targeted, 0.5, 0)
 	var switched := encounter.advance_boat_fishing_ambient_hazard([targeted], 0.5)
 	_check(is_equal_approx(float(switched.get("hazard_accumulated", -1.0)), 0.0), "switching to targeted mode clears ambient progress instead of combining hazards")
+
+
+func _test_authority_bite_willingness(encounter: FishingEncounterSystem, manager: FakeFishingManager) -> void:
+	for multiplier in [0.80, 0.25]:
+		manager.schools.clear()
+		manager.set_school("herring_disturbance", "herring", Vector3(1.0, 0.0, 0.0), 10.0, 40)
+		var school: Dictionary = manager.schools["herring_disturbance"]
+		school["disturbance_state"] = "ALERT" if is_equal_approx(float(multiplier), 0.80) else "FLEEING"
+		school["bite_willingness_multiplier"] = multiplier
+		manager.schools["herring_disturbance"] = school
+		var evaluation := encounter.evaluate_boat_fishing_candidates(Vector3(0.0, -10.0, 0.0), 10.0, 0.0, SABIKI_RIG, false, 0)
+		encounter.reset_boat_fishing_trigger_state()
+		var snapshot := encounter.advance_boat_fishing_trigger_for_hook(evaluation, 0.1, 0)
+		var progress := float(snapshot.get("reaction_total_seconds", 0.0)) - float(snapshot.get("reaction_remaining_seconds", 0.0)) - float(snapshot.get("visual_approach_estimate_seconds", 0.0))
+		_check(absf(progress - 0.1 * multiplier) < 0.01, "Authority bite willingness scales SCHOOL_TARGETED reaction progress exactly once")
 
 
 func _advance_until_trigger(encounter: FishingEncounterSystem, evaluation: Dictionary, hook_index: int, max_samples: int) -> Dictionary:

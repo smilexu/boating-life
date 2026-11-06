@@ -894,6 +894,12 @@ fishing.debug.boat_bite_summary,"%s · %s · line %.1f m · relative speed %.2f 
 fishing.debug.boat_bite_bait_depth,Bait depth %.2f m,鱼饵深度 %.2f 米
 fishing.debug.boat_bite_hook_row,Hook %d · depth %.2f m · %s,钩位 %d · 深度 %.2f 米 · %s
 fishing.debug.boat_bite_school_row,"Hook %d · %s / %s · pop %d · reserved %d · horizontal %.1f m × %.2f · target/effective depth %.1f/%.1f m · bait delta %.1f m","钩位 %d · %s / %s · 数量 %d · 预留 %d · 水平 %.1f 米 × %.2f · 目标/有效深度 %.1f/%.1f 米 · 鱼饵深度差 %.1f 米"
+fishing.debug.section.school_disturbance,Authority school disturbance,Authority 鱼群惊扰
+fishing.debug.school_disturbance.no_target,No nearby school target,当前没有附近目标鱼群
+fishing.debug.school_disturbance.row,"School %s / %s · horizontal %.1f m · below hull %.1f m · vessel %.2f · target %.2f · level %.2f · %s · bite ×%.2f","鱼群 %s / %s · 水平 %.1f 米 · 船底以下 %.1f 米 · 船只扰动 %.2f · 目标 %.2f · 累积 %.2f · %s · 咬钩 ×%.2f"
+fishing.debug.school_disturbance.state.calm,Calm,平静
+fishing.debug.school_disturbance.state.alert,Alert,警觉
+fishing.debug.school_disturbance.state.fleeing,Fleeing,逃散
 fishing.debug.boat_bite_rate_row,"depth ×%.2f · population ×%.2f · action ×%.2f · surface ×%.2f · base %.1f/h → final %.1f/h · %s","水层 ×%.2f · 数量 ×%.2f · 动作 ×%.2f · 表层 ×%.2f · 基础 %.1f 次/小时 → 最终 %.1f 次/小时 · %s"
 fishing.debug.boat_bite_visual_depth,Visible school depth %.2f m · difference %.2f m,可见鱼群代表深度 %.2f 米 · 差值 %.2f 米
 fishing.debug.boat_bite_no_school,No targeted school candidate; ambient eligibility is shown below,没有定向鱼群候选；普通海域候选见下方
@@ -930,9 +936,12 @@ fishing.debug.boat_bite_phase.occupied,occupied,钩位已占用
 fishing.debug.boat_bite_phase.inactive,inactive,未运行
 fishing.debug.boat_bite_phase.target_boundary_hold,boundary hold,边界保持中
 fishing.debug.boat_bite_trigger_row,"Hook %d · %s · school %s · %s · H %.1f m / V %.1f m / 3D %.2f · available %d · depth %s · action %s · %s · %.1f s · %s","钩位 %d · %s · 鱼群 %s · %s · 水平 %.1f 米 / 垂直 %.1f 米 / 三维 %.2f · 可用 %d 条 · 水层 %s · 动作 %s · %s · %.1f 秒 · %s"
-fishing.debug.boat_bite_school_geometry,"target %s · ambient %s · school extents H %.1f/V %.1f m · normalized 3D %.2f · available %d · %s","定向 %s · 偶遇 %s · 鱼群范围 H %.1f/V %.1f 米 · 归一化三维距离 %.2f · 可用 %d 条 · %s"
+fishing.debug.boat_bite_school_geometry,"target %s · ambient %s · core diagnostic H %.1f/V %.1f m · core ellipsoid %.2f · available %d · %s","定向 %s · 偶遇 %s · 鱼群核心诊断 H %.1f/V %.1f 米 · 核心椭球 %.2f · 可用 %d 条 · %s"
+fishing.debug.boat_bite_pursuit_geometry,"Hook %d · pursuit radius %.1f m · school-hook 3D %.1f m · sphere %s · eligible %s · approach %s · fish mouth-hook %.2f m","钩位 %d · 追饵半径 %.1f 米 · 鱼群至钩位三维距离 %.1f 米 · 球内 %s · 资格 %s · 接近 %s · 鱼嘴至钩 %.2f 米"
+fishing.debug.boat_bite_active_pursuit,"Hook %d pursuit %s · school %s · radius %.1f m · school-hook %.1f m · fish mouth-hook %.2f m · swim %.2f m/s · elapsed %.1f s","钩位 %d 追饵 %s · 鱼群 %s · 半径 %.1f 米 · 鱼群至钩 %.1f 米 · 鱼嘴至钩 %.2f 米 · 游速 %.2f 米/秒 · 已持续 %.1f 秒"
 fishing.debug.boat_bite_reason.action_requirement_not_met,Single Jig needs a little lure movement,单钩亮片需要轻微运动
 fishing.debug.boat_bite_reason.outside_school_volume,Hook is outside the school's 3D activity area,鱼钩在鱼群三维活动范围外
+fishing.debug.boat_bite_reason.outside_pursuit_sphere,Hook is outside this species' spherical pursuit range,鱼钩超出该鱼种的球形追饵范围
 fishing.debug.boat_bite_reason.inside_school_target_zone,Inside school; targeted trigger has priority,处于鱼群定向范围内
 fishing.debug.boat_bite_reason.outside_horizontal_range,Outside the 50 m horizontal range,超出 50 米水平范围
 fishing.debug.boat_bite_reason.target_reaction_waiting,Valid school target; fish response is progressing,鱼群条件有效；鱼正在反应
@@ -948,3 +957,32 @@ fishing.debug.boat_ambient_rate_state,Ambient %.2f events/real hour · mean %.0f
 fishing.debug.boat_ambient_authority,Authority request accepted %s · %s · fish %s,Authority 请求接受 %s · %s · 鱼 %s
 fishing.debug.boat_ambient_fish,Ambient fish %s · %s · %.2f m · hook %d · %s,临时自然鱼 %s · %s · %.2f 米 · 钩位 %d · %s
 fishing.debug.boat_ambient_candidate,Ambient candidate · hook %d · %s · depth %.1f m · ecology weight %.4f · habitat %s,普通海域候选 · 钩位 %d · %s · 深度 %.1f 米 · 生态权重 %.4f · 栖息地 %s
+fishing.debug.section.boat_pursuit_result,Last Pursuit Result,最近一次追饵结果
+fishing.debug.boat_pursuit_result.none,No completed pursuit yet,尚无已结束的追饵记录
+fishing.debug.boat_pursuit_result.success,Bite confirmed,已确认咬钩
+fishing.debug.boat_pursuit_result.failed,Failed,失败
+fishing.debug.boat_pursuit_result.header,"%s · %s · School %s · Hook %d · %s","%s · %s · 鱼群 %s · 钩位 %d · %s"
+fishing.debug.boat_pursuit_result.timing,"Elapsed %.2f s · reason: %s · mouth to hook %.2f m","持续 %.2f 秒 · 原因：%s · 鱼嘴距钩 %.2f 米"
+fishing.debug.boat_pursuit_result.depth,"Hook depth %.2f m · school activity depth %.2f m · state %s","鱼钩水深 %.2f 米 · 鱼群活动深度 %.2f 米 · 状态 %s"
+fishing.debug.boat_pursuit_result.range,"Pursuit radius %.1f m · hook to school %.2f m · pending: %s · line %.2f m","追饵半径 %.1f 米 · 钩位距鱼群 %.2f 米 · 预约：%s · 线长 %.2f 米"
+fishing.debug.boat_pursuit_result.pending.confirmed,confirmed,已确认
+fishing.debug.boat_pursuit_result.pending.released,released,已释放
+fishing.debug.boat_pursuit_result.pending.released_by_authority,released by Authority,Authority 已释放
+fishing.debug.boat_pursuit_result.pending.not_released,not released,未释放
+fishing.debug.boat_pursuit_result.reason.bite_confirmed,Bite confirmed,已确认咬钩
+fishing.debug.boat_pursuit_result.reason.approach_timeout,Approach timed out,追逐超时
+fishing.debug.boat_pursuit_result.reason.pursuit_range_exited,Hook left the pursuit sphere,鱼钩离开追饵球
+fishing.debug.boat_pursuit_result.reason.school_unavailable,Authority school unavailable,Authority 鱼群不可用
+fishing.debug.boat_pursuit_result.reason.unknown_species,Species profile unavailable,鱼种配置不可用
+fishing.debug.boat_pursuit_result.reason.pending_catch_invalid,Pending catch is no longer valid,待处理渔获已失效
+fishing.debug.boat_pursuit_result.reason.hook_invalid,Hook position is invalid,鱼钩位置无效
+fishing.debug.boat_pursuit_result.reason.authority_confirmation_rejected,Authority rejected bite confirmation,Authority 拒绝确认咬钩
+fishing.debug.boat_pursuit_result.reason.school_unavailable_during_bite,School became unavailable during pursuit,追逐期间鱼群不可用
+fishing.debug.boat_pursuit_result.reason.boat_fishing_ended,Boat Fishing activity ended,船钓活动已结束
+fishing.debug.boat_pursuit_result.reason.boat_fishing_cancelled,Boat Fishing pursuit cancelled,船钓追饵已取消
+fishing.debug.boat_pursuit_result.reason.sabiki_cancelled,Sabiki pursuit cancelled,串钩追饵已取消
+fishing.debug.boat_pursuit_result.reason.ambient_fish_unavailable_during_bite,Ambient fish became unavailable during pursuit,普通海域鱼在追逐期间不可用
+fishing.debug.boat_pursuit_result.reason.activity_depth_mismatch,Legacy depth mismatch cancellation,旧版活动水深不匹配取消
+fishing.debug.school_activity_state.near_surface,near surface,近表层
+fishing.debug.school_activity_state.descending,descending,下潜中
+fishing.debug.school_activity_state.deep,deep,深层

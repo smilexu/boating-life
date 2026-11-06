@@ -41,6 +41,8 @@ const SURFACE_ACTIVITY_VISUAL_DEPTH_M := 2.0
 @export_range(0.01, 8.0, 0.01) var movement_speed_max_mps := 1.0
 @export_enum("surface", "midwater", "near_bottom") var vertical_layer := "midwater"
 @export var surface_activity_cycle_enabled := false
+## Multiplier for the shared, Authority-owned vessel disturbance model.
+@export_range(0.0, 3.0, 0.01) var vessel_disturbance_sensitivity := 1.0
 @export_range(0.0, 1.0, 0.01) var surface_activity_time_share := 0.0
 @export var surface_activity_depth_m := Vector2(0.5, 2.0)
 @export var deep_activity_depth_m := Vector2(7.0, 20.0)
@@ -97,6 +99,9 @@ const SURFACE_ACTIVITY_VISUAL_DEPTH_M := 2.0
 @export_group("Fishing")
 @export var supported_fishing_methods: PackedStringArray = PackedStringArray()
 @export var compatible_lure_tags: PackedStringArray = PackedStringArray()
+## Maximum 3D distance from an Authority school activity center at which this
+## species may leave the school and pursue a compatible boat-fishing lure.
+@export_range(1.0, 40.0, 0.5) var boat_fishing_pursuit_radius_m := 12.0
 @export_range(0.0, 4.0, 0.05) var relative_bite_tendency := 1.0
 ## Per-species speed response; the vessel's own cruise cap is applied separately.
 @export_range(0.1, 12.0, 0.1) var trolling_speed_optimum_mps := 1.5

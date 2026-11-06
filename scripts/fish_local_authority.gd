@@ -15,6 +15,7 @@ const SCHOOL_UPDATES_PER_FRAME := 96
 const SEAGRASS_GENERATOR := preload("res://scripts/shallow_seagrass_generator.gd")
 const SEAGRASS_SEED := 771903
 const SEAGRASS_PATCH_CELL_M := 22.0
+const DISTURBANCE_MODEL := preload("res://scripts/fish_school_disturbance_model.gd")
 
 var _seed := DEFAULT_WORLD_SEED
 var _bathymetry: BathymetryManager
@@ -35,6 +36,7 @@ var _ambient_rng := RandomNumberGenerator.new()
 var _ambient_encounter_sequence := 1
 var _ambient_fish_by_id: Dictionary = {}
 var _settled_ambient_fish_ids: Dictionary = {}
+var _disturbed_school_ids: Dictionary = {}
 
 
 func authority_source_name() -> String:
@@ -48,6 +50,7 @@ func initialize(seed: int, bathymetry: BathymetryManager, georeference: GeoRefer
 	_ambient_encounter_sequence = 1
 	_ambient_fish_by_id.clear()
 	_settled_ambient_fish_ids.clear()
+	_disturbed_school_ids.clear()
 	_bathymetry = bathymetry
 	_georeference = georeference
 	_profiles_by_id.clear()
@@ -115,6 +118,82 @@ func get_schools_near(world_position: Vector3, radius_m: float, include_unavaila
 				if dx * dx + dz * dz <= radius_squared:
 					result.append(_snapshot_for_state(state))
 	return result
+
+
+func get_disturbed_school_ids() -> Array[String]:
+	var result: Array[String] = []
+	for school_id_variant in _disturbed_school_ids.keys():
+		result.append(str(school_id_variant))
+	result.sort()
+	return result
+
+
+func update_school_disturbance(vessel_snapshot: Dictionary, school_samples: Array[Dictionary], delta_real_seconds: float, config: Dictionary) -> bool:
+	if not is_finite(delta_real_seconds) or delta_real_seconds <= 0.0:
+		return false
+	if not _has_finite_world_position(vessel_snapshot.get("world_position", null)):
+		return false
+	var vessel: Dictionary = DISTURBANCE_MODEL.vessel_disturbance(vessel_snapshot, config)
+	var boat_position := _dictionary_vector3(vessel_snapshot.get("world_position", Vector3.ZERO))
+	var hull_bottom_y := _finite_float(vessel_snapshot.get("hull_bottom_world_y", boat_position.y), boat_position.y)
+	var samples_by_id: Dictionary = {}
+	for sample in school_samples:
+		var school_id := str(sample.get("school_id", ""))
+		if not school_id.is_empty():
+			samples_by_id[school_id] = sample
+	var target_ids: Dictionary = {}
+	for school_id in samples_by_id:
+		target_ids[str(school_id)] = true
+	for school_id in _disturbed_school_ids:
+		target_ids[str(school_id)] = true
+	var state_changed := false
+	for school_id_variant in target_ids.keys():
+		var school_id := str(school_id_variant)
+		var state := _schools.get(school_id) as FishSchoolState
+		if state == null:
+			_disturbed_school_ids.erase(school_id)
+			continue
+		var sample: Dictionary = samples_by_id.get(school_id, {})
+		if sample.is_empty():
+			continue
+		var surface_y := _finite_float(sample.get("surface_height_m", NAN), NAN)
+		if not is_finite(surface_y) or not _has_finite_world_position(state.world_position):
+			continue
+		var activity_depth := maxf(0.0, _finite_float(sample.get("effective_activity_depth_m", state.activity_depth_m), state.activity_depth_m))
+		var fish_center_y := surface_y - activity_depth
+		var vertical_below_hull := maxf(0.0, hull_bottom_y - fish_center_y)
+		var dx := state.world_position.x - boat_position.x
+		var dz := state.world_position.z - boat_position.z
+		var horizontal_distance := sqrt(dx * dx + dz * dz)
+		var profile := _profiles_by_id.get(state.species_id) as FishSpeciesProfile
+		var sensitivity := profile.vessel_disturbance_sensitivity if profile != null else 1.0
+		var target := DISTURBANCE_MODEL.target_for_school(horizontal_distance, vertical_below_hull, float(vessel.get("vessel_disturbance", 0.0)), sensitivity, config)
+		var previous_state := state.disturbance_state
+		var next_values: Dictionary = DISTURBANCE_MODEL.advance_school_state(
+			state.disturbance_level,
+			state.disturbance_state,
+			state.strong_disturbance_duration_seconds,
+			target,
+			delta_real_seconds,
+			config
+		)
+		state.disturbance_level = float(next_values.get("disturbance_level", 0.0))
+		state.disturbance_target = target
+		state.disturbance_state = str(next_values.get("disturbance_state", "CALM"))
+		state.strong_disturbance_duration_seconds = float(next_values.get("strong_disturbance_duration_seconds", 0.0))
+		state.disturbance_horizontal_distance_m = horizontal_distance
+		state.disturbance_vertical_below_hull_m = vertical_below_hull
+		state.vessel_disturbance = float(vessel.get("vessel_disturbance", 0.0))
+		state.bite_willingness_multiplier = DISTURBANCE_MODEL.bite_willingness(state.disturbance_state, config)
+		if state.disturbance_state != previous_state:
+			state_changed = true
+		if state.disturbance_state != "CALM" or state.disturbance_level > 0.001 or target > 0.001:
+			_disturbed_school_ids[school_id] = true
+		else:
+			_disturbed_school_ids.erase(school_id)
+	if state_changed:
+		_state_revision += 1
+	return state_changed
 
 
 ## Returns legal transient catch sources for one actual submerged hook. Species
@@ -540,6 +619,11 @@ func restore_snapshot(snapshot: Dictionary) -> bool:
 			state.activity_depth_state_timestamp_seconds = saved_simulation_seconds
 		restored[state.school_id] = state
 	_schools = restored
+	_disturbed_school_ids.clear()
+	for restored_school_id in _schools:
+		var restored_school := _schools[restored_school_id] as FishSchoolState
+		if restored_school.disturbance_state != "CALM" or restored_school.disturbance_level > 0.001:
+			_disturbed_school_ids[str(restored_school_id)] = true
 	_rebuild_spatial_index()
 	_pending_school_ids.clear()
 	_school_update_cursor = 0
@@ -975,6 +1059,30 @@ func _add_school_to_cell(school_id: String, cell: Vector2i) -> void:
 		_schools_by_cell[cell] = []
 	var cell_schools: Array = _schools_by_cell[cell]
 	cell_schools.append(school_id)
+
+
+func _dictionary_vector3(value: Variant) -> Vector3:
+	if value is Vector3:
+		var vector: Vector3 = value
+		return vector if is_finite(vector.x) and is_finite(vector.y) and is_finite(vector.z) else Vector3.ZERO
+	if value is Array and value.size() >= 3:
+		var vector := Vector3(float(value[0]), float(value[1]), float(value[2]))
+		return vector if is_finite(vector.x) and is_finite(vector.y) and is_finite(vector.z) else Vector3.ZERO
+	return Vector3.ZERO
+
+
+func _has_finite_world_position(value: Variant) -> bool:
+	if value is Vector3:
+		var position: Vector3 = value
+		return is_finite(position.x) and is_finite(position.y) and is_finite(position.z)
+	if value is Array and value.size() >= 3:
+		return is_finite(float(value[0])) and is_finite(float(value[1])) and is_finite(float(value[2]))
+	return false
+
+
+func _finite_float(value: Variant, fallback: float) -> float:
+	var number := float(value)
+	return number if is_finite(number) else fallback
 
 
 static func hash01(x: int, y: int, seed: int) -> float:

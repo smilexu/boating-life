@@ -136,7 +136,12 @@ func _run() -> void:
 	_check(int(sabiki_profile["hook_count"]) == 5 and int(sabiki_profile["maximum_catch_count"]) == 5, "Sabiki data defines five hook positions without creating catch results")
 	_check(is_equal_approx(float(sabiki_profile["effective_height_m"]), 1.8) and sabiki_profile["compatible_species_ids"] == PackedStringArray(["herring"]), "Sabiki covers its configured 1.8 m depth span and declares Herring compatibility")
 	var sabiki_root := casting.find_child("SabikiRigVisual", true, false) as Node3D
-	_check(sabiki_root != null and sabiki_root.find_child("SabikiMainline", true, false) is MeshInstance3D, "Sabiki visual has a continuous mainline")
+	_check(
+		sabiki_root != null
+		and boat_fishing_line != null
+		and sabiki_root.find_child("SabikiMainline", true, false) == null,
+		"Sabiki backbone is rendered by the shared external line mesh instead of a separate rigid cylinder"
+	)
 	_check(sabiki_root != null and sabiki_root.find_child("SabikiLeadWeight", true, false) is MeshInstance3D, "Sabiki visual has a distinct bottom sinker")
 	var complete_sabiki := sabiki_root != null
 	if sabiki_root != null:
@@ -152,7 +157,7 @@ func _run() -> void:
 	var saved_airborne_retrieval := bool(casting.get("_bait_airborne_retrieval"))
 	var saved_airborne_elapsed := float(casting.get("_airborne_retrieval_elapsed"))
 	var saved_manual_reeling := bool(casting.get("_manual_reeling"))
-	var saved_sabiki_retrieval_taut := bool(casting.get("_sabiki_retrieval_taut"))
+	var saved_rig_profile: BoatFishingRigProfile = casting.get("_current_rig")
 	casting.set("_bait_world", synthetic_sinker)
 	casting.set("_boat_velocity_estimate_world", Vector3.ZERO)
 	casting.set("_rod_tension", 0.0)
@@ -176,37 +181,73 @@ func _run() -> void:
 	if leaned_hooks.size() == 5:
 		for hook_index in range(leaned_hooks.size() - 1):
 			leaned_order_valid = leaned_order_valid and leaned_hooks[hook_index].y > leaned_hooks[hook_index + 1].y
-	_check(leaned_order_valid, "Boat flow and rod tension can lean the rig without flipping its top-to-bottom hook order")
+	_check(leaned_order_valid, "Boat flow leans the rig without flipping its top-to-bottom hook order")
 	var rod_tip_for_rig: Vector3 = casting.call("_get_rod_tip_world")
 	var tether_direction := Vector3(-0.52, 0.79, 0.32).normalized()
 	var aligned_sinker := rod_tip_for_rig - tether_direction * 3.0
 	casting.set("_bait_world", aligned_sinker)
+	var expected_rig_axis: Vector3 = casting.call("_get_sabiki_up_direction_world")
+	var same_rig_axis_across_states := true
 	for rig_state in [BoatFishingCastingSystem.CastState.CASTING, BoatFishingCastingSystem.CastState.WAITING, BoatFishingCastingSystem.CastState.RETRIEVING]:
 		casting.set("_state", rig_state)
 		var state_rig_up: Vector3 = casting.call("_get_sabiki_up_direction_world")
-		_check(state_rig_up.dot(tether_direction) > 0.999, "Sabiki mainline remains collinear with the rod tether in state %d" % int(rig_state))
+		same_rig_axis_across_states = same_rig_axis_across_states and state_rig_up.dot(expected_rig_axis) > 0.9999
+	_check(same_rig_axis_across_states, "Sabiki hook layout does not switch posture between cast, waiting, and retrieval states")
 	var aligned_connection: Vector3 = casting.call("_get_tackle_line_connection_world")
-	var connection_is_on_tether := (aligned_connection - aligned_sinker).cross(tether_direction).length() < 0.001
-	connection_is_on_tether = connection_is_on_tether and aligned_connection.distance_to(rod_tip_for_rig) < rod_tip_for_rig.distance_to(aligned_sinker)
-	_check(connection_is_on_tether, "Sabiki top eye remains on the continuous rod-to-sinker line during entry and retrieval")
-	var slack_near_end: Vector3 = casting.call(
-		"_get_slack_sabiki_line_point",
-		rod_tip_for_rig,
-		aligned_connection,
-		Vector3.RIGHT,
-		0.995
-	)
-	var terminal_tangent := (aligned_connection - slack_near_end).normalized()
-	_check(terminal_tangent.dot(-tether_direction) > 0.98, "Slack outer line meets the Sabiki mainline without a direction kink")
+	var connection_offset := aligned_connection - aligned_sinker
+	var expected_rig_height := float(casting.get_rig_snapshot().get("line_attachment_height_m", 0.0))
+	var connection_follows_rig_axis := connection_offset.normalized().dot(expected_rig_axis) > 0.9999
+	connection_follows_rig_axis = connection_follows_rig_axis and absf(connection_offset.length() - expected_rig_height) < 0.001
+	_check(connection_follows_rig_axis, "Sabiki top eye follows the configured terminal rig geometry")
+	var gravity_sag_stays_below_chord := true
+	for progress in [0.15, 0.35, 0.65, 0.85]:
+		var span_start := Vector3.ZERO
+		var span_end := Vector3(1.0, -0.3, 0.0)
+		var chord_point := span_start.lerp(span_end, progress)
+		var taut_point := BoatFishingCastingSystem.calculate_main_line_visual_span_point(span_start, span_end, progress, 0.0)
+		var slack_point := BoatFishingCastingSystem.calculate_main_line_visual_span_point(span_start, span_end, progress, 0.18)
+		gravity_sag_stays_below_chord = gravity_sag_stays_below_chord and taut_point.distance_to(chord_point) < 0.000001
+		gravity_sag_stays_below_chord = gravity_sag_stays_below_chord and slack_point.y <= chord_point.y
+	_check(gravity_sag_stays_below_chord, "Shared taut line follows its chord and slack line sags only with gravity, independent of rig axis")
+	var previous_tube_side := Vector3.ZERO
+	var tube_frame_continuous := true
+	for direction in [Vector3(0.5, -0.866, 0.0), Vector3(0.25, -0.968, 0.0), Vector3(0.05, -0.999, 0.0), Vector3.DOWN]:
+		var side_direction := BoatFishingCastingSystem.calculate_line_tube_side_direction(direction, previous_tube_side)
+		if previous_tube_side.length_squared() > 0.001:
+			tube_frame_continuous = tube_frame_continuous and side_direction.dot(previous_tube_side.normalized()) > 0.95
+		previous_tube_side = side_direction
+	_check(tube_frame_continuous, "Line tube cross-sections transport continuously as the backbone approaches vertical")
 	casting.set("_bait_airborne_retrieval", true)
-	casting.set("_airborne_retrieval_elapsed", BoatFishingCastingSystem.AIRBORNE_RIG_RELAX_DURATION_SECONDS)
-	var relaxed_rig_up: Vector3 = casting.call("_get_sabiki_up_direction_world")
-	var natural_rig_up: Vector3 = casting.call("_get_sabiki_up_direction_for_sinker", aligned_sinker)
-	_check(relaxed_rig_up.dot(natural_rig_up) > 0.999, "Sabiki relaxes toward gravity only after the whole tackle is airborne")
+	casting.set("_airborne_retrieval_elapsed", 0.65)
 	casting.set("_state", BoatFishingCastingSystem.CastState.WAITING)
 	casting.set("_manual_reeling", true)
-	casting.set("_sabiki_retrieval_taut", true)
-	_check(not bool(casting.call("_should_render_fishing_line_taut")), "A fully airborne Sabiki line droops even if reel-state flags are still held")
+	var airborne_rig_up: Vector3 = casting.call("_get_sabiki_up_direction_world")
+	casting.set("_bait_airborne_retrieval", false)
+	casting.set("_airborne_retrieval_elapsed", 0.0)
+	var submerged_rig_up: Vector3 = casting.call("_get_sabiki_up_direction_world")
+	_check(airborne_rig_up.dot(submerged_rig_up) > 0.9999, "Rig axis does not switch when the waterline or airborne timer changes")
+	casting.set("_state", BoatFishingCastingSystem.CastState.WAITING)
+	casting.set("_manual_reeling", true)
+	casting.set("_bait_airborne_retrieval", true)
+	var sabiki_airborne_line_state: Dictionary = casting.call("_get_main_line_visual_state")
+	var sabiki_profile_for_line_state: BoatFishingRigProfile = casting.get("_current_rig")
+	casting.set("_current_rig", BoatFishingCastingSystem.SINGLE_JIG_PROFILE)
+	var single_airborne_line_state: Dictionary = casting.call("_get_main_line_visual_state")
+	_check(
+		not bool(sabiki_airborne_line_state.get("taut", true))
+		and sabiki_airborne_line_state == single_airborne_line_state,
+		"A fully airborne line uses the same slack state for Single Jig and Sabiki"
+	)
+	casting.set("_current_rig", sabiki_profile_for_line_state)
+	casting.set("_bait_airborne_retrieval", false)
+	var sabiki_reeling_line_state: Dictionary = casting.call("_get_main_line_visual_state")
+	casting.set("_current_rig", BoatFishingCastingSystem.SINGLE_JIG_PROFILE)
+	var single_reeling_line_state: Dictionary = casting.call("_get_main_line_visual_state")
+	_check(
+		bool(sabiki_reeling_line_state.get("taut", false))
+		and sabiki_reeling_line_state == single_reeling_line_state,
+		"Manual reeling uses the same taut-state rule for Single Jig and Sabiki"
+	)
 	casting.set("_bait_world", saved_bait_position)
 	casting.set("_boat_velocity_estimate_world", saved_boat_velocity)
 	casting.set("_rod_tension", saved_rod_tension)
@@ -214,7 +255,7 @@ func _run() -> void:
 	casting.set("_bait_airborne_retrieval", saved_airborne_retrieval)
 	casting.set("_airborne_retrieval_elapsed", saved_airborne_elapsed)
 	casting.set("_manual_reeling", saved_manual_reeling)
-	casting.set("_sabiki_retrieval_taut", saved_sabiki_retrieval_taut)
+	casting.set("_current_rig", saved_rig_profile)
 	var synthetic_surface_y := 0.0
 	var previous_exit_step := -1
 	var exit_order_valid := true
@@ -328,6 +369,7 @@ func _run() -> void:
 		_check(line_route_vertices.size() >= 450, "Deployed line draws from drum exit through all guide rings to the waterline")
 	else:
 		_check(false, "Deployed line has a rendered reel-to-water mesh surface")
+	_test_sabiki_line_transition_geometry(casting, boat_fishing_line, sabiki_root)
 	_check(int(casting.get_debug_snapshot()["fishing_audio_event_counts"]["splash"]) == 0, "Bait water impact keeps the visual splash but does not play the fish-caught splash sound")
 	_check(not bool(casting.get_debug_snapshot()["fishing_audio_loops"]["line_out"]), "Cast line-out loop stops when the bait lands")
 	_check(onboard.is_movement_locked(), "WAITING retains the player movement lock")
@@ -616,5 +658,111 @@ func _check(condition: bool, message: String) -> void:
 	else:
 		_failures += 1
 		printerr("FAIL: %s" % message)
+
+
+func _test_sabiki_line_transition_geometry(
+	casting: BoatFishingCastingSystem,
+	line_instance: MeshInstance3D,
+	sabiki_root: Node3D
+) -> void:
+	if casting == null or line_instance == null or sabiki_root == null:
+		_check(false, "Sabiki transition geometry fixture is available")
+		return
+	var saved_bait: Vector3 = casting.get_sinker_world_position()
+	var saved_line_length := float(casting.get("_line_paid_out_length_m"))
+	var saved_airborne := bool(casting.get("_bait_airborne_retrieval"))
+	var saved_airborne_elapsed := float(casting.get("_airborne_retrieval_elapsed"))
+	var saved_manual_reeling := bool(casting.get("_manual_reeling"))
+	var saved_boat_velocity: Vector3 = casting.get("_boat_velocity_estimate_world")
+	var saved_rod_tension := float(casting.get("_rod_tension"))
+	var surface_y := float(casting.call("_sample_water", saved_bait).get("height", saved_bait.y))
+	var stages := [
+		{"offset": -1.0, "airborne": false, "elapsed": 0.0},
+		{"offset": -0.35, "airborne": false, "elapsed": 0.0},
+		{"offset": 0.0, "airborne": false, "elapsed": 0.0},
+		{"offset": 0.06, "airborne": true, "elapsed": 0.0},
+		{"offset": 0.06, "airborne": true, "elapsed": 0.325},
+		{"offset": 0.06, "airborne": true, "elapsed": 0.65},
+	]
+	var all_stages_connected := true
+	var hooks_unchanged := true
+	var rig_connection_moves_with_sinker := true
+	var previous_sinker := Vector3.ZERO
+	var previous_connection := Vector3.ZERO
+	var has_previous_connection := false
+	for stage in stages:
+		var stage_bait := saved_bait
+		stage_bait.y = surface_y + float(stage["offset"])
+		casting.set("_bait_world", stage_bait)
+		casting.set("_bait_airborne_retrieval", bool(stage["airborne"]))
+		casting.set("_airborne_retrieval_elapsed", float(stage["elapsed"]))
+		casting.set("_manual_reeling", saved_manual_reeling)
+		casting.call("_update_rig_visual_position")
+		var hooks_before_line_render: Array[Vector3] = casting.get_hook_attachment_world_positions()
+		casting.call("_update_line_and_bait_visuals")
+		var connection: Vector3 = casting.call("_get_tackle_line_connection_world")
+		var eye := sabiki_root.find_child("SabikiRodSideEye", true, false) as Node3D
+		var backbone_hook_roots: Array[Vector3] = casting.get_rig_hook_positions(stage_bait, casting.call("_get_sabiki_up_direction_world"))
+		var current_hooks: Array[Vector3] = casting.get_hook_attachment_world_positions()
+		var mesh_contains_connection := _line_mesh_contains_world_point(line_instance, connection, 0.004)
+		var mesh_contains_sinker := _line_mesh_contains_world_point(line_instance, stage_bait, 0.004)
+		if has_previous_connection:
+			rig_connection_moves_with_sinker = rig_connection_moves_with_sinker and (connection - previous_connection).distance_to(stage_bait - previous_sinker) < 0.0001
+		all_stages_connected = all_stages_connected and eye != null and eye.global_position.distance_to(connection) < 0.0001
+		all_stages_connected = all_stages_connected and mesh_contains_connection and mesh_contains_sinker
+		for hook_root in backbone_hook_roots:
+			all_stages_connected = all_stages_connected and _line_mesh_contains_world_point(line_instance, hook_root, 0.004)
+		hooks_unchanged = hooks_unchanged and _vector_arrays_approximately_equal(hooks_before_line_render, current_hooks, 0.00001)
+		previous_sinker = stage_bait
+		previous_connection = connection
+		has_previous_connection = true
+	_check(all_stages_connected, "Shared line mesh joins the top eye and sinker through submerged, partial-exit, and airborne stages")
+	_check(hooks_unchanged, "Line continuity rendering leaves all five actual hook positions unchanged")
+	_check(rig_connection_moves_with_sinker, "Partial-exit connection does not jump relative to the continuously moving sinker")
+	_check(is_equal_approx(float(casting.get("_line_paid_out_length_m")), saved_line_length), "Line continuity rendering does not change authoritative paid-out length")
+	var rod_tip: Vector3 = casting.call("_get_rod_tip_world")
+	casting.set("_boat_velocity_estimate_world", Vector3.ZERO)
+	casting.set("_bait_world", rod_tip + Vector3(5.0, -3.0, 0.0))
+	casting.set("_bait_airborne_retrieval", false)
+	casting.set("_rod_tension", 0.0)
+	var previous_up: Vector3 = casting.call("_get_sabiki_up_direction_world")
+	var max_load_orientation_step_deg := 0.0
+	for frame_index in range(1, 31):
+		casting.set("_rod_tension", float(frame_index) / 30.0)
+		var current_up: Vector3 = casting.call("_get_sabiki_up_direction_world")
+		max_load_orientation_step_deg = maxf(max_load_orientation_step_deg, rad_to_deg(previous_up.angle_to(current_up)))
+		previous_up = current_up
+	_check(max_load_orientation_step_deg < 0.001, "Sabiki hook layout remains stable under changing rod load at 30 FPS")
+	casting.set("_bait_world", saved_bait)
+	casting.set("_bait_airborne_retrieval", saved_airborne)
+	casting.set("_airborne_retrieval_elapsed", saved_airborne_elapsed)
+	casting.set("_manual_reeling", saved_manual_reeling)
+	casting.set("_boat_velocity_estimate_world", saved_boat_velocity)
+	casting.set("_rod_tension", saved_rod_tension)
+	casting.call("_update_rig_visual_position")
+	casting.call("_update_line_and_bait_visuals")
+
+
+func _line_mesh_contains_world_point(line_instance: MeshInstance3D, world_point: Vector3, tolerance_m: float) -> bool:
+	if line_instance == null or not (line_instance.mesh is ImmediateMesh):
+		return false
+	var immediate := line_instance.mesh as ImmediateMesh
+	if immediate.get_surface_count() <= 0:
+		return false
+	var arrays := immediate.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	for local_vertex in vertices:
+		if line_instance.to_global(local_vertex).distance_to(world_point) <= tolerance_m:
+			return true
+	return false
+
+
+func _vector_arrays_approximately_equal(first: Array[Vector3], second: Array[Vector3], tolerance_m: float) -> bool:
+	if first.size() != second.size():
+		return false
+	for index in range(first.size()):
+		if first[index].distance_to(second[index]) > tolerance_m:
+			return false
+	return true
 
 

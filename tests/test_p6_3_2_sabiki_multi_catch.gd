@@ -320,7 +320,7 @@ func _test_live_boat_fishing_and_f3() -> void:
 	var onboard: OnboardActivityController = casting.get("_onboard") as OnboardActivityController if casting != null else null
 	_check(manager != null and casting != null and rod_system != null and boat_controller != null and onboard != null, "Main scene loads the shared Authority, boat-fishing controller, and trolling presentation system")
 	_check(debug_panel != null, "F3 Fishing tab is available for Sabiki tests")
-	_check(debug_panel != null and debug_panel.find_child("BoatFishingBiteDiagnostics", true, false) is Label, "F3 Fishing tab contains low-frequency natural-bite diagnostics")
+	_check(debug_panel != null and debug_panel.find_child("BoatFishingBiteOverview", true, false) is Label, "F3 Fishing tab contains the categorized natural-bite overview diagnostics")
 	if manager == null or casting == null or rod_system == null or boat_controller == null or onboard == null or activities_button == null or boat_fishing_button == null:
 		await _free_main(main)
 		return
@@ -361,6 +361,8 @@ func _test_live_boat_fishing_and_f3() -> void:
 		_check(first_approach.global_position.distance_to(start_position) > 0.005, "shallow Sabiki test fish visibly swims toward its own hook")
 	var reached_one := await _wait_until(func() -> bool: return casting.get_sabiki_hooked_count() == 1, 360)
 	_check(reached_one and str(casting.get_sabiki_hook_states_snapshot()[0].get("status", "")) == "hooked", "hook state changes only after the fish reaches Hook 1")
+	var first_pursuit_result: Dictionary = casting.get_natural_bite_diagnostics().get("last_pursuit_result", {})
+	_check(str(first_pursuit_result.get("result", "")) == "success" and int(first_pursuit_result.get("hook_index", -1)) == 0, "latest completed-pursuit snapshot records the Sabiki hook that confirmed")
 	_check(casting.get_casting_state() == BoatFishingCastingSystem.CastState.SABIKI_HOOKED_WAITING, "one Sabiki fish leaves other hooks waiting instead of auto-retrieving")
 	if f3_index != null:
 		f3_index.value = 2.0
@@ -486,7 +488,6 @@ func _prepare_landed_sabiki(casting: BoatFishingCastingSystem, boat: Node3D, onb
 	casting.set("_bait_has_landed", true)
 	casting.set("_bait_flight_started", true)
 	casting.set("_bait_airborne_retrieval", false)
-	casting.set("_sabiki_retrieval_taut", false)
 	var rod_tip: Vector3 = casting.call("_get_rod_tip_world")
 	casting.set("_line_paid_out_length_m", clampf(rod_tip.distance_to(bait_position), 1.0, casting.maximum_line_length_m))
 	onboard.set_movement_locked(true)

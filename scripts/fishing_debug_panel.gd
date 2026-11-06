@@ -25,6 +25,8 @@ var _boat_sabiki_spawn_hook_button: Button
 var _boat_sabiki_spawn_next_button: Button
 var _boat_sabiki_fill_button: Button
 var _boat_bite_overview_label: Label
+var _boat_pursuit_result_label: Label
+var _boat_school_disturbance_label: Label
 var _boat_bite_visible_school_label: Label
 var _boat_bite_logic_school_label: Label
 var _boat_ambient_diagnostics_label: Label
@@ -119,6 +121,10 @@ func _ready() -> void:
 
 	var school_section := _add_section_container(content, "fishing.debug.section.boat_school_targeting")
 	_boat_bite_overview_label = _make_readout_label(school_section, "BoatFishingBiteOverview")
+	_add_section_heading(school_section, "fishing.debug.section.boat_pursuit_result")
+	_boat_pursuit_result_label = _make_readout_label(school_section, "BoatFishingLastPursuitResult")
+	_add_section_heading(school_section, "fishing.debug.section.school_disturbance")
+	_boat_school_disturbance_label = _make_readout_label(school_section, "BoatFishingSchoolDisturbance")
 	_add_section_heading(school_section, "fishing.debug.section.boat_visible_school_candidates")
 	var visual_school_note := Label.new()
 	visual_school_note.text = tr("fishing.debug.boat_visual_school_note")
@@ -969,7 +975,7 @@ func _refresh_fish_finder_diagnostics() -> void:
 		return
 	var lines: Array[String] = []
 	var scan := _finder.get_last_scan() if _finder != null else {}
-	var finder_history: Array[Dictionary] = _finder.get_scan_history() if _finder != null else []
+	var finder_history: Array = _finder.get_scan_history() if _finder != null else []
 	var finder_capacity := _finder.get_effective_history_capacity() if _finder != null else 0
 	var finder_echoes: Array = scan.get("echoes", [])
 	var finder_status := tr("fishing.debug.reason.valid") if bool(scan.get("valid", false)) else _localized_reason(str(scan.get("reason", "not_scanned")))
@@ -1186,13 +1192,47 @@ func _refresh_boat_bite_diagnostics() -> void:
 			float(trigger.get("reaction_remaining_seconds", 0.0)),
 			reason_key,
 		])
+	var active_approach: Dictionary = diagnostics.get("active_pursuit_approach", {})
+	if not active_approach.is_empty():
+		overview_lines.append(_boat_pursuit_debug_line(active_approach))
+	for active_variant in diagnostics.get("active_pursuits", []):
+		if active_variant is Dictionary:
+			overview_lines.append(_boat_pursuit_debug_line(active_variant))
 	var candidates: Array = diagnostics.get("candidate_schools", [])
+	var disturbance_candidates: Array = diagnostics.get("school_targeted_candidates", [])
+	if disturbance_candidates.is_empty():
+		for candidate_variant in candidates:
+			if candidate_variant is Dictionary:
+				disturbance_candidates.append(candidate_variant)
+	if disturbance_candidates.is_empty():
+		_boat_school_disturbance_label.text = tr("fishing.debug.school_disturbance.no_target")
+	else:
+		var disturbance_candidate: Dictionary = disturbance_candidates[0]
+		var disturbance_species_id := str(disturbance_candidate.get("species_id", ""))
+		var disturbance_profile := _manager.call("get_species_profile", disturbance_species_id) as FishSpeciesProfile if _manager != null else null
+		var disturbance_species_name := tr(disturbance_profile.name_key) if disturbance_profile != null else disturbance_species_id
+		var disturbance_state := str(disturbance_candidate.get("disturbance_state", "CALM")).to_lower()
+		var disturbance_state_key := "fishing.debug.school_disturbance.state." + disturbance_state
+		var localized_disturbance_state := tr(disturbance_state_key)
+		if localized_disturbance_state == disturbance_state_key:
+			localized_disturbance_state = str(disturbance_candidate.get("disturbance_state", "CALM"))
+		_boat_school_disturbance_label.text = tr("fishing.debug.school_disturbance.row") % [
+			str(disturbance_candidate.get("school_id", "—")),
+			disturbance_species_name,
+			float(disturbance_candidate.get("disturbance_horizontal_distance_m", -1.0)),
+			float(disturbance_candidate.get("disturbance_vertical_below_hull_m", -1.0)),
+			float(disturbance_candidate.get("vessel_disturbance", 0.0)),
+			float(disturbance_candidate.get("disturbance_target", 0.0)),
+			float(disturbance_candidate.get("disturbance_level", 0.0)),
+			localized_disturbance_state,
+			float(disturbance_candidate.get("bite_willingness_multiplier", 1.0)),
+		]
 	candidates.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var a_score := 100.0 if bool(a.get("target_eligible", false)) else (10.0 if bool(a.get("ambient_eligible", false)) else 0.0)
 		var b_score := 100.0 if bool(b.get("target_eligible", false)) else (10.0 if bool(b.get("ambient_eligible", false)) else 0.0)
 		if not is_equal_approx(a_score, b_score):
 			return a_score > b_score
-		return float(a.get("normalized_3d_distance", INF)) < float(b.get("normalized_3d_distance", INF))
+		return float(a.get("pursuit_distance_m", INF)) < float(b.get("pursuit_distance_m", INF))
 	)
 	var school_visual_cache: Dictionary = {}
 	for candidate_variant in candidates.slice(0, mini(5, candidates.size())):
@@ -1229,6 +1269,29 @@ func _refresh_boat_bite_diagnostics() -> void:
 			float(candidate.get("normalized_3d_distance", -1.0)),
 			int(candidate.get("available_population", 0)),
 			_boat_bite_reason_text(str(candidate.get("rejection_reason", "no_valid_candidate"))),
+		])
+		var hook_index := int(candidate.get("hook_index", 0))
+		var approach_state := "not_started"
+		var mouth_distance := -1.0
+		var hook_snapshots: Array = diagnostics.get("hook_depths", [])
+		for hook_snapshot_variant in hook_snapshots:
+			var hook_snapshot: Dictionary = hook_snapshot_variant
+			if int(hook_snapshot.get("hook_index", -1)) == hook_index:
+				approach_state = str(hook_snapshot.get("status", "not_started"))
+				mouth_distance = float(hook_snapshot.get("actual_mouth_to_hook_distance_m", -1.0))
+				break
+		var candidate_approach_snapshot: Dictionary = diagnostics.get("active_pursuit_approach", {})
+		if int(candidate_approach_snapshot.get("hook_index", hook_index)) == hook_index and not candidate_approach_snapshot.is_empty():
+			approach_state = str(candidate_approach_snapshot.get("state", approach_state))
+			mouth_distance = float(candidate_approach_snapshot.get("actual_mouth_to_hook_distance_m", mouth_distance))
+		candidate_lines.append(tr("fishing.debug.boat_bite_pursuit_geometry") % [
+			int(candidate.get("hook_index", -1)) + 1 if candidate.has("hook_index") else 0,
+			float(candidate.get("pursuit_radius_m", 0.0)),
+			float(candidate.get("pursuit_distance_m", -1.0)),
+			tr("fish.finder.debug.yes") if bool(candidate.get("inside_pursuit_sphere", false)) else tr("fish.finder.debug.no"),
+			tr("fish.finder.debug.yes") if bool(candidate.get("pursuit_eligibility", candidate.get("target_eligible", false))) else tr("fish.finder.debug.no"),
+			approach_state,
+			mouth_distance,
 		])
 		if has_render_instances:
 			var visible_depth := float(visual.get("visible_representative_depth_m", -1.0))
@@ -1297,6 +1360,7 @@ func _refresh_boat_bite_diagnostics() -> void:
 	else:
 		fight_lines.append(tr("fishing.debug.boat_fight_inactive"))
 	_boat_bite_overview_label.text = "\n".join(overview_lines)
+	_boat_pursuit_result_label.text = _boat_last_pursuit_result_text(diagnostics.get("last_pursuit_result", {}))
 	_boat_bite_visible_school_label.text = "\n".join(rendered_school_lines)
 	_boat_bite_logic_school_label.text = "\n".join(logic_school_lines)
 	_boat_ambient_diagnostics_label.text = "\n".join(ambient_lines)
@@ -1306,6 +1370,8 @@ func _refresh_boat_bite_diagnostics() -> void:
 func _set_boat_bite_diagnostics_text(message: String) -> void:
 	for label in [
 		_boat_bite_overview_label,
+		_boat_pursuit_result_label,
+		_boat_school_disturbance_label,
 		_boat_bite_visible_school_label,
 		_boat_bite_logic_school_label,
 		_boat_ambient_diagnostics_label,
@@ -1320,6 +1386,64 @@ func _format_debug_world_position(value: Variant) -> String:
 		return "—"
 	var position: Vector3 = value
 	return "(%.2f, %.2f, %.2f)" % [position.x, position.y, position.z]
+
+
+func _boat_pursuit_debug_line(pursuit: Dictionary) -> String:
+	var state := str(pursuit.get("state", "approaching"))
+	var state_key := "fishing.debug.boat_bite_hook_state." + state
+	var localized_state := tr(state_key)
+	if localized_state == state_key:
+		localized_state = state
+	return tr("fishing.debug.boat_bite_active_pursuit") % [
+		int(pursuit.get("hook_index", -1)) + 1,
+		localized_state,
+		str(pursuit.get("school_id", "—")),
+		float(pursuit.get("pursuit_radius_m", 0.0)),
+		float(pursuit.get("school_to_hook_distance_m", -1.0)),
+		float(pursuit.get("actual_mouth_to_hook_distance_m", -1.0)),
+		float(pursuit.get("speed_mps", 0.0)),
+		float(pursuit.get("elapsed_seconds", 0.0)),
+	]
+
+
+func _boat_last_pursuit_result_text(result: Variant) -> String:
+	if not result is Dictionary or (result as Dictionary).is_empty():
+		return tr("fishing.debug.boat_pursuit_result.none")
+	var record: Dictionary = result
+	var species_id := str(record.get("species_id", ""))
+	var profile := _manager.call("get_species_profile", species_id) as FishSpeciesProfile if _manager != null and not species_id.is_empty() else null
+	var species_name := tr(profile.name_key) if profile != null else species_id
+	var raw_result := str(record.get("result", "failed"))
+	var result_key := "fishing.debug.boat_pursuit_result." + raw_result
+	var localized_result := tr(result_key)
+	if localized_result == result_key:
+		localized_result = raw_result
+	var trigger_mode := str(record.get("trigger_mode", ""))
+	var mode_key := "fishing.debug.boat_bite_mode." + trigger_mode.to_lower()
+	var localized_mode := tr(mode_key)
+	if localized_mode == mode_key:
+		localized_mode = trigger_mode
+	var end_reason := str(record.get("end_reason", "unknown"))
+	var reason_key := "fishing.debug.boat_pursuit_result.reason." + end_reason
+	var localized_reason := tr(reason_key)
+	if localized_reason == reason_key:
+		localized_reason = end_reason
+	var school_state := str(record.get("school_activity_state", "unknown"))
+	var school_state_key := "fishing.debug.school_activity_state." + school_state.to_lower()
+	var localized_school_state := tr(school_state_key)
+	if localized_school_state == school_state_key:
+		localized_school_state = school_state
+	var pending_release := str(record.get("pending_release_result", "not_released"))
+	var pending_key := "fishing.debug.boat_pursuit_result.pending." + pending_release
+	var localized_pending := tr(pending_key)
+	if localized_pending == pending_key:
+		localized_pending = pending_release
+	return "\n".join([
+		tr("fishing.debug.boat_pursuit_result.header") % [localized_result, species_name, str(record.get("school_id", "—")), int(record.get("hook_index", -1)) + 1, localized_mode],
+		tr("fishing.debug.boat_pursuit_result.timing") % [float(record.get("elapsed_seconds", 0.0)), localized_reason, float(record.get("fish_mouth_to_hook_distance_m", -1.0))],
+		tr("fishing.debug.boat_pursuit_result.depth") % [float(record.get("hook_depth_m", -1.0)), float(record.get("school_activity_depth_m", -1.0)), localized_school_state],
+		tr("fishing.debug.boat_pursuit_result.range") % [float(record.get("pursuit_radius_m", 0.0)), float(record.get("hook_to_school_distance_m", -1.0)), localized_pending, float(record.get("line_paid_out_length_m", 0.0))],
+	])
 
 
 func _boat_bite_reason_text(reason: String) -> String:

@@ -21,6 +21,21 @@ const CAST_BAIT_RELEASE_OFFSET_SECONDS := 0.19
 const RETRIEVE_DURATION_SECONDS := 0.72
 const BAIT_WATER_DRAG_FOLLOW := 0.78
 const BAIT_WATER_DRAG_RESPONSE := 1.25
+const SABIKI_MOTION_AXIS_RESPONSE_SPEED_MPS := 8.0
+const SABIKI_MOTION_AXIS_MAX_LEAN := 0.48
+# Presentation-only ratio for how much existing rod/line load tilts the whole
+# terminal rig toward the rod while gravity still contributes to its orientation.
+const SABIKI_LINE_LOAD_AXIS_RESPONSE := 1.0
+const SABIKI_AIRBORNE_CAST_ALIGNMENT_WEIGHT := 0.94
+const SABIKI_AIRBORNE_RETRIEVAL_ALIGNMENT_WEIGHT := 0.92
+const SABIKI_AIRBORNE_LINE_DIRECTION_MIN_LENGTH_M := 0.12
+const SABIKI_AIRBORNE_LINE_DIRECTION_FULL_LENGTH_M := 0.55
+const SABIKI_AIRBORNE_SPEED_MIN_MPS := 1.0
+const SABIKI_AIRBORNE_SPEED_FULL_MPS := 4.0
+const SABIKI_AIRBORNE_RELEASE_RAMP_SECONDS := 0.055
+const SABIKI_AIRBORNE_EMERGENCE_CLEARANCE_M := 0.025
+const SABIKI_AIRBORNE_BACKBONE_CURVE_SEGMENTS := 16
+const SABIKI_AIRBORNE_BACKBONE_CURVE_SOLVE_STEPS := 7
 const BAIT_SINK_ACCELERATION_MPS2 := 2.6
 const AIRBORNE_BAIT_GRAVITY_MPS2 := 5.2
 const AIRBORNE_BAIT_DAMPING_PER_SECOND := 1.65
@@ -46,8 +61,6 @@ const CAST_MAX_FLIGHT_TIME_SECONDS := 1.18
 const CAST_ARC_HEIGHT_M := 2.1
 const SPLASH_DURATION_SECONDS := 0.55
 const SABIKI_WATER_ENTRY_CLEARANCE_M := 0.025
-const AIRBORNE_RIG_RELAX_DURATION_SECONDS := 0.65
-const SABIKI_SLACK_LINE_MAX_SAG_M := 0.34
 const BOAT_FISHING_AUDIO_OWNER := &"boat_fishing"
 const REEL_LINE_DELTA_EPSILON_M := 0.0005
 const MAX_AUTOMATIC_LINE_BURST_EXTRA_M := 5.0
@@ -62,6 +75,7 @@ const FIGHT_LANDING_RISE_METERS := 0.62
 const FIGHT_LANDING_RISE_SPEED_MPS := 0.85
 const FIGHT_HULL_SAFETY_MARGIN_M := 0.28
 const FIGHT_LINE_BROKEN_DURATION_SECONDS := 0.9
+const BOAT_FISHING_BITE_CONTACT_RADIUS_M := 0.08
 const FIGHT_DEFAULT_DRAG_ADJUST_RATE_PER_SECOND := 0.35
 const BOAT_FIGHT_LINE_PROFILE: BoatFishingLineProfile = preload("res://resources/boat_fishing/line_profiles/standard_boat_fishing_line.tres")
 
@@ -129,6 +143,7 @@ var _charge_cancel_start_bend_deg := 0.0
 var _waiting_elapsed := 0.0
 var _cast_target_world := Vector3.ZERO
 var _cast_start_world := Vector3.ZERO
+var _cast_target_drift_velocity_world := Vector3.ZERO
 var _bait_flight_elapsed := 0.0
 var _bait_flight_duration := 0.0
 var _bait_flight_started := false
@@ -137,7 +152,6 @@ var _cast_tackle_entry_complete := false
 var _cast_first_entry_recorded := false
 var _bait_airborne_retrieval := false
 var _airborne_retrieval_elapsed := 0.0
-var _sabiki_retrieval_taut := false
 var _rod_recovery_complete := false
 var _rod_back_angle_deg := 0.0
 var _rod_bend_angle_deg := 0.0
@@ -184,7 +198,9 @@ var _fishing_audio_event_counts := {"splash": 0, "catch_success": 0}
 var _played_success_audio_batches: Dictionary = {}
 var _success_audio_batch_order: Array[String] = []
 var _line_mesh: ImmediateMesh
+var _sabiki_backbone_mesh: ImmediateMesh
 var _line_instance: MeshInstance3D
+var _sabiki_backbone_instance: MeshInstance3D
 var _line_material: StandardMaterial3D
 var _cast_aim_marker: Node3D
 var _cast_aim_marker_material: StandardMaterial3D
@@ -192,11 +208,9 @@ var _cast_aim_preview_elapsed := 0.0
 var _bait_instance: MeshInstance3D
 var _bait_material: StandardMaterial3D
 var _sabiki_rig_root: Node3D
-var _sabiki_mainline_instance: MeshInstance3D
 var _sabiki_top_eye: MeshInstance3D
 var _sabiki_sinker_instance: MeshInstance3D
 var _sabiki_hook_nodes: Array[Node3D] = []
-var _sabiki_hook_spacing_applied := -1.0
 var _sabiki_hook_states: Array[Dictionary] = []
 var _sabiki_batch_retrieval_active := false
 var _sabiki_batch_catch_count := 0
@@ -209,12 +223,18 @@ var _game_menu: Node
 var _natural_bite_sample_elapsed := 0.0
 var _natural_bite_pending_real_delta := 0.0
 var _last_natural_bite_diagnostics: Dictionary = {}
+var _last_pursuit_result_snapshot: Dictionary = {}
+var _single_pursuit_end_recorded := false
 var _bite_candidate: Dictionary = {}
 var _bite_debug_spawned := false
 var _bite_elapsed := 0.0
 var _bite_duration := 0.0
+var _bite_approach_timeout_seconds := 0.0
+var _bite_pursuit_speed_mps := 0.0
 var _bite_fish_visual: Node3D
 var _bite_fish_start_world := Vector3.ZERO
+var _bite_fish_mouth_world := Vector3.ZERO
+var _bite_fish_heading_world := Vector3.FORWARD
 var _bite_fish_side_world := Vector3.ZERO
 var _fight_start_bait_world := Vector3.ZERO
 var _fight_start_bait_depth_m := 0.0
@@ -335,6 +355,7 @@ func end_activity() -> void:
 	if _encounter != null:
 		_encounter.end_boat_fishing_session("boat_fishing_ended")
 	clear_cast()
+	_last_pursuit_result_snapshot.clear()
 	_activity_active = false
 	_manual_reeling = false
 	_manual_reeling_from_ui = false
@@ -377,9 +398,9 @@ func clear_cast() -> void:
 	_cast_first_entry_recorded = false
 	_bait_airborne_retrieval = false
 	_airborne_retrieval_elapsed = 0.0
-	_sabiki_retrieval_taut = false
 	_rod_recovery_complete = false
 	_waiting_elapsed = 0.0
+	_cast_target_drift_velocity_world = Vector3.ZERO
 	_bait_velocity_world = Vector3.ZERO
 	_line_paid_out_length_m = 0.0
 	_manual_reeling = false
@@ -474,7 +495,6 @@ func release_charge() -> bool:
 	_cast_first_entry_recorded = false
 	_bait_airborne_retrieval = false
 	_airborne_retrieval_elapsed = 0.0
-	_sabiki_retrieval_taut = false
 	_rod_recovery_complete = false
 	_splash_elapsed = 0.0
 	_state_elapsed = 0.0
@@ -588,6 +608,7 @@ func get_rig_snapshot() -> Dictionary:
 
 func get_natural_bite_diagnostics(include_unavailable_for_diagnostics: bool = false) -> Dictionary:
 	var result := _last_natural_bite_diagnostics.duplicate(true)
+	result["last_pursuit_result"] = _last_pursuit_result_snapshot.duplicate(true)
 	result["rig_id"] = _current_rig.rig_id if _current_rig != null else &""
 	result["state_name"] = get_casting_state_name()
 	result["line_length_m"] = _line_paid_out_length_m
@@ -607,11 +628,56 @@ func get_natural_bite_diagnostics(include_unavailable_for_diagnostics: bool = fa
 				depth = _depth_below_surface_at(positions[hook_index])
 			if status == "empty":
 				empty_count += 1
-			hook_depths.append({"hook_index": hook_index, "depth_m": depth, "status": status})
+			var candidate: Dictionary = hook_state.get("candidate", {})
+			hook_depths.append({
+				"hook_index": hook_index,
+				"depth_m": depth,
+				"status": status,
+				"school_id": str(candidate.get("school_id", "")),
+				"pursuit_radius_m": float(candidate.get("pursuit_radius_m", 0.0)),
+				"school_to_hook_distance_m": float(candidate.get("pursuit_distance_m", -1.0)),
+				"actual_mouth_to_hook_distance_m": float(hook_state.get("actual_mouth_to_hook_distance_m", -1.0)),
+				"approach_elapsed_seconds": float(hook_state.get("approach_elapsed", 0.0)),
+				"approach_speed_mps": float(hook_state.get("approach_speed_mps", 0.0)),
+			})
 		result["hook_depths"] = hook_depths
 		result["empty_hook_count"] = empty_count
 	else:
 		result["bait_depth_m"] = _get_bait_depth_below_surface_m() if _bait_has_landed else -1.0
+	if _state == CastState.BITE_APPROACH:
+		var active_pursuit: Dictionary = result.get("active_pursuit_approach", {})
+		if active_pursuit.is_empty():
+			active_pursuit = {
+				"state": "approaching",
+				"trigger_mode": str(_bite_candidate.get("trigger_mode", "AMBIENT_ENCOUNTER")),
+				"school_id": str(_bite_candidate.get("school_id", "")),
+				"hook_index": 0,
+				"pursuit_radius_m": float(_bite_candidate.get("pursuit_radius_m", 0.0)),
+				"school_to_hook_distance_m": float(_bite_candidate.get("pursuit_distance_m", -1.0)),
+				"actual_mouth_to_hook_distance_m": _bite_fish_mouth_world.distance_to(_get_single_jig_hook_attachment_world()),
+				"speed_mps": _bite_pursuit_speed_mps,
+				"elapsed_seconds": _bite_elapsed,
+			}
+		result["active_pursuit_approach"] = active_pursuit.duplicate(true)
+	if _current_rig != null and _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		var active_pursuits: Array[Dictionary] = []
+		for hook_index in range(_sabiki_hook_states.size()):
+			var hook_state: Dictionary = _sabiki_hook_states[hook_index]
+			if str(hook_state.get("status", "")) not in ["approaching", "hooked"]:
+				continue
+			var pursuit_candidate: Dictionary = hook_state.get("candidate", {})
+			active_pursuits.append({
+				"hook_index": hook_index,
+				"state": str(hook_state.get("status", "approaching")),
+				"species_id": str(hook_state.get("species_id", "")),
+				"school_id": str(pursuit_candidate.get("school_id", "")),
+				"pursuit_radius_m": float(pursuit_candidate.get("pursuit_radius_m", 0.0)),
+				"school_to_hook_distance_m": float(pursuit_candidate.get("pursuit_distance_m", -1.0)),
+				"actual_mouth_to_hook_distance_m": float(hook_state.get("actual_mouth_to_hook_distance_m", -1.0)),
+				"speed_mps": float(hook_state.get("approach_speed_mps", 0.0)),
+				"elapsed_seconds": float(hook_state.get("approach_elapsed", 0.0)),
+			})
+		result["active_pursuits"] = active_pursuits
 	if include_unavailable_for_diagnostics and _activity_active and _bait_has_landed and _is_waiting_line_state() and _encounter != null and _current_rig != null:
 		var relative_velocity := _bait_velocity_world - _boat_velocity_estimate_world * BAIT_WATER_DRAG_FOLLOW
 		var rows: Array[Dictionary] = []
@@ -851,6 +917,14 @@ func get_rig_hook_positions(sinker_world_position: Vector3, rig_up_direction: Ve
 	## Structural order is stable: returned entries are Hook 1 (rod side) through Hook 5 (sinker side).
 	var positions: Array[Vector3] = []
 	if _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI:
+		return positions
+	if _uses_sabiki_airborne_backbone_curve(sinker_world_position):
+		var backbone_curve := _get_sabiki_airborne_backbone_curve(sinker_world_position)
+		var cumulative_lengths := _get_polyline_cumulative_lengths(backbone_curve)
+		var total_curve_length := cumulative_lengths[-1] if not cumulative_lengths.is_empty() else 0.0
+		for hook_index in range(_current_rig.hook_count):
+			var height_from_sinker := _current_rig.bottom_leader_length_m + float(_current_rig.hook_count - hook_index - 1) * _current_rig.hook_spacing_m
+			positions.append(_sample_polyline_at_distance(backbone_curve, cumulative_lengths, maxf(0.0, total_curve_length - height_from_sinker)))
 		return positions
 	var up_direction := rig_up_direction.normalized()
 	if up_direction.length_squared() < 0.5:
@@ -1428,7 +1502,7 @@ func _update_natural_bite_judgement(delta: float) -> void:
 				var pending := _encounter.reserve_sabiki_hook(candidate, _current_rig, hook_index, false)
 				if pending != null:
 					_encounter.clear_boat_fishing_hook_trigger_state(hook_index)
-					_begin_sabiki_hook_bite(hook_index, pending, candidate, false)
+					_begin_sabiki_hook_bite(hook_index, pending, candidate, false, str(candidate.get("trigger_mode", "")) == "SCHOOL_TARGETED")
 					bite_started = true
 					hook_locked = true
 				else:
@@ -1595,7 +1669,7 @@ func _natural_bite_rejection_reason(candidates: Array[Dictionary]) -> String:
 		var reason := str(candidate.get("rejection_reason", ""))
 		if not reason.is_empty():
 			reasons[reason] = true
-	for reason in ["method_or_rig_mismatch", "empty_school", "lure_outside_school", "activity_depth_mismatch"]:
+	for reason in ["method_or_rig_mismatch", "empty_school", "outside_pursuit_sphere", "activity_depth_mismatch"]:
 		if reasons.has(reason):
 			return reason
 	if reasons.has("zero_event_rate"):
@@ -1629,6 +1703,7 @@ func _begin_sabiki_hook_bite(hook_index: int, pending: FishingPendingCatch, cand
 	var hook_depth := _depth_below_surface_at(hook_position)
 	var should_approach := should_visualize_bite_approach(hook_depth, shallow_bite_visual_depth_m, force_approach)
 	var hook_state: Dictionary = _sabiki_hook_states[hook_index]
+	var approach_candidate := candidate.duplicate(true)
 	hook_state["status"] = "approaching" if should_approach else "reserved"
 	hook_state["pending"] = pending
 	hook_state["catch_id"] = pending.catch_id
@@ -1636,37 +1711,64 @@ func _begin_sabiki_hook_bite(hook_index: int, pending: FishingPendingCatch, cand
 	hook_state["debug_spawned"] = debug_spawned
 	hook_state["body_length_m"] = pending.body_length_m
 	hook_state["approach_elapsed"] = 0.0
+	hook_state["pursuit_end_recorded"] = false
 	hook_state["surface_crossed"] = false
+	hook_state["candidate"] = approach_candidate
 	if should_approach:
 		var school_start := hook_position - Vector3.FORWARD * 3.2
 		if pending.source_type == "ambient":
 			var ambient_start: Variant = candidate.get("spawn_world_position", [])
 			if ambient_start is Array and ambient_start.size() >= 3:
 				school_start = Vector3(float(ambient_start[0]), float(ambient_start[1]), float(ambient_start[2]))
-		elif not debug_spawned and _fish_manager != null:
-			var school: Dictionary = _fish_manager.get_school(pending.school_id)
-			var values: Array = school.get("world_position", [])
-			if values.size() >= 3:
-				var anchor := Vector3(float(values[0]), hook_position.y, float(values[2]))
-				var direction := Vector3(hook_position.x - anchor.x, 0.0, hook_position.z - anchor.z)
-				if direction.length_squared() > 0.001:
-					direction = direction.normalized()
-					school_start = hook_position - direction * clampf(Vector2(hook_position.x - anchor.x, hook_position.z - anchor.z).length(), 2.8, 5.0)
+		elif not debug_spawned:
+			var has_school_center := candidate.get("school_center_world_position", null) is Vector3
+			var school_center := candidate.get("school_center_world_position", Vector3.ZERO) as Vector3
+			if _fish_manager != null:
+				var school := _fish_manager.get_school(pending.school_id)
+				if not school.is_empty():
+					school_center = _school_activity_center_world(school, hook_position)
+					has_school_center = true
+			var profile_for_start := _fish_manager.get_species_profile(pending.species_id) if _fish_manager != null else null
+			if has_school_center and school_center.is_finite():
+				approach_candidate["pursuit_anchor_world_position"] = school_center
+				school_start = school_pursuit_start_world(
+					school_center,
+					hook_position,
+					profile_for_start.school_wander_radius_m if profile_for_start != null else 2.4
+				)
+		if debug_spawned:
+			var boat_forward := -_boat_controller.global_basis.z if _boat_controller != null else Vector3.FORWARD
+			boat_forward.y = 0.0
+			if boat_forward.length_squared() < 0.001:
+				boat_forward = Vector3.FORWARD
+			school_start = hook_position - boat_forward.normalized() * 3.2
+		var start_surface_y := float(_sample_water(school_start).get("height", hook_position.y))
+		var activity_depth := maxf(0.0, float(candidate.get("activity_depth_m", hook_depth)))
+		if pending.source_type == "school" and not debug_spawned:
+			var school := _fish_manager.get_school(pending.school_id) if _fish_manager != null else {}
+			if not school.is_empty():
+				activity_depth = maxf(0.0, float(school.get("effective_activity_depth_m", school.get("activity_depth_m", activity_depth))))
+		school_start.y = start_surface_y - activity_depth
 		var direction_to_hook := hook_position - school_start
-		direction_to_hook.y = 0.0
 		if direction_to_hook.length_squared() < 0.001:
 			direction_to_hook = -_boat_controller.global_basis.z if _boat_controller != null else Vector3.FORWARD
 		direction_to_hook = direction_to_hook.normalized()
-		var surface_y := float(_sample_water(school_start).get("height", hook_position.y))
-		var activity_depth := maxf(0.0, float(candidate.get("activity_depth_m", hook_depth)))
-		school_start.y = surface_y - activity_depth
 		var profile := _fish_manager.get_species_profile(pending.species_id) if _fish_manager != null else null
 		var speed := 0.65
 		if profile != null:
-			speed = maxf(0.25, (profile.movement_speed_min_mps + profile.movement_speed_max_mps) * 0.5)
+			speed = maxf(0.1, (profile.movement_speed_min_mps + profile.movement_speed_max_mps) * 0.5)
+		var school_targeted := str(candidate.get("trigger_mode", "")) == "SCHOOL_TARGETED"
+		hook_state["candidate"] = approach_candidate
+		hook_state["pursuit_anchor_world_position"] = approach_candidate.get("pursuit_anchor_world_position", Vector3.ZERO)
 		hook_state["start_world"] = school_start
+		hook_state["mouth_world"] = school_start
+		hook_state["heading_world"] = direction_to_hook
+		hook_state["approach_speed_mps"] = speed
 		hook_state["side_world"] = direction_to_hook.cross(Vector3.UP).normalized()
-		hook_state["approach_duration"] = clampf(school_start.distance_to(hook_position) / speed, 0.8, 3.6)
+		var estimated_duration := school_start.distance_to(hook_position) / speed
+		hook_state["approach_duration"] = estimated_duration if school_targeted else clampf(estimated_duration, 0.8, 3.6)
+		hook_state["approach_timeout_seconds"] = maxf(15.0, float(hook_state["approach_duration"]) * 2.0 + 5.0)
+		hook_state["actual_mouth_to_hook_distance_m"] = school_start.distance_to(hook_position)
 		hook_state["visual"] = _create_sabiki_fish_visual(pending.species_id, pending.body_length_m, direction_to_hook)
 		if hook_state["visual"] != null:
 			(hook_state["visual"] as Node3D).name = "SabikiHookFish_%02d" % (hook_index + 1)
@@ -1685,35 +1787,79 @@ func _advance_sabiki_hook_approaches(delta: float) -> void:
 		var hook_state: Dictionary = _sabiki_hook_states[hook_index]
 		if str(hook_state.get("status", "empty")) not in ["approaching", "reserved"]:
 			continue
+		var target := Vector3.ZERO
 		if str(hook_state.get("status", "")) == "approaching":
 			var elapsed := float(hook_state.get("approach_elapsed", 0.0)) + maxf(delta, 0.0)
 			hook_state["approach_elapsed"] = elapsed
-			var duration := maxf(0.01, float(hook_state.get("approach_duration", 1.0)))
-			var progress := clampf(elapsed / duration, 0.0, 1.0)
 			var hook_positions := get_hook_attachment_world_positions()
-			if hook_index < hook_positions.size():
-				var start: Vector3 = hook_state.get("start_world", hook_positions[hook_index])
-				var target: Vector3 = hook_positions[hook_index]
+			var invalid_hook_position := hook_index >= hook_positions.size()
+			if not invalid_hook_position:
+				target = hook_positions[hook_index]
+			var approach_pending := hook_state.get("pending") as FishingPendingCatch
+			var candidate: Dictionary = hook_state.get("candidate", {})
+			var school_targeted := str(candidate.get("trigger_mode", "")) == "SCHOOL_TARGETED"
+			if invalid_hook_position:
+				var released_invalid_hook := _clear_sabiki_hook_state(hook_index, true)
+				var invalid_mouth: Vector3 = hook_state.get("mouth_world", hook_state.get("start_world", Vector3.ZERO))
+				_record_sabiki_pursuit_result(hook_index, hook_state, approach_pending, Vector3(INF, INF, INF), "failed", "hook_invalid", "released" if released_invalid_hook else "not_released", invalid_mouth)
+				continue
+			if school_targeted:
+				var pursuit_anchor: Variant = hook_state.get("pursuit_anchor_world_position", null)
+				var pursuit := _school_pursuit_still_valid_at_anchor(candidate, approach_pending, target, pursuit_anchor)
+				if not bool(pursuit.get("valid", false)):
+					var reason := str(pursuit.get("reason", "pursuit_cancelled"))
+					var mouth_at_end: Vector3 = hook_state.get("mouth_world", hook_state.get("start_world", target))
+					var released := _clear_sabiki_hook_state(hook_index, true)
+					_record_sabiki_pursuit_result(hook_index, hook_state, approach_pending, target, "failed", reason, "released" if released else "not_released", mouth_at_end)
+					continue
+			var mouth_world: Vector3 = hook_state.get("mouth_world", hook_state.get("start_world", target))
+			var speed := maxf(0.0, float(hook_state.get("approach_speed_mps", 0.65)))
+			var progress := clampf(elapsed / maxf(0.01, float(hook_state.get("approach_duration", 1.0))), 0.0, 1.0)
+			if school_targeted:
+				mouth_world = advance_fish_pursuit_world(mouth_world, target, speed, maxf(delta, 0.0))
+			else:
+				var start: Vector3 = hook_state.get("start_world", mouth_world)
 				var side: Vector3 = hook_state.get("side_world", Vector3.RIGHT)
-				var eased := _smoothstep01(progress)
-				var visual := hook_state.get("visual") as Node3D
-				if visual != null and is_instance_valid(visual):
-					var mouth_target := start.lerp(target, eased) + side * sin(PI * progress) * 0.22 + Vector3.UP * sin(PI * progress) * 0.08
-					_set_fish_visual_pose_at_hook(
-						visual,
-						str(hook_state.get("species_id", "herring")),
-						float(hook_state.get("body_length_m", 0.32)),
-						mouth_target,
-						target - start,
-						sin(elapsed * 6.0) * 0.045
-					)
-			if progress < 1.0:
-				_sabiki_hook_states[hook_index] = hook_state
+				mouth_world = start.lerp(target, _smoothstep01(progress)) + side * sin(PI * progress) * 0.22 + Vector3.UP * sin(PI * progress) * 0.08
+			var distance_to_hook := mouth_world.distance_to(target)
+			hook_state["mouth_world"] = mouth_world
+			hook_state["actual_mouth_to_hook_distance_m"] = distance_to_hook
+			var visual := hook_state.get("visual") as Node3D
+			var current_heading: Vector3 = hook_state.get("heading_world", target - mouth_world)
+			var desired_heading := target - mouth_world
+			var profile := _fish_manager.get_species_profile(str(hook_state.get("species_id", ""))) if _fish_manager != null else null
+			var turn_rate := deg_to_rad(profile.boat_fishing_turn_rate_deg_s) if profile != null else deg_to_rad(240.0)
+			var heading := turn_pursuit_heading(current_heading, desired_heading, turn_rate, maxf(delta, 0.0))
+			hook_state["heading_world"] = heading
+			if visual != null and is_instance_valid(visual):
+				_set_fish_visual_pose_at_hook(visual, str(hook_state.get("species_id", "herring")), float(hook_state.get("body_length_m", 0.32)), mouth_world, heading, sin(elapsed * 6.0) * 0.045)
+			if school_targeted and elapsed > float(hook_state.get("approach_timeout_seconds", 30.0)):
+				var released_on_timeout := _clear_sabiki_hook_state(hook_index, true)
+				_record_sabiki_pursuit_result(hook_index, hook_state, approach_pending, target, "failed", "approach_timeout", "released" if released_on_timeout else "not_released", mouth_world)
+				continue
+			_sabiki_hook_states[hook_index] = hook_state
+			if (school_targeted and distance_to_hook > BOAT_FISHING_BITE_CONTACT_RADIUS_M) or (not school_targeted and progress < 1.0):
 				continue
 		var pending := hook_state.get("pending") as FishingPendingCatch
-		if pending == null or _encounter == null or not _encounter.confirm_sabiki_hook(str(hook_state.get("catch_id", ""))):
-			_clear_sabiki_hook_state(hook_index, true)
+		var was_approaching := str(hook_state.get("status", "")) == "approaching"
+		var catch_id := str(hook_state.get("catch_id", ""))
+		var pending_was_reserved := _has_sabiki_pending_catch(catch_id)
+		var bite_confirmed := pending != null and _encounter != null and _encounter.confirm_sabiki_hook(catch_id)
+		if not bite_confirmed:
+			var pending_still_reserved := _has_sabiki_pending_catch(catch_id)
+			var pending_release_result := "not_released"
+			if pending_still_reserved:
+				pending_release_result = "released" if _encounter.release_sabiki_reservation(catch_id) else "not_released"
+			elif pending_was_reserved:
+				pending_release_result = "released_by_authority"
+			var mouth_at_end: Vector3 = hook_state.get("mouth_world", hook_state.get("start_world", target))
+			if was_approaching:
+				_record_sabiki_pursuit_result(hook_index, hook_state, pending, target, "failed", "authority_confirmation_rejected", pending_release_result, mouth_at_end)
+			_clear_sabiki_hook_state(hook_index, false)
 			continue
+		if was_approaching:
+			var confirmed_mouth: Vector3 = hook_state.get("mouth_world", target)
+			_record_sabiki_pursuit_result(hook_index, hook_state, pending, target, "success", "bite_confirmed", "confirmed", confirmed_mouth)
 		hook_state["status"] = "hooked"
 		hook_state["pending"] = pending
 		hook_state["body_length_m"] = pending.body_length_m
@@ -1738,6 +1884,10 @@ func _advance_sabiki_hook_approaches(delta: float) -> void:
 		_rod_bend_angle_deg = rod_bend_at_full_tension_deg * _rod_tension
 		_set_rod_bend_angle(deg_to_rad(_rod_bend_angle_deg))
 		_set_state(CastState.SABIKI_HOOKED_WAITING)
+		# The first participant changes the loaded terminal axis immediately. Keep
+		# already hooked fish mouths on the same-frame hook geometry before render.
+		_update_rig_visual_position()
+		_reanchor_sabiki_hooked_fish_visuals_to_hooks()
 
 
 func _update_sabiki_hooked_fish_visuals(delta: float) -> void:
@@ -1772,6 +1922,28 @@ func _update_sabiki_hooked_fish_visuals(delta: float) -> void:
 		_set_fish_visual_pose_at_hook(visual, str(hook_state.get("species_id", "herring")), float(hook_state.get("body_length_m", 0.32)), hook_position, _fight_radial_direction, sin(elapsed * 7.0) * 0.055)
 
 
+func _reanchor_sabiki_hooked_fish_visuals_to_hooks() -> void:
+	if _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI or _sabiki_hook_states.is_empty():
+		return
+	var hook_positions := get_hook_attachment_world_positions()
+	for hook_index in range(mini(_sabiki_hook_states.size(), hook_positions.size())):
+		var hook_state: Dictionary = _sabiki_hook_states[hook_index]
+		if str(hook_state.get("status", "")) != "hooked":
+			continue
+		var visual := hook_state.get("visual") as Node3D
+		if visual == null or not is_instance_valid(visual):
+			continue
+		var profile := _fish_manager.get_species_profile(str(hook_state.get("species_id", ""))) if _fish_manager != null else null
+		if profile == null:
+			continue
+		var fish_basis := visual.global_basis
+		visual.global_position = mouth_anchored_fish_origin(
+			hook_positions[hook_index],
+			fish_basis,
+			profile.boat_fishing_mouth_anchor_local
+		)
+
+
 func _reset_sabiki_hook_states() -> void:
 	_sabiki_hook_states.clear()
 	_fight_sabiki_branch_directions_local.clear()
@@ -1804,17 +1976,18 @@ func _clear_sabiki_hook_visuals() -> void:
 			visual.queue_free()
 
 
-func _clear_sabiki_hook_state(hook_index: int, release_reservation: bool) -> void:
+func _clear_sabiki_hook_state(hook_index: int, release_reservation: bool) -> bool:
 	if hook_index < 0 or hook_index >= _sabiki_hook_states.size():
-		return
+		return false
 	var hook_state: Dictionary = _sabiki_hook_states[hook_index]
 	var visual := hook_state.get("visual") as Node3D
 	if visual != null and is_instance_valid(visual):
 		visual.queue_free()
+	var reservation_released := false
 	if release_reservation and _encounter != null:
 		var catch_id := str(hook_state.get("catch_id", ""))
 		if not catch_id.is_empty():
-			_encounter.release_sabiki_reservation(catch_id)
+			reservation_released = _encounter.release_sabiki_reservation(catch_id)
 	_sabiki_hook_states[hook_index] = {
 		"hook_index": hook_index,
 		"status": "empty",
@@ -1825,6 +1998,7 @@ func _clear_sabiki_hook_state(hook_index: int, release_reservation: bool) -> voi
 		"visual": null,
 		"surface_crossed": false,
 	}
+	return reservation_released
 
 
 func _cancel_sabiki_approach_reservations() -> void:
@@ -1904,6 +2078,190 @@ func _depth_below_surface_at(position: Vector3) -> float:
 	return maxf(0.0, float(sample.get("height", position.y)) - position.y)
 
 
+func _school_activity_center_world(school: Dictionary, reference_position: Vector3) -> Vector3:
+	var values: Array = school.get("world_position", [])
+	if values.size() < 3:
+		return reference_position
+	var x := float(values[0])
+	var z := float(values[2])
+	var activity_depth := maxf(0.0, float(school.get("effective_activity_depth_m", school.get("activity_depth_m", 0.0))))
+	var surface := _sample_water(Vector3(x, reference_position.y, z))
+	return Vector3(x, float(surface.get("height", reference_position.y)) - activity_depth, z)
+
+
+func _school_pursuit_still_valid(candidate: Dictionary, pending: FishingPendingCatch, hook_world: Vector3) -> Dictionary:
+	return _school_pursuit_still_valid_at_anchor(candidate, pending, hook_world, null)
+
+
+func _school_pursuit_still_valid_at_anchor(candidate: Dictionary, pending: FishingPendingCatch, hook_world: Vector3, pursuit_anchor_world: Variant) -> Dictionary:
+	if str(candidate.get("trigger_mode", "")) != "SCHOOL_TARGETED":
+		return {"valid": true, "reason": "not_school_pursuit", "distance_m": -1.0}
+	if pending == null:
+		return {"valid": false, "reason": "pending_catch_invalid", "distance_m": INF}
+	if pending.debug_spawned:
+		return {"valid": true, "reason": "debug_pursuit", "distance_m": -1.0}
+	if pending.source_type != "school":
+		return {"valid": false, "reason": "pending_catch_invalid", "distance_m": INF}
+	if not hook_world.is_finite() or pending.catch_id.is_empty() or pending.fishing_method != "boat_fishing":
+		return {"valid": false, "reason": "hook_invalid" if not hook_world.is_finite() else "pending_catch_invalid", "distance_m": INF}
+	if str(candidate.get("school_id", "")) != pending.school_id or str(candidate.get("species_id", "")) != pending.species_id:
+		return {"valid": false, "reason": "pending_catch_invalid", "distance_m": INF}
+	if not _is_school_pursuit_pending_active(pending):
+		return {"valid": false, "reason": "pending_catch_invalid", "distance_m": INF}
+	if _fish_manager == null or not is_instance_valid(_fish_manager):
+		return {"valid": false, "reason": "school_unavailable", "distance_m": INF}
+	var school := _fish_manager.get_school(pending.school_id)
+	if school.is_empty() or str(school.get("species_id", "")) != pending.species_id or int(school.get("population", 0)) <= 0 or str(school.get("resource_state", "available")) != "available":
+		return {"valid": false, "reason": "school_unavailable", "distance_m": INF}
+	var profile := _fish_manager.get_species_profile(pending.species_id)
+	if profile == null:
+		return {"valid": false, "reason": "unknown_species", "distance_m": INF}
+	var center: Vector3 = _school_activity_center_world(school, hook_world)
+	var anchor_value: Variant = pursuit_anchor_world
+	if anchor_value == null:
+		anchor_value = candidate.get("pursuit_anchor_world_position", null)
+	if anchor_value is Vector3 and (anchor_value as Vector3).is_finite():
+		center = anchor_value as Vector3
+	var distance := center.distance_to(hook_world)
+	var radius := maxf(0.1, profile.boat_fishing_pursuit_radius_m)
+	if distance > radius:
+		return {"valid": false, "reason": "pursuit_range_exited", "distance_m": distance, "center_world_position": center}
+	return {
+		"valid": true,
+		"reason": "pursuit_active",
+		"distance_m": distance,
+		"center_world_position": center,
+		"school_activity_depth_m": maxf(0.0, float(school.get("effective_activity_depth_m", school.get("activity_depth_m", 0.0)))),
+		"school_activity_state": str(school.get("effective_surface_activity_state", school.get("surface_activity_state", "unknown"))),
+		"activity_depth_is_eligibility_only": true,
+	}
+
+
+func _is_school_pursuit_pending_active(pending: FishingPendingCatch) -> bool:
+	if _encounter == null or not is_instance_valid(_encounter):
+		return false
+	if _current_rig != null and _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		for active_pending in _encounter.get_sabiki_hook_catches():
+			if active_pending.catch_id == pending.catch_id and active_pending.school_id == pending.school_id and not active_pending.hook_confirmed:
+				return true
+		return false
+	var active_pending := _encounter.pending_catch
+	return active_pending != null and active_pending.catch_id == pending.catch_id and active_pending.school_id == pending.school_id and not active_pending.hook_confirmed
+
+
+func _has_sabiki_pending_catch(catch_id: String) -> bool:
+	if _encounter == null or catch_id.is_empty():
+		return false
+	for pending in _encounter.get_sabiki_hook_catches():
+		if pending.catch_id == catch_id:
+			return true
+	return false
+
+
+func _record_pursuit_result(
+	candidate: Dictionary,
+	pending: FishingPendingCatch,
+	hook_index: int,
+	hook_world: Vector3,
+	fish_mouth_world: Vector3,
+	result: String,
+	end_reason: String,
+	pending_release_result: String,
+	elapsed_seconds: float,
+	catch_id_override: String = ""
+) -> void:
+	var catch_id := catch_id_override
+	if catch_id.is_empty() and pending != null:
+		catch_id = pending.catch_id
+	var school_id := str(candidate.get("school_id", pending.school_id if pending != null else ""))
+	var species_id := str(candidate.get("species_id", pending.species_id if pending != null else ""))
+	var school: Dictionary = _fish_manager.get_school(school_id) if _fish_manager != null and not school_id.is_empty() else {}
+	var school_depth := float(candidate.get("effective_activity_depth_m", candidate.get("activity_depth_m", -1.0)))
+	var school_state := str(candidate.get("effective_surface_activity_state", candidate.get("surface_activity_state", "unknown")))
+	if not school.is_empty():
+		school_depth = float(school.get("effective_activity_depth_m", school.get("activity_depth_m", school_depth)))
+		school_state = str(school.get("effective_surface_activity_state", school.get("surface_activity_state", school_state)))
+	var profile := _fish_manager.get_species_profile(species_id) if _fish_manager != null and not species_id.is_empty() else null
+	var pursuit_radius := float(candidate.get("pursuit_radius_m", profile.boat_fishing_pursuit_radius_m if profile != null else 0.0))
+	var anchor: Variant = candidate.get("pursuit_anchor_world_position", candidate.get("school_center_world_position", null))
+	if not anchor is Vector3 and not school.is_empty() and hook_world.is_finite():
+		anchor = _school_activity_center_world(school, hook_world)
+	var hook_to_school_distance := -1.0
+	if hook_world.is_finite() and anchor is Vector3 and (anchor as Vector3).is_finite():
+		hook_to_school_distance = hook_world.distance_to(anchor as Vector3)
+	var hook_depth := _depth_below_surface_at(hook_world) if hook_world.is_finite() else -1.0
+	_last_pursuit_result_snapshot = {
+		"species_id": species_id,
+		"school_id": school_id,
+		"catch_id": catch_id,
+		"hook_index": hook_index,
+		"trigger_mode": str(candidate.get("trigger_mode", "AMBIENT_ENCOUNTER")),
+		"result": result,
+		"end_reason": end_reason,
+		"elapsed_seconds": maxf(0.0, elapsed_seconds),
+		"fish_mouth_to_hook_distance_m": fish_mouth_world.distance_to(hook_world) if fish_mouth_world.is_finite() and hook_world.is_finite() else -1.0,
+		"hook_depth_m": hook_depth,
+		"school_activity_depth_m": school_depth,
+		"school_activity_state": school_state,
+		"pursuit_radius_m": pursuit_radius,
+		"hook_to_school_distance_m": hook_to_school_distance,
+		"pending_release_result": pending_release_result,
+		"line_paid_out_length_m": _line_paid_out_length_m,
+	}
+
+
+func _record_single_pursuit_result(result: String, end_reason: String, pending_release_result: String, pending: FishingPendingCatch = null) -> void:
+	if _single_pursuit_end_recorded or _state != CastState.BITE_APPROACH:
+		return
+	_single_pursuit_end_recorded = true
+	var hook_world := _get_single_jig_hook_attachment_world()
+	var pending_to_record := pending
+	if pending_to_record == null and _encounter != null:
+		var active_pending := _encounter.pending_catch
+		if active_pending != null and active_pending.catch_id == _active_catch_id:
+			pending_to_record = active_pending
+	_record_pursuit_result(
+		_bite_candidate,
+		pending_to_record,
+		0,
+		hook_world,
+		_bite_fish_mouth_world,
+		result,
+		end_reason,
+		pending_release_result,
+		_bite_elapsed,
+		_active_catch_id
+	)
+
+
+func _record_sabiki_pursuit_result(
+	hook_index: int,
+	hook_state: Dictionary,
+	pending: FishingPendingCatch,
+	hook_world: Vector3,
+	result: String,
+	end_reason: String,
+	pending_release_result: String,
+	fish_mouth_world: Vector3
+) -> void:
+	if bool(hook_state.get("pursuit_end_recorded", false)):
+		return
+	hook_state["pursuit_end_recorded"] = true
+	var candidate: Dictionary = hook_state.get("candidate", {})
+	_record_pursuit_result(
+		candidate,
+		pending,
+		hook_index,
+		hook_world,
+		fish_mouth_world,
+		result,
+		end_reason,
+		pending_release_result,
+		float(hook_state.get("approach_elapsed", 0.0)),
+		str(hook_state.get("catch_id", ""))
+	)
+
+
 func _is_waiting_line_state() -> bool:
 	return _state in [CastState.WAITING, CastState.SABIKI_HOOKED_WAITING]
 
@@ -1931,47 +2289,65 @@ func _begin_bite_event(candidate: Dictionary, debug_spawned: bool, force_approac
 	_active_catch_species_id = pending.species_id
 	_active_catch_body_length_m = pending.body_length_m
 	_bite_elapsed = 0.0
+	_single_pursuit_end_recorded = false
 	_bite_fish_visual = null
 	var species := _fish_manager.get_species_profile(pending.species_id) if _fish_manager != null else null
 	var depth_m := _get_bait_depth_below_surface_m()
-	var should_approach := should_visualize_bite_approach(depth_m, shallow_bite_visual_depth_m, force_approach)
+	var school_targeted := str(candidate.get("trigger_mode", "")) == "SCHOOL_TARGETED"
+	var should_approach := should_visualize_bite_approach(depth_m, shallow_bite_visual_depth_m, force_approach or school_targeted)
 	var school_start := _bait_world
 	if pending.source_type == "ambient":
 		var ambient_start: Variant = candidate.get("spawn_world_position", [])
 		if ambient_start is Array and ambient_start.size() >= 3:
 			school_start = Vector3(float(ambient_start[0]), float(ambient_start[1]), float(ambient_start[2]))
-	elif not debug_spawned:
-		var school: Dictionary = _fish_manager.get_school(pending.school_id) if _fish_manager != null else {}
-		var values: Array = school.get("world_position", [])
-		if values.size() >= 3:
-			school_start = Vector3(float(values[0]), 0.0, float(values[2]))
+	elif school_targeted and not debug_spawned:
+		var has_school_center := candidate.get("school_center_world_position", null) is Vector3
+		var school_center := candidate.get("school_center_world_position", Vector3.ZERO) as Vector3
+		if _fish_manager != null:
+			var school := _fish_manager.get_school(pending.school_id)
+			if not school.is_empty():
+				school_center = _school_activity_center_world(school, _bait_world)
+				has_school_center = true
+		if has_school_center and school_center.is_finite():
+			_bite_candidate["pursuit_anchor_world_position"] = school_center
+			school_start = school_pursuit_start_world(
+				school_center,
+				_bait_world,
+				species.school_wander_radius_m if species != null else 2.4
+			)
 	if should_approach:
-		var to_bait := Vector3(_bait_world.x - school_start.x, 0.0, _bait_world.z - school_start.z)
-		if to_bait.length_squared() < 0.01:
-			var seed_angle := float(absi(pending.school_id.hash() if not debug_spawned else pending.catch_id.hash()) % 6283) / 1000.0
-			to_bait = Vector3(cos(seed_angle), 0.0, sin(seed_angle))
-		to_bait = to_bait.normalized()
-		var start_distance := clampf(Vector2(_bait_world.x - school_start.x, _bait_world.z - school_start.z).length(), 2.8, 5.5)
 		if debug_spawned:
 			var boat_forward := -_boat_controller.global_basis.z if _boat_controller != null else Vector3.FORWARD
 			boat_forward.y = 0.0
-			to_bait = boat_forward.normalized() if boat_forward.length_squared() > 0.001 else Vector3.FORWARD
-			start_distance = 3.2
-		_bite_fish_start_world = _bait_world - to_bait * start_distance
-		var start_surface := float(_sample_water(_bite_fish_start_world).get("height", _bait_world.y))
+			if boat_forward.length_squared() < 0.001:
+				boat_forward = Vector3.FORWARD
+			school_start = _bait_world - boat_forward.normalized() * 3.2
 		var fish_depth := float(candidate.get("activity_depth_m", depth_m))
-		_bite_fish_start_world.y = start_surface - fish_depth
-		_bite_fish_side_world = to_bait.cross(Vector3.UP).normalized()
-		var movement_speed := 1.0
+		if pending.source_type != "ambient":
+			var start_surface := float(_sample_water(school_start).get("height", _bait_world.y))
+			school_start.y = start_surface - fish_depth
+		_bite_fish_start_world = school_start
+		_bite_fish_mouth_world = school_start
+		var to_bait := _bait_world - school_start
+		if to_bait.length_squared() < 0.001:
+			to_bait = Vector3.FORWARD
+		_bite_fish_heading_world = to_bait.normalized()
+		_bite_fish_side_world = _bite_fish_heading_world.cross(Vector3.UP).normalized()
+		_bite_pursuit_speed_mps = 1.0
 		if species != null:
-			movement_speed = maxf(0.25, (species.movement_speed_min_mps + species.movement_speed_max_mps) * 0.5)
-		_bite_duration = clampf(start_distance / movement_speed, 1.0, 4.5)
-		_bite_fish_visual = _create_transient_fish_visual(pending.species_id, pending.body_length_m, to_bait)
+			_bite_pursuit_speed_mps = maxf(0.1, (species.movement_speed_min_mps + species.movement_speed_max_mps) * 0.5)
+		var estimated_duration := _bite_fish_mouth_world.distance_to(_bait_world) / _bite_pursuit_speed_mps
+		_bite_duration = estimated_duration if school_targeted else clampf(estimated_duration, 1.0, 4.5)
+		_bite_approach_timeout_seconds = maxf(15.0, _bite_duration * 2.0 + 5.0)
+		_bite_fish_visual = _create_transient_fish_visual(pending.species_id, pending.body_length_m, _bite_fish_heading_world)
 		if _bite_fish_visual != null:
-			_set_fish_visual_pose_at_hook(_bite_fish_visual, pending.species_id, pending.body_length_m, _bite_fish_start_world, to_bait)
+			_set_fish_visual_pose_at_hook(_bite_fish_visual, pending.species_id, pending.body_length_m, _bite_fish_start_world, _bite_fish_heading_world)
 	else:
 		_bite_duration = 0.0
+		_bite_approach_timeout_seconds = 0.0
+		_bite_pursuit_speed_mps = 0.0
 		_bite_fish_start_world = _bait_world
+		_bite_fish_mouth_world = _bait_world
 	set_automatic_control_owned(true)
 	_manual_reeling = false
 	_manual_line_releasing = false
@@ -1989,22 +2365,85 @@ func _begin_bite_event(candidate: Dictionary, debug_spawned: bool, force_approac
 
 
 func _advance_bite_approach(delta: float) -> void:
-	_bite_elapsed += maxf(0.0, delta)
-	var progress := clampf(_bite_elapsed / maxf(_bite_duration, 0.01), 0.0, 1.0)
-	var eased := _smoothstep01(progress)
-	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
-		var hook_world := _get_single_jig_hook_attachment_world()
+	var elapsed_delta := maxf(0.0, delta)
+	_bite_elapsed += elapsed_delta
+	var hook_world := _get_single_jig_hook_attachment_world()
+	var school_targeted := str(_bite_candidate.get("trigger_mode", "")) == "SCHOOL_TARGETED"
+	var pending := _encounter.pending_catch if _encounter != null else null
+	if school_targeted:
+		var pursuit := _school_pursuit_still_valid(_bite_candidate, pending, hook_world)
+		if not bool(pursuit.get("valid", false)):
+			_cancel_school_bite_approach(str(pursuit.get("reason", "pursuit_cancelled")))
+			return
+	var progress := clampf(_bite_elapsed / maxf(0.01, _bite_duration), 0.0, 1.0)
+	if school_targeted:
+		_bite_fish_mouth_world = advance_fish_pursuit_world(_bite_fish_mouth_world, hook_world, _bite_pursuit_speed_mps, elapsed_delta)
+	else:
 		var travel := hook_world - _bite_fish_start_world
 		var lateral := _bite_fish_side_world * sin(PI * progress) * minf(0.65, travel.length() * 0.08)
 		var vertical := Vector3.UP * sin(PI * progress) * 0.16
-		var mouth_target := _bite_fish_start_world.lerp(hook_world, eased) + lateral + vertical
-		_set_fish_visual_pose_at_hook(_bite_fish_visual, _active_catch_species_id, _get_pending_catch_body_length_m(), mouth_target, hook_world - _bite_fish_visual.global_position, sin(_bite_elapsed * 5.5) * 0.035)
-	if progress >= 1.0:
+		_bite_fish_mouth_world = _bite_fish_start_world.lerp(hook_world, _smoothstep01(progress)) + lateral + vertical
+	var distance_to_hook := _bite_fish_mouth_world.distance_to(hook_world)
+	var species := _fish_manager.get_species_profile(_active_catch_species_id) if _fish_manager != null else null
+	var turn_rate := deg_to_rad(species.boat_fishing_turn_rate_deg_s) if species != null else deg_to_rad(240.0)
+	_bite_fish_heading_world = turn_pursuit_heading(_bite_fish_heading_world, hook_world - _bite_fish_mouth_world, turn_rate, elapsed_delta)
+	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
+		_set_fish_visual_pose_at_hook(_bite_fish_visual, _active_catch_species_id, _get_pending_catch_body_length_m(), _bite_fish_mouth_world, _bite_fish_heading_world, sin(_bite_elapsed * 5.5) * 0.035)
+	_last_natural_bite_diagnostics["active_pursuit_approach"] = {
+		"state": "approaching",
+		"trigger_mode": str(_bite_candidate.get("trigger_mode", "AMBIENT_ENCOUNTER")),
+		"school_id": str(_bite_candidate.get("school_id", "")),
+		"hook_index": 0,
+		"pursuit_radius_m": float(_bite_candidate.get("pursuit_radius_m", 0.0)),
+		"school_to_hook_distance_m": float(_bite_candidate.get("pursuit_distance_m", -1.0)),
+		"species_id": _active_catch_species_id,
+		"start_distance_to_hook_m": _bite_fish_start_world.distance_to(hook_world),
+		"actual_mouth_to_hook_distance_m": distance_to_hook,
+		"elapsed_seconds": _bite_elapsed,
+		"estimated_duration_seconds": _bite_duration,
+		"timeout_seconds": _bite_approach_timeout_seconds,
+		"speed_mps": _bite_pursuit_speed_mps,
+		"contact_radius_m": BOAT_FISHING_BITE_CONTACT_RADIUS_M,
+		"reservation_state": "reserved",
+	}
+	if school_targeted and _bite_elapsed > _bite_approach_timeout_seconds:
+		_cancel_school_bite_approach("approach_timeout")
+		return
+	if (school_targeted and distance_to_hook <= BOAT_FISHING_BITE_CONTACT_RADIUS_M) or (not school_targeted and progress >= 1.0):
+		_last_natural_bite_diagnostics["active_pursuit_approach"]["state"] = "contact"
+		_last_natural_bite_diagnostics["active_pursuit_approach"]["reservation_state"] = "contact_confirming"
 		_confirm_boat_bite()
 
 
+func _cancel_school_bite_approach(reason: String) -> void:
+	_last_natural_bite_diagnostics["last_pursuit_failure_reason"] = reason
+	_last_natural_bite_diagnostics["active_pursuit_approach"] = {"state": "cancelled", "reason": reason}
+	var pending_before := _encounter.pending_catch if _encounter != null else null
+	var cancelled := pending_before != null and _encounter.cancel_boat_fishing_catch(reason)
+	if not _single_pursuit_end_recorded:
+		var release_result := "released" if cancelled else "not_released"
+		_record_single_pursuit_result("failed", reason, release_result, pending_before)
+		if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
+			_bite_fish_visual.queue_free()
+		_bite_fish_visual = null
+		set_automatic_control_owned(false)
+		_bite_candidate.clear()
+		_active_catch_id = ""
+		_set_state(CastState.WAITING)
+
+
 func _confirm_boat_bite() -> void:
+	var pending_before := _encounter.pending_catch if _encounter != null else null
 	if _encounter == null or not _encounter.confirm_boat_fishing_bite():
+		if _state == CastState.BITE_APPROACH and not _single_pursuit_end_recorded:
+			var was_reserved := pending_before != null and pending_before.catch_id == _active_catch_id
+			var still_reserved := _encounter != null and _encounter.pending_catch != null and _encounter.pending_catch.catch_id == _active_catch_id
+			_record_single_pursuit_result(
+				"failed",
+				"authority_confirmation_rejected",
+				"released_by_authority" if was_reserved and not still_reserved else "not_released",
+				pending_before
+			)
 		if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
 			_bite_fish_visual.queue_free()
 		_bite_fish_visual = null
@@ -2021,6 +2460,14 @@ func _confirm_boat_bite() -> void:
 	var pending := _encounter.pending_catch
 	if pending == null:
 		return
+	if _state == CastState.BITE_APPROACH:
+		_record_single_pursuit_result("success", "bite_confirmed", "confirmed", pending)
+	var active_pursuit: Dictionary = _last_natural_bite_diagnostics.get("active_pursuit_approach", {})
+	if not active_pursuit.is_empty():
+		active_pursuit["state"] = "hooked"
+		active_pursuit["reservation_state"] = "confirmed"
+		active_pursuit["actual_mouth_to_hook_distance_m"] = _bite_fish_mouth_world.distance_to(_get_single_jig_hook_attachment_world())
+		_last_natural_bite_diagnostics["active_pursuit_approach"] = active_pursuit
 	_active_catch_id = pending.catch_id
 	_active_catch_species_id = pending.species_id
 	_active_catch_body_length_m = pending.body_length_m
@@ -2280,11 +2727,7 @@ func _advance_boat_fight(delta: float) -> void:
 	_fight_rod_target_bend_deg = clampf(raw_visual_target, -rod_visual_release_recoil_deg, positive_bend_limit_deg)
 	var visual_tau := 0.07 if _fight_rod_target_bend_deg > _rod_bend_angle_deg else 0.15
 	_rod_bend_angle_deg = lerpf(_rod_bend_angle_deg, _fight_rod_target_bend_deg, 1.0 - exp(-delta / visual_tau))
-	_rod_bend_direction_local = calculate_bend_direction_local(
-		_get_tackle_line_connection_world() - _get_fight_solver_rod_tip_world(),
-		_rod_mesh_instance.global_basis if _rod_mesh_instance != null else Basis.IDENTITY
-	)
-	_set_rod_bend_direction(_rod_bend_direction_local)
+	_update_rod_bend_direction_from_visual_line()
 	_set_rod_bend_angle(deg_to_rad(_rod_bend_angle_deg))
 	_apply_fight_participant_motion(delta, fish_snapshots)
 	if bool(solved.get("snapped", false)):
@@ -2311,7 +2754,7 @@ func _fight_hook_position_for_index(hook_index: int) -> Vector3:
 func _apply_fight_terminal_line_position(line_delta_m: float, minimum_line_m: float, delta: float) -> void:
 	var previous := _bait_world
 	var rod_tip := _get_fight_solver_rod_tip_world()
-	var connection_offset := _get_terminal_line_connection_offset_world()
+	var connection_offset := _get_tackle_line_connection_offset_world()
 	var current_connection := _get_tackle_line_connection_world()
 	var direction := current_connection - rod_tip
 	if direction.length_squared() < 0.000001:
@@ -2340,12 +2783,6 @@ func _get_fight_solver_rod_tip_world() -> Vector3:
 	# Physics uses the straight rod axis. Shader bend and burst feedback are
 	# presentation-only and must not alter line length, payout, or solver input.
 	return _rod_swing.to_global(ROD_AXIS_LOCAL * ROD_LENGTH_M)
-
-
-func _get_terminal_line_connection_offset_world() -> Vector3:
-	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
-		return _get_sabiki_up_direction_world() * _current_rig.get_line_attachment_height_m()
-	return _lure_visual_basis_world * Vector3.UP * SPOON_LINE_EYE_Y_M
 
 
 func _constrain_fight_connection_to_terminal_water_column(
@@ -2431,16 +2868,16 @@ func _advance_single_jig_tackle_for_fish(direction: Vector3, speed: float, delta
 		connection,
 		rod_tip,
 		_line_paid_out_length_m,
-		_get_terminal_line_connection_offset_world()
+		_get_tackle_line_connection_offset_world()
 	)
 	connection = _constrain_fight_connection_to_line_and_hull(
 		connection,
 		rod_tip,
 		_line_paid_out_length_m,
-		_get_terminal_line_connection_offset_world()
+		_get_tackle_line_connection_offset_world()
 	)
-	_bait_world = connection - _get_terminal_line_connection_offset_world()
-	_bait_velocity_world = (_bait_world - (previous_connection - _get_terminal_line_connection_offset_world())) / maxf(delta, 0.0001)
+	_bait_world = connection - _get_tackle_line_connection_offset_world()
+	_bait_velocity_world = (_bait_world - (previous_connection - _get_tackle_line_connection_offset_world())) / maxf(delta, 0.0001)
 	var final_radial := connection - rod_tip
 	if final_radial.length_squared() > 0.000001:
 		_fight_radial_direction = final_radial.normalized()
@@ -2947,9 +3384,26 @@ func _on_authority_catch_succeeded(result: FishingCatchResult) -> void:
 	_set_state(CastState.CATCH_PRESENTATION)
 
 
-func _on_authority_catch_cancelled(catch_id: String, _reason: String) -> void:
-	if catch_id.is_empty() or catch_id != _active_catch_id or _catch_result_received:
+func _on_authority_catch_cancelled(catch_id: String, reason: String) -> void:
+	if catch_id.is_empty() or _catch_result_received:
 		return
+	if _current_rig != null and _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		for hook_index in range(_sabiki_hook_states.size()):
+			var hook_state: Dictionary = _sabiki_hook_states[hook_index]
+			if str(hook_state.get("status", "")) != "approaching" or str(hook_state.get("catch_id", "")) != catch_id:
+				continue
+			var hook_positions := get_hook_attachment_world_positions()
+			var hook_world: Vector3 = hook_positions[hook_index] if hook_index < hook_positions.size() else Vector3.ZERO
+			var pending := hook_state.get("pending") as FishingPendingCatch
+			var mouth_world: Vector3 = hook_state.get("mouth_world", hook_state.get("start_world", hook_world))
+			_record_sabiki_pursuit_result(hook_index, hook_state, pending, hook_world, "failed", reason, "released_by_authority", mouth_world)
+			_clear_sabiki_hook_state(hook_index, false)
+			interaction_updated.emit(get_interaction_snapshot())
+			return
+	if catch_id != _active_catch_id:
+		return
+	if _state == CastState.BITE_APPROACH:
+		_record_single_pursuit_result("failed", reason, "released_by_authority")
 	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
 		_bite_fish_visual.queue_free()
 	_bite_fish_visual = null
@@ -3024,6 +3478,35 @@ func _create_transient_fish_visual(species_id: String, body_length_m: float, hea
 
 static func mouth_anchored_fish_origin(hook_world: Vector3, scaled_fish_basis: Basis, mouth_anchor_local: Vector3) -> Vector3:
 	return hook_world - scaled_fish_basis * mouth_anchor_local
+
+
+## Places the pursuing fish within the school's core while keeping most of the
+## school-to-hook distance for real, speed-limited swimming.
+static func school_pursuit_start_world(school_center: Vector3, hook_world: Vector3, school_core_radius_m: float) -> Vector3:
+	if not school_center.is_finite() or not hook_world.is_finite() or not is_finite(school_core_radius_m):
+		return school_center
+	var to_hook := hook_world - school_center
+	var distance := to_hook.length()
+	if distance <= 0.001:
+		return school_center
+	var offset := minf(minf(maxf(0.0, school_core_radius_m) * 0.2, 1.0), distance * 0.2)
+	return school_center + to_hook / distance * offset
+
+
+## Moves the fish mouth toward a moving hook without tweening or exceeding its
+## species pursuit speed.
+static func advance_fish_pursuit_world(current_mouth_world: Vector3, hook_world: Vector3, speed_mps: float, dt_real: float) -> Vector3:
+	if not current_mouth_world.is_finite() or not hook_world.is_finite() or not is_finite(speed_mps) or not is_finite(dt_real):
+		return current_mouth_world
+	return current_mouth_world.move_toward(hook_world, maxf(0.0, speed_mps) * maxf(0.0, dt_real))
+
+
+static func turn_pursuit_heading(current_heading: Vector3, target_heading: Vector3, turn_rate_radians_per_second: float, dt_real: float) -> Vector3:
+	var current := current_heading.normalized() if current_heading.is_finite() and current_heading.length_squared() > 0.0001 else Vector3.FORWARD
+	var target := target_heading.normalized() if target_heading.is_finite() and target_heading.length_squared() > 0.0001 else current
+	var blend := clampf(maxf(0.0, turn_rate_radians_per_second) * maxf(0.0, dt_real), 0.0, 1.0)
+	var heading := current.slerp(target, blend)
+	return heading.normalized() if heading.length_squared() > 0.0001 else target
 
 
 func _world_game_time_seconds() -> float:
@@ -3189,6 +3672,21 @@ func _set_rod_bend_direction(direction_local: Vector2) -> void:
 	_rod_shader_material.set_shader_parameter("bend_direction_local", Vector3(safe_direction.x, 0.0, safe_direction.y))
 
 
+func _update_rod_bend_direction_from_visual_line() -> void:
+	if _rod_mesh_instance == null or not is_instance_valid(_rod_mesh_instance):
+		return
+	# The Solver deliberately keeps its straight rod reference. Presentation must
+	# use the deformed tip because the rendered mainline also starts there.
+	var line_pull_world := _get_tackle_line_connection_world() - _get_rod_tip_world()
+	if line_pull_world.length_squared() <= 0.000001:
+		return
+	var mesh_basis := _rod_mesh_instance.global_basis
+	if absf(mesh_basis.determinant()) < 0.000001:
+		return
+	_rod_bend_direction_local = calculate_bend_direction_local(line_pull_world, mesh_basis)
+	_set_rod_bend_direction(_rod_bend_direction_local)
+
+
 func _update_cast_animation(delta: float) -> void:
 	_state_elapsed += delta
 	var release_progress := clampf(_state_elapsed / maxf(cast_release_duration, 0.01), 0.0, 1.0)
@@ -3211,6 +3709,7 @@ func _update_cast_animation(delta: float) -> void:
 	if _bait_flight_started and not _cast_tackle_entry_complete:
 		_update_bait_flight(delta)
 	_rod_recovery_complete = _state_elapsed >= cast_release_duration + cast_recovery_duration
+	var minimum_paid_line_m := 0.0
 	if _cast_tackle_entry_complete and _rod_recovery_complete:
 		_state_elapsed = 0.0
 		_waiting_elapsed = 0.0
@@ -3220,11 +3719,20 @@ func _update_cast_animation(delta: float) -> void:
 		_set_rod_bend_angle(0.0)
 		_rod_aim_yaw_deg = 0.0
 		_rod_aim_pitch_deg = 0.0
+		minimum_paid_line_m = 0.55
 		var line_connection := _get_tackle_line_connection_world()
-		_line_paid_out_length_m = clampf(_get_rod_tip_world().distance_to(line_connection), 0.55, maximum_line_length_m)
 		_previous_line_connection_world = line_connection
 		_has_previous_line_connection = true
 		_set_state(CastState.WAITING)
+	if _bait_flight_started:
+		# Casting pays line out as the terminal connection moves away. Keep the
+		# one authoritative length in sync each frame instead of leaving it at 0 m
+		# until CASTING ends while rendering a visibly extended taut line.
+		_line_paid_out_length_m = clampf(
+			_get_rod_tip_world().distance_to(_get_tackle_line_connection_world()),
+			minimum_paid_line_m,
+			maximum_line_length_m
+		)
 
 
 func _start_bait_flight() -> void:
@@ -3236,26 +3744,28 @@ func _start_bait_flight() -> void:
 	_bait_has_landed = false
 	_bait_airborne_retrieval = false
 	_airborne_retrieval_elapsed = 0.0
-	_sabiki_retrieval_taut = false
 	var rod_tip := _get_rod_tip_world()
 	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
-		var initial_guess := rod_tip - Vector3.UP * _current_rig.get_line_attachment_height_m()
-		_bait_world = rod_tip - _get_sabiki_up_direction_for_sinker(initial_guess) * _current_rig.get_line_attachment_height_m()
+		_bait_world = rod_tip - _get_sabiki_natural_up_direction_world() * _current_rig.get_line_attachment_height_m()
 	else:
 		_bait_world = rod_tip - _lure_visual_basis_world * Vector3.UP * SPOON_LINE_EYE_Y_M
 	_cast_start_world = _bait_world
 	_bait_instance.visible = true
 	_line_instance.visible = true
-	_bait_velocity_world = _boat_velocity_estimate_world * 0.12
+	_cast_target_drift_velocity_world = _boat_velocity_estimate_world * 0.12
+	_bait_velocity_world = _cast_target_drift_velocity_world
 
 
 func _update_bait_flight(delta: float) -> void:
 	if _bait_has_landed:
 		_advance_cast_tackle_water_entry(delta)
 		return
+	if delta <= 0.0:
+		return
+	var previous_bait_world := _bait_world
 	_bait_flight_elapsed += delta
 	var progress := clampf(_bait_flight_elapsed / maxf(_bait_flight_duration, 0.01), 0.0, 1.0)
-	var target_world := _cast_target_world + _bait_velocity_world * minf(_bait_flight_elapsed, 0.45)
+	var target_world := _cast_target_world + _cast_target_drift_velocity_world * minf(_bait_flight_elapsed, 0.45)
 	_bait_world = _cast_start_world.lerp(target_world, progress)
 	_bait_world.y += sin(PI * progress) * CAST_ARC_HEIGHT_M * maxf(0.38, sqrt(_get_cast_range_ratio()))
 	if progress >= 1.0:
@@ -3272,6 +3782,8 @@ func _update_bait_flight(delta: float) -> void:
 		_splash_instance.scale = Vector3.ONE * 0.28
 		_splash_instance.visible = true
 		_previous_boat_world = _boat_controller.global_position if _boat_controller != null else Vector3.ZERO
+	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		_bait_velocity_world = (_bait_world - previous_bait_world) / maxf(delta, 0.0001)
 
 
 func _advance_cast_tackle_water_entry(delta: float) -> void:
@@ -3383,8 +3895,6 @@ func _update_cast_aim_marker(delta: float) -> void:
 
 func _update_waiting_bait(delta: float) -> void:
 	_waiting_elapsed += delta
-	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI and _manual_reeling:
-		_sabiki_retrieval_taut = true
 	if _bait_airborne_retrieval:
 		_airborne_retrieval_elapsed += maxf(delta, 0.0)
 	_apply_waiting_rod_pose()
@@ -3503,6 +4013,7 @@ func _apply_waiting_rod_pose() -> void:
 	var delta := maxf(get_process_delta_time(), 0.0)
 	_rod_bend_angle_deg = lerpf(_rod_bend_angle_deg, bend_target, 1.0 - exp(-4.5 * delta))
 	_set_rod_bend_angle(deg_to_rad(_rod_bend_angle_deg))
+	_update_rod_bend_direction_from_visual_line()
 	_rod_back_angle_deg = _rod_aim_pitch_deg
 
 
@@ -3545,7 +4056,6 @@ func _update_retrieve_animation(delta: float) -> void:
 		_bait_velocity_world = Vector3.ZERO
 		_line_paid_out_length_m = 0.0
 		_rod_tension = 0.0
-		_sabiki_retrieval_taut = false
 		_rod_aim_yaw_deg = 0.0
 		_rod_aim_pitch_deg = 0.0
 		_has_previous_line_connection = false
@@ -4076,16 +4586,28 @@ func _update_line_and_bait_visuals() -> void:
 	if not is_cast_active() or not _bait_flight_started:
 		return
 	_update_single_jig_visual(maxf(get_process_delta_time(), 0.0))
-	var line_should_be_taut := _should_render_fishing_line_taut()
+	var line_visual_state := _get_main_line_visual_state()
+	line_visual_state["airborne_elapsed_seconds"] = _airborne_retrieval_elapsed
+	line_visual_state["bait_velocity_world"] = _bait_velocity_world
+	line_visual_state["fight_session_active"] = _fight_session_active
+	line_visual_state["fight_tension_n"] = float(_fight_snapshot.get("tension_n", 0.0))
+	line_visual_state["line_out_rate_mps"] = float(_fight_snapshot.get("line_out_rate_mps", 0.0))
+	line_visual_state["line_visual_reference_load_n"] = line_visual_reference_load_n
+	line_visual_state["max_line_out_speed_mps"] = BOAT_FIGHT_LINE_PROFILE.max_line_out_speed_mps
+	line_visual_state["fight_visual_elapsed_seconds"] = _fight_visual_elapsed
+	line_visual_state["line_visual_vibration_frequency_hz"] = line_visual_vibration_frequency_hz
+	line_visual_state["line_visual_vibration_m"] = line_visual_vibration_m
 	var start := _get_rod_tip_world()
 	var end := _get_tackle_line_connection_world()
+	# Low rod load is not spare line: an airborne reeling span at its paid length
+	# cannot acquire the old tension-only decorative sag and sideways sway.
+	line_visual_state["airborne_reel_constraint"] = (_manual_reeling or _state == CastState.RETRIEVING) and not _fight_session_active and _line_paid_out_length_m <= start.distance_to(end) + 0.01 and (_bait_airborne_retrieval or _is_tackle_fully_above_surface(0.0))
 	_update_rod_line_guides()
-	var world_points: Array[Vector3] = [_get_reel_line_exit_world()]
-	world_points.append(_get_reel_line_guide_world())
+	var prefix_world := PackedVector3Array([_get_reel_line_exit_world(), _get_reel_line_guide_world()])
 	for guide in _rod_line_guides:
 		if is_instance_valid(guide):
-			world_points.append(guide.global_position)
-	world_points.append(start)
+			prefix_world.append(guide.global_position)
+	prefix_world.append(start)
 	var deck_polygon := PackedVector2Array()
 	var deck_height := 0.0
 	var tail_route_local: Array[Vector3] = []
@@ -4095,7 +4617,7 @@ func _update_line_and_bait_visuals() -> void:
 	else:
 		tail_route_local.append(start)
 		tail_route_local.append(end)
-	if not line_should_be_taut and _onboard != null and _onboard.profile != null:
+	if not bool(line_visual_state.get("taut", false)) and _onboard != null and _onboard.profile != null:
 		deck_polygon = _onboard.profile.walkable_polygon_xz
 		deck_height = _onboard.profile.deck_height_m
 		tail_route_local = get_hull_clearance_line_route(
@@ -4104,71 +4626,155 @@ func _update_line_and_bait_visuals() -> void:
 	var route_world: Array[Vector3] = []
 	for route_point in tail_route_local:
 		route_world.append(_onboard.to_global(route_point) if _onboard != null else route_point)
-	var span_segments := maxi(2, int(ceil(float(LINE_SEGMENTS) / float(maxi(1, route_world.size() - 1)))))
-	for span_index in range(route_world.size() - 1):
+	var route_world_packed := PackedVector3Array()
+	var route_local_packed := PackedVector3Array()
+	for route_index in range(route_world.size()):
+		route_world_packed.append(route_world[route_index])
+		route_local_packed.append(tail_route_local[route_index])
+	var centerline_world := calculate_common_main_line_visual_path(
+		prefix_world,
+		route_world_packed,
+		route_local_packed,
+		deck_polygon,
+		deck_height,
+		line_visual_state
+	)
+	var main_line_points := PackedVector3Array()
+	for point in centerline_world:
+		main_line_points.append(to_local(point))
+	_rebuild_line_tube_mesh(_line_mesh, main_line_points)
+	_line_instance.visible = true
+	_bait_instance.global_position = _bait_world
+	_bait_instance.global_basis = _lure_visual_basis_world
+	_bait_instance.visible = _current_rig.rig_type == BoatFishingRigProfile.RigType.SINGLE_JIG
+	var rig_up_direction := _update_rig_visual_position()
+	_update_sabiki_backbone_visual(_current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI, rig_up_direction)
+
+
+static func calculate_common_main_line_visual_path(
+	prefix_world: PackedVector3Array,
+	route_world: PackedVector3Array,
+	route_local: PackedVector3Array,
+	deck_polygon: PackedVector2Array,
+	deck_height_m: float,
+	visual_state: Dictionary
+) -> PackedVector3Array:
+	var points := PackedVector3Array()
+	for prefix_point in prefix_world:
+		if prefix_point.is_finite() and (points.is_empty() or points[-1].distance_to(prefix_point) > 0.0001):
+			points.append(prefix_point)
+	if route_world.is_empty():
+		return points
+	if points.is_empty() or points[-1].distance_to(route_world[0]) > 0.0001:
+		points.append(route_world[0])
+	var taut := bool(visual_state.get("taut", false))
+	var slack_ratio := clampf(float(visual_state.get("slack_ratio", 1.0)), 0.0, 1.0)
+	var airborne := bool(visual_state.get("airborne", false))
+	var airborne_elapsed := maxf(0.0, float(visual_state.get("airborne_elapsed_seconds", 0.0)))
+	var bait_velocity: Vector3 = visual_state.get("bait_velocity_world", Vector3.ZERO)
+	var fight_session_active := bool(visual_state.get("fight_session_active", false))
+	var fight_tension_n := maxf(0.0, float(visual_state.get("fight_tension_n", 0.0)))
+	var line_out_rate_mps := maxf(0.0, float(visual_state.get("line_out_rate_mps", 0.0)))
+	var reference_load_n := maxf(0.001, float(visual_state.get("line_visual_reference_load_n", 1.0)))
+	var max_line_out_speed_mps := maxf(0.1, float(visual_state.get("max_line_out_speed_mps", 1.0)))
+	var fight_visual_elapsed := float(visual_state.get("fight_visual_elapsed_seconds", 0.0))
+	var vibration_frequency_hz := maxf(0.0, float(visual_state.get("line_visual_vibration_frequency_hz", 0.0)))
+	var vibration_amplitude_m := maxf(0.0, float(visual_state.get("line_visual_vibration_m", 0.0)))
+	var route_span_count := maxi(0, route_world.size() - 1)
+	if route_span_count == 0:
+		return points
+	var span_segments := maxi(2, int(ceil(float(LINE_SEGMENTS) / float(route_span_count))))
+	for span_index in range(route_span_count):
 		var span_start := route_world[span_index]
 		var span_end := route_world[span_index + 1]
 		var span_delta := span_end - span_start
-		var midpoint_local := (tail_route_local[span_index] + tail_route_local[span_index + 1]) * 0.5
+		var local_start := route_local[span_index] if route_local.size() == route_world.size() else span_start
+		var local_end := route_local[span_index + 1] if route_local.size() == route_world.size() else span_end
+		var midpoint_local := (local_start + local_end) * 0.5
 		var midpoint_over_deck := not deck_polygon.is_empty() and Geometry2D.is_point_in_polygon(Vector2(midpoint_local.x, midpoint_local.z), deck_polygon)
-		var clearance_height := deck_height + 1.34
-		var span_kept_clear := not deck_polygon.is_empty() and tail_route_local[span_index].y >= clearance_height and tail_route_local[span_index + 1].y >= clearance_height
+		var clearance_height := deck_height_m + 1.34
+		var span_kept_clear := not deck_polygon.is_empty() and local_start.y >= clearance_height and local_end.y >= clearance_height
 		var over_deck := midpoint_over_deck or span_kept_clear
-		var terminal_span := span_index == route_world.size() - 2
+		var terminal_span := span_index == route_span_count - 1
 		var sway_axis := span_delta.cross(Vector3.DOWN).normalized()
 		if sway_axis.length_squared() < 0.001:
 			sway_axis = Vector3.RIGHT
-		var previous_route_point := route_world[maxi(span_index - 1, 0)]
-		var arrival_direction := (span_start - previous_route_point).normalized()
-		if arrival_direction.length_squared() < 0.001:
-			arrival_direction = span_delta.normalized()
 		for point_index in range(1, span_segments + 1):
 			var t := float(point_index) / float(span_segments)
-			var sag := Vector3.ZERO
-			var terminal_curve_clear := not midpoint_over_deck or span_kept_clear
-			var fight_sag_scale := _get_fight_line_visual_slack_ratio() if _fight_session_active else 1.0
-			if terminal_span and not line_should_be_taut and _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI and terminal_curve_clear:
-				var hanging_point := _get_slack_sabiki_line_point(
-					span_start, span_end, arrival_direction, t, fight_sag_scale
-				)
-				if _bait_airborne_retrieval:
-					var relaxation := exp(-2.6 * maxf(_airborne_retrieval_elapsed, 0.0))
-					var sway_amount := clampf(Vector2(_bait_velocity_world.x, _bait_velocity_world.z).length() * 0.035, 0.0, 0.065) * relaxation
-					hanging_point += sway_axis * sin(_airborne_retrieval_elapsed * 7.0) * sway_amount * pow(sin(t * PI), 2.0)
-				world_points.append(hanging_point)
-				continue
-			if not over_deck and not line_should_be_taut:
-				var sag_scale := _get_fight_line_visual_slack_ratio() if _fight_session_active else (1.0 - _rod_tension * 0.9)
-				sag = Vector3.DOWN * minf(span_delta.length() * 0.018, 0.62) * sag_scale * sin(t * PI)
-				if terminal_span and _bait_airborne_retrieval:
-					# A retrieved lure is no longer pulling a wet, loaded line. Keep a
-					# visible hanging curve and let its side-to-side motion follow the
-					# tackle's remaining inertia instead of preserving the taut cast angle.
-					var air_sag := minf(AIRBORNE_LINE_VISUAL_SAG_M, span_delta.length() * 0.16)
-					var relaxation := exp(-2.6 * maxf(_airborne_retrieval_elapsed, 0.0))
-					var sway_amount := clampf(Vector2(_bait_velocity_world.x, _bait_velocity_world.z).length() * 0.035, 0.0, 0.065) * relaxation
-					var sway := sway_axis * sin(_airborne_retrieval_elapsed * 7.0) * sway_amount * sin(t * PI)
-					sag = Vector3.DOWN * air_sag * sin(t * PI) + sway
-			var line_point := span_start.lerp(span_end, t) + sag
-			if terminal_span and not over_deck and _fight_session_active and _fight_snapshot.has("tension_n"):
-				var vibration_load := clampf(float(_fight_snapshot.get("tension_n", 0.0)) / maxf(line_visual_reference_load_n, 0.001), 0.0, 1.0)
-				var payout_load := clampf(float(_fight_snapshot.get("line_out_rate_mps", 0.0)) / maxf(BOAT_FIGHT_LINE_PROFILE.max_line_out_speed_mps, 0.1), 0.0, 1.0)
+			var apply_slack_curve := not over_deck and not taut and not bool(visual_state.get("airborne_reel_constraint", false))
+			var sag_depth := calculate_main_line_visual_sag_depth(span_delta.length(), slack_ratio, airborne) if apply_slack_curve else 0.0
+			var line_point := calculate_main_line_visual_span_point(span_start, span_end, t, sag_depth)
+			if apply_slack_curve and terminal_span and airborne:
+				var relaxation := exp(-2.6 * airborne_elapsed)
+				var sway_amount := clampf(Vector2(bait_velocity.x, bait_velocity.z).length() * 0.035, 0.0, 0.065) * relaxation
+				line_point += sway_axis * sin(airborne_elapsed * 7.0) * sway_amount * pow(sin(t * PI), 2.0)
+			if terminal_span and not over_deck and fight_session_active:
+				var vibration_load := clampf(fight_tension_n / reference_load_n, 0.0, 1.0)
+				var payout_load := clampf(line_out_rate_mps / max_line_out_speed_mps, 0.0, 1.0)
 				var vibration_strength := maxf(vibration_load, payout_load * 0.65)
-				var envelope := sin(PI * t)
-				line_point += sway_axis * sin(_fight_visual_elapsed * TAU * line_visual_vibration_frequency_hz + span_index * 1.37 + t * 2.4) * line_visual_vibration_m * vibration_strength * envelope
-			world_points.append(line_point)
-	var points := PackedVector3Array()
-	for point in world_points:
-		points.append(to_local(point))
-	_line_mesh.clear_surfaces()
-	_line_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, _line_material)
+				var envelope := pow(sin(PI * t), 2.0)
+				line_point += sway_axis * sin(fight_visual_elapsed * TAU * vibration_frequency_hz + span_index * 1.37 + t * 2.4) * vibration_amplitude_m * vibration_strength * envelope
+			if points.is_empty() or points[-1].distance_to(line_point) > 0.0001:
+				points.append(line_point)
+	return points
+
+
+static func calculate_main_line_visual_sag_depth(
+	span_length_m: float,
+	slack_ratio: float,
+	airborne: bool
+) -> float:
+	if not is_finite(span_length_m) or not is_finite(slack_ratio):
+		return 0.0
+	var span_length := maxf(0.0, span_length_m)
+	var safe_slack := clampf(slack_ratio, 0.0, 1.0)
+	var natural_sag := minf(span_length * 0.018, 0.62)
+	if airborne:
+		natural_sag = minf(AIRBORNE_LINE_VISUAL_SAG_M, span_length * 0.16)
+	return natural_sag * safe_slack
+
+
+static func calculate_main_line_visual_span_point(
+	span_start: Vector3,
+	span_end: Vector3,
+	progress: float,
+	sag_depth_m: float
+) -> Vector3:
+	var t := clampf(progress, 0.0, 1.0) if is_finite(progress) else 0.0
+	var chord_point := span_start.lerp(span_end, t)
+	var safe_sag := maxf(0.0, sag_depth_m) if is_finite(sag_depth_m) else 0.0
+	return chord_point + Vector3.DOWN * safe_sag * pow(sin(PI * t), 2.0)
+
+
+static func calculate_line_tube_side_direction(segment_direction: Vector3, previous_side_direction: Vector3) -> Vector3:
+	if not segment_direction.is_finite() or segment_direction.length_squared() < 0.000001:
+		return Vector3.RIGHT
+	var direction := segment_direction.normalized()
+	var side := Vector3.ZERO
+	if previous_side_direction.is_finite() and previous_side_direction.length_squared() > 0.000001:
+		var previous := previous_side_direction.normalized()
+		side = previous - direction * previous.dot(direction)
+	if side.length_squared() < 0.000001:
+		side = direction.cross(Vector3.UP)
+	if side.length_squared() < 0.000001:
+		side = direction.cross(Vector3.RIGHT)
+	return side.normalized() if side.length_squared() > 0.000001 else Vector3.FORWARD
+
+
+func _rebuild_line_tube_mesh(mesh: ImmediateMesh, points: PackedVector3Array) -> void:
+	if mesh == null:
+		return
+	mesh.clear_surfaces()
+	if points.size() < 2:
+		return
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, _line_material)
+	var previous_side_direction := Vector3.ZERO
 	for point_index in range(points.size() - 1):
 		var segment_direction := (points[point_index + 1] - points[point_index]).normalized()
-		var side := segment_direction.cross(Vector3.UP)
-		if side.length_squared() < 0.001:
-			side = segment_direction.cross(Vector3.RIGHT)
-		side = side.normalized() * LINE_RADIUS_M
-		var other := segment_direction.cross(side).normalized() * LINE_RADIUS_M
+		var side_direction := calculate_line_tube_side_direction(segment_direction, previous_side_direction)
+		previous_side_direction = side_direction
+		var side := side_direction * LINE_RADIUS_M
+		var other := segment_direction.cross(side_direction).normalized() * LINE_RADIUS_M
 		var a := points[point_index]
 		var b := points[point_index + 1]
 		for side_index in range(LINE_SIDES):
@@ -4176,66 +4782,19 @@ func _update_line_and_bait_visuals() -> void:
 			var angle_b := TAU * float(side_index + 1) / float(LINE_SIDES)
 			var offset_a := side * cos(angle_a) + other * sin(angle_a)
 			var offset_b := side * cos(angle_b) + other * sin(angle_b)
-			_line_mesh.surface_add_vertex(a + offset_a)
-			_line_mesh.surface_add_vertex(b + offset_a)
-			_line_mesh.surface_add_vertex(b + offset_b)
-			_line_mesh.surface_add_vertex(a + offset_a)
-			_line_mesh.surface_add_vertex(b + offset_b)
-			_line_mesh.surface_add_vertex(a + offset_b)
-	_line_mesh.surface_end()
-	_line_instance.visible = true
-	_bait_instance.global_position = _bait_world
-	_bait_instance.global_basis = _lure_visual_basis_world
-	_bait_instance.visible = _current_rig.rig_type == BoatFishingRigProfile.RigType.SINGLE_JIG
-	_update_rig_visual_position()
-
-
-func _get_slack_sabiki_line_point(
-	span_start: Vector3,
-	span_end: Vector3,
-	arrival_direction: Vector3,
-	progress: float,
-	sag_scale: float = 1.0
-) -> Vector3:
-	var t := clampf(progress, 0.0, 1.0)
-	var inverse_t := 1.0 - t
-	var span_length := span_start.distance_to(span_end)
-	var handle_length := minf(span_length * 0.32, 0.45)
-	var start_direction := arrival_direction.normalized()
-	if start_direction.length_squared() < 0.001:
-		start_direction = (span_end - span_start).normalized()
-	var rig_down := -_get_sabiki_up_direction_world().normalized()
-	if rig_down.length_squared() < 0.5:
-		rig_down = Vector3.DOWN
-	var control_start := span_start + start_direction * handle_length
-	var control_end := span_end - rig_down * handle_length
-	var point := (
-		span_start * (inverse_t * inverse_t * inverse_t)
-		+ control_start * (3.0 * inverse_t * inverse_t * t)
-		+ control_end * (3.0 * inverse_t * t * t)
-		+ span_end * (t * t * t)
-	)
-	# The zero-slope endpoint envelope makes the fairlead curve droop while
-	# preserving a tangent that continues smoothly into the hanging Sabiki rig.
-	var sag_limit := SABIKI_SLACK_LINE_MAX_SAG_M if _bait_airborne_retrieval else 0.14
-	var sag_fraction := 0.24 if _bait_airborne_retrieval else 0.12
-	var sag_depth := minf(sag_limit, span_length * sag_fraction)
-	return point + Vector3.DOWN * sag_depth * clampf(sag_scale, 0.0, 1.0) * pow(sin(PI * t), 2.0)
+			mesh.surface_add_vertex(a + offset_a)
+			mesh.surface_add_vertex(b + offset_a)
+			mesh.surface_add_vertex(b + offset_b)
+			mesh.surface_add_vertex(a + offset_a)
+			mesh.surface_add_vertex(b + offset_b)
+			mesh.surface_add_vertex(a + offset_b)
+	mesh.surface_end()
 
 
 func _update_rig_visual_selection() -> void:
 	if _sabiki_rig_root == null:
 		return
 	var rig_height := _current_rig.get_line_attachment_height_m()
-	if not is_equal_approx(rig_height, _sabiki_hook_spacing_applied):
-		_sabiki_hook_spacing_applied = rig_height
-		var mainline_mesh := CylinderMesh.new()
-		mainline_mesh.top_radius = 0.0024
-		mainline_mesh.bottom_radius = 0.0024
-		mainline_mesh.height = maxf(rig_height, 0.04)
-		mainline_mesh.radial_segments = 6
-		_sabiki_mainline_instance.mesh = mainline_mesh
-	_sabiki_mainline_instance.position.y = rig_height * 0.5
 	if _sabiki_top_eye != null:
 		_sabiki_top_eye.position.y = rig_height
 	for index in range(_sabiki_hook_nodes.size()):
@@ -4247,14 +4806,17 @@ func _update_rig_visual_selection() -> void:
 	_update_rig_visual_position()
 
 
-func _update_rig_visual_position() -> void:
+func _update_rig_visual_position() -> Vector3:
 	if _sabiki_rig_root == null:
-		return
+		return Vector3.UP
 	var sabiki_active := _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI
+	var rig_up_direction := _get_sabiki_up_direction_world()
 	_sabiki_rig_root.global_position = _bait_world
-	_sabiki_rig_root.global_basis = Basis(Quaternion(Vector3.UP, _get_sabiki_up_direction_world()))
+	_sabiki_rig_root.global_basis = Basis(Quaternion(Vector3.UP, rig_up_direction))
+	if _sabiki_top_eye != null:
+		_sabiki_top_eye.position = _sabiki_rig_root.to_local(_get_tackle_line_connection_world())
 	if sabiki_active and is_cast_active():
-		var hook_positions := get_hook_world_positions()
+		var hook_positions := get_rig_hook_positions(_bait_world, rig_up_direction)
 		for hook_index in range(mini(hook_positions.size(), _sabiki_hook_nodes.size())):
 			var hook_node := _sabiki_hook_nodes[hook_index]
 			hook_node.position = _sabiki_rig_root.to_local(hook_positions[hook_index])
@@ -4265,43 +4827,332 @@ func _update_rig_visual_position() -> void:
 			else:
 				hook_node.basis = Basis.IDENTITY
 	_sabiki_rig_root.visible = sabiki_active and is_cast_active() and _bait_flight_started
+	return rig_up_direction
 
 
-func _should_keep_sabiki_tackle_aligned() -> bool:
-	# Sabiki is one tackle attached to the same continuous line as a single jig.
-	# Keep its mainline on the rod-to-sinker tether axis while any part is still
-	# wet; rotating it toward world-up as soon as CASTING ends creates a visible
-	# hinge where the external line meets the multi-hook rig. Only relax it after
-	# the complete rig has cleared the water during retrieval.
-	return not _bait_airborne_retrieval
+func _update_sabiki_backbone_visual(sabiki_active: bool, rig_up_direction: Vector3) -> void:
+	if _sabiki_backbone_mesh == null or _sabiki_backbone_instance == null or _sabiki_rig_root == null:
+		return
+	_sabiki_backbone_mesh.clear_surfaces()
+	if not sabiki_active or not is_cast_active() or not _bait_flight_started:
+		_sabiki_backbone_instance.visible = false
+		return
+	var backbone_points := PackedVector3Array()
+	if _uses_sabiki_airborne_backbone_curve(_bait_world):
+		for world_point in _get_sabiki_airborne_backbone_curve(_bait_world):
+			backbone_points.append(_sabiki_rig_root.to_local(world_point))
+	else:
+		backbone_points.append(_sabiki_top_eye.position)
+		for hook_position in get_rig_hook_positions(_bait_world, rig_up_direction):
+			var local_hook_position := _sabiki_rig_root.to_local(hook_position)
+			if backbone_points[-1].distance_to(local_hook_position) > 0.0001:
+				backbone_points.append(local_hook_position)
+		if backbone_points[backbone_points.size() - 1].distance_to(Vector3.ZERO) > 0.0001:
+			backbone_points.append(Vector3.ZERO)
+	_rebuild_line_tube_mesh(_sabiki_backbone_mesh, backbone_points)
+	_sabiki_backbone_instance.visible = backbone_points.size() > 1
 
 
-func _should_render_fishing_line_taut() -> bool:
-	# Once the complete tackle has cleared the water, neither stale manual-reel
-	# state nor the Sabiki retrieval flag may keep the line visually stretched.
-	if _bait_airborne_retrieval:
-		return false
-	return (
+func _get_main_line_visual_state() -> Dictionary:
+	var slack_ratio := 1.0 - clampf(_rod_tension, 0.0, 1.0) * 0.9
+	if _fight_session_active:
+		slack_ratio = _get_fight_line_visual_slack_ratio()
+	var forced_taut := (
 		_state == CastState.CASTING
-		or _is_waiting_line_state() and _manual_reeling and not _fight_session_active
-		or _state in [CastState.WAITING, CastState.SABIKI_HOOKED_WAITING, CastState.RETRIEVING, CastState.FIGHTING] and _sabiki_retrieval_taut and not _fight_session_active
+		or (_is_waiting_line_state() and _manual_reeling and not _fight_session_active)
 		or _state == CastState.RETRIEVING
 	)
+	var airborne := _bait_airborne_retrieval
+	var taut := not airborne and (forced_taut or slack_ratio <= 0.001)
+	if taut:
+		slack_ratio = 0.0
+	return {"taut": taut, "slack_ratio": clampf(slack_ratio, 0.0, 1.0), "airborne": airborne}
 
 
 func _get_sabiki_up_direction_world() -> Vector3:
-	var natural_up := _get_sabiki_up_direction_for_sinker(_bait_world)
-	# Presentation-only rod bend must not feed back into Sabiki hook geometry.
-	# Keep the rig axis tied to the straight solver rod tip during a fight.
-	var rod_tip := _get_fight_solver_rod_tip_world() if _fight_session_active or _state == CastState.LANDING else _get_rod_tip_world()
-	var toward_rod := rod_tip - _bait_world
-	if toward_rod.length_squared() < 0.0001:
+	var natural_up := _get_sabiki_natural_up_direction_world()
+	if not is_cast_active() or _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI:
 		return natural_up
-	var tether_up := toward_rod.normalized()
-	if _should_keep_sabiki_tackle_aligned():
-		return tether_up
-	var relax_progress := clampf(_airborne_retrieval_elapsed / AIRBORNE_RIG_RELAX_DURATION_SECONDS, 0.0, 1.0)
-	return tether_up.slerp(natural_up, _smoothstep01(relax_progress)).normalized()
+	var airborne_pose := _get_sabiki_airborne_pose(natural_up)
+	var pose_up: Vector3 = airborne_pose.get("up_direction", natural_up)
+	var alignment_weight := clampf(float(airborne_pose.get("alignment_weight", 0.0)), 0.0, 1.0)
+	if alignment_weight > 0.001:
+		natural_up = _blend_unit_directions(natural_up, pose_up, alignment_weight)
+	if _state == CastState.CASTING:
+		return natural_up
+	var line_load := clampf(_rod_tension, 0.0, 1.0)
+	var line_state := _get_main_line_visual_state()
+	if not bool(line_state.get("taut", false)):
+		line_load *= 1.0 - clampf(float(line_state.get("slack_ratio", 1.0)), 0.0, 1.0)
+	if line_load <= 0.001:
+		return natural_up
+	# Mainline force is applied at the Sabiki top eye, not at the sinker origin.
+	# Estimate that eye using the unloaded pose to avoid a circular dependency
+	# between the terminal axis and its connection point.
+	var neutral_line_eye := _bait_world + natural_up * _current_rig.get_line_attachment_height_m()
+	var toward_rod := _get_rod_tip_world() - neutral_line_eye
+	if toward_rod.length_squared() <= 0.000001:
+		return natural_up
+	# The existing normalized rod-tension value is the only non-fight load proxy;
+	# during a fight it is smoothed from the solver tension ratio. Blend the
+	# actual top-eye line direction with gravity/boat flow. All terminal geometry
+	# reads this shared axis; this response does not change paid line length or
+	# solver force.
+	return (natural_up + toward_rod.normalized() * line_load * SABIKI_LINE_LOAD_AXIS_RESPONSE).normalized()
+
+
+func _get_sabiki_airborne_pose(natural_up: Vector3) -> Dictionary:
+	var attachment_height := _current_rig.get_line_attachment_height_m()
+	var rod_tip := _get_rod_tip_world()
+	var root_outward := _bait_world - rod_tip
+	var root_distance := root_outward.length()
+	var line_direction_confidence := smoothstep(
+		SABIKI_AIRBORNE_LINE_DIRECTION_MIN_LENGTH_M,
+		SABIKI_AIRBORNE_LINE_DIRECTION_FULL_LENGTH_M,
+		root_distance
+	)
+	var velocity := _bait_velocity_world
+	var speed := velocity.length()
+	var motion_direction_confidence := smoothstep(
+		SABIKI_AIRBORNE_SPEED_MIN_MPS,
+		SABIKI_AIRBORNE_SPEED_FULL_MPS,
+		speed
+	)
+	var outward_direction := root_outward / root_distance if root_distance > 0.0001 else Vector3.ZERO
+	if outward_direction.length_squared() > 0.5:
+		if motion_direction_confidence > 0.0 and speed > 0.0001:
+			var velocity_direction := velocity / speed
+			# The sinker's radial direction remains authoritative when it is valid.
+			# Use flight/retrieval velocity only as a small agreeing cue; a slow
+			# opposing velocity must never replace a reliable rod-to-sinker axis.
+			if outward_direction.dot(velocity_direction) > 0.35:
+				outward_direction = _blend_unit_directions(
+					outward_direction,
+					velocity_direction,
+					0.12 * motion_direction_confidence
+				)
+	elif speed > 0.0001 and motion_direction_confidence > 0.0:
+		outward_direction = velocity / speed
+	var direction_confidence := maxf(line_direction_confidence, motion_direction_confidence)
+	# The line eye's available offset is geometric: it cannot extend farther
+	# toward the rod than the current rod-tip-to-sinker span. Keeping this
+	# independent of _line_paid_out_length_m avoids a feedback loop where cast
+	# line length moves the eye, then the moved eye changes the next line length.
+	var attachment_span := clampf(root_distance, 0.0, attachment_height)
+	var mainline_length := maxf(0.0, root_distance - _line_paid_out_length_m)
+	var alignment_weight := 0.0
+	var pose_mode := "natural"
+	var casting_flight := _state == CastState.CASTING and _bait_flight_started
+	var retrieving := _state == CastState.RETRIEVING or (
+		_is_waiting_line_state() and _manual_reeling and not _fight_session_active
+	)
+	var emergence_weight := 0.0
+	if casting_flight:
+		pose_mode = "cast_flight"
+		if _bait_has_landed:
+			# Keep the same stretch while the entire rig is still clear, then ease
+			# back toward its underwater hanging pose as the sinker enters.
+			emergence_weight = _get_sabiki_surface_emergence_weight(natural_up)
+			alignment_weight = SABIKI_AIRBORNE_CAST_ALIGNMENT_WEIGHT * emergence_weight
+			pose_mode = "cast_water_entry"
+		else:
+			var release_ramp := smoothstep(
+				0.0,
+				SABIKI_AIRBORNE_RELEASE_RAMP_SECONDS,
+				_bait_flight_elapsed
+			)
+			var flight_progress := clampf(_bait_flight_elapsed / maxf(_bait_flight_duration, 0.01), 0.0, 1.0)
+			var end_fade := lerpf(1.0, 0.92, smoothstep(0.78, 1.0, flight_progress))
+			alignment_weight = SABIKI_AIRBORNE_CAST_ALIGNMENT_WEIGHT * direction_confidence * release_ramp * end_fade
+	elif retrieving:
+		pose_mode = "retrieval_emergence"
+		emergence_weight = _get_sabiki_surface_emergence_weight(natural_up)
+		alignment_weight = SABIKI_AIRBORNE_RETRIEVAL_ALIGNMENT_WEIGHT * emergence_weight * direction_confidence
+		if _state == CastState.RETRIEVING:
+			# Keep the existing extension until the top eye reaches the rod and the
+			# normal completion path hides the rig. Fading toward world-up here
+			# rotated the moving retrieval target during the last visible frames.
+			pose_mode = "stowing"
+	if outward_direction.length_squared() < 0.5:
+		alignment_weight = 0.0
+	return {
+		"up_direction": -outward_direction if outward_direction.length_squared() > 0.5 else natural_up,
+		"outward_direction": outward_direction,
+		"alignment_weight": clampf(alignment_weight, 0.0, 1.0),
+		"line_direction_confidence": line_direction_confidence,
+		"motion_direction_confidence": motion_direction_confidence,
+		"emergence_weight": emergence_weight,
+		"stow_progress": smoothstep(
+			0.0,
+			RETRIEVE_DURATION_SECONDS,
+			_state_elapsed
+		) if _state == CastState.RETRIEVING else 0.0,
+		"mode": pose_mode,
+		"attachment_span_m": attachment_span,
+		"mainline_length_m": mainline_length,
+	}
+
+
+func _get_sabiki_surface_emergence_weight(natural_up: Vector3) -> float:
+	var water_sample := _sample_water(_bait_world)
+	var water_height := float(water_sample.get("height", _bait_world.y))
+	var vertical_rig_extent := _current_rig.get_line_attachment_height_m() * maxf(natural_up.y, 0.0)
+	var transition_depth := maxf(vertical_rig_extent + SABIKI_AIRBORNE_EMERGENCE_CLEARANCE_M, 0.05)
+	var submerged_to_emerged := clampf(
+		(_bait_world.y - water_height + vertical_rig_extent) / transition_depth,
+		0.0,
+		1.0
+	)
+	return submerged_to_emerged * submerged_to_emerged * (3.0 - 2.0 * submerged_to_emerged)
+
+
+func _blend_unit_directions(from_direction: Vector3, to_direction: Vector3, weight: float) -> Vector3:
+	var from := from_direction.normalized() if from_direction.length_squared() > 0.000001 else Vector3.UP
+	var to := to_direction.normalized() if to_direction.length_squared() > 0.000001 else from
+	var t := clampf(weight, 0.0, 1.0)
+	if t <= 0.0:
+		return from
+	if t >= 1.0:
+		return to
+	var dot_value := clampf(from.dot(to), -1.0, 1.0)
+	if dot_value > 0.9995:
+		return from.lerp(to, t).normalized()
+	if dot_value < -0.995:
+		var stable_axis := _sabiki_rig_root.global_basis.x if _sabiki_rig_root != null else Vector3.RIGHT
+		stable_axis -= from * stable_axis.dot(from)
+		if stable_axis.length_squared() < 0.0001:
+			stable_axis = from.cross(Vector3.RIGHT)
+		if stable_axis.length_squared() < 0.0001:
+			stable_axis = from.cross(Vector3.FORWARD)
+		stable_axis = stable_axis.normalized()
+		var midpoint := (Quaternion(stable_axis, PI * 0.5) * from).normalized()
+		if t <= 0.5:
+			return _blend_unit_directions_regular(from, midpoint, t * 2.0)
+		return _blend_unit_directions_regular(midpoint, to, (t - 0.5) * 2.0)
+	return _blend_unit_directions_regular(from, to, t)
+
+
+func _blend_unit_directions_regular(from: Vector3, to: Vector3, weight: float) -> Vector3:
+	var dot_value := clampf(from.dot(to), -1.0, 1.0)
+	if dot_value > 0.9995:
+		return from.lerp(to, clampf(weight, 0.0, 1.0)).normalized()
+	var angle := acos(dot_value)
+	var sine := sin(angle)
+	if absf(sine) <= 0.00001:
+		return to
+	var t := clampf(weight, 0.0, 1.0)
+	return (
+		from * (sin((1.0 - t) * angle) / sine)
+		+ to * (sin(t * angle) / sine)
+	).normalized()
+
+
+func _uses_sabiki_airborne_backbone_curve(sinker_world_position: Vector3) -> bool:
+	if (
+		_current_rig == null
+		or _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI
+		or not is_cast_active()
+		or sinker_world_position.distance_to(_bait_world) > 0.001
+	):
+		return false
+	var natural_up := _get_sabiki_natural_up_direction_world()
+	var pose: Dictionary = _get_sabiki_airborne_pose(natural_up)
+	var pose_mode := str(pose.get("mode", "natural"))
+	return pose_mode in ["cast_flight", "cast_water_entry", "retrieval_emergence"] or (
+		pose_mode == "stowing" and float(pose.get("alignment_weight", 0.0)) > 0.0
+	)
+
+
+func _get_sabiki_airborne_backbone_curve(sinker_world_position: Vector3) -> PackedVector3Array:
+	var start := _get_tackle_line_connection_world()
+	var end := sinker_world_position
+	var chord := end - start
+	var chord_length := chord.length()
+	var points := PackedVector3Array()
+	if chord_length <= 0.0001:
+		points.append(start)
+		points.append(end)
+		return points
+	var target_length := maxf(chord_length, _current_rig.get_line_attachment_height_m())
+	var chord_direction := chord / chord_length
+	var bend_direction := Vector3.DOWN - chord_direction * Vector3.DOWN.dot(chord_direction)
+	if bend_direction.length_squared() < 0.0001:
+		var stable_side := _rod_swing.global_basis.x if _rod_swing != null else Vector3.RIGHT
+		bend_direction = stable_side - chord_direction * stable_side.dot(chord_direction)
+	if bend_direction.length_squared() < 0.0001:
+		bend_direction = chord_direction.cross(Vector3.FORWARD)
+	bend_direction = bend_direction.normalized()
+	var amplitude := 0.0
+	if chord_length < target_length - 0.0001:
+		var low := 0.0
+		var high := target_length * 2.0
+		for _iteration in range(SABIKI_AIRBORNE_BACKBONE_CURVE_SOLVE_STEPS):
+			var middle := (low + high) * 0.5
+			if _measure_sabiki_airborne_curve_length(start, end, bend_direction, middle) < target_length:
+				low = middle
+			else:
+				high = middle
+		amplitude = (low + high) * 0.5
+	for point_index in range(SABIKI_AIRBORNE_BACKBONE_CURVE_SEGMENTS + 1):
+		var t := float(point_index) / float(SABIKI_AIRBORNE_BACKBONE_CURVE_SEGMENTS)
+		points.append(_get_sabiki_airborne_curve_point(start, end, bend_direction, amplitude, t))
+	return points
+
+
+func _get_sabiki_airborne_curve_point(
+	start: Vector3,
+	end: Vector3,
+	bend_direction: Vector3,
+	amplitude: float,
+	progress: float
+) -> Vector3:
+	var t := clampf(progress, 0.0, 1.0)
+	return start.lerp(end, t) + bend_direction * amplitude * pow(sin(PI * t), 2.0)
+
+
+func _measure_sabiki_airborne_curve_length(
+	start: Vector3,
+	end: Vector3,
+	bend_direction: Vector3,
+	amplitude: float
+) -> float:
+	var length := 0.0
+	var previous := start
+	for point_index in range(1, SABIKI_AIRBORNE_BACKBONE_CURVE_SEGMENTS + 1):
+		var t := float(point_index) / float(SABIKI_AIRBORNE_BACKBONE_CURVE_SEGMENTS)
+		var point := _get_sabiki_airborne_curve_point(start, end, bend_direction, amplitude, t)
+		length += previous.distance_to(point)
+		previous = point
+	return length
+
+
+func _get_polyline_cumulative_lengths(points: PackedVector3Array) -> PackedFloat32Array:
+	var cumulative := PackedFloat32Array()
+	if points.is_empty():
+		return cumulative
+	cumulative.append(0.0)
+	for point_index in range(1, points.size()):
+		cumulative.append(cumulative[-1] + points[point_index - 1].distance_to(points[point_index]))
+	return cumulative
+
+
+func _sample_polyline_at_distance(
+	points: PackedVector3Array,
+	cumulative_lengths: PackedFloat32Array,
+	distance_from_start: float
+) -> Vector3:
+	if points.is_empty():
+		return _bait_world
+	if points.size() == 1 or cumulative_lengths.size() != points.size():
+		return points[0]
+	var distance := clampf(distance_from_start, 0.0, cumulative_lengths[-1])
+	for segment_index in range(points.size() - 1):
+		var segment_end_distance := cumulative_lengths[segment_index + 1]
+		if distance <= segment_end_distance or segment_index == points.size() - 2:
+			var segment_length := segment_end_distance - cumulative_lengths[segment_index]
+			var t := (distance - cumulative_lengths[segment_index]) / segment_length if segment_length > 0.0001 else 0.0
+			return points[segment_index].lerp(points[segment_index + 1], t)
+	return points[-1]
 
 
 func _get_tackle_water_sample_points() -> Array[Vector3]:
@@ -4328,29 +5179,53 @@ func _is_tackle_fully_above_surface(clearance_m: float) -> bool:
 	return true
 
 
-func _get_sabiki_up_direction_for_sinker(sinker_world_position: Vector3) -> Vector3:
-	var lean := Vector3.ZERO
+func _get_sabiki_natural_up_direction_world() -> Vector3:
+	# This is the unloaded orientation baseline. During CASTING, the terminal rig
+	# trails its actual motion; outside the cast, gravity and boat flow define its
+	# neutral pose. _get_sabiki_up_direction_world adds the existing line-load
+	# response once the rig is connected to a loaded mainline.
 	var boat_flow := Vector3(_boat_velocity_estimate_world.x, 0.0, _boat_velocity_estimate_world.z)
 	if boat_flow.length_squared() > 0.01:
-		lean += boat_flow.normalized() * clampf(boat_flow.length() / 18.0 * 0.22, 0.0, 0.22)
-	var toward_rod := _get_rod_tip_world() - sinker_world_position
-	var rod_horizontal := Vector3(toward_rod.x, 0.0, toward_rod.z)
-	if rod_horizontal.length_squared() > 0.01:
-		lean += rod_horizontal.normalized() * clampf(_rod_tension, 0.0, 1.0) * 0.28
+		boat_flow = boat_flow.normalized() * clampf(boat_flow.length() / 18.0 * 0.22, 0.0, 0.22)
+	var relative_motion := Vector3(
+		_bait_velocity_world.x - _boat_velocity_estimate_world.x * BAIT_WATER_DRAG_FOLLOW,
+		0.0,
+		_bait_velocity_world.z - _boat_velocity_estimate_world.z * BAIT_WATER_DRAG_FOLLOW
+	)
+	var terminal_load_lean := Vector3.ZERO
+	if _state == CastState.CASTING and relative_motion.length_squared() > 0.0025:
+		# The sinker leads during the cast, so the top eye and hook train trail
+		# toward the rod instead of leaning in the direction of travel.
+		var cast_response := clampf(relative_motion.length() / SABIKI_MOTION_AXIS_RESPONSE_SPEED_MPS, 0.0, SABIKI_MOTION_AXIS_MAX_LEAN)
+		terminal_load_lean = -relative_motion.normalized() * cast_response
+	var lean := boat_flow + terminal_load_lean
 	return (Vector3.UP + lean).normalized()
 
 
-func _get_tackle_line_connection_world() -> Vector3:
+func _get_tackle_line_connection_offset_world() -> Vector3:
 	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
-		return _bait_world + _get_sabiki_up_direction_world() * _current_rig.get_line_attachment_height_m()
-	return _bait_world + _lure_visual_basis_world * Vector3.UP * SPOON_LINE_EYE_Y_M
+		# Keep the top eye at its profile station. Airborne alignment changes the
+		# shared axis only. When the straight rod-to-sinker span is shorter than
+		# the profile length, the terminal line bends while preserving its full
+		# arc length; it does not compress hook stations.
+		var attachment_height := _current_rig.get_line_attachment_height_m()
+		var pose: Dictionary = _get_sabiki_airborne_pose(_get_sabiki_natural_up_direction_world())
+		var alignment_weight := clampf(float(pose.get("alignment_weight", 0.0)), 0.0, 1.0)
+		var attachment_span := lerpf(
+			attachment_height,
+			float(pose.get("attachment_span_m", attachment_height)),
+			alignment_weight
+		)
+		return _get_sabiki_up_direction_world() * attachment_span
+	return _lure_visual_basis_world * Vector3.UP * SPOON_LINE_EYE_Y_M
+
+
+func _get_tackle_line_connection_world() -> Vector3:
+	return _bait_world + _get_tackle_line_connection_offset_world()
 
 
 func _get_tackle_retrieval_target_world() -> Vector3:
-	var rod_tip := _get_rod_tip_world()
-	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
-		return rod_tip - _get_sabiki_up_direction_world() * _current_rig.get_line_attachment_height_m()
-	return rod_tip - _lure_visual_basis_world * Vector3.UP * SPOON_LINE_EYE_Y_M
+	return _get_rod_tip_world() - _get_tackle_line_connection_offset_world()
 
 
 func _update_single_jig_visual(delta: float) -> void:
@@ -4712,11 +5587,14 @@ func _build_sabiki_visuals() -> void:
 	_sabiki_rig_root.name = "SabikiRigVisual"
 	_sabiki_rig_root.visible = false
 	add_child(_sabiki_rig_root)
-	_sabiki_mainline_instance = MeshInstance3D.new()
-	_sabiki_mainline_instance.name = "SabikiMainline"
-	_sabiki_mainline_instance.material_override = _line_material
-	_sabiki_mainline_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	_sabiki_rig_root.add_child(_sabiki_mainline_instance)
+	_sabiki_backbone_mesh = ImmediateMesh.new()
+	_sabiki_backbone_instance = MeshInstance3D.new()
+	_sabiki_backbone_instance.name = "SabikiBackboneLine"
+	_sabiki_backbone_instance.mesh = _sabiki_backbone_mesh
+	_sabiki_backbone_instance.material_override = _line_material
+	_sabiki_backbone_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_sabiki_backbone_instance.visible = false
+	_sabiki_rig_root.add_child(_sabiki_backbone_instance)
 	_sabiki_top_eye = MeshInstance3D.new()
 	_sabiki_top_eye.name = "SabikiRodSideEye"
 	var top_eye_mesh := TorusMesh.new()

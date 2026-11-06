@@ -374,8 +374,9 @@ func end_boat_fishing_session(reason: String = "boat_fishing_ended") -> void:
 
 
 ## Boat fishing uses the same school authority and encounter lifecycle as
-## trolling. This query is anchored to the real lure position/depth, not the
-## boat or camera, and only returns schools the selected rig can target.
+## trolling. School targeting uses a species-specific 3D pursuit sphere around
+## the current Authority activity center; the school movement ellipsoid remains
+## diagnostic only and does not gate pursuit.
 func evaluate_boat_fishing_candidates(
 	lure_world_position: Vector3,
 	lure_depth_m: float,
@@ -411,7 +412,8 @@ func evaluate_boat_fishing_candidates(
 		var activity_depth := maxf(0.0, float(school.get("effective_activity_depth_m", target_activity_depth)))
 		var activity_state := str(school.get("effective_surface_activity_state", school.get("surface_activity_state", "unknown")))
 		var vertical_tolerance := clampf(profile.school_activity_radius_m * 0.7, 1.2, 3.0) if profile != null else 0.0
-		var vertical_delta := _school_hook_vertical_delta_m(school_position, lure_world_position, activity_depth, lure_depth_m)
+		var school_center_world := _school_activity_center_world(school_position, lure_world_position, activity_depth, lure_depth_m)
+		var vertical_delta := absf(school_center_world.y - lure_world_position.y)
 		var depth_weight := 1.0 - smoothstep(vertical_tolerance * 0.35, vertical_tolerance, vertical_delta) if vertical_tolerance > 0.0 else 0.0
 		var horizontal_weight := boat_fishing_horizontal_distance_weight(horizontal_distance, boat_fishing_near_distance_full_weight_end_m, boat_fishing_middle_distance_end_m)
 		var school_horizontal_radius := maxf(0.5, profile.school_wander_radius_m) if profile != null else 0.0
@@ -419,12 +421,20 @@ func evaluate_boat_fishing_candidates(
 		var vertical_normalized := vertical_delta / vertical_tolerance if vertical_tolerance > 0.0 else INF
 		var normalized_3d_distance := sqrt(horizontal_normalized * horizontal_normalized + vertical_normalized * vertical_normalized) if is_finite(horizontal_normalized) and is_finite(vertical_normalized) else INF
 		var inside_school_volume := normalized_3d_distance <= 1.0 and horizontal_distance < BOAT_FISHING_MAX_HORIZONTAL_RANGE_M
+		var pursuit_radius := maxf(0.1, profile.boat_fishing_pursuit_radius_m) if profile != null else 0.0
+		var pursuit_distance := school_center_world.distance_to(lure_world_position) if profile != null else INF
+		var pursuit_distance_ratio := pursuit_distance / pursuit_radius if pursuit_radius > 0.0 else INF
+		var inside_pursuit_sphere := pursuit_distance <= pursuit_radius
 		var zone := "core" if normalized_3d_distance <= 0.5 else ("edge" if inside_school_volume else "outside")
 		var method_match := profile != null and profile.supported_fishing_methods.has("boat_fishing") and rig_matches_profile(profile, rig)
 		var reserved_count := _get_reserved_sabiki_count_for_school(species_id, school_id) if is_sabiki else 0
 		var population_available := maxi(0, population - reserved_count)
 		var available := population_available > 0 and str(school.get("resource_state", "available")) == "available"
 		var surface_multiplier := boat_fishing_surface_activity_multiplier(activity_state, activity_depth, profile, surface_activity_transition_depth_m, surface_transition_bite_multiplier, visible_surface_bite_multiplier)
+		var bite_willingness := float(school.get("bite_willingness_multiplier", 1.0))
+		if not is_finite(bite_willingness):
+			bite_willingness = 1.0
+		bite_willingness = clampf(bite_willingness, 0.0, 1.0)
 		var base_rejection_reason := ""
 		if profile == null:
 			base_rejection_reason = "unknown_species"
@@ -439,10 +449,10 @@ func evaluate_boat_fishing_candidates(
 		elif horizontal_distance >= BOAT_FISHING_MAX_HORIZONTAL_RANGE_M:
 			base_rejection_reason = "outside_horizontal_range"
 		var target_reason := base_rejection_reason
-		if target_reason.is_empty() and not inside_school_volume:
-			target_reason = "outside_school_volume"
+		if target_reason.is_empty() and not inside_pursuit_sphere:
+			target_reason = "outside_pursuit_sphere"
 		var target_eligible := target_reason.is_empty()
-		if inside_school_volume and target_zone_blocker.is_empty():
+		if inside_pursuit_sphere and target_zone_blocker.is_empty():
 			target_zone_blocker = {"school_id": school_id, "species_id": species_id, "reason": base_rejection_reason if not base_rejection_reason.is_empty() else "school_target_zone_priority"}
 		var candidate := {
 			"school_id": school_id,
@@ -456,10 +466,24 @@ func evaluate_boat_fishing_candidates(
 			"activity_depth_target_m": target_activity_depth,
 			"activity_depth_m": activity_depth,
 			"effective_activity_depth_m": activity_depth,
+			"disturbance_level": clampf(float(school.get("disturbance_level", 0.0)), 0.0, 1.0),
+			"disturbance_target": clampf(float(school.get("disturbance_target", 0.0)), 0.0, 1.0),
+			"disturbance_state": str(school.get("disturbance_state", "CALM")),
+			"disturbance_horizontal_distance_m": float(school.get("disturbance_horizontal_distance_m", -1.0)),
+			"disturbance_vertical_below_hull_m": float(school.get("disturbance_vertical_below_hull_m", -1.0)),
+			"vessel_disturbance": clampf(float(school.get("vessel_disturbance", 0.0)), 0.0, 1.0),
+			"bite_willingness_multiplier": bite_willingness,
 			"lure_depth_m": maxf(0.0, lure_depth_m),
 			"hook_world_position": lure_world_position,
 			"horizontal_distance_m": horizontal_distance,
 			"school_horizontal_radius_m": school_horizontal_radius,
+			"school_center_world_position": school_center_world,
+			"pursuit_radius_m": pursuit_radius,
+			"pursuit_distance_m": pursuit_distance,
+			"pursuit_distance_ratio": pursuit_distance_ratio,
+			"inside_pursuit_sphere": inside_pursuit_sphere,
+			"pursuit_eligibility": target_eligible,
+			"pursuit_rejection_reason": target_reason,
 			"horizontal_normalized_distance": horizontal_normalized,
 			"horizontal_weight": horizontal_weight,
 			"vertical_delta_m": vertical_delta,
@@ -478,11 +502,11 @@ func evaluate_boat_fishing_candidates(
 			"depth_match": depth_weight > 0.0,
 			"available": available,
 			"target_eligible": target_eligible,
-			"target_zone_blocker": inside_school_volume,
+			"target_zone_blocker": inside_pursuit_sphere,
 			"ambient_eligible": false,
 			"rejection_reason": "" if target_eligible else (target_reason if not target_reason.is_empty() else base_rejection_reason),
 			"target_rejection_reason": target_reason,
-			"ambient_rejection_reason": "school_target_zone_priority" if inside_school_volume else "environment_authority_query_required",
+			"ambient_rejection_reason": "school_target_zone_priority" if inside_pursuit_sphere else "environment_authority_query_required",
 			"hook_index": hook_index,
 		}
 		samples.append(candidate)
@@ -505,7 +529,7 @@ func evaluate_boat_fishing_candidates(
 	var reason := "target_reaction_waiting"
 	if targeted_candidates.is_empty():
 		if ambient_blocked_by_school:
-			reason = "school_target_zone_blocked"
+			reason = str(target_zone_blocker.get("reason", "school_target_zone_blocked"))
 		elif not submerged:
 			reason = "hook_not_submerged"
 		elif not _boat_fishing_session_active:
@@ -569,7 +593,7 @@ func _boat_candidate_reason(samples: Array[Dictionary], targeted: Array[Dictiona
 		return "target_reaction_waiting"
 	if samples.is_empty():
 		return "no_nearby_schools"
-	for reason in ["method_or_rig_mismatch", "empty_school", "activity_depth_mismatch", "action_requirement_not_met", "outside_school_volume", "outside_horizontal_range", "unknown_species"]:
+	for reason in ["method_or_rig_mismatch", "empty_school", "activity_depth_mismatch", "action_requirement_not_met", "outside_pursuit_sphere", "outside_horizontal_range", "unknown_species"]:
 		for candidate in samples:
 			if str(candidate.get("rejection_reason", "")) == reason:
 				return reason
@@ -618,15 +642,15 @@ func _ambient_rate_for_candidates(candidates: Array[Dictionary], environment_qua
 	return minf(boat_fishing_ambient_max_event_rate_per_tackle_hour, boat_fishing_ambient_base_event_rate_per_real_hour * clampf(environment_quality, 0.0, 1.0) * density_factor)
 
 
-func _school_hook_vertical_delta_m(school_position: Vector3, hook_position: Vector3, activity_depth_m: float, fallback_hook_depth_m: float) -> float:
+func _school_activity_center_world(school_position: Vector3, hook_position: Vector3, activity_depth_m: float, fallback_hook_depth_m: float) -> Vector3:
+	var center_y := hook_position.y + (maxf(0.0, fallback_hook_depth_m) - maxf(0.0, activity_depth_m))
 	if _wave_sampler != null and is_instance_valid(_wave_sampler) and _wave_sampler.has_method("sample_physics_surface"):
 		var sample_position := Vector3(school_position.x, hook_position.y, school_position.z)
 		var sample_time := float(_wave_sampler.call("get_effective_wave_time_seconds")) if _wave_sampler.has_method("get_effective_wave_time_seconds") else float(_wave_sampler.get("wave_time_seconds"))
 		var surface: Dictionary = _wave_sampler.call("sample_physics_surface", sample_position, sample_time)
 		if bool(surface.get("valid", true)):
-			var fish_center_y := float(surface.get("height", hook_position.y)) - activity_depth_m
-			return absf(fish_center_y - hook_position.y)
-	return absf(activity_depth_m - maxf(0.0, fallback_hook_depth_m))
+			center_y = float(surface.get("height", hook_position.y)) - maxf(0.0, activity_depth_m)
+	return Vector3(school_position.x, center_y, school_position.z)
 
 
 static func boat_fishing_action_weight(lure_relative_speed_mps: float, min_weight: float = 0.55, max_weight: float = 1.0, reference_speed_mps: float = 2.5) -> float:
@@ -703,7 +727,8 @@ func advance_boat_fishing_trigger_for_hook(diagnostics: Dictionary, delta_real_s
 			reaction = _create_target_reaction(target, hook_index)
 		reaction["outside_seconds"] = 0.0
 		reaction["candidate"] = target.duplicate(true)
-		reaction["remaining_seconds"] = maxf(0.0, float(reaction.get("remaining_seconds", 0.0)) - delta_real_seconds)
+		var willingness := clampf(float(target.get("bite_willingness_multiplier", 1.0)), 0.0, 1.0)
+		reaction["remaining_seconds"] = maxf(0.0, float(reaction.get("remaining_seconds", 0.0)) - delta_real_seconds * willingness)
 		_boat_target_reactions[key] = reaction
 		var target_snapshot := _target_reaction_snapshot(reaction, hook_index)
 		if float(reaction.get("remaining_seconds", 0.0)) <= 0.0:
@@ -722,7 +747,8 @@ func advance_boat_fishing_trigger_for_hook(diagnostics: Dictionary, delta_real_s
 		if _candidate_can_hold_target(retained):
 			reaction["outside_seconds"] = 0.0 if bool(retained.get("target_eligible", false)) else float(reaction.get("outside_seconds", 0.0)) + delta_real_seconds
 			reaction["candidate"] = retained.duplicate(true)
-			reaction["remaining_seconds"] = maxf(0.0, float(reaction.get("remaining_seconds", 0.0)) - delta_real_seconds)
+			var retained_willingness := clampf(float(retained.get("bite_willingness_multiplier", 1.0)), 0.0, 1.0)
+			reaction["remaining_seconds"] = maxf(0.0, float(reaction.get("remaining_seconds", 0.0)) - delta_real_seconds * retained_willingness)
 			if float(reaction.get("outside_seconds", 0.0)) <= boat_fishing_target_boundary_grace_seconds:
 				_boat_target_reactions[key] = reaction
 				var held_snapshot := _target_reaction_snapshot(reaction, hook_index)
@@ -859,10 +885,11 @@ func _weighted_dictionary(rows: Array[Dictionary]) -> Dictionary:
 
 
 func _create_target_reaction(candidate: Dictionary, hook_index: int) -> Dictionary:
-	var normalized := clampf(float(candidate.get("normalized_3d_distance", 1.0)), 0.0, 1.0)
-	var is_core := normalized <= 0.5
-	var minimum := boat_fishing_target_core_min_reaction_seconds if is_core else boat_fishing_target_edge_min_reaction_seconds
-	var maximum := maxf(minimum, boat_fishing_target_core_max_reaction_seconds if is_core else boat_fishing_target_edge_max_reaction_seconds)
+	# Response time changes continuously with distance inside the one pursuit
+	# sphere; no second inner/outer eligibility zone is introduced.
+	var distance_ratio := clampf(float(candidate.get("pursuit_distance_ratio", 1.0)), 0.0, 1.0)
+	var minimum := lerpf(boat_fishing_target_core_min_reaction_seconds, boat_fishing_target_edge_min_reaction_seconds, distance_ratio)
+	var maximum := maxf(minimum, lerpf(boat_fishing_target_core_max_reaction_seconds, boat_fishing_target_edge_max_reaction_seconds, distance_ratio))
 	var variation := _stable_target_variation(candidate, hook_index)
 	var total_seconds := lerpf(minimum, maximum, variation)
 	var approach_seconds := _estimate_existing_bite_approach_seconds(candidate, hook_index)
@@ -875,7 +902,7 @@ func _create_target_reaction(candidate: Dictionary, hook_index: int) -> Dictiona
 		"approach_seconds": approach_seconds,
 		"outside_seconds": 0.0,
 		"hook_index": hook_index,
-		"zone": "core" if is_core else "edge",
+		"zone": str(candidate.get("school_zone", "edge")),
 	}
 
 
@@ -885,20 +912,19 @@ func _stable_target_variation(candidate: Dictionary, hook_index: int) -> float:
 
 
 func _estimate_existing_bite_approach_seconds(candidate: Dictionary, hook_index: int) -> float:
-	if float(candidate.get("lure_depth_m", 99.0)) >= surface_activity_transition_depth_m:
-		return 0.0
 	var species_id := str(candidate.get("species_id", ""))
 	var profile := _manager.call("get_species_profile", species_id) as FishSpeciesProfile if _manager != null and _manager.has_method("get_species_profile") else null
 	if profile == null:
 		return 0.0
-	var is_sabiki := int(candidate.get("rig_type", -1)) == BoatFishingRigProfile.RigType.SABIKI or str(candidate.get("rig_id", "")) == "sabiki_rig"
-	# Current boat-fishing rigs use an explicit depth cutoff of 6 m; retain that
-	# exact visualization gate without coupling it to the ecological depth test.
-	if float(candidate.get("lure_depth_m", 99.0)) >= 6.0:
-		return 0.0
-	var start_distance := clampf(float(candidate.get("horizontal_distance_m", 0.0)), 2.8, 5.0 if is_sabiki else 5.5)
-	var speed := maxf(0.25, (profile.movement_speed_min_mps + profile.movement_speed_max_mps) * 0.5)
-	return clampf(start_distance / speed, 0.8 if is_sabiki else 1.0, 3.6 if is_sabiki else 4.5)
+	var center_value: Variant = candidate.get("school_center_world_position", Vector3.ZERO)
+	var hook_value: Variant = candidate.get("hook_world_position", Vector3.ZERO)
+	var center := center_value as Vector3 if center_value is Vector3 else Vector3.ZERO
+	var hook := hook_value as Vector3 if hook_value is Vector3 else Vector3.ZERO
+	var core_radius := maxf(0.0, float(candidate.get("school_horizontal_radius_m", profile.school_wander_radius_m)))
+	var start_offset := minf(core_radius * 0.2, 1.0)
+	var start_distance := maxf(0.0, center.distance_to(hook) - start_offset)
+	var speed := maxf(0.1, (profile.movement_speed_min_mps + profile.movement_speed_max_mps) * 0.5)
+	return start_distance / speed
 
 
 func _select_target_candidate(candidates: Array[Dictionary], preferred_school_id: String) -> Dictionary:
@@ -908,9 +934,9 @@ func _select_target_candidate(candidates: Array[Dictionary], preferred_school_id
 	var best: Dictionary = {}
 	var best_distance := INF
 	for candidate in candidates:
-		var normalized := float(candidate.get("normalized_3d_distance", INF))
-		if normalized < best_distance:
-			best_distance = normalized
+		var distance := float(candidate.get("pursuit_distance_m", INF))
+		if distance < best_distance:
+			best_distance = distance
 			best = candidate
 	return best
 
@@ -927,11 +953,13 @@ func _candidate_can_hold_target(candidate: Dictionary) -> bool:
 		and bool(candidate.get("method_match", false)) \
 		and bool(candidate.get("available", false)) \
 		and float(candidate.get("depth_weight", 0.0)) > 0.0 \
-		and float(candidate.get("normalized_3d_distance", INF)) <= boat_fishing_target_boundary_hysteresis
+		and float(candidate.get("pursuit_distance_m", INF)) <= float(candidate.get("pursuit_radius_m", 0.0)) * boat_fishing_target_boundary_hysteresis
 
 
 func _target_reaction_snapshot(reaction: Dictionary, hook_index: int) -> Dictionary:
-	var candidate: Dictionary = reaction.get("candidate", {})
+	var candidate: Dictionary = reaction.get("candidate", {}).duplicate(true)
+	candidate["trigger_mode"] = "SCHOOL_TARGETED"
+	candidate["hook_index"] = hook_index
 	return {
 		"trigger_mode": "SCHOOL_TARGETED",
 		"phase": "target_reaction",

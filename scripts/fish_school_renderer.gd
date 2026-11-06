@@ -17,23 +17,19 @@ const SURFACE_FISH_ACCELERATION_FACTOR := 0.60
 @export_range(100.0, 2400.0, 50.0) var render_radius_m := 1200.0
 @export_range(50, 700, 10) var maximum_visible_fish := 360
 @export_range(0.05, 0.5, 0.01) var movement_update_interval := 0.16
+## Fallback clearance for non-surface, non-benthic visual profiles. Surface
+## activity schools are kept in the rendered instance set under the vessel.
 @export_range(1.0, 30.0, 1.0) var boat_exclusion_radius_m := 5.0
 @export var animation_enabled := true
 @export var smooth_motion_enabled := true
 @export_category("Stickleback disturbance")
 @export_range(10.0, 100.0, 1.0) var stickleback_alert_radius_m := 48.0
-@export_range(5.0, 40.0, 1.0) var stickleback_scatter_radius_m := 18.0
-@export_range(0.05, 0.8, 0.01) var stickleback_alert_threshold := 0.20
-@export_range(0.2, 0.95, 0.01) var stickleback_scatter_threshold := 0.56
-@export_range(0.05, 0.6, 0.01) var stickleback_scatter_exit_threshold := 0.28
 @export_range(3.0, 8.0, 0.25) var stickleback_regroup_min_seconds := 6.0
 @export_range(8.0, 16.0, 0.25) var stickleback_regroup_max_seconds := 12.0
 @export_range(1.0, 8.0, 0.25) var stickleback_scatter_radius_extension_m := 4.0
-@export var disturbance_source_group := "fish_disturbance_source"
+@export_range(0.5, 8.0, 0.25) var visual_scatter_radius_response_mps := 2.5
 @export_category("Surface fish disturbance")
 @export_range(5.0, 30.0, 1.0) var surface_fish_alert_radius_m := 15.0
-@export_range(4.0, 20.0, 1.0) var surface_fish_scatter_radius_m := 10.0
-@export_range(2.0, 12.0, 1.0) var surface_fish_emergency_radius_m := 5.0
 @export_range(2.0, 10.0, 0.5) var surface_fish_scatter_extension_m := 5.0
 @export_range(100.0, 5000.0, 100.0) var observation_search_radius_m := 5000.0
 @export_range(250.0, 3000.0, 250.0) var preferred_observation_search_radius_m := 1500.0
@@ -59,9 +55,6 @@ var _visual_transition_duration := 0.16
 var _observation_camera: Camera3D
 var _return_camera: Camera3D
 var _observation_school_id := ""
-var _authoritative_disturbance_snapshot: Array[Dictionary] = []
-var _has_authoritative_disturbance_snapshot := false
-var _last_disturbance_positions: Dictionary = {}
 var _school_render_states: Dictionary = {}
 var _surface_school_motion_states: Dictionary = {}
 var _logical_school_counts: Dictionary = {}
@@ -157,22 +150,6 @@ func is_observation_active() -> bool:
 
 func get_observation_school_id() -> String:
 	return _observation_school_id
-
-
-## A network adapter can feed the same shared threat snapshot to every client.
-## Each item contains `id`, `world_position` and `velocity` as Vector3 values or
-## three-number arrays. Calling this with an empty list means no current threats.
-func set_authoritative_disturbance_snapshot(sources: Array[Dictionary]) -> void:
-	_authoritative_disturbance_snapshot.clear()
-	for source in sources:
-		_authoritative_disturbance_snapshot.append(source.duplicate(true))
-	_has_authoritative_disturbance_snapshot = true
-
-
-## Used by the local single-player authority or when no server snapshot is set.
-func use_local_disturbance_sources() -> void:
-	_authoritative_disturbance_snapshot.clear()
-	_has_authoritative_disturbance_snapshot = false
 
 
 func get_school_visual_debug(school_id: String, reference_world_position: Variant = null) -> Dictionary:
@@ -398,51 +375,6 @@ func _update_observation_camera(school: Dictionary) -> void:
 	_observation_camera.look_at(target, Vector3.UP)
 
 
-func _get_disturbance_sources(delta: float) -> Array[Dictionary]:
-	if _has_authoritative_disturbance_snapshot:
-		return _authoritative_disturbance_snapshot.duplicate(false)
-	var candidates: Array[Node3D] = []
-	if is_instance_valid(_boat):
-		candidates.append(_boat)
-	for candidate in get_tree().get_nodes_in_group(disturbance_source_group):
-		var source := candidate as Node3D
-		if source != null and source != _boat and not candidates.has(source):
-			candidates.append(source)
-	var result: Array[Dictionary] = []
-	var active_ids: Dictionary = {}
-	for source in candidates:
-		if not is_instance_valid(source) or not source.is_inside_tree():
-			continue
-		var source_id := str(source.get_instance_id())
-		active_ids[source_id] = true
-		var position := source.global_position
-		var velocity := Vector3.ZERO
-		if source.has_method("get_fish_disturbance_snapshot"):
-			var snapshot: Dictionary = source.call("get_fish_disturbance_snapshot")
-			position = _snapshot_vector3(snapshot.get("world_position", position), position)
-			velocity = _snapshot_vector3(snapshot.get("velocity", Vector3.ZERO), Vector3.ZERO)
-		elif source is CharacterBody3D:
-			velocity = (source as CharacterBody3D).velocity
-		elif source is RigidBody3D:
-			velocity = (source as RigidBody3D).linear_velocity
-		elif source == _boat:
-			var speed := _get_numeric_node_property(source, "speed_mps", 0.0)
-			var forward := -source.global_transform.basis.z
-			forward.y = 0.0
-			velocity = forward.normalized() * speed
-		else:
-			var previous: Vector3 = _last_disturbance_positions.get(source_id, position)
-			var displacement := position - previous
-			if delta > 0.0001 and displacement.length() <= 20.0:
-				velocity = displacement / delta
-		_last_disturbance_positions[source_id] = position
-		result.append({"id": source_id, "world_position": position, "velocity": velocity})
-	for source_id_variant in _last_disturbance_positions.keys():
-		if not active_ids.has(str(source_id_variant)):
-			_last_disturbance_positions.erase(source_id_variant)
-	return result
-
-
 func _get_numeric_node_property(node: Object, property_name: String, fallback: float) -> float:
 	for property_info in node.get_property_list():
 		if str(property_info.get("name", "")) != property_name:
@@ -451,56 +383,6 @@ func _get_numeric_node_property(node: Object, property_name: String, fallback: f
 		if typeof(value) == TYPE_FLOAT or typeof(value) == TYPE_INT:
 			return float(value)
 	return fallback
-
-
-func _disturbance_strength_at(fish_world_xz: Vector2, sources: Array[Dictionary]) -> float:
-	var strongest := 0.0
-	for source in sources:
-		var source_position := _snapshot_vector3(source.get("world_position", source.get("position", Vector3.ZERO)), Vector3.ZERO)
-		var source_velocity := _snapshot_vector3(source.get("velocity", Vector3.ZERO), Vector3.ZERO)
-		var to_fish := fish_world_xz - Vector2(source_position.x, source_position.z)
-		var distance := to_fish.length()
-		var direct_pressure := 1.0 - smoothstep(stickleback_scatter_radius_m * 0.55, stickleback_scatter_radius_m * 1.25, distance)
-		var speed := Vector2(source_velocity.x, source_velocity.z).length()
-		if speed <= 0.35:
-			strongest = maxf(strongest, direct_pressure)
-			continue
-		var velocity_xz := Vector2(source_velocity.x, source_velocity.z)
-		var direction_to_fish := to_fish.normalized()
-		var closing_speed := maxf(0.0, velocity_xz.dot(direction_to_fish))
-		var approach_strength := smoothstep(0.15, 3.0, closing_speed)
-		var distance_signal := (1.0 - smoothstep(0.0, stickleback_alert_radius_m, distance)) * approach_strength * 0.62
-		var time_to_closest := clampf(to_fish.dot(velocity_xz) / maxf(velocity_xz.length_squared(), 0.001), 0.0, 5.0)
-		var closest_distance := (to_fish - velocity_xz * time_to_closest).length()
-		var path_signal := (1.0 - smoothstep(stickleback_scatter_radius_m * 0.65, stickleback_alert_radius_m, closest_distance)) * approach_strength * (0.25 + 0.75 * (1.0 - time_to_closest / 5.0)) * 0.78
-		strongest = maxf(strongest, maxf(direct_pressure, maxf(distance_signal, path_signal)))
-	return clampf(strongest, 0.0, 1.0)
-
-
-func _surface_fish_threat(fish_world_xz: Vector2, sources: Array[Dictionary]) -> Dictionary:
-	var alert_strength := 0.0
-	var scatter_strength := 0.0
-	for source in sources:
-		var source_position := _snapshot_vector3(source.get("world_position", source.get("position", Vector3.ZERO)), Vector3.ZERO)
-		var source_velocity := _snapshot_vector3(source.get("velocity", Vector3.ZERO), Vector3.ZERO)
-		var velocity := Vector2(source_velocity.x, source_velocity.z)
-		var to_fish := fish_world_xz - Vector2(source_position.x, source_position.z)
-		var distance := to_fish.length()
-		var speed := velocity.length()
-		var alert_radius := surface_fish_alert_radius_m + minf(speed * 0.35, 5.0)
-		var scatter_radius := surface_fish_scatter_radius_m + minf(speed * 0.25, 4.0)
-		var emergency_radius := surface_fish_emergency_radius_m + minf(speed * 0.15, 2.0)
-		var effective_distance := distance
-		if speed > 0.45:
-			var time_to_closest := clampf(to_fish.dot(velocity) / maxf(velocity.length_squared(), 0.001), 0.0, 1.5)
-			var closest_distance := (to_fish - velocity * time_to_closest).length()
-			var predicted_distance := closest_distance + minf(speed * 0.3, 3.0)
-			effective_distance = minf(distance, predicted_distance)
-		var alert := 1.0 - smoothstep(alert_radius, alert_radius + 3.0, effective_distance)
-		var scatter := 1.0 - smoothstep(emergency_radius, scatter_radius, effective_distance)
-		alert_strength = maxf(alert_strength, alert)
-		scatter_strength = maxf(scatter_strength, scatter)
-	return {"alert": clampf(alert_strength, 0.0, 1.0), "scatter": clampf(scatter_strength, 0.0, 1.0)}
 
 
 func _surface_fish_escape_direction(fish_world_xz: Vector2, local_offset: Vector2, state: Dictionary, sources: Array[Dictionary]) -> Vector2:
@@ -651,7 +533,6 @@ func _build_species_visuals() -> void:
 
 func _update_visible_fish(delta: float) -> void:
 	var schools := _manager.get_schools_near(_boat.global_position, render_radius_m)
-	var disturbance_sources := _get_disturbance_sources(delta)
 	var observation_id := _observation_school_id if is_observation_active() else ""
 	schools.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
 		var a_id := str(a.get("school_id", ""))
@@ -718,7 +599,7 @@ func _update_visible_fish(delta: float) -> void:
 		var allowed := mini(int(school["population"]), mini(max_for_species - array.size(), remaining_total))
 		if allowed <= 0:
 			continue
-		var fish_records := _build_school_fish(school, profile, allowed, delta, time_now, depth_sample_cache, surface_sample_cache, disturbance_sources)
+		var fish_records := _build_school_fish(school, profile, allowed, delta, time_now, depth_sample_cache, surface_sample_cache)
 		array.append_array(fish_records)
 		fish_by_species[species_id] = array
 		remaining_total -= fish_records.size()
@@ -954,17 +835,31 @@ static func _snapshot_vector3(value: Variant, fallback: Vector3) -> Vector3:
 	return fallback
 
 
+## Used only to choose a visual escape heading after the Authority has already
+## entered ALERT or FLEEING. This does not calculate or trigger disturbance.
+func _authoritative_escape_sources(authoritative_state: String) -> Array[Dictionary]:
+	var sources: Array[Dictionary] = []
+	if authoritative_state == "CALM" or _boat == null or not is_instance_valid(_boat):
+		return sources
+	var speed := _get_numeric_node_property(_boat, "speed_mps", 0.0)
+	var forward := -_boat.global_transform.basis.z
+	forward.y = 0.0
+	var velocity := forward.normalized() * speed if forward.length_squared() > 0.001 else Vector3.ZERO
+	sources.append({"id": "authority_visual_heading", "world_position": _boat.global_position, "velocity": velocity})
+	return sources
+
+
 func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: int, delta: float, time_now: float, depth_sample_cache: Dictionary, surface_sample_cache: Dictionary = {}, disturbance_sources: Array[Dictionary] = []) -> Array[Dictionary]:
 	var result: Array[Dictionary] = []
 	var school_id := str(school["school_id"])
 	var school_position := Vector3(float(school["world_position"][0]), 0.0, float(school["world_position"][2]))
 	var group_heading := float(school["direction_radians"])
 	var group_forward := Vector2(cos(group_heading), sin(group_heading))
-	var boat_delta := Vector2(_boat.global_position.x - school_position.x, _boat.global_position.z - school_position.z)
-	var boat_distance := boat_delta.length()
-	var active_disturbance_sources := disturbance_sources
-	if active_disturbance_sources.is_empty():
-		active_disturbance_sources = _get_disturbance_sources(delta)
+	var authority_disturbance_state := str(school.get("disturbance_state", "CALM")).to_upper()
+	if authority_disturbance_state not in ["CALM", "ALERT", "FLEEING"]:
+		authority_disturbance_state = "CALM"
+	var authority_disturbance_level := clampf(float(school.get("disturbance_level", 0.0)), 0.0, 1.0)
+	var active_disturbance_sources := _authoritative_escape_sources(authority_disturbance_state)
 	var school_depth := maxf(0.1, float(school["depth_m"]))
 	# All members remain within a few metres of the school anchor. One shared
 	# Gerstner sample preserves coherent height while avoiding a full inverse
@@ -1005,36 +900,27 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 		var epoch := int(state["behavior_epoch"])
 		var regroup_remaining := float(state.get("regroup_remaining", 0.0))
 		var regroup_duration := float(state.get("regroup_duration", 0.0))
-		var disturbance_state := str(state.get("disturbance_state", "cruising"))
+		var disturbance_state := str(state.get("visual_disturbance_state", state.get("disturbance_state", "cruising")))
 		var is_fleeing := false
-		var threat_level := 0.0
+		var threat_level := authority_disturbance_level
 		if profile.behavior_type == "coastal_benthic":
-			var fish_world_xz := Vector2(school_position.x + offset.x, school_position.z + offset.y)
-			var incoming_threat := clampf(_disturbance_strength_at(fish_world_xz, active_disturbance_sources) * float(state.get("reaction_sensitivity", 1.0)), 0.0, 1.0)
-			var previous_threat := float(state.get("threat_level", 0.0))
-			var response_rate := 4.0 if incoming_threat > previous_threat else 0.85
-			threat_level = move_toward(previous_threat, incoming_threat, response_rate * delta)
 			var previous_disturbance_state := disturbance_state
-			var peak_threat := maxf(float(state.get("peak_threat", 0.0)), threat_level)
-			if threat_level >= stickleback_scatter_threshold or (previous_disturbance_state == "scattering" and threat_level > stickleback_scatter_exit_threshold):
+			if authority_disturbance_state == "FLEEING":
 				disturbance_state = "scattering"
 				regroup_remaining = 0.0
 				regroup_duration = 0.0
-				state["peak_threat"] = peak_threat
 				if previous_disturbance_state != "scattering":
 					state["depth_target_m"] = _choose_stickleback_depth_target(profile, int(state["random_seed"]), epoch + 1, true)
-			elif previous_disturbance_state == "scattering":
-				disturbance_state = "recovering"
-				var population_factor := clampf(float(school.get("population", 0)) * 0.10, 0.0, 1.0)
-				regroup_duration = lerpf(stickleback_regroup_min_seconds, stickleback_regroup_max_seconds, clampf(peak_threat + population_factor * 0.2, 0.0, 1.0))
-				regroup_remaining = regroup_duration
-				state["peak_threat"] = 0.0
-				state["depth_target_m"] = _choose_stickleback_depth_target(profile, int(state["random_seed"]), epoch + 1, false)
-			elif threat_level >= stickleback_alert_threshold:
+			elif authority_disturbance_state == "ALERT":
 				disturbance_state = "alert"
 				regroup_remaining = 0.0
 				regroup_duration = 0.0
-				state["peak_threat"] = peak_threat
+			elif previous_disturbance_state == "scattering":
+				disturbance_state = "recovering"
+				var population_factor := clampf(float(school.get("population", 0)) * 0.10, 0.0, 1.0)
+				regroup_duration = lerpf(stickleback_regroup_min_seconds, stickleback_regroup_max_seconds, clampf(authority_disturbance_level + population_factor * 0.2, 0.0, 1.0))
+				regroup_remaining = regroup_duration
+				state["depth_target_m"] = _choose_stickleback_depth_target(profile, int(state["random_seed"]), epoch + 1, false)
 			elif previous_disturbance_state == "recovering" and regroup_remaining > 0.0:
 				disturbance_state = "recovering"
 				regroup_remaining = maxf(0.0, regroup_remaining - delta)
@@ -1042,7 +928,6 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 				disturbance_state = "cruising"
 				regroup_remaining = 0.0
 				regroup_duration = 0.0
-				state["peak_threat"] = 0.0
 			if disturbance_state == "cruising" and state_timer <= 0.0:
 				epoch += 1
 				behavior = _choose_behavior(profile, int(state["random_seed"]), epoch)
@@ -1059,26 +944,23 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 				"recovering": behavior = "regrouping"
 			is_fleeing = disturbance_state == "scattering"
 			state["disturbance_state"] = disturbance_state
+			state["visual_disturbance_state"] = disturbance_state
 			state["threat_level"] = threat_level
 			state["regroup_remaining"] = regroup_remaining
 			state["regroup_duration"] = regroup_duration
 		else:
 			if profile.surface_activity_cycle_enabled:
-				var fish_world_xz := Vector2(school_position.x + offset.x, school_position.z + offset.y)
-				var threat := _surface_fish_threat(fish_world_xz, active_disturbance_sources)
-				var incoming_threat := clampf(float(threat.get("alert", 0.0)) * float(state.get("reaction_sensitivity", 1.0)), 0.0, 1.0)
-				var scatter_strength := clampf(float(threat.get("scatter", 0.0)) * float(state.get("reaction_sensitivity", 1.0)), 0.0, 1.0)
-				var previous_state := str(state.get("surface_disturbance_state", "cruising"))
+				var previous_state := str(state.get("surface_visual_disturbance_state", state.get("surface_disturbance_state", "cruising")))
 				var recovery_remaining := float(state.get("surface_recovery_remaining", 0.0))
-				if scatter_strength >= 0.12 or (previous_state == "scattering" and scatter_strength >= 0.06):
+				if authority_disturbance_state == "FLEEING":
 					disturbance_state = "scattering"
+					recovery_remaining = 0.0
+				elif authority_disturbance_state == "ALERT":
+					disturbance_state = "alert"
 					recovery_remaining = 0.0
 				elif previous_state == "scattering":
 					disturbance_state = "recovering"
 					recovery_remaining = lerpf(3.5, 6.5, clampf(float(state.get("reaction_sensitivity", 1.0)) - 0.90, 0.0, 1.0))
-				elif incoming_threat >= 0.16:
-					disturbance_state = "alert"
-					recovery_remaining = 0.0
 				elif previous_state == "recovering" and recovery_remaining > 0.0:
 					disturbance_state = "recovering"
 					recovery_remaining = maxf(0.0, recovery_remaining - delta)
@@ -1094,18 +976,39 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 					"scattering": behavior = "flee"
 					"recovering": behavior = "regrouping"
 				is_fleeing = disturbance_state == "scattering"
-				threat_level = maxf(incoming_threat, scatter_strength)
+				threat_level = authority_disturbance_level
 				state["surface_disturbance_state"] = disturbance_state
+				state["surface_visual_disturbance_state"] = disturbance_state
 				state["surface_recovery_remaining"] = recovery_remaining
 				state["surface_threat_level"] = threat_level
 			else:
-				is_fleeing = boat_distance < profile.flee_radius_m
-				if is_fleeing:
+				var previous_state := disturbance_state
+				var recovery_remaining := float(state.get("visual_recovery_remaining", 0.0))
+				if authority_disturbance_state == "FLEEING":
+					disturbance_state = "scattering"
+					recovery_remaining = 0.0
+				elif authority_disturbance_state == "ALERT":
+					disturbance_state = "alert"
+					recovery_remaining = 0.0
+				elif previous_state in ["scattering", "alert"]:
+					disturbance_state = "recovering"
+					recovery_remaining = 4.0
+				elif previous_state == "recovering" and recovery_remaining > 0.0:
+					disturbance_state = "recovering"
+					recovery_remaining = maxf(0.0, recovery_remaining - delta)
+				else:
+					disturbance_state = "cruising"
+				if disturbance_state == "scattering":
 					behavior = "flee"
-				elif state_timer <= 0.0:
+					is_fleeing = true
+				elif disturbance_state == "alert":
+					behavior = "alert"
+				elif disturbance_state == "cruising" and state_timer <= 0.0:
 					epoch += 1
 					behavior = _choose_behavior(profile, int(state["random_seed"]), epoch)
 					state_timer = _behavior_duration(profile, int(state["random_seed"]), epoch)
+				state["visual_disturbance_state"] = disturbance_state
+				state["visual_recovery_remaining"] = recovery_remaining
 		var separation := Vector2.ZERO
 		var alignment := Vector2.ZERO
 		var neighbor_center := Vector2.ZERO
@@ -1217,18 +1120,24 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 		velocity = _limit_velocity_turn(local_velocities[index], velocity, profile, delta, is_fleeing)
 		offset += velocity * delta
 		var base_activity_radius := _school_wander_radius(profile)
-		var expansion := 0.0
+		var target_expansion := 0.0
 		if profile.behavior_type == "coastal_benthic":
 			if disturbance_state == "scattering":
-				expansion = stickleback_scatter_radius_extension_m * profile.scatter_radius_extension_factor * clampf(threat_level, 0.4, 1.0)
+				target_expansion = stickleback_scatter_radius_extension_m * profile.scatter_radius_extension_factor * clampf(threat_level, 0.4, 1.0)
 			elif disturbance_state == "recovering":
-				expansion = stickleback_scatter_radius_extension_m * clampf(regroup_remaining / maxf(regroup_duration, 0.01), 0.0, 1.0)
+				target_expansion = stickleback_scatter_radius_extension_m * clampf(regroup_remaining / maxf(regroup_duration, 0.01), 0.0, 1.0)
 		elif profile.surface_activity_cycle_enabled:
 			if disturbance_state == "scattering":
-				expansion = surface_fish_scatter_extension_m * profile.scatter_radius_extension_factor
+				target_expansion = surface_fish_scatter_extension_m * profile.scatter_radius_extension_factor
 			elif disturbance_state == "recovering":
 				var remaining_recovery := float(state.get("surface_recovery_remaining", 0.0))
-				expansion = surface_fish_scatter_extension_m * clampf(remaining_recovery / 6.5, 0.0, 1.0) * 0.65
+				target_expansion = surface_fish_scatter_extension_m * clampf(remaining_recovery / 6.5, 0.0, 1.0) * 0.65
+		# Keep the local formation radius continuous when Authority changes from
+		# FLEEING directly to ALERT. The Authority state remains authoritative;
+		# this scalar only smooths the visual envelope used to constrain offsets.
+		var current_expansion := maxf(0.0, float(state.get("visual_scatter_radius_expansion_m", 0.0)))
+		var expansion := move_toward(current_expansion, target_expansion, visual_scatter_radius_response_mps * maxf(delta, 0.0))
+		state["visual_scatter_radius_expansion_m"] = expansion
 		var activity_radius := base_activity_radius + expansion
 		var wander_radius := activity_radius
 		if offset.length() > wander_radius:
@@ -1286,6 +1195,10 @@ func _build_school_fish(school: Dictionary, profile: FishSpeciesProfile, count: 
 			position_y = clampf(position_y, local_surface_height - local_depth + clearance, local_surface_height - clearance)
 		var position := Vector3(world_xz.x, position_y, world_xz.y)
 		var boat_clearance := 0.65 if profile.behavior_type == "coastal_benthic" else boat_exclusion_radius_m
+		# Keep surface-school instances and motion state active under the boat;
+		# leave any occlusion to the normal scene depth/material rendering.
+		if profile.surface_activity_cycle_enabled:
+			boat_clearance = 0.0
 		if profile.behavior_type == "coastal_benthic" and (is_fleeing or (_observation_school_id == school_id and is_observation_active())):
 			boat_clearance = 0.0
 		if Vector2(position.x - _boat.global_position.x, position.z - _boat.global_position.z).length() < boat_clearance:

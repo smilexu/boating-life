@@ -298,6 +298,7 @@ func _run() -> void:
 	_check(not resource_map.is_map_open() and sea_chart.visible and not depth_map_canvas.visible, "M closes the full chart and restores the compact Sea Chart")
 
 	var renderer := main_root.get_node("FishResourceManager/FishSchoolRenderer") as FishSchoolRenderer
+	_test_surface_fish_crossing_old_boat_clearance(renderer, manager, boat, bathymetry)
 	var authority_population_before_budget_change := 0
 	for school in manager.get_all_school_snapshots():
 		authority_population_before_budget_change += int(school.get("population", 0))
@@ -434,10 +435,50 @@ func _run() -> void:
 			radius_before_evasion += initial_local_position.length()
 		radius_before_evasion /= maxf(float(stickle_count), 1.0)
 		boat.global_position = stickleback_center
+		var visual_school_snapshot: Dictionary = nearest_shallow_stickleback.duplicate(true)
+		visual_school_snapshot["disturbance_state"] = "CALM"
+		visual_school_snapshot["disturbance_level"] = 0.0
 		for tick in range(16):
 			stickle_depth_cache.clear()
 			stickle_surface_cache.clear()
-			renderer._build_school_fish(nearest_shallow_stickleback, stickleback_profile, stickle_count, 0.16, 5.0 + float(tick) * 0.16, stickle_depth_cache, stickle_surface_cache)
+			renderer._build_school_fish(visual_school_snapshot, stickleback_profile, stickle_count, 0.16, 4.0 + float(tick) * 0.16, stickle_depth_cache, stickle_surface_cache)
+		var calm_overhead_flee_count := 0
+		for index in range(stickle_count):
+			var key := "%s:%d" % [str(nearest_shallow_stickleback["school_id"]), index]
+			if str(renderer._individual_states.get(key, {}).get("behavior_state", "")) == "flee":
+				calm_overhead_flee_count += 1
+		_check(calm_overhead_flee_count == 0, "boat directly overhead does not start fleeing without an Authority disturbance state")
+		boat.global_position = stickleback_center + Vector3(100.0, 0.0, 0.0)
+		visual_school_snapshot["disturbance_state"] = "ALERT"
+		visual_school_snapshot["disturbance_level"] = 0.4
+		for tick in range(4):
+			stickle_depth_cache.clear()
+			stickle_surface_cache.clear()
+			renderer._build_school_fish(visual_school_snapshot, stickleback_profile, stickle_count, 0.16, 6.56 + float(tick) * 0.16, stickle_depth_cache, stickle_surface_cache)
+		var alert_count := 0
+		var alert_flee_count := 0
+		for index in range(stickle_count):
+			var key := "%s:%d" % [str(nearest_shallow_stickleback["school_id"]), index]
+			var alert_state: Dictionary = renderer._individual_states.get(key, {})
+			if str(alert_state.get("behavior_state", "")) == "alert":
+				alert_count += 1
+			if str(alert_state.get("behavior_state", "")) == "flee":
+				alert_flee_count += 1
+		_check(alert_count > 0 and alert_flee_count == 0, "Authority ALERT redirects eligible visuals without entering the FLEEING behavior")
+		radius_before_evasion = 0.0
+		for index in range(stickle_count):
+			var key := "%s:%d" % [str(nearest_shallow_stickleback["school_id"]), index]
+			var alert_fish_state: Dictionary = renderer._individual_states[key]
+			var alert_local_position: Vector2 = alert_fish_state.get("local_position", Vector2.ZERO)
+			radius_before_evasion += alert_local_position.length()
+		radius_before_evasion /= maxf(float(stickle_count), 1.0)
+		boat.global_position = stickleback_center
+		visual_school_snapshot["disturbance_state"] = "FLEEING"
+		visual_school_snapshot["disturbance_level"] = 0.8
+		for tick in range(16):
+			stickle_depth_cache.clear()
+			stickle_surface_cache.clear()
+			renderer._build_school_fish(visual_school_snapshot, stickleback_profile, stickle_count, 0.16, 7.20 + float(tick) * 0.16, stickle_depth_cache, stickle_surface_cache)
 		var fleeing_count := 0
 		var shallow_evasion_count := 0
 		var radius_after_evasion := 0.0
@@ -451,15 +492,17 @@ func _run() -> void:
 			var evaded_local_position: Vector2 = fish_state.get("local_position", Vector2.ZERO)
 			radius_after_evasion += evaded_local_position.length()
 		radius_after_evasion /= maxf(float(stickle_count), 1.0)
-		_check(fleeing_count == stickle_count, "boat overhead triggers lateral evasion for the whole stickleback school")
+		_check(fleeing_count == stickle_count, "Authority FLEEING state triggers lateral evasion for the whole stickleback school")
 		_check(shallow_evasion_count == stickle_count, "panicked sticklebacks stay in the shallow visible layer instead of diving into seagrass")
 		_check(radius_after_evasion > radius_before_evasion + 0.05, "boat disturbance spreads sticklebacks outward without moving their shared school anchor")
 		var recovery_start_distance := 0.0
 		boat.global_position = stickleback_center + Vector3(100.0, 0.0, 0.0)
+		visual_school_snapshot["disturbance_state"] = "CALM"
+		visual_school_snapshot["disturbance_level"] = 0.1
 		for tick in range(16):
 			stickle_depth_cache.clear()
 			stickle_surface_cache.clear()
-			renderer._build_school_fish(nearest_shallow_stickleback, stickleback_profile, stickle_count, 0.16, 8.0 + float(tick) * 0.16, stickle_depth_cache, stickle_surface_cache)
+			renderer._build_school_fish(visual_school_snapshot, stickleback_profile, stickle_count, 0.16, 9.76 + float(tick) * 0.16, stickle_depth_cache, stickle_surface_cache)
 		var regrouping_count := 0
 		for index in range(stickle_count):
 			var key := "%s:%d" % [str(nearest_shallow_stickleback["school_id"]), index]
@@ -470,50 +513,45 @@ func _run() -> void:
 		for tick in range(48):
 			stickle_depth_cache.clear()
 			stickle_surface_cache.clear()
-			renderer._build_school_fish(nearest_shallow_stickleback, stickleback_profile, stickle_count, 0.16, 10.56 + float(tick) * 0.16, stickle_depth_cache, stickle_surface_cache)
+			renderer._build_school_fish(visual_school_snapshot, stickleback_profile, stickle_count, 0.16, 13.12 + float(tick) * 0.16, stickle_depth_cache, stickle_surface_cache)
 		var recovery_end_distance := _mean_stickleback_pair_distance(renderer, str(nearest_shallow_stickleback["school_id"]), stickle_count)
 		_check(recovery_end_distance < recovery_start_distance, "sticklebacks gradually return toward their original formation after the boat passes")
-		var two_threats: Array[Dictionary] = [
-			{"id": "simulated_boat_left", "world_position": stickleback_center + Vector3(-10.0, 0.0, 0.0), "velocity": Vector3(7.0, 0.0, 0.0)},
-			{"id": "simulated_boat_right", "world_position": stickleback_center + Vector3(10.0, 0.0, 0.0), "velocity": Vector3(-7.0, 0.0, 0.0)},
-		]
-		_check(manager.set_authoritative_disturbance_snapshot(two_threats), "authority can supply a shared multi-boat threat snapshot")
-		for tick in range(16):
-			stickle_depth_cache.clear()
-			stickle_surface_cache.clear()
-			renderer._build_school_fish(nearest_shallow_stickleback, stickleback_profile, stickle_count, 0.16, 20.0 + float(tick) * 0.16, stickle_depth_cache, stickle_surface_cache)
-		var multi_threat_scattering_count := 0
-		for index in range(stickle_count):
-			var key := "%s:%d" % [str(nearest_shallow_stickleback["school_id"]), index]
-			if str(renderer._individual_states.get(key, {}).get("disturbance_state", "")) == "scattering":
-				multi_threat_scattering_count += 1
-		_check(multi_threat_scattering_count == stickle_count, "multiple approaching boats can trigger the shared scattering response")
-		var remaining_threat: Array[Dictionary] = [
-			{"id": "simulated_boat_right", "world_position": stickleback_center, "velocity": Vector3.ZERO},
-		]
-		manager.set_authoritative_disturbance_snapshot(remaining_threat)
-		for tick in range(12):
-			stickle_depth_cache.clear()
-			stickle_surface_cache.clear()
-			renderer._build_school_fish(nearest_shallow_stickleback, stickleback_profile, stickle_count, 0.16, 22.56 + float(tick) * 0.16, stickle_depth_cache, stickle_surface_cache)
-		var remaining_threat_scattering_count := 0
-		for index in range(stickle_count):
-			var key := "%s:%d" % [str(nearest_shallow_stickleback["school_id"]), index]
-			if str(renderer._individual_states.get(key, {}).get("disturbance_state", "")) == "scattering":
-				remaining_threat_scattering_count += 1
-		_check(remaining_threat_scattering_count == stickle_count, "one nearby vessel prevents premature regrouping after another leaves")
-		manager.set_authoritative_disturbance_snapshot([])
-		for tick in range(16):
-			stickle_depth_cache.clear()
-			stickle_surface_cache.clear()
-			renderer._build_school_fish(nearest_shallow_stickleback, stickleback_profile, stickle_count, 0.16, 24.48 + float(tick) * 0.16, stickle_depth_cache, stickle_surface_cache)
-		var no_threat_recovering_count := 0
+		var recovered_visual_phase_count := 0
 		for index in range(stickle_count):
 			var key := "%s:%d" % [str(nearest_shallow_stickleback["school_id"]), index]
 			if str(renderer._individual_states.get(key, {}).get("disturbance_state", "")) == "recovering":
-				no_threat_recovering_count += 1
-		_check(no_threat_recovering_count == stickle_count, "the school begins recovering after all authoritative threats leave")
-		renderer.use_local_disturbance_sources()
+				recovered_visual_phase_count += 1
+		_check(recovered_visual_phase_count == 0, "Authority returning to CALM lets the presentation recovery phase complete")
+		var authority_anchor_before_transition: Array = manager.get_school(str(nearest_shallow_stickleback["school_id"])).get("world_position", []).duplicate()
+		var transition_key := "%s:0" % str(nearest_shallow_stickleback["school_id"])
+		var transition_state: Dictionary = renderer._individual_states[transition_key]
+		var base_radius := renderer._school_wander_radius(stickleback_profile)
+		var transition_extension := renderer.stickleback_scatter_radius_extension_m * 0.8
+		var previous_offset: Vector2 = transition_state.get("local_position", Vector2.RIGHT)
+		var escape_direction := previous_offset.normalized() if previous_offset.length_squared() > 0.001 else Vector2.RIGHT
+		var position_before_alert := escape_direction * (base_radius + transition_extension)
+		transition_state["local_position"] = position_before_alert
+		transition_state["velocity"] = Vector2.ZERO
+		transition_state["disturbance_state"] = "scattering"
+		transition_state["visual_disturbance_state"] = "scattering"
+		transition_state["visual_scatter_radius_expansion_m"] = transition_extension
+		renderer._individual_states[transition_key] = transition_state
+		visual_school_snapshot["disturbance_state"] = "ALERT"
+		visual_school_snapshot["disturbance_level"] = 0.8
+		stickle_depth_cache.clear()
+		stickle_surface_cache.clear()
+		var alert_transition_records := renderer._build_school_fish(visual_school_snapshot, stickleback_profile, stickle_count, 0.16, 20.80, stickle_depth_cache, stickle_surface_cache)
+		var position_after_alert: Vector2 = renderer._individual_states[transition_key].get("local_position", Vector2.ZERO)
+		var fleeing_to_alert_displacement := position_before_alert.distance_to(position_after_alert)
+		var transition_record_exists := false
+		for record in alert_transition_records:
+			if str(record.get("individual_key", "")) == transition_key:
+				transition_record_exists = true
+				break
+		_check(transition_record_exists, "FLEEING to ALERT transition updates the test fish in the rendered sample")
+		_check(fleeing_to_alert_displacement < 0.75, "FLEEING to ALERT contracts the visual envelope without snapping an escaped fish back to the core (observed %.2f m)" % fleeing_to_alert_displacement)
+		var authority_anchor_after_transition: Array = manager.get_school(str(nearest_shallow_stickleback["school_id"])).get("world_position", [])
+		_check(authority_anchor_before_transition == authority_anchor_after_transition, "Renderer-only flee spreading leaves the Authority school anchor unchanged")
 		boat.global_position = saved_boat_position
 		var selected_school_id_before := str(nearest_shallow_stickleback["school_id"])
 		var selected_school_before := manager.get_school(selected_school_id_before)
@@ -532,10 +570,122 @@ func _run() -> void:
 		if not selected_visual_stats.is_empty():
 			_check(int(selected_visual_stats.get("visible_fish", 0)) >= mini(5, int(selected_visual_stats.get("school_population", 0))), "overhead F3 observation keeps the school visible instead of culling fish under the boat")
 			var observation_behaviors: Dictionary = selected_visual_stats.get("behavior_counts", {})
-			_check(int(observation_behaviors.get("scattering", 0)) > 0, "F3 uses the same visible shallow-water evasion as normal boat approaches")
+			var authority_school_state := manager.get_school(selected_school_id)
+			var authority_disturbance_state := str(authority_school_state.get("disturbance_state", "CALM"))
+			var scattering_count := int(observation_behaviors.get("scattering", 0))
+			_check(scattering_count > 0 if authority_disturbance_state == "FLEEING" else scattering_count == 0, "F3 fish behavior follows Authority state rather than the boat's horizontal proximity alone")
 	print("[FISH_TEST] renderer=%s; init_elapsed_ms=%.1f" % [render_stats, float(Time.get_ticks_usec() - start_usec) / 1000.0])
 	print("[FISH_TEST] authority=%s; revision=%d; schools=%d; deterministic_init_ms=%.2f; step_total_ms=%.2f; worst_budgeted_frame_ms=%.2f; step_frames=%d" % [manager.get_authority_source(), manager.get_state_revision(), all_schools.size(), float(authority_init_usec) / 1000.0, float(simulation_update_usec) / 1000.0, float(worst_simulation_frame_usec) / 1000.0, frame_count])
 	_finish()
+
+
+func _test_surface_fish_crossing_old_boat_clearance(
+	renderer: FishSchoolRenderer,
+	manager: FishResourceManager,
+	boat: Node3D,
+	bathymetry: BathymetryManager
+) -> void:
+	var saved_boat_position := boat.global_position
+	var species_ids := ["herring", "sea_trout", "needlefish"]
+	for species_id_variant in species_ids:
+		var species_id := str(species_id_variant)
+		var profile := manager.get_species_profile(species_id)
+		if profile == null or not profile.surface_activity_cycle_enabled:
+			_check(false, "%s uses the surface-school renderer path" % species_id)
+			continue
+		var school: Dictionary = {}
+		var school_position := Vector3.ZERO
+		var school_depth_m := 0.0
+		for candidate in manager.get_all_school_snapshots():
+			if str(candidate.get("species_id", "")) != species_id:
+				continue
+			var position_values: Array = candidate.get("world_position", [])
+			if position_values.size() < 3:
+				continue
+			var candidate_position := Vector3(float(position_values[0]), 0.0, float(position_values[2]))
+			var depth_sample := bathymetry.get_depth_at_world_position(candidate_position)
+			if not bool(depth_sample.get("valid", false)) or float(depth_sample.get("depth_m", 0.0)) < 1.0:
+				continue
+			school = candidate.duplicate(true)
+			school_position = candidate_position
+			school_depth_m = float(depth_sample.get("depth_m", 0.0))
+			break
+		_check(not school.is_empty(), "%s has a valid water school for a controlled boat-crossing check" % species_id)
+		if school.is_empty():
+			continue
+
+		var synthetic_school_id := "renderer_boat_crossing_%s" % species_id
+		school["school_id"] = synthetic_school_id
+		school["world_position"] = [school_position.x, 0.0, school_position.z]
+		school["depth_m"] = school_depth_m
+		school["population"] = 1
+		school["movement_speed_mps"] = maxf(profile.movement_speed_min_mps, 0.1)
+		school["surface_activity_state"] = "near_surface"
+		school["effective_surface_activity_state"] = "near_surface"
+		school["activity_depth_m"] = 1.0
+		school["effective_activity_depth_m"] = 1.0
+		school["effective_activity_depth_target_m"] = 1.0
+		school["disturbance_state"] = "CALM"
+		school["disturbance_level"] = 0.0
+		var individual_key := "%s:0" % synthetic_school_id
+		var individual_state := renderer._create_individual_state(int(school.get("seed", 1)), 0, profile, 1.0)
+		individual_state["local_position"] = Vector2.ZERO
+		individual_state["formation_anchor"] = Vector2.ZERO
+		individual_state["velocity"] = Vector2(maxf(profile.movement_speed_min_mps * 0.25, 0.05), 0.0)
+		individual_state["visual_scatter_radius_expansion_m"] = 0.0
+		individual_state["boat_crossing_test_marker"] = species_id
+		renderer._individual_states[individual_key] = individual_state
+
+		var depth_cache: Dictionary = {}
+		var surface_cache: Dictionary = {}
+		boat.global_position = school_position + Vector3(6.0, saved_boat_position.y, 0.0)
+		var outside_records := renderer._build_school_fish(school, profile, 1, 0.16, 100.0, depth_cache, surface_cache)
+		_check(outside_records.size() == 1, "%s renders the tracked fish before crossing the old 5m boundary" % species_id)
+		_retain_test_school_states(renderer, synthetic_school_id, outside_records)
+		var outside_state: Dictionary = renderer._individual_states.get(individual_key, {})
+		var outside_position: Vector3 = outside_state.get("visual_to_transform", Transform3D.IDENTITY).origin
+
+		boat.global_position = school_position + Vector3(0.0, saved_boat_position.y, 0.0)
+		school["disturbance_state"] = "FLEEING"
+		school["disturbance_level"] = 0.8
+		depth_cache.clear()
+		surface_cache.clear()
+		var inside_records := renderer._build_school_fish(school, profile, 1, 0.16, 100.16, depth_cache, surface_cache)
+		_check(inside_records.size() == 1, "%s keeps its fish record inside the former 5m hard-cull radius" % species_id)
+		_retain_test_school_states(renderer, synthetic_school_id, inside_records)
+		var inside_state: Dictionary = renderer._individual_states.get(individual_key, {})
+		var inside_offset: Vector2 = inside_state.get("local_position", Vector2.ZERO)
+		var inside_distance := (school_position + Vector3(inside_offset.x, 0.0, inside_offset.y)).distance_to(Vector3(boat.global_position.x, school_position.y, boat.global_position.z))
+		_check(inside_distance < 5.0, "%s crossing check places the tracked fish inside 5m" % species_id)
+		_check(str(inside_state.get("boat_crossing_test_marker", "")) == species_id, "%s retains the same individual state inside the old cull radius" % species_id)
+		_check(str(inside_state.get("behavior_state", "")) == "flee", "%s still uses its Authority-driven FLEEING presentation" % species_id)
+		_check(float(inside_state.get("visual_scatter_radius_expansion_m", 0.0)) > 0.0, "%s continues the existing smooth scatter-radius update" % species_id)
+		var inside_position: Vector3 = inside_state.get("visual_to_transform", Transform3D.IDENTITY).origin
+		_check(outside_position.distance_to(inside_position) > 0.001, "%s continues moving its visual transform through the boat crossing" % species_id)
+
+		boat.global_position = school_position + Vector3(6.0, saved_boat_position.y, 0.0)
+		school["disturbance_state"] = "CALM"
+		school["disturbance_level"] = 0.0
+		depth_cache.clear()
+		surface_cache.clear()
+		var after_records := renderer._build_school_fish(school, profile, 1, 0.16, 100.32, depth_cache, surface_cache)
+		_check(after_records.size() == 1, "%s remains in the render records after the boat leaves" % species_id)
+		_retain_test_school_states(renderer, synthetic_school_id, after_records)
+		var after_state: Dictionary = renderer._individual_states.get(individual_key, {})
+		_check(str(after_state.get("boat_crossing_test_marker", "")) == species_id, "%s does not reinitialize the tracked fish after the crossing" % species_id)
+		renderer._individual_states.erase(individual_key)
+	boat.global_position = saved_boat_position
+
+
+func _retain_test_school_states(renderer: FishSchoolRenderer, school_id: String, records: Array[Dictionary]) -> void:
+	var active_keys: Dictionary = {}
+	for record in records:
+		active_keys[str(record.get("individual_key", ""))] = true
+	var prefix := school_id + ":"
+	for key_variant in renderer._individual_states.keys():
+		var key := str(key_variant)
+		if key.begins_with(prefix) and not active_keys.has(key):
+			renderer._individual_states.erase(key_variant)
 
 
 func _snapshot_layouts_equal(a: Dictionary, b: Dictionary) -> bool:

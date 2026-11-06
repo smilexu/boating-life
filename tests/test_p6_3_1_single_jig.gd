@@ -76,6 +76,16 @@ func _run() -> void:
 			target_candidate = valid_variant
 			break
 	_check(not target_candidate.is_empty(), "natural candidate query uses the real lure world position and water depth")
+	if not target_candidate.is_empty():
+		var target_profile := manager.get_species_profile(str(target_candidate.get("species_id", "")))
+		var pursuit_distance := float(target_candidate.get("pursuit_distance_m", -1.0))
+		_check(
+			pursuit_distance > float(target_candidate.get("school_horizontal_radius_m", 0.0))
+			and pursuit_distance <= float(target_candidate.get("pursuit_radius_m", 0.0))
+			and not bool(target_candidate.get("inside_school_volume", true))
+			and target_profile != null,
+			"a real Authority school remains eligible at 9 m beyond its core ellipsoid"
+		)
 	var far_diagnostics := encounter.evaluate_boat_fishing_candidates(hook_position + Vector3(100000.0, 0.0, 100000.0), depth, 0.8, SINGLE_JIG)
 	_check(int(far_diagnostics.get("valid_candidate_count", 0)) == 0, "empty water outside the Authority query cannot produce a natural bite")
 	var wrong_depth := encounter.evaluate_boat_fishing_candidates(hook_position - Vector3.UP * 10.0, depth + 10.0, 0.8, SINGLE_JIG)
@@ -114,6 +124,10 @@ func _run() -> void:
 	# Bite confirmation and the fight solver run on successive process frames.
 	await process_frame
 	_check(hooked_events.size() == 1 and encounter.state == FishingEncounterSystem.State.HOOKED, "Authority bite is confirmed once only when the fish reaches the hook")
+	var live_pursuit: Dictionary = casting.get_natural_bite_diagnostics().get("active_pursuit_approach", {})
+	var live_contact_error := float(live_pursuit.get("actual_mouth_to_hook_distance_m", INF))
+	_check(str(live_pursuit.get("state", "")) == "hooked" and live_contact_error <= BoatFishingCastingSystem.BOAT_FISHING_BITE_CONTACT_RADIUS_M, "9 m runtime pursuit reaches mouth-hook contact before Authority confirms the bite")
+	print("[P6.3.1] 9m runtime pursuit: species=%s, approach=%.2f s, start=%.2f m, contact=%.3f m" % [str(chosen.get("species_id", "")), float(live_pursuit.get("elapsed_seconds", 0.0)), float(live_pursuit.get("start_distance_to_hook_m", 0.0)), live_contact_error])
 	_check(casting.get_casting_state() == BoatFishingCastingSystem.CastState.FIGHTING and bool(casting.get_debug_snapshot().get("fight_session_active", false)), "confirmed single-jig bite enters the boat fight session")
 	_check(not casting.is_automatic_control_owned(), "the player owns boat-fight reel input instead of the old automatic timeline")
 	_check(rod_system.get_presentation_source_name() == "NONE", "boat catch does not start the trolling rod presentation timeline")
@@ -276,7 +290,7 @@ func _find_nearby_shallow_natural_candidate(manager: FishResourceManager, encoun
 		var school_position := Vector3(float(values[0]), 0.0, float(values[2]))
 		var distance := Vector2(school_position.x - origin.x, school_position.z - origin.z).length()
 		if distance < best_distance:
-			var lure_position := school_position + Vector3.RIGHT * 4.0
+			var lure_position := school_position + Vector3.RIGHT * 9.0
 			var lure_surface := waves.sample_physics_surface(lure_position, waves.get_effective_wave_time_seconds())
 			lure_position.y = float(lure_surface.get("height", 0.0)) - depth
 			var diagnostics := encounter.evaluate_boat_fishing_candidates(lure_position, depth, 0.8, SINGLE_JIG)

@@ -18,6 +18,34 @@ const LOCAL_AUTHORITY_SCRIPT := preload("res://scripts/fish_local_authority.gd")
 @export_node_path("Node") var wave_sampler_path := NodePath("../WaveSampler")
 @export_node_path("Node") var map_layer_path := NodePath("../FishResourceMap")
 
+@export_category("School vessel disturbance")
+@export_range(20.0, 80.0, 1.0) var disturbance_query_radius_m := 48.0
+@export_range(2.0, 40.0, 0.5) var disturbance_horizontal_falloff_m := 12.0
+@export_range(1.0, 12.0, 0.25) var disturbance_vertical_falloff_m := 3.5
+@export_range(0.05, 15.0, 0.1) var disturbance_rise_time_constant_s := 3.0
+@export_range(0.1, 60.0, 0.5) var disturbance_fall_time_constant_s := 12.0
+@export_range(0.0, 1.0, 0.01) var disturbance_alert_enter_level := 0.20
+@export_range(0.0, 1.0, 0.01) var disturbance_alert_exit_level := 0.12
+@export_range(0.0, 1.0, 0.01) var disturbance_flee_enter_level := 0.65
+@export_range(0.0, 1.0, 0.01) var disturbance_flee_exit_level := 0.45
+@export_range(0.1, 10.0, 0.1) var disturbance_flee_duration_s := 1.5
+@export_range(0.0, 1.0, 0.01) var disturbance_bite_willingness_calm := 1.0
+@export_range(0.0, 1.0, 0.01) var disturbance_bite_willingness_alert := 0.80
+@export_range(0.0, 1.0, 0.01) var disturbance_bite_willingness_fleeing := 0.25
+@export_range(0.01, 1.0, 0.01) var engine_off_stationary_disturbance := 0.08
+@export_range(0.01, 1.0, 0.01) var engine_off_drift_disturbance := 0.12
+@export_range(0.05, 1.0, 0.01) var engine_off_max_movement_disturbance := 0.50
+@export_range(0.01, 1.0, 0.01) var engine_idle_disturbance := 0.30
+@export_range(0.01, 1.0, 0.01) var engine_low_speed_disturbance := 0.50
+@export_range(0.01, 1.0, 0.01) var engine_cruise_disturbance := 0.80
+@export_range(0.01, 1.0, 0.01) var engine_high_speed_disturbance := 1.0
+@export_range(0.0, 1.0, 0.01) var engine_idle_speed_mps := 0.25
+@export_range(0.1, 4.0, 0.1) var engine_low_speed_end_mps := 1.5
+@export_range(1.0, 12.0, 0.1) var engine_cruise_speed_end_mps := 5.5
+@export_range(2.0, 20.0, 0.1) var engine_high_speed_end_mps := 8.0
+@export_range(0.1, 15.0, 0.1) var engine_off_full_movement_speed_mps := 6.0
+@export_range(0.01, 1.0, 0.01) var disturbance_still_speed_mps := 0.08
+
 var _bathymetry: BathymetryManager
 var _shallow_seabed_manager: ShallowSeabedManager
 var _georeference: GeoReference
@@ -73,6 +101,7 @@ func _process(delta: float) -> void:
 	if _authority == null:
 		return
 	_authority.update(delta, _world_game_time_seconds())
+	_update_authoritative_disturbance(delta)
 	var revision := _authority.get_state_revision()
 	if revision != _last_revision:
 		_last_revision = revision
@@ -82,6 +111,140 @@ func _process(delta: float) -> void:
 		_map_refresh_elapsed = fmod(_map_refresh_elapsed, 2.0)
 		if _map_layer != null and _map_layer.is_map_open():
 			_map_layer.refresh_data()
+
+
+func _update_authoritative_disturbance(delta_real_seconds: float) -> void:
+	if _authority == null or _boat == null or not is_instance_valid(_boat) or not _boat.is_inside_tree():
+		return
+	var boat_position := _boat.global_position
+	if not _is_finite_vector3(boat_position):
+		return
+	var wave_time := float(_wave_sampler.get("wave_time_seconds")) if _wave_sampler != null else _world_game_time_seconds()
+	var boat_surface_y := boat_position.y
+	if _wave_sampler != null:
+		var boat_surface_sample := _wave_sampler.sample_physics_surface(Vector3(boat_position.x, 0.0, boat_position.z), wave_time)
+		boat_surface_y = _finite_or(float(boat_surface_sample.get("height", boat_position.y)), boat_position.y)
+	var draft := -1.0
+	if _boat.has_method("get_current_draft_m"):
+		draft = float(_boat.call("get_current_draft_m"))
+	if not is_finite(draft) or draft <= 0.0:
+		draft = 0.8
+	var engine_data_available := _boat.has_method("has_engine") and _boat.has_method("get_engine_audio_state")
+	var engine_running := false
+	var throttle_demand := 0.0
+	if engine_data_available:
+		var engine_state: Dictionary = _boat.call("get_engine_audio_state")
+		throttle_demand = _finite_or(float(engine_state.get("throttle_demand", 0.0)), 0.0)
+		# TEMP: powered boats do not yet expose an explicit ignition state. Treat
+		# zero throttle as engine-off for disturbance; replace this proxy when the
+		# boat controller gains an authoritative engine start/stop state.
+		engine_running = (
+			_finite_bool(engine_state.get("running", false))
+			and bool(_boat.call("has_engine"))
+			and throttle_demand > 0.0
+		)
+	var speed_mps := absf(_numeric_property(_boat, "speed_mps", 0.0))
+	var vessel_snapshot := {
+		"world_position": boat_position,
+		"hull_bottom_world_y": boat_surface_y - draft,
+		"surface_height_m": boat_surface_y,
+		"engine_data_available": engine_data_available,
+		"engine_running": engine_running,
+		"throttle_demand": throttle_demand,
+		"speed_mps": speed_mps,
+	}
+	var samples_by_id: Dictionary = {}
+	var schools := get_schools_near(boat_position, disturbance_query_radius_m, true)
+	if _authority.has_method("get_disturbed_school_ids"):
+		for school_id_variant in _authority.call("get_disturbed_school_ids"):
+			var school_id := str(school_id_variant)
+			if not school_id.is_empty() and not samples_by_id.has(school_id):
+				var school := get_school(school_id)
+				if not school.is_empty():
+					schools.append(school)
+	for school in schools:
+		var school_id := str(school.get("school_id", ""))
+		if school_id.is_empty() or samples_by_id.has(school_id):
+			continue
+		var position := _position_from_school(school)
+		if not _is_finite_vector3(position):
+			continue
+		var surface_y := boat_surface_y
+		if _wave_sampler != null:
+			var surface_sample := _wave_sampler.sample_physics_surface(Vector3(position.x, 0.0, position.z), wave_time)
+			surface_y = _finite_or(float(surface_sample.get("height", boat_surface_y)), boat_surface_y)
+		samples_by_id[school_id] = {
+			"school_id": school_id,
+			"surface_height_m": surface_y,
+			"effective_activity_depth_m": float(school.get("effective_activity_depth_m", school.get("activity_depth_m", 0.0))),
+		}
+	var samples: Array[Dictionary] = []
+	for sample_variant in samples_by_id.values():
+		samples.append(sample_variant)
+	if _authority.has_method("update_school_disturbance"):
+		_authority.call("update_school_disturbance", vessel_snapshot, samples, delta_real_seconds, _disturbance_config())
+
+
+func get_school_disturbance_config() -> Dictionary:
+	return _disturbance_config()
+
+
+func _disturbance_config() -> Dictionary:
+	return {
+		"horizontal_falloff_m": disturbance_horizontal_falloff_m,
+		"vertical_falloff_m": disturbance_vertical_falloff_m,
+		"rise_time_constant_s": disturbance_rise_time_constant_s,
+		"fall_time_constant_s": disturbance_fall_time_constant_s,
+		"alert_enter_level": disturbance_alert_enter_level,
+		"alert_exit_level": disturbance_alert_exit_level,
+		"flee_enter_level": disturbance_flee_enter_level,
+		"flee_exit_level": disturbance_flee_exit_level,
+		"flee_strong_duration_s": disturbance_flee_duration_s,
+		"bite_willingness_calm": disturbance_bite_willingness_calm,
+		"bite_willingness_alert": disturbance_bite_willingness_alert,
+		"bite_willingness_fleeing": disturbance_bite_willingness_fleeing,
+		"engine_off_stationary": engine_off_stationary_disturbance,
+		"engine_off_drifting": engine_off_drift_disturbance,
+		"engine_off_movement_max": engine_off_max_movement_disturbance,
+		"engine_idle": engine_idle_disturbance,
+		"engine_low_speed": engine_low_speed_disturbance,
+		"engine_cruise": engine_cruise_disturbance,
+		"engine_high_speed": engine_high_speed_disturbance,
+		"engine_idle_speed_mps": engine_idle_speed_mps,
+		"engine_low_speed_end_mps": engine_low_speed_end_mps,
+		"engine_cruise_speed_end_mps": engine_cruise_speed_end_mps,
+		"engine_high_speed_end_mps": engine_high_speed_end_mps,
+		"engine_off_full_movement_speed_mps": engine_off_full_movement_speed_mps,
+		"off_still_speed_mps": disturbance_still_speed_mps,
+	}
+
+
+func _position_from_school(school: Dictionary) -> Vector3:
+	var values: Variant = school.get("world_position", [])
+	if values is Array and values.size() >= 3:
+		var position := Vector3(float(values[0]), float(values[1]), float(values[2]))
+		if _is_finite_vector3(position):
+			return position
+	return Vector3(NAN, NAN, NAN)
+
+
+func _is_finite_vector3(value: Vector3) -> bool:
+	return is_finite(value.x) and is_finite(value.y) and is_finite(value.z)
+
+
+func _numeric_property(object: Object, property_name: String, fallback: float) -> float:
+	for property_info in object.get_property_list():
+		if str(property_info.get("name", "")) == property_name:
+			return _finite_or(float(object.get(property_name)), fallback)
+	return fallback
+
+
+func _finite_or(value: float, fallback: float) -> float:
+	return value if is_finite(value) else fallback
+
+
+func _finite_bool(value: Variant) -> bool:
+	return bool(value) if typeof(value) == TYPE_BOOL else false
 
 
 func get_species_profiles() -> Array[FishSpeciesProfile]:
@@ -314,21 +477,6 @@ func get_fish_finder_sensor() -> FishFinderSensor:
 ## of render delta, so pause and time acceleration follow the shared world clock.
 func get_world_game_time_seconds() -> float:
 	return _world_game_time_seconds()
-
-
-## A server adapter can pass one shared ship-threat snapshot to all clients.
-## In the current local-authority prototype, the renderer samples the player
-## boat and nodes in its configured disturbance-source group instead.
-func set_authoritative_disturbance_snapshot(sources: Array[Dictionary]) -> bool:
-	if _renderer == null:
-		return false
-	_renderer.set_authoritative_disturbance_snapshot(sources)
-	return true
-
-
-func use_local_disturbance_sources() -> void:
-	if _renderer != null:
-		_renderer.use_local_disturbance_sources()
 
 
 func _load_default_profiles() -> void:

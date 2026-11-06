@@ -29,11 +29,21 @@ var baseline_population := 0
 var last_population_update_game_time_seconds := 0.0
 ## Fractional fish accumulated by the continuous recovery curve; always [0, 1).
 var recovery_fractional_population := 0.0
+## Authoritative vessel-disturbance state. This is transient behavior state,
+## persisted with a school snapshot so reloads do not create a fresh alert.
+var disturbance_level := 0.0
+var disturbance_target := 0.0
+var disturbance_state := "CALM"
+var strong_disturbance_duration_seconds := 0.0
+var disturbance_horizontal_distance_m := -1.0
+var disturbance_vertical_below_hull_m := -1.0
+var vessel_disturbance := 0.0
+var bite_willingness_multiplier := 1.0
 
 
 func to_dictionary() -> Dictionary:
 	return {
-		"schema_version": 3,
+		"schema_version": 4,
 		"school_id": school_id,
 		"species_id": species_id,
 		"world_position": [world_position.x, world_position.y, world_position.z],
@@ -55,12 +65,20 @@ func to_dictionary() -> Dictionary:
 		"baseline_population": baseline_population,
 		"last_population_update_game_time_seconds": last_population_update_game_time_seconds,
 		"recovery_fractional_population": recovery_fractional_population,
+		"disturbance_level": disturbance_level,
+		"disturbance_target": disturbance_target,
+		"disturbance_state": disturbance_state,
+		"strong_disturbance_duration_seconds": strong_disturbance_duration_seconds,
+		"disturbance_horizontal_distance_m": disturbance_horizontal_distance_m,
+		"disturbance_vertical_below_hull_m": disturbance_vertical_below_hull_m,
+		"vessel_disturbance": vessel_disturbance,
+		"bite_willingness_multiplier": bite_willingness_multiplier,
 	}
 
 
 static func from_dictionary(data: Dictionary) -> FishSchoolState:
 	var schema_version := int(data.get("schema_version", -1))
-	if schema_version != 3:
+	if schema_version not in [3, 4]:
 		return null
 	var position: Variant = data.get("world_position", [])
 	if not position is Array or position.size() != 3:
@@ -69,6 +87,8 @@ static func from_dictionary(data: Dictionary) -> FishSchoolState:
 	school.school_id = str(data.get("school_id", ""))
 	school.species_id = str(data.get("species_id", ""))
 	school.world_position = Vector3(float(position[0]), float(position[1]), float(position[2]))
+	if not is_finite(school.world_position.x) or not is_finite(school.world_position.y) or not is_finite(school.world_position.z):
+		return null
 	school.population = maxi(0, int(data.get("population", 0)))
 	school.habitat_region = str(data.get("habitat_region", ""))
 	school.movement_state = str(data.get("movement_state", "cruise"))
@@ -87,6 +107,16 @@ static func from_dictionary(data: Dictionary) -> FishSchoolState:
 	school.baseline_population = maxi(0, int(data.get("baseline_population", -1)))
 	school.last_population_update_game_time_seconds = float(data.get("last_population_update_game_time_seconds", -1.0))
 	school.recovery_fractional_population = float(data.get("recovery_fractional_population", -1.0))
+	school.disturbance_level = clampf(_finite_number(data.get("disturbance_level", 0.0), 0.0), 0.0, 1.0)
+	school.disturbance_target = clampf(_finite_number(data.get("disturbance_target", 0.0), 0.0), 0.0, 1.0)
+	school.disturbance_state = str(data.get("disturbance_state", "CALM"))
+	if school.disturbance_state not in ["CALM", "ALERT", "FLEEING"]:
+		school.disturbance_state = "CALM"
+	school.strong_disturbance_duration_seconds = maxf(0.0, _finite_number(data.get("strong_disturbance_duration_seconds", 0.0), 0.0))
+	school.disturbance_horizontal_distance_m = _diagnostic_distance(data.get("disturbance_horizontal_distance_m", -1.0))
+	school.disturbance_vertical_below_hull_m = _diagnostic_distance(data.get("disturbance_vertical_below_hull_m", -1.0))
+	school.vessel_disturbance = clampf(_finite_number(data.get("vessel_disturbance", 0.0), 0.0), 0.0, 1.0)
+	school.bite_willingness_multiplier = clampf(_finite_number(data.get("bite_willingness_multiplier", 1.0), 1.0), 0.0, 1.0)
 	if school.school_id.is_empty() or school.species_id.is_empty():
 		return null
 	if school.baseline_population < school.population:
@@ -96,3 +126,13 @@ static func from_dictionary(data: Dictionary) -> FishSchoolState:
 	if not is_finite(school.recovery_fractional_population) or school.recovery_fractional_population < 0.0 or school.recovery_fractional_population >= 1.0:
 		return null
 	return school
+
+
+static func _finite_number(value: Variant, fallback: float) -> float:
+	var number := float(value)
+	return number if is_finite(number) else fallback
+
+
+static func _diagnostic_distance(value: Variant) -> float:
+	var distance := _finite_number(value, -1.0)
+	return -1.0 if distance < 0.0 else distance
