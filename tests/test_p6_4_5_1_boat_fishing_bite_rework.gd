@@ -161,7 +161,7 @@ func _test_depth_action_and_query_limits(encounter: FishingEncounterSystem, mana
 	manager.schools.clear()
 	manager.set_school("herring_action", "herring", Vector3(1.0, 0.0, 0.0), 1.6, 20)
 	var no_jig_motion := encounter.evaluate_boat_fishing_candidates(origin, 1.6, 0.0, SINGLE_JIG)
-	_check(int(no_jig_motion.get("targeted_candidate_count", 0)) == 0 and str(no_jig_motion.get("reason", "")) in ["method_or_rig_mismatch", "school_target_zone_blocked"], "incompatible Herring cannot be targeted or randomly bypassed by Single Jig inside its school zone")
+	_check(int(no_jig_motion.get("targeted_candidate_count", 0)) == 0 and str(no_jig_motion.get("reason", "")) == "action_requirement_not_met", "stationary Single Jig still requires minimum lure action for compatible Herring inside its school zone")
 	manager.set_school("trout_action", "sea_trout", Vector3(1.0, 0.0, 0.0), 2.0, 8)
 	var stationary_jig := encounter.evaluate_boat_fishing_candidates(origin, 2.0, 0.0, SINGLE_JIG)
 	var moving_jig := encounter.evaluate_boat_fishing_candidates(origin, 2.0, 0.2, SINGLE_JIG)

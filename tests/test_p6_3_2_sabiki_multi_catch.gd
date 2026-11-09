@@ -150,7 +150,7 @@ func _test_distance_curve_and_compatibility() -> void:
 	_check(HERRING_PROFILE.supported_fishing_methods.has("boat_fishing"), "Herring explicitly permits Boat Fishing")
 	_check(not HERRING_PROFILE.supported_fishing_methods.has("trolling"), "Herring compatibility change does not add Trolling")
 	_check(FishingEncounterSystem.rig_matches_profile(HERRING_PROFILE, SABIKI_RIG), "Sabiki species ID whitelist accepts Herring without lure tags")
-	_check(not FishingEncounterSystem.rig_matches_profile(HERRING_PROFILE, SINGLE_JIG), "Single Jig still rejects Herring without a matching lure tag")
+	_check(FishingEncounterSystem.rig_matches_profile(HERRING_PROFILE, SINGLE_JIG), "Single Jig accepts Herring through its matching small-fish lure tag")
 	_check(FishingEncounterSystem.rig_matches_profile(SEA_TROUT_PROFILE, SINGLE_JIG), "Single Jig retains existing lure-tag species compatibility")
 	_check(not FishingEncounterSystem.rig_matches_profile(SEA_TROUT_PROFILE, SABIKI_RIG), "Sabiki whitelist rejects species outside its configured list")
 	_check(is_equal_approx(FishingEncounterSystem.boat_fishing_surface_activity_multiplier("near_surface", 1.5, HERRING_PROFILE), 1.6), "active near-surface schools receive the surface bite multiplier")

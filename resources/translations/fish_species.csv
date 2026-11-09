@@ -353,8 +353,8 @@ fishing.debug.boat_bite_no_logic_schools,No logic-only school candidates at this
 fishing.debug.boat_ambient_no_candidates,No eligible ambient fish candidate at the current hook positions.,当前钩位没有符合条件的普通海域鱼种候选。
 fishing.debug.boat_fight_inactive,No active boat-fishing fight session.,当前没有进行中的船钓搏鱼会话。
 fishing.debug.boat_test_species,Test fish species,测试鱼种
-fishing.debug.boat_test_bite,Spawn Test Fish & Bite,生成测试鱼并咬钩
-fishing.debug.boat_test_started,Test %s is approaching the lure.,测试鱼 %s 正在游向拟饵。
+fishing.debug.boat_test_bite,Sim Single Jig,模拟单钩
+fishing.debug.boat_test_started,Simulated %s is approaching the Single Jig.,模拟鱼 %s 正在接近单钩拟饵。
 fishing.debug.boat_test_unavailable,Boat-fishing test is not available in the current state.,当前状态无法执行船钓测试。
 fishing.debug.boat_test_species_unavailable,Choose a supported test species first.,请先选择支持的测试鱼种。
 fishing.debug.boat_test.reason.boat_fishing_inactive,Start Boat Fishing before spawning a test fish.,请先开启船钓活动。
@@ -873,19 +873,19 @@ hud.boat_fishing.batch_caught_format,"Caught %d Herring · total %.1f kg",成功
 hud.boat_fishing.retrieve_rig,Retrieve Rig,收获串钩
 fishing.debug.boat_sabiki_section,Sabiki multi-catch test,串钩多鱼测试
 fishing.debug.sabiki_hook_index,Hook slot,钩位
-fishing.debug.sabiki_spawn_hook,Spawn test herring at selected hook,在指定钩位生成测试鲱鱼
-fishing.debug.sabiki_spawn_next,Spawn test herring at next empty hook,在下一个空钩生成测试鲱鱼
-fishing.debug.sabiki_fill,Fill all empty hooks,填满所有空钩
-fishing.debug.sabiki_spawned,Test herring is approaching hook %d.,测试鲱鱼正在接近钩位 %d。
-fishing.debug.sabiki_spawned_count,Spawned %d test herring.,已生成 %d 条测试鲱鱼。
+fishing.debug.sabiki_spawn_hook,Spawn selected test fish at selected hook,在指定钩位生成所选测试鱼
+fishing.debug.sabiki_spawn_next,Spawn selected test fish at next empty hook,在下一个空钩生成所选测试鱼
+fishing.debug.sabiki_fill,Sim Sabiki Catch,模拟串钩上鱼
+fishing.debug.sabiki_spawned,Simulated %s is approaching hook %d.,模拟鱼 %s 正在接近钩位 %d。
+fishing.debug.sabiki_spawned_count,Started %d simulated %s fish.,已开始模拟 %d 条%s。
 fishing.debug.sabiki_unavailable,Sabiki test is unavailable in the current state.,当前状态无法执行串钩测试。
-fishing.debug.sabiki.reason.boat_fishing_inactive,Start Boat Fishing before spawning test herring.,请先开启船钓活动。
-fishing.debug.sabiki.reason.sabiki_rig_required,Select Sabiki Rig first.,请先选择鲱鱼串钩。
+fishing.debug.sabiki.reason.boat_fishing_inactive,Start Boat Fishing before simulating a Sabiki catch.,请先开启船钓活动，再模拟串钩上鱼。
+fishing.debug.sabiki.reason.sabiki_rig_required,Select the Sabiki rig first.,请先选择串钩。
 fishing.debug.sabiki.reason.tackle_not_in_water,Cast the rig and wait until it is in the water.,请先抛投串钩并等待入水。
 fishing.debug.sabiki.reason.catch_already_active,A hook or retrieval event is already active.,当前已有挂钩或收鱼流程。
 fishing.debug.sabiki.reason.no_empty_hook,There are no empty hook slots.,没有空钩位。
 fishing.debug.sabiki.reason.hook_not_empty,That hook slot already has a fish or bite.,该钩位已有鱼或正在咬钩。
-fishing.debug.sabiki.reason.method_or_rig_mismatch,Herring is not compatible with this rig.,鲱鱼与当前钓组不兼容。
+fishing.debug.sabiki.reason.method_or_rig_mismatch,This species is not compatible with the Sabiki rig.,该鱼种与当前串钩不兼容。
 fishing.debug.sabiki.reason.other,Sabiki test could not start.,串钩测试无法启动。
 fishing.debug.boat_bite_diagnostics,Boat fishing natural-bite diagnostics,船钓自然中鱼诊断
 fishing.debug.boat_bite_unavailable,Boat-fishing diagnostics are unavailable.,船钓诊断暂不可用。

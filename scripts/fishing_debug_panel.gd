@@ -2,6 +2,9 @@ extends ScrollContainer
 
 ## Developer-only controls for exercising the P2 APIs; this is not player UI.
 
+const BOAT_TEST_SINGLE_JIG: BoatFishingRigProfile = preload("res://resources/boat_fishing/single_jig.tres")
+const BOAT_TEST_SABIKI: BoatFishingRigProfile = preload("res://resources/boat_fishing/sabiki_rig.tres")
+
 var _manager: Node
 var _encounter: FishingEncounterSystem
 var _finder: FishFinderSensor
@@ -96,8 +99,12 @@ func _ready() -> void:
 	_boat_test_species_option.item_selected.connect(_on_boat_test_species_selected)
 	boat_test_section.add_child(boat_test_species_label)
 	boat_test_section.add_child(_boat_test_species_option)
-	_boat_test_bite_button = _add_button(boat_test_section, "fishing.debug.boat_test_bite", _on_boat_test_bite_pressed)
-	_boat_test_bite_button.name = "BoatFishingSpawnTestFishBite"
+	var boat_test_simulation_row := HBoxContainer.new()
+	_boat_test_bite_button = _add_button(boat_test_simulation_row, "fishing.debug.boat_test_bite", _on_boat_test_bite_pressed)
+	_boat_test_bite_button.name = "BoatFishingSimulateSingleJigCatch"
+	_boat_sabiki_fill_button = _add_button(boat_test_simulation_row, "fishing.debug.sabiki_fill", _on_sabiki_fill_pressed)
+	_boat_sabiki_fill_button.name = "BoatFishingSimulateSabikiCatch"
+	boat_test_section.add_child(boat_test_simulation_row)
 	_add_section_heading(boat_test_section, "fishing.debug.boat_sabiki_section")
 	var sabiki_hook_row := HBoxContainer.new()
 	var sabiki_hook_label := Label.new()
@@ -116,8 +123,6 @@ func _ready() -> void:
 	_boat_sabiki_spawn_hook_button.name = "BoatSabikiSpawnTestFishAtHook"
 	_boat_sabiki_spawn_next_button = _add_button(boat_test_section, "fishing.debug.sabiki_spawn_next", _on_sabiki_spawn_next_pressed)
 	_boat_sabiki_spawn_next_button.name = "BoatSabikiSpawnTestFishNextEmpty"
-	_boat_sabiki_fill_button = _add_button(boat_test_section, "fishing.debug.sabiki_fill", _on_sabiki_fill_pressed)
-	_boat_sabiki_fill_button.name = "BoatSabikiFillTestHooks"
 
 	var school_section := _add_section_container(content, "fishing.debug.section.boat_school_targeting")
 	_boat_bite_overview_label = _make_readout_label(school_section, "BoatFishingBiteOverview")
@@ -512,10 +517,15 @@ func _populate_boat_test_species() -> void:
 	if _boat_test_species_option == null or _manager == null:
 		return
 	var available_profiles: Array[FishSpeciesProfile] = []
-	for species_id in ["sea_trout", "needlefish"]:
-		var profile := _manager.call("get_species_profile", species_id) as FishSpeciesProfile
-		if profile != null:
-			available_profiles.append(profile)
+	if _manager.has_method("get_species_profiles"):
+		var registered_profiles: Array = _manager.call("get_species_profiles")
+		for profile_value in registered_profiles:
+			var profile := profile_value as FishSpeciesProfile
+			if profile == null or not profile.supported_fishing_methods.has("boat_fishing"):
+				continue
+			if _profile_matches_boat_test_rig(profile, BOAT_TEST_SINGLE_JIG) or _profile_matches_boat_test_rig(profile, BOAT_TEST_SABIKI):
+				available_profiles.append(profile)
+	available_profiles.sort_custom(func(a: FishSpeciesProfile, b: FishSpeciesProfile) -> bool: return a.species_index < b.species_index)
 	var next_species_ids: Array[String] = []
 	for profile in available_profiles:
 		next_species_ids.append(profile.species_id)
@@ -548,6 +558,19 @@ func _selected_boat_test_species_id() -> String:
 	if index < 0 or index >= _boat_test_species_option.item_count:
 		return ""
 	return str(_boat_test_species_option.get_item_metadata(index))
+
+
+func _profile_matches_boat_test_rig(profile: FishSpeciesProfile, rig: BoatFishingRigProfile) -> bool:
+	return profile != null and rig != null and FishingEncounterSystem.rig_matches_profile(profile, rig)
+
+
+func _selected_boat_test_species_matches(rig: BoatFishingRigProfile) -> bool:
+	if _manager == null or not _manager.has_method("get_species_profile"):
+		return false
+	var profile := _manager.call("get_species_profile", _selected_boat_test_species_id()) as FishSpeciesProfile
+	return profile != null \
+		and profile.supported_fishing_methods.has("boat_fishing") \
+		and _profile_matches_boat_test_rig(profile, rig)
 
 
 func _on_boat_test_species_selected(_index: int) -> void:
@@ -744,6 +767,9 @@ func _on_boat_test_bite_pressed() -> void:
 	if species_id.is_empty():
 		_show_feedback(tr("fishing.debug.boat_test_species_unavailable"))
 		return
+	if not _selected_boat_test_species_matches(BOAT_TEST_SINGLE_JIG):
+		_show_feedback(tr("fishing.debug.boat_test.reason.method_or_rig_mismatch"))
+		return
 	var result := _boat_casting_system.debug_spawn_test_fish(species_id)
 	if bool(result.get("accepted", false)):
 		var profile := _get_simulation_species_profile(species_id)
@@ -767,9 +793,18 @@ func _on_sabiki_fill_pressed() -> void:
 	if _boat_casting_system == null:
 		_show_feedback(tr("fishing.debug.sabiki_unavailable"))
 		return
-	var result := _boat_casting_system.debug_fill_sabiki_rig()
+	var species_id := _selected_boat_test_species_id()
+	if species_id.is_empty():
+		_show_feedback(tr("fishing.debug.boat_test_species_unavailable"))
+		return
+	if not _selected_boat_test_species_matches(BOAT_TEST_SABIKI):
+		_show_feedback(tr("fishing.debug.sabiki.reason.method_or_rig_mismatch"))
+		return
+	var result := _boat_casting_system.debug_fill_sabiki_rig(species_id)
 	if bool(result.get("accepted", false)):
-		_show_feedback(tr("fishing.debug.sabiki_spawned_count") % int(result.get("spawned_count", 0)))
+		var profile := _get_simulation_species_profile(species_id)
+		var species_name := tr(profile.name_key) if profile != null else species_id
+		_show_feedback(tr("fishing.debug.sabiki_spawned_count") % [int(result.get("spawned_count", 0)), species_name])
 	else:
 		_show_feedback(_sabiki_reason_text(str(result.get("reason", "other"))))
 
@@ -778,9 +813,18 @@ func _spawn_sabiki_test_fish(hook_index: int) -> void:
 	if _boat_casting_system == null:
 		_show_feedback(tr("fishing.debug.sabiki_unavailable"))
 		return
-	var result := _boat_casting_system.debug_spawn_sabiki_fish(hook_index)
+	var species_id := _selected_boat_test_species_id()
+	if species_id.is_empty():
+		_show_feedback(tr("fishing.debug.boat_test_species_unavailable"))
+		return
+	if not _selected_boat_test_species_matches(BOAT_TEST_SABIKI):
+		_show_feedback(tr("fishing.debug.sabiki.reason.method_or_rig_mismatch"))
+		return
+	var result := _boat_casting_system.debug_spawn_sabiki_fish(hook_index, species_id)
 	if bool(result.get("accepted", false)):
-		_show_feedback(tr("fishing.debug.sabiki_spawned") % (int(result.get("hook_index", 0)) + 1))
+		var profile := _get_simulation_species_profile(species_id)
+		var species_name := tr(profile.name_key) if profile != null else species_id
+		_show_feedback(tr("fishing.debug.sabiki_spawned") % [species_name, int(result.get("hook_index", 0)) + 1])
 	else:
 		_show_feedback(_sabiki_reason_text(str(result.get("reason", "other"))))
 
@@ -1538,6 +1582,8 @@ func _refresh_controls() -> void:
 	var simulation_active := _rod_system != null and _rod_system.presentation_source == FishingRodSystem.PresentationSource.DEBUG_SIMULATION
 	var has_species := not _selected_simulation_species_id().is_empty()
 	var has_boat_test_species := not _selected_boat_test_species_id().is_empty()
+	var single_test_species_compatible := _selected_boat_test_species_matches(BOAT_TEST_SINGLE_JIG)
+	var sabiki_test_species_compatible := _selected_boat_test_species_matches(BOAT_TEST_SABIKI)
 	var can_simulate := _rod_system != null and _rod_system.can_start_debug_simulation() and has_species
 	if _trolling_start_button != null:
 		_trolling_start_button.disabled = _rod_system != null and (simulation_active or _rod_system.visual_state != FishingRodSystem.VisualState.IDLE)
@@ -1547,12 +1593,12 @@ func _refresh_controls() -> void:
 	if _simulation_start_button != null:
 		_simulation_start_button.disabled = not can_simulate
 	if _boat_test_bite_button != null:
-		_boat_test_bite_button.disabled = simulation_active or _boat_casting_system == null or not has_boat_test_species
+		_boat_test_bite_button.disabled = simulation_active or _boat_casting_system == null or not has_boat_test_species or not single_test_species_compatible
 	if _boat_test_species_option != null:
 		_boat_test_species_option.disabled = simulation_active or _boat_test_species_option.item_count == 0 or not has_boat_test_species
 	var rig_snapshot: Dictionary = _boat_casting_system.get_rig_snapshot() if _boat_casting_system != null else {}
 	var sabiki_selected := str(rig_snapshot.get("rig_id", "")) == "sabiki_rig"
-	var sabiki_available := _boat_casting_system != null and _boat_casting_system.is_activity_active() and sabiki_selected
+	var sabiki_available := _boat_casting_system != null and _boat_casting_system.is_activity_active() and sabiki_selected and sabiki_test_species_compatible
 	if _boat_sabiki_hook_index_spin != null:
 		_boat_sabiki_hook_index_spin.editable = sabiki_available and not simulation_active
 		_boat_sabiki_hook_index_spin.max_value = maxf(1.0, float(rig_snapshot.get("hook_count", 5)))
@@ -1562,6 +1608,12 @@ func _refresh_controls() -> void:
 		_boat_sabiki_spawn_next_button.disabled = not sabiki_available or simulation_active
 	if _boat_sabiki_fill_button != null:
 		_boat_sabiki_fill_button.disabled = not sabiki_available or simulation_active
+		if has_boat_test_species and not sabiki_test_species_compatible:
+			_boat_sabiki_fill_button.tooltip_text = tr("fishing.debug.sabiki.reason.method_or_rig_mismatch")
+		elif not sabiki_selected:
+			_boat_sabiki_fill_button.tooltip_text = tr("fishing.debug.sabiki.reason.sabiki_rig_required")
+		else:
+			_boat_sabiki_fill_button.tooltip_text = ""
 	if _simulation_stop_button != null:
 		_simulation_stop_button.disabled = not simulation_active
 	if _simulation_replay_button != null:

@@ -804,11 +804,11 @@ func request_sabiki_retrieval() -> bool:
 	return set_manual_reeling(true, true)
 
 
-func debug_spawn_sabiki_fish(hook_index: int = -1) -> Dictionary:
+func debug_spawn_sabiki_fish(hook_index: int = -1, species_id: String = "herring") -> Dictionary:
 	_resolve_encounter()
 	if not _activity_active:
 		return {"accepted": false, "reason": "boat_fishing_inactive"}
-	if _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI:
+	if _current_rig == null or _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI:
 		return {"accepted": false, "reason": "sabiki_rig_required"}
 	if _state not in [CastState.WAITING, CastState.SABIKI_HOOKED_WAITING] or not _bait_has_landed:
 		return {"accepted": false, "reason": "tackle_not_in_water"}
@@ -820,14 +820,14 @@ func debug_spawn_sabiki_fish(hook_index: int = -1) -> Dictionary:
 		return {"accepted": false, "reason": "no_empty_hook"}
 	if hook_index >= _sabiki_hook_states.size() or str(_sabiki_hook_states[hook_index].get("status", "empty")) != "empty":
 		return {"accepted": false, "reason": "hook_not_empty"}
-	var profile := _fish_manager.get_species_profile("herring") if _fish_manager != null else null
+	var profile := _fish_manager.get_species_profile(species_id) if _fish_manager != null else null
 	if profile == null or not profile.supported_fishing_methods.has("boat_fishing") or not FishingEncounterSystem.rig_matches_profile(profile, _current_rig):
 		return {"accepted": false, "reason": "method_or_rig_mismatch"}
 	var hook_positions := get_hook_attachment_world_positions()
 	var hook_position: Vector3 = hook_positions[hook_index] if hook_index < hook_positions.size() else _bait_world
 	var candidate := {
 		"school_id": "",
-		"species_id": "herring",
+		"species_id": species_id,
 		"population": 0,
 		"activity_depth_m": _depth_below_surface_at(hook_position),
 		"lure_depth_m": _depth_below_surface_at(hook_position),
@@ -837,22 +837,28 @@ func debug_spawn_sabiki_fish(hook_index: int = -1) -> Dictionary:
 	if pending == null:
 		return {"accepted": false, "reason": "catch_already_active"}
 	_begin_sabiki_hook_bite(hook_index, pending, candidate, true)
-	return {"accepted": true, "hook_index": hook_index, "species_id": "herring"}
+	return {"accepted": true, "hook_index": hook_index, "species_id": species_id}
 
 
-func debug_fill_sabiki_rig() -> Dictionary:
+func debug_fill_sabiki_rig(species_id: String = "herring") -> Dictionary:
 	_resolve_encounter()
-	if _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI:
+	if _current_rig == null or _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI:
 		return {"accepted": false, "reason": "sabiki_rig_required", "spawned_count": 0}
+	var profile := _fish_manager.get_species_profile(species_id) if _fish_manager != null else null
+	if profile == null or not profile.supported_fishing_methods.has("boat_fishing") or not FishingEncounterSystem.rig_matches_profile(profile, _current_rig):
+		return {"accepted": false, "reason": "method_or_rig_mismatch", "spawned_count": 0}
 	var spawned := 0
+	var failure_reason := "no_empty_hook"
 	var catch_limit := mini(_current_rig.hook_count, _current_rig.maximum_catch_count)
 	for hook_index in range(catch_limit):
 		if str(_sabiki_hook_states[hook_index].get("status", "empty")) != "empty":
 			continue
-		var result := debug_spawn_sabiki_fish(hook_index)
+		var result := debug_spawn_sabiki_fish(hook_index, species_id)
 		if bool(result.get("accepted", false)):
 			spawned += 1
-	return {"accepted": spawned > 0, "spawned_count": spawned}
+		elif spawned == 0:
+			failure_reason = str(result.get("reason", "other"))
+	return {"accepted": spawned > 0, "spawned_count": spawned, "species_id": species_id, "reason": "debug_spawned" if spawned > 0 else failure_reason}
 
 
 func get_hook_depth_range_m() -> Dictionary:

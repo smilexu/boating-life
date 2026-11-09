@@ -20,7 +20,7 @@ func _run() -> void:
 	_check(is_zero_approx(BoatFishingCastingSystem.get_automatic_line_burst_offset_m("REELING", 10.2, 9.0)), "P3 line distance is not treated as payout outside a true backing-out phase")
 	_check(FishingEncounterSystem.boat_fishing_action_weight(0.0) < FishingEncounterSystem.boat_fishing_action_weight(1.5), "lure movement raises action weighting without requiring a button-only bonus")
 	_check(FishingEncounterSystem.rig_matches_profile(ResourceLoader.load("res://resources/fish_species/sea_trout.tres") as FishSpeciesProfile, SINGLE_JIG), "Single Jig compatibility uses the species and rig lure tags")
-	_check(not FishingEncounterSystem.rig_matches_profile(ResourceLoader.load("res://resources/fish_species/herring.tres") as FishSpeciesProfile, SINGLE_JIG), "incompatible Herring cannot enter the single-jig natural candidate pool")
+	_check(FishingEncounterSystem.rig_matches_profile(ResourceLoader.load("res://resources/fish_species/herring.tres") as FishSpeciesProfile, SINGLE_JIG), "Herring is compatible with the Single Jig through its small-fish lure tag")
 	var fallback_profile := BoatFishingFightProfileCatalog.load_profile("boat_fish_without_tuned_profile_test", 0.82)
 	_check(fallback_profile != null and fallback_profile.is_valid_for_species("boat_fish_without_tuned_profile_test") and is_equal_approx(fallback_profile.size_reference_length_m, 0.82), "unprofiled boat-fishable species receives a safe generic fight profile")
 
