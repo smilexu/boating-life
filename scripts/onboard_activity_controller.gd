@@ -10,6 +10,7 @@ signal activity_ended
 const PLAYER_COLLISION_LAYER := 1 << 5
 const GRAVITY_FALLBACK_MPS2 := 9.8
 const MAX_WALK_SPEED_MPS := 4.0
+const PRESENTATION_PITCH_TRACK_RESPONSE := 7.0
 
 @export var profile: OnboardActivityProfile
 @export_node_path("Node") var boat_controller_path := NodePath("../..")
@@ -28,6 +29,19 @@ var _spawned_once := false
 var _player_local_position := Vector3.ZERO
 var _player_local_yaw := 0.0
 var _look_pitch := 0.0
+var _fight_view_constraint_active := false
+var _fight_view_yaw_base := 0.0
+var _fight_view_yaw_half_range_rad := 0.0
+var _fight_view_pitch_min_rad := -deg_to_rad(55.0)
+var _fight_view_pitch_max_rad := deg_to_rad(35.0)
+var _fishing_rod_view_pitch_constraint_active := false
+var _fishing_rod_view_pitch_min_rad := -deg_to_rad(65.0)
+var _fishing_rod_view_pitch_max_rad := deg_to_rad(35.0)
+var _fight_presentation_tracking_active := false
+var _fight_presentation_pitch_target_rad := 0.0
+var _fight_presentation_pitch_offset_rad := 0.0
+var _fight_presentation_pitch_manual_range_rad := deg_to_rad(8.0)
+var _fight_presentation_has_pitch_target := false
 var _jump_action_was_pressed := false
 var _movement_lock_position := Vector3.ZERO
 var _walkable_polygon_signed_area := 0.0
@@ -75,6 +89,7 @@ func begin_activity() -> bool:
 		return false
 	if _activity_active:
 		return true
+	end_fishing_fight_view()
 	if not _spawned_once:
 		_player_local_position = profile.safe_spawn_position
 		_player_local_yaw = 0.0
@@ -95,6 +110,8 @@ func end_activity() -> void:
 	if not _activity_active:
 		return
 	_activity_active = false
+	_fishing_rod_view_pitch_constraint_active = false
+	end_fishing_fight_view()
 	set_debug_bounds_visible(false)
 	_movement_locked = false
 	set_first_person_active(false)
@@ -148,14 +165,137 @@ func set_movement_locked(locked: bool) -> void:
 func apply_mouse_look(relative: Vector2) -> void:
 	if not _first_person_active or profile == null:
 		return
-	_player_local_yaw -= relative.x * profile.mouse_sensitivity * 0.01
-	_look_pitch = clampf(
-		_look_pitch - relative.y * profile.mouse_sensitivity * 0.01,
-		-deg_to_rad(profile.pitch_limit_degrees),
-		deg_to_rad(profile.pitch_limit_degrees)
-	)
+	var yaw_delta := -relative.x * profile.mouse_sensitivity * 0.01
+	if _fight_view_constraint_active:
+		var yaw_offset := wrapf(_player_local_yaw + yaw_delta - _fight_view_yaw_base, -PI, PI)
+		_player_local_yaw = _fight_view_yaw_base + clampf(yaw_offset, -_fight_view_yaw_half_range_rad, _fight_view_yaw_half_range_rad)
+	else:
+		_player_local_yaw += yaw_delta
+	var pitch_delta := -relative.y * profile.mouse_sensitivity * 0.01
+	if _fight_view_constraint_active and _fight_presentation_tracking_active:
+		_fight_presentation_pitch_offset_rad = clampf(
+			_fight_presentation_pitch_offset_rad + pitch_delta,
+			-_fight_presentation_pitch_manual_range_rad,
+			_fight_presentation_pitch_manual_range_rad
+		)
+		_look_pitch = clampf(
+			_fight_presentation_pitch_target_rad + _fight_presentation_pitch_offset_rad,
+			_fight_view_pitch_min_rad,
+			_fight_view_pitch_max_rad
+		)
+	else:
+		var pitch_min := -deg_to_rad(profile.pitch_limit_degrees)
+		var pitch_max := deg_to_rad(profile.pitch_limit_degrees)
+		if _fight_view_constraint_active:
+			pitch_min = _fight_view_pitch_min_rad
+			pitch_max = _fight_view_pitch_max_rad
+		elif _fishing_rod_view_pitch_constraint_active:
+			pitch_min = _fishing_rod_view_pitch_min_rad
+			pitch_max = _fishing_rod_view_pitch_max_rad
+		_look_pitch = clampf(_look_pitch + pitch_delta, pitch_min, pitch_max)
 	_head_pivot.rotation.x = _look_pitch
 	_set_player_transform_from_hull()
+
+
+func set_fishing_rod_view_pitch_constraint(active: bool, minimum_degrees: float, maximum_degrees: float) -> void:
+	_fishing_rod_view_pitch_constraint_active = active
+	_fishing_rod_view_pitch_min_rad = deg_to_rad(minf(minimum_degrees, maximum_degrees))
+	_fishing_rod_view_pitch_max_rad = deg_to_rad(maxf(minimum_degrees, maximum_degrees))
+	if active and not _fight_view_constraint_active:
+		_look_pitch = clampf(_look_pitch, _fishing_rod_view_pitch_min_rad, _fishing_rod_view_pitch_max_rad)
+		if _head_pivot != null:
+			_head_pivot.rotation.x = _look_pitch
+		_set_player_transform_from_hull()
+
+
+func begin_fishing_fight_view(
+	yaw_half_range_degrees: float,
+	pitch_min_degrees: float,
+	pitch_max_degrees: float,
+	presentation_pitch_manual_range_degrees: float
+) -> void:
+	if _fight_view_constraint_active:
+		return
+	_fight_view_constraint_active = true
+	_fight_view_yaw_base = _player_local_yaw
+	_fight_view_yaw_half_range_rad = deg_to_rad(maxf(0.0, yaw_half_range_degrees))
+	_fight_view_pitch_min_rad = deg_to_rad(minf(pitch_min_degrees, pitch_max_degrees))
+	_fight_view_pitch_max_rad = deg_to_rad(maxf(pitch_min_degrees, pitch_max_degrees))
+	_fight_presentation_pitch_manual_range_rad = deg_to_rad(maxf(0.0, presentation_pitch_manual_range_degrees))
+	_fight_presentation_pitch_offset_rad = 0.0
+	_fight_presentation_tracking_active = false
+	_fight_presentation_has_pitch_target = false
+	_look_pitch = clampf(_look_pitch, _fight_view_pitch_min_rad, _fight_view_pitch_max_rad)
+	_head_pivot.rotation.x = _look_pitch
+	_set_player_transform_from_hull()
+
+
+func set_fishing_presentation_tracking(active: bool) -> void:
+	if not _fight_view_constraint_active or active == _fight_presentation_tracking_active:
+		return
+	_fight_presentation_tracking_active = active
+	_fight_presentation_pitch_offset_rad = 0.0
+	_fight_presentation_has_pitch_target = false
+	_fight_presentation_pitch_target_rad = _look_pitch
+
+
+func update_fishing_presentation_focus(world_positions: Array, delta: float) -> void:
+	if not _fight_view_constraint_active or not _fight_presentation_tracking_active or _player == null or world_positions.is_empty():
+		return
+	var eye_height := profile.eye_height_m if profile != null else 1.55
+	var camera_origin_local := _player.to_local(_player_camera.global_position) if _player_camera != null else Vector3(0.0, eye_height, 0.0)
+	var minimum_pitch := INF
+	var maximum_pitch := -INF
+	for world_position_variant in world_positions:
+		if not (world_position_variant is Vector3):
+			continue
+		var world_position: Vector3 = world_position_variant
+		if not world_position.is_finite():
+			continue
+		var direction_local := _player.to_local(world_position) - camera_origin_local
+		# Measure elevation against the view's horizontal forward axis. Radial
+		# XZ distance would under-pitch a target that is far to either side.
+		var forward_distance := -direction_local.z
+		if forward_distance <= 0.05:
+			# A hooked fish can move behind the fight-start heading. It cannot be
+			# centered by pitch alone, but retain a stable elevation target while
+			# the player turns within the bounded yaw range.
+			forward_distance = Vector2(direction_local.x, direction_local.z).length()
+		var target_pitch := atan2(direction_local.y, forward_distance)
+		minimum_pitch = minf(minimum_pitch, target_pitch)
+		maximum_pitch = maxf(maximum_pitch, target_pitch)
+	if not is_finite(minimum_pitch) or not is_finite(maximum_pitch):
+		return
+	var target_center_pitch := clampf(
+		(minimum_pitch + maximum_pitch) * 0.5,
+		_fight_view_pitch_min_rad,
+		_fight_view_pitch_max_rad
+	)
+	if not _fight_presentation_has_pitch_target:
+		_fight_presentation_pitch_target_rad = target_center_pitch
+		_fight_presentation_has_pitch_target = true
+	else:
+		var target_blend := 1.0 - exp(-PRESENTATION_PITCH_TRACK_RESPONSE * maxf(delta, 0.0))
+		_fight_presentation_pitch_target_rad = lerpf(_fight_presentation_pitch_target_rad, target_center_pitch, target_blend)
+	var desired_pitch := clampf(
+		_fight_presentation_pitch_target_rad + _fight_presentation_pitch_offset_rad,
+		_fight_view_pitch_min_rad,
+		_fight_view_pitch_max_rad
+	)
+	var pitch_blend := 1.0 - exp(-PRESENTATION_PITCH_TRACK_RESPONSE * maxf(delta, 0.0))
+	_look_pitch = lerpf(_look_pitch, desired_pitch, pitch_blend)
+	_head_pivot.rotation.x = _look_pitch
+
+
+func end_fishing_fight_view() -> void:
+	_fight_view_constraint_active = false
+	_fight_presentation_tracking_active = false
+	_fight_presentation_has_pitch_target = false
+	_fight_presentation_pitch_offset_rad = 0.0
+
+
+func is_fishing_fight_view_active() -> bool:
+	return _fight_view_constraint_active
 
 
 func set_debug_bounds_visible(visible: bool) -> void:
@@ -174,6 +314,18 @@ func get_debug_snapshot() -> Dictionary:
 		"first_person_active": _first_person_active,
 		"movement_locked": _movement_locked,
 		"player_local_position": get_player_local_position(),
+		"fishing_rod_view_pitch_constraint_active": _fishing_rod_view_pitch_constraint_active,
+		"fishing_rod_view_pitch_degrees": rad_to_deg(_look_pitch),
+		"fishing_rod_view_pitch_min_degrees": rad_to_deg(_fishing_rod_view_pitch_min_rad),
+		"fishing_rod_view_pitch_max_degrees": rad_to_deg(_fishing_rod_view_pitch_max_rad),
+		"fishing_fight_view_active": _fight_view_constraint_active,
+		"fishing_fight_yaw_base_degrees": rad_to_deg(_fight_view_yaw_base),
+		"fishing_fight_yaw_offset_degrees": rad_to_deg(wrapf(_player_local_yaw - _fight_view_yaw_base, -PI, PI)) if _fight_view_constraint_active else 0.0,
+		"fishing_fight_yaw_half_range_degrees": rad_to_deg(_fight_view_yaw_half_range_rad),
+		"fishing_fight_pitch_degrees": rad_to_deg(_look_pitch),
+		"fishing_presentation_tracking_active": _fight_presentation_tracking_active,
+		"fishing_presentation_pitch_target_valid": _fight_presentation_has_pitch_target,
+		"fishing_presentation_pitch_target_degrees": rad_to_deg(_fight_presentation_pitch_target_rad),
 		"grounded": _grounded,
 		"inside_walkable_area": is_player_inside_walkable_area(),
 		"walkable_area_polygon_count": 1 if profile != null and profile.walkable_polygon_xz.size() >= 3 else 0,

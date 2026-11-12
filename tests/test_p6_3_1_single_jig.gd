@@ -50,6 +50,18 @@ func _run() -> void:
 	await process_frame
 	_check(casting.is_activity_active(), "Boat Fishing activity starts before casting")
 	_check(casting.select_rig(&"single_jig"), "Natural and test catch use the Single Jig")
+	if onboard != null and onboard.is_first_person_active() and not onboard.is_fishing_fight_view_active():
+		var initial_rod_view_pitch := onboard.get_camera_pitch()
+		var pitch_sensitivity := onboard.profile.mouse_sensitivity * 0.01 if onboard.profile != null else 0.01
+		var rod_view_snapshot: Dictionary = onboard.get_debug_snapshot()
+		_check(bool(rod_view_snapshot.get("fishing_rod_view_pitch_constraint_active", false)), "visible boat-fishing rod enables the bounded first-person pitch range")
+		onboard.apply_mouse_look(Vector2(0.0, -10000.0))
+		_check(is_equal_approx(rad_to_deg(onboard.get_camera_pitch()), 35.0), "visible rod limits upward camera pitch to the rod framing range")
+		onboard.apply_mouse_look(Vector2(0.0, 10000.0))
+		_check(is_equal_approx(rad_to_deg(onboard.get_camera_pitch()), -65.0), "visible rod limits downward camera pitch to the rod framing range")
+		var pitch_restore_delta := initial_rod_view_pitch - onboard.get_camera_pitch()
+		onboard.apply_mouse_look(Vector2(0.0, -pitch_restore_delta / maxf(pitch_sensitivity, 0.0001)))
+		_check(is_equal_approx(onboard.get_camera_pitch(), initial_rod_view_pitch), "pitch-bound check restores the original rod view")
 	var encounter := manager.get_fishing_encounter_system()
 	var wave_sampler := main.find_child("WaveSampler", true, false) as WaveSampler
 	var natural_fixture := _find_nearby_shallow_natural_candidate(manager, encounter, boat_controller, wave_sampler)
@@ -106,6 +118,15 @@ func _run() -> void:
 	var chosen: Dictionary = trigger.get("candidate", {})
 	_check(str(trigger.get("trigger_mode", "")) == "SCHOOL_TARGETED" and not chosen.is_empty(), "qualifying real school uses the short targeted response instead of the old hazard roll")
 	_check(str(chosen.get("school_id", "")) == school_id, "deterministic test fixture leaves the selected real school as the sampled candidate")
+	var pre_fight_camera := onboard.get_activity_camera()
+	var pre_fight_rod := casting.get("_rod_visual_root") as Node3D
+	var pre_fight_butt_screen := Vector2.ZERO
+	var pre_fight_axis_camera_dot := 0.0
+	if pre_fight_camera != null and pre_fight_rod != null:
+		pre_fight_butt_screen = pre_fight_camera.unproject_position(pre_fight_rod.global_position)
+		var pre_fight_tip: Vector3 = casting.call("_get_fight_solver_rod_tip_world")
+		var pre_fight_axis := (pre_fight_tip - pre_fight_rod.global_position).normalized()
+		pre_fight_axis_camera_dot = pre_fight_axis.dot(-pre_fight_camera.global_basis.z.normalized())
 	var began := bool(casting.call("_begin_bite_event", chosen, false, false))
 	var natural_pending := encounter.pending_catch
 	_check(began and natural_pending != null and not natural_pending.debug_spawned, "natural Authority catch reserves one non-debug pending fish")
@@ -164,13 +185,62 @@ func _run() -> void:
 		print("[P6.4.5][SINGLE_GEOMETRY] live mouth-hook error=%.6fm" % mouth_error)
 		_check(mouth_error >= 0.0 and mouth_error <= 0.01, "live single-jig fish mouth stays within 1 cm of its actual hook tip")
 	if handheld_rod != null and onboard != null and onboard.is_first_person_active():
-		onboard.apply_mouse_look(Vector2(32.0, -18.0))
-		await process_frame
-		var expected_heading := Basis(Vector3.UP, onboard.get_player_local_yaw())
-		var expected_rod_position := onboard.get_player_local_position() + expected_heading * Vector3(0.31, 1.13, -0.02)
-		_check(handheld_rod.position.is_equal_approx(expected_rod_position), "the rod hand anchor follows first-person yaw during a fight")
-		_check(is_equal_approx(handheld_rod.rotation.y, onboard.get_player_local_yaw()), "the rod orientation follows the first-person view during a fight")
-		onboard.apply_mouse_look(Vector2(-32.0, 18.0))
+		var view_snapshot: Dictionary = onboard.get_debug_snapshot()
+		var fight_yaw_base_deg := float(view_snapshot.get("fishing_fight_yaw_base_degrees", 0.0))
+		var fight_pitch_base_deg := float(view_snapshot.get("fishing_fight_pitch_degrees", 0.0))
+		_check(bool(view_snapshot.get("fishing_fight_view_active", false)), "boat fight activates the bounded onboard view")
+		var fight_camera := onboard.get_activity_camera()
+		var rod_swing := casting.get("_rod_swing") as Node3D
+		var fight_reel := casting.get("_reel_visual_root") as Node3D
+		var fight_butt_screen := fight_camera.unproject_position(handheld_rod.global_position) if fight_camera != null else Vector2.ZERO
+		var fight_butt_camera_local := fight_camera.to_local(handheld_rod.global_position) if fight_camera != null else Vector3.ZERO
+		var fight_reel_camera_local := fight_camera.to_local(fight_reel.global_position) if fight_camera != null and fight_reel != null else Vector3.ZERO
+		var fight_axis_camera_dot := pre_fight_axis_camera_dot
+		if fight_camera != null and rod_swing != null:
+			var solver_tip: Vector3 = casting.call("_get_fight_solver_rod_tip_world")
+			var rod_axis := (solver_tip - rod_swing.global_position).normalized()
+			var camera_forward := -fight_camera.global_basis.z.normalized()
+			fight_axis_camera_dot = rod_axis.dot(camera_forward)
+			_check(
+				absf(fight_axis_camera_dot - pre_fight_axis_camera_dot) <= 0.01,
+				"fight entry preserves the rod's prior angular offset from the camera"
+			)
+		_check(
+			fight_camera != null and pre_fight_camera != null and fight_butt_screen.distance_to(pre_fight_butt_screen) <= 2.0,
+			"single-jig fight entry keeps the rod butt at its pre-fight screen anchor"
+		)
+		onboard.apply_mouse_look(Vector2(-10000.0, -10000.0))
+		await create_timer(0.32).timeout
+		view_snapshot = onboard.get_debug_snapshot()
+		var fight_yaw_offset_deg := absf(float(view_snapshot.get("fishing_fight_yaw_offset_degrees", 999.0)))
+		_check(fight_yaw_offset_deg <= 55.1, "boat-fight yaw stays inside the fixed range around the fight-start heading")
+		var fight_pitch_deg := float(view_snapshot.get("fishing_fight_pitch_degrees", INF))
+		_check(fight_pitch_deg >= -65.1 and fight_pitch_deg <= 35.1, "boat-fight pitch stays inside the vertical framing bounds")
+		if fight_camera != null and handheld_rod != null:
+			var moved_relative := fight_camera.to_local(handheld_rod.global_position)
+			_check(
+				moved_relative.distance_to(fight_butt_camera_local) <= 0.001,
+				"single-jig rod butt keeps its camera-relative anchor while the fight camera turns"
+			)
+			if fight_reel != null:
+				var moved_reel_relative := fight_camera.to_local(fight_reel.global_position)
+				_check(
+					moved_reel_relative.distance_to(fight_reel_camera_local) <= 0.001,
+					"single-jig reel keeps its camera-relative placement while the fight camera turns"
+				)
+			var moved_tip: Vector3 = casting.call("_get_fight_solver_rod_tip_world")
+			var moved_axis := (moved_tip - handheld_rod.global_position).normalized()
+			_check(
+				absf(moved_axis.dot(-fight_camera.global_basis.z.normalized()) - fight_axis_camera_dot) <= 0.01,
+				"single-jig rod keeps its fight-start angular offset as the camera turns"
+			)
+		var sensitivity := onboard.profile.mouse_sensitivity if onboard.profile != null else 1.0
+		var yaw_restore_delta := deg_to_rad(fight_yaw_base_deg) - onboard.get_player_local_yaw()
+		var pitch_restore_delta := deg_to_rad(fight_pitch_base_deg) - onboard.get_camera_pitch()
+		onboard.apply_mouse_look(Vector2(
+			-yaw_restore_delta / maxf(sensitivity * 0.01, 0.0001),
+			-pitch_restore_delta / maxf(sensitivity * 0.01, 0.0001)
+		))
 		await process_frame
 	_check(int(manager.get_school(school_id).get("population", 0)) == population_before, "candidate reservation and bite do not consume the school before settlement")
 	var initial_line_length := float(casting.get_interaction_snapshot().get("line_length_m", 0.0))
@@ -185,6 +255,17 @@ func _run() -> void:
 	casting.call("_advance_boat_fight", 0.016)
 	casting.set_manual_reeling(false, true)
 	_check(casting.get_casting_state() == BoatFishingCastingSystem.CastState.LANDING, "reeling the tackle to the hull-safe boundary starts the boat landing phase")
+	var landing_view_snapshot: Dictionary = onboard.get_debug_snapshot() if onboard != null else {}
+	_check(bool(landing_view_snapshot.get("fishing_presentation_tracking_active", false)), "landing enables automatic vertical framing for the surfaced fish")
+	for _frame in range(8):
+		await process_frame
+	landing_view_snapshot = onboard.get_debug_snapshot() if onboard != null else {}
+	var tracked_pitch_deg := float(landing_view_snapshot.get("fishing_presentation_pitch_target_degrees", INF))
+	_check(
+		bool(landing_view_snapshot.get("fishing_presentation_pitch_target_valid", false))
+		and tracked_pitch_deg >= -65.0 and tracked_pitch_deg <= 35.0,
+		"landing derives a bounded camera pitch target from the live fish positions"
+	)
 	var settled_natural := await _wait_until(func() -> bool: return not catch_results.is_empty(), 180)
 	_check(settled_natural, "boat landing reaches the shared authoritative catch settlement")
 	_check(fishing_player_panel == null or fishing_player_panel.get("_last_catch_result") == null, "trolling result panel ignores Boat Fishing settlement events")

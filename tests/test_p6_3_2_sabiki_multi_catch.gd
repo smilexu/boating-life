@@ -329,6 +329,38 @@ func _test_live_boat_fishing_and_f3() -> void:
 	for _frame in range(2):
 		await process_frame
 	_check(casting.is_activity_active() and casting.select_rig(&"sabiki_rig"), "Boat Fishing starts with the selectable Sabiki profile")
+	# Exercise the actual Sabiki hooked-state camera hook before the later F3
+	# controls check, so a stale debug-panel assertion cannot skip this coverage.
+	var sabiki_camera := onboard.get_activity_camera()
+	var sabiki_rod := casting.get("_rod_visual_root") as Node3D
+	var sabiki_butt_screen_before := sabiki_camera.unproject_position(sabiki_rod.global_position) if sabiki_camera != null and sabiki_rod != null else Vector2.ZERO
+	casting.call("_set_state", BoatFishingCastingSystem.CastState.SABIKI_HOOKED_WAITING)
+	var sabiki_view_snapshot: Dictionary = onboard.get_debug_snapshot()
+	var sabiki_yaw_base_deg := float(sabiki_view_snapshot.get("fishing_fight_yaw_base_degrees", 0.0))
+	_check(bool(sabiki_view_snapshot.get("fishing_fight_view_active", false)), "the Sabiki hooked state activates the bounded onboard view")
+	var sabiki_butt_camera_local := sabiki_camera.to_local(sabiki_rod.global_position) if sabiki_camera != null and sabiki_rod != null else Vector3.ZERO
+	var sabiki_butt_screen_on_entry := sabiki_camera.unproject_position(sabiki_rod.global_position) if sabiki_camera != null and sabiki_rod != null else Vector2.ZERO
+	_check(
+		sabiki_camera != null and sabiki_rod != null and sabiki_butt_screen_on_entry.distance_to(sabiki_butt_screen_before) <= 2.0,
+		"Sabiki fight entry keeps the rod butt at its pre-fight screen anchor"
+	)
+	onboard.apply_mouse_look(Vector2(10000.0, 0.0))
+	await process_frame
+	sabiki_view_snapshot = onboard.get_debug_snapshot()
+	_check(
+		absf(float(sabiki_view_snapshot.get("fishing_fight_yaw_offset_degrees", 999.0))) <= 55.1,
+		"Sabiki yaw stays within the same fixed fight-start range as Single Jig"
+	)
+	if sabiki_camera != null and sabiki_rod != null:
+		var sabiki_butt_camera_local_after := sabiki_camera.to_local(sabiki_rod.global_position)
+		_check(
+			sabiki_butt_camera_local_after.distance_to(sabiki_butt_camera_local) <= 0.001,
+			"Sabiki fight view keeps the rod butt camera-relative while the view turns"
+		)
+	var sabiki_sensitivity := onboard.profile.mouse_sensitivity if onboard.profile != null else 1.0
+	var sabiki_yaw_restore_delta := deg_to_rad(sabiki_yaw_base_deg) - onboard.get_player_local_yaw()
+	onboard.apply_mouse_look(Vector2(-sabiki_yaw_restore_delta / maxf(sabiki_sensitivity * 0.01, 0.0001), 0.0))
+	casting.call("_set_state", BoatFishingCastingSystem.CastState.READY)
 	var previous_sampling_interval := casting.boat_fishing_sampling_interval_real_seconds
 	casting.boat_fishing_sampling_interval_real_seconds = 1000.0
 	var encounter := manager.get_fishing_encounter_system()

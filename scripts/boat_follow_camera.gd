@@ -31,7 +31,6 @@ var _onboard_activity_controller: OnboardActivityController
 var _boat_fishing_casting_system: BoatFishingCastingSystem
 var _onboard_activity_active := false
 var _onboard_return_mode := CameraMode.FOLLOW
-var _rod_aim_mouse_active := false
 var _fight_camera_offset_local := Vector3(0.45, 1.15, -1.6)
 var _fight_camera_focus_local := Vector3(0.0, -0.35, 5.8)
 var _fight_camera_approach_focus_adjustment_local := Vector3(0.0, -0.15, 0.35)
@@ -91,23 +90,13 @@ func _unhandled_input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_RIGHT:
 		if event.pressed:
-			_rod_aim_mouse_active = (
-				_camera_mode == CameraMode.ONBOARD_ACTIVITY
-				and is_instance_valid(_boat_fishing_casting_system)
-				and _boat_fishing_casting_system.begin_rod_aim()
-			)
 			_mouse_look_active = _camera_mode != CameraMode.TROLLING_ROD_VIEW
 		else:
-			if _rod_aim_mouse_active and is_instance_valid(_boat_fishing_casting_system):
-				_boat_fishing_casting_system.end_rod_aim()
-			_rod_aim_mouse_active = false
 			_mouse_look_active = false
 		Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED if _mouse_look_active else Input.MOUSE_MODE_VISIBLE)
 		get_viewport().set_input_as_handled()
 	elif event is InputEventMouseMotion and _mouse_look_active:
-		if _rod_aim_mouse_active and is_instance_valid(_boat_fishing_casting_system):
-			_boat_fishing_casting_system.apply_rod_aim_mouse_motion(event.relative)
-		elif _camera_mode == CameraMode.ONBOARD_ACTIVITY and is_instance_valid(_onboard_activity_controller):
+		if _camera_mode == CameraMode.ONBOARD_ACTIVITY and is_instance_valid(_onboard_activity_controller):
 			_onboard_activity_controller.apply_mouse_look(event.relative)
 		else:
 			orbit_yaw += event.relative.x * mouse_sensitivity * 0.01
@@ -142,9 +131,7 @@ func _notification(what: int) -> void:
 
 func release_mouse_look() -> void:
 	_mouse_look_active = false
-	_rod_aim_mouse_active = false
 	if is_instance_valid(_boat_fishing_casting_system):
-		_boat_fishing_casting_system.end_rod_aim()
 		_boat_fishing_casting_system.set_manual_reeling(false)
 	Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 
@@ -356,7 +343,6 @@ func _set_camera_mode(next_mode: int) -> void:
 	if was_onboard_activity and next_mode != CameraMode.ONBOARD_ACTIVITY:
 		_onboard_activity_controller.set_first_person_active(false)
 		_mouse_look_active = false
-		_rod_aim_mouse_active = false
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
 	_camera_mode = next_mode
 	if next_mode == CameraMode.GOD and not was_god:

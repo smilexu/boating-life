@@ -348,6 +348,24 @@ func _run() -> void:
 	_check(onboard.is_movement_locked(), "A valid released cast locks walking and jumping")
 	_check(casting.get_debug_snapshot()["line_active"] and not casting.find_child("BoatFishingBait", true, false).visible, "Cast begins before bait release, without teleporting bait to the landing point")
 	_check(camera.get_camera_mode_name() == "onboard_activity", "Casting does not change the camera mode")
+	var cast_rod_root := casting.find_child("BoatFishingRodVisual", true, false) as Node3D
+	var cast_rod_camera_transform_before := first_person_camera.global_transform.affine_inverse() * cast_rod_root.global_transform
+	var cast_pitch_before := onboard.get_camera_pitch()
+	var cast_look_press := InputEventMouseButton.new()
+	cast_look_press.button_index = MOUSE_BUTTON_RIGHT
+	cast_look_press.pressed = true
+	camera._unhandled_input(cast_look_press)
+	var cast_look_motion := InputEventMouseMotion.new()
+	cast_look_motion.relative = Vector2(0.0, 12.0)
+	camera._unhandled_input(cast_look_motion)
+	await process_frame
+	var cast_rod_camera_transform_after := first_person_camera.global_transform.affine_inverse() * cast_rod_root.global_transform
+	_check(not is_equal_approx(onboard.get_camera_pitch(), cast_pitch_before), "Camera pitch input remains active during the cast")
+	_check(cast_rod_camera_transform_before.origin.distance_to(cast_rod_camera_transform_after.origin) < 0.002, "Casting no longer freezes the rod in its release-time world pose")
+	_check(cast_rod_camera_transform_before.basis.z.dot(cast_rod_camera_transform_after.basis.z) > 0.9999, "The rod keeps the same camera-relative angle during the cast")
+	var cast_look_release := cast_look_press.duplicate() as InputEventMouseButton
+	cast_look_release.pressed = false
+	camera._unhandled_input(cast_look_release)
 	for _frame in range(15):
 		await process_frame
 	_check(bool(casting.get_debug_snapshot()["bait_flying"]) and casting.find_child("SabikiRigVisual", true, false).visible, "Sabiki rig follows the bait through visible flight")
@@ -429,33 +447,52 @@ func _run() -> void:
 	casting._input(payout_key_release)
 	casting.set_manual_reeling(false)
 	_check(not bool(casting.get_debug_snapshot()["line_controls_conflicted"]), "The simultaneous-input interlock clears after both controls are released")
-	var rod_tip_before_aim: Vector3 = casting.get_debug_snapshot()["rod_tip_world_position"]
-	var bait_before_aim: Vector3 = casting.get_debug_snapshot()["bait_world_position"]
-	_check(casting.begin_rod_aim(), "Right mouse can acquire rod aiming while the lure is waiting in the water")
-	casting.apply_rod_aim_mouse_motion(Vector2(-80.0, -40.0))
-	var aimed_snapshot := casting.get_debug_snapshot()
-	_check(float(aimed_snapshot["rod_aim_yaw_deg"]) > 0.0 and float(aimed_snapshot["rod_aim_pitch_deg"]) > 0.0, "Rod aiming changes hull-local yaw and pitch")
-	_check(rod_tip_before_aim.distance_to(aimed_snapshot["rod_tip_world_position"]) > 0.05, "Changing rod aim moves the persistent line anchor at the curved rod tip")
-	casting.set("_line_paid_out_length_m", maxf(0.55, float(aimed_snapshot["actual_line_length_m"]) - 0.4))
+	var rod_tip_before_look: Vector3 = casting.get_debug_snapshot()["rod_tip_world_position"]
+	var rod_visual_root := casting.find_child("BoatFishingRodVisual", true, false) as Node3D
+	var view_camera := onboard.get_activity_camera()
+	var rod_camera_transform_before := view_camera.global_transform.affine_inverse() * rod_visual_root.global_transform
+	var reel_screen_position_before: Vector2 = view_camera.unproject_position(handheld_reel_spool.global_position)
+	var pitch_before_look := onboard.get_camera_pitch()
+	var yaw_before_look := onboard.get_player_local_yaw()
+	var right_mouse_press := InputEventMouseButton.new()
+	right_mouse_press.button_index = MOUSE_BUTTON_RIGHT
+	right_mouse_press.pressed = true
+	camera._unhandled_input(right_mouse_press)
+	var look_motion := InputEventMouseMotion.new()
+	look_motion.relative = Vector2(-80.0, -40.0)
+	camera._unhandled_input(look_motion)
+	await process_frame
+	var looked_snapshot := casting.get_debug_snapshot()
+	_check(onboard.get_player_local_yaw() > yaw_before_look and onboard.get_camera_pitch() > pitch_before_look, "Right-drag moves the shared camera view in both yaw and pitch while fishing")
+	_check(rod_tip_before_look.distance_to(looked_snapshot["rod_tip_world_position"]) > 0.05, "The rod tip follows the changed camera view and remains the active line anchor")
+	var rod_camera_transform_after := view_camera.global_transform.affine_inverse() * rod_visual_root.global_transform
+	_check(rod_camera_transform_before.origin.distance_to(rod_camera_transform_after.origin) < 0.002, "The rod hand anchor stays fixed relative to the camera while looking around")
+	_check(rod_camera_transform_before.basis.x.dot(rod_camera_transform_after.basis.x) > 0.9999 and rod_camera_transform_before.basis.y.dot(rod_camera_transform_after.basis.y) > 0.9999, "The rod's full camera-relative orientation remains unchanged")
+	_check(rod_camera_transform_before.basis.z.dot(rod_camera_transform_after.basis.z) > 0.9999, "The rod orientation follows the camera without a separate waiting aim transform")
+	var reel_screen_position_after: Vector2 = view_camera.unproject_position(handheld_reel_spool.global_position)
+	_check(reel_screen_position_before.distance_to(reel_screen_position_after) < 1.5, "Camera movement keeps the reel at the same screen position")
+	var right_mouse_release := right_mouse_press.duplicate() as InputEventMouseButton
+	right_mouse_release.pressed = false
+	camera._unhandled_input(right_mouse_release)
+	casting.set("_line_paid_out_length_m", maxf(0.55, float(looked_snapshot["actual_line_length_m"]) - 0.4))
 	casting.set("_boat_velocity_estimate_world", Vector3.ZERO)
 	casting.set("_bait_velocity_world", Vector3.ZERO)
-	var bait_before_line_pull: Vector3 = aimed_snapshot["bait_world_position"]
+	var bait_before_line_pull: Vector3 = looked_snapshot["bait_world_position"]
 	casting.call("_update_waiting_bait", 0.05)
 	var bait_after_line_pull: Vector3 = casting.get_debug_snapshot()["bait_world_position"]
 	_check(bait_after_line_pull.distance_to(bait_before_line_pull) > 0.02, "A taut line makes the bait respond gradually to rod-tip movement and line tension")
 	casting.set("_line_paid_out_length_m", casting.get_debug_snapshot()["actual_line_length_m"])
-	casting.end_rod_aim()
-	_check(not bool(casting.get_debug_snapshot()["rod_aim_active"]), "Releasing right mouse retains the rod angle and ends aim capture")
 	var bait_before_view_switch: Vector3 = casting.get_debug_snapshot()["bait_world_position"]
 	camera.cycle_camera_view()
 	_check(camera.get_camera_mode_name() == "follow" and casting.get_casting_state() == BoatFishingCastingSystem.CastState.WAITING, "O returns to the driving view without clearing the active cast")
-	_check(not bool(casting.get_debug_snapshot()["manual_reeling"]) and not bool(casting.get_debug_snapshot()["rod_aim_active"]), "Changing view releases held manual controls")
+	_check(not bool(casting.get_debug_snapshot()["manual_reeling"]) and not bool(casting.get_debug_snapshot()["rod_camera_relative_pose_captured"]), "Changing view releases held controls and invalidates the first-person hand anchor")
 	var bait_after_view_switch: Vector3 = casting.get_debug_snapshot()["bait_world_position"]
 	_check(bait_after_view_switch.distance_to(bait_before_view_switch) < 0.001, "Changing view does not teleport or reset the bait")
 	camera.cycle_camera_view()
 	camera.cycle_camera_view()
 	_check(onboard.is_first_person_active() and casting.get_casting_state() == BoatFishingCastingSystem.CastState.WAITING, "Returning to first person resumes the same waiting cast")
 	_check(casting.get_debug_snapshot()["bait_world_position"].distance_to(bait_after_view_switch) < 0.001, "Re-entering first person does not reset the bait position")
+	await process_frame
 	casting._input(payout_key_press)
 	_check(bool(casting.get_debug_snapshot()["manual_line_releasing"]), "F payout can be held before changing view")
 	var line_before_payout_view_switch := float(casting.get_debug_snapshot()["line_length_m"])

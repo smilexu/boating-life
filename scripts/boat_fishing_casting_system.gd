@@ -17,6 +17,9 @@ const SABIKI_RIG_PROFILE: BoatFishingRigProfile = preload("res://resources/boat_
 const ROD_LENGTH_M := 1.78
 const ROD_AXIS_LOCAL := Vector3(0.0, 0.26004, -0.9656)
 const HANDHELD_FIRST_GUIDE_PROGRESS := 0.50
+const HANDHELD_REEL_SCREEN_ANCHOR := Vector2(0.70, 0.74)
+const HANDHELD_REEL_SCREEN_ANCHOR_CONFLICT_PADDING_PX := 12.0
+const HANDHELD_REEL_SCREEN_BOUNDING_RADIUS_M := 0.14
 const CAST_BAIT_RELEASE_OFFSET_SECONDS := 0.19
 const RETRIEVE_DURATION_SECONDS := 0.72
 const BAIT_WATER_DRAG_FOLLOW := 0.78
@@ -56,12 +59,18 @@ const MAX_AUTOMATIC_LINE_BURST_EXTRA_M := 5.0
 const DEFAULT_CAST_MAX_DISTANCE_FROM_GUNWALE_M := 0.72
 const DEFAULT_CAST_MIN_OUTWARD_ALIGNMENT := 0.55
 const MINIMUM_MANUAL_RETRIEVAL_LINE_M := 0.08
-const FIGHT_PRESENTATION_DURATION_SECONDS := 1.25
-const FIGHT_LANDING_DURATION_SECONDS := 1.10
-const FIGHT_LANDING_FISH_STAGGER_SECONDS := 0.12
-const FIGHT_LANDING_FISH_RISE_SECONDS := 0.72
-const FIGHT_LANDING_RISE_METERS := 0.62
-const FIGHT_LANDING_RISE_SPEED_MPS := 0.85
+const FIGHT_PRESENTATION_DURATION_SECONDS := 2.6
+const FIGHT_VIEW_YAW_HALF_RANGE_DEG := 55.0
+const BOAT_FISHING_VIEW_PITCH_MIN_DEG := -65.0
+const BOAT_FISHING_VIEW_PITCH_MAX_DEG := 35.0
+const FIGHT_PRESENTATION_PITCH_MANUAL_RANGE_DEG := 7.0
+const FIGHT_LANDING_MIN_REEL_DURATION_SECONDS := 0.9
+const FIGHT_LANDING_ROD_LIFT_DEG := 42.0
+const FIGHT_LANDING_RIG_OUTWARD_OFFSET_M := 0.28
+const FIGHT_LANDING_FISH_CLEARANCE_M := 0.28
+const FIGHT_LANDING_FISH_CLEARANCE_RATIO := 0.14
+const FIGHT_LANDING_FISH_THRASH_ROLL_RAD := 0.32
+const FIGHT_LANDING_FISH_THRASH_PITCH := 0.14
 const FIGHT_HULL_SAFETY_MARGIN_M := 0.28
 const SABIKI_FIGHT_LANDING_LINE_BUFFER_M := 0.35
 const SABIKI_EMPTY_RETRIEVAL_APPROACH_MARGIN_M := 0.35
@@ -107,7 +116,6 @@ const BOAT_FIGHT_LINE_PROFILE: BoatFishingLineProfile = preload("res://resources
 @export_range(1.0, 30.0, 0.5) var line_visual_reference_load_n := 8.0
 @export_range(0.0, 0.04, 0.001) var line_visual_vibration_m := 0.012
 @export_range(1.0, 18.0, 0.5) var line_visual_vibration_frequency_hz := 8.5
-@export_range(0.08, 0.5, 0.01) var rod_aim_degrees_per_mouse_pixel := 0.22
 @export_range(0.05, 0.35, 0.01) var terminal_tackle_recovery_margin_m := 0.16
 @export_range(0.04, 0.2, 0.01) var cast_aim_preview_interval_seconds := 0.08
 @export_category("Single jig encounters")
@@ -165,9 +173,6 @@ var _manual_line_release_held := false
 var _manual_line_releasing := false
 var _line_controls_conflicted := false
 var _automatic_control_owned := false
-var _rod_aim_active := false
-var _rod_aim_yaw_deg := 0.0
-var _rod_aim_pitch_deg := 0.0
 var _rod_tension := 0.0
 var _rod_bend_direction_local := Vector2(1.0, 0.0)
 var _previous_line_connection_world := Vector3.ZERO
@@ -177,13 +182,17 @@ var _boat_velocity_estimate_world := Vector3.ZERO
 var _lure_visual_phase := 0.0
 var _lure_visual_intensity := 0.0
 var _lure_visual_basis_world := Basis.IDENTITY
-var _rod_locked_position := Vector3.ZERO
-var _rod_locked_rotation := Vector3.ZERO
+var _rod_view_camera_relative_transform := Transform3D.IDENTITY
+var _rod_view_camera_pose_captured := false
+var _rod_reel_camera_depth_m := 0.0
+var _rod_reel_camera_anchor_captured := false
+var _landing_reel_anchor_released := false
 var _rod_visual_root: Node3D
 var _rod_swing: Node3D
 var _rod_mesh_instance: MeshInstance3D
 var _reel_mount: Node3D
 var _reel_visual_root: Node3D
+var _reel_spool_visual: MeshInstance3D
 var _reel_rotating_assembly: Node3D
 var _reel_winding_visual: MultiMeshInstance3D
 var _rod_line_guides: Array[MeshInstance3D] = []
@@ -260,7 +269,12 @@ var _fight_landing_surface_crossed: Dictionary = {}
 var _line_broken_elapsed := 0.0
 var _fight_terminal_motion_this_step := false
 var _fight_landing_start_bait_world := Vector3.ZERO
-var _fight_landing_raise_m := FIGHT_LANDING_RISE_METERS
+var _fight_landing_target_bait_world := Vector3.ZERO
+var _fight_landing_start_paid_line_m := 0.0
+var _fight_landing_target_paid_line_m := 0.0
+var _fight_landing_reel_duration_seconds := FIGHT_LANDING_MIN_REEL_DURATION_SECONDS
+var _fight_landing_start_rod_rotation := Vector3.ZERO
+var _fight_landing_target_rod_rotation := Vector3.ZERO
 var _fight_rod_burst_impulse_rad := 0.0
 var _fight_rod_target_bend_deg := 0.0
 var _fight_rod_micro_vibration_deg := 0.0
@@ -315,6 +329,14 @@ func begin_activity() -> bool:
 	if _onboard == null or not _onboard.is_activity_active() or _activity_active:
 		return _activity_active
 	_activity_active = true
+	if _onboard != null:
+		_onboard.set_fishing_rod_view_pitch_constraint(
+			_onboard.is_first_person_active(),
+			BOAT_FISHING_VIEW_PITCH_MIN_DEG,
+			BOAT_FISHING_VIEW_PITCH_MAX_DEG
+		)
+	_rod_view_camera_pose_captured = false
+	_rod_reel_camera_anchor_captured = false
 	_reset_boat_fight_session(true)
 	_resolve_encounter()
 	if _encounter != null:
@@ -357,9 +379,12 @@ func end_activity() -> void:
 	_manual_line_release_held = false
 	_manual_line_releasing = false
 	_line_controls_conflicted = false
-	_rod_aim_active = false
 	_automatic_control_owned = false
 	_clear_boat_fishing_audio_loops()
+	if _onboard != null:
+		_onboard.set_fishing_rod_view_pitch_constraint(false, BOAT_FISHING_VIEW_PITCH_MIN_DEG, BOAT_FISHING_VIEW_PITCH_MAX_DEG)
+	_rod_view_camera_pose_captured = false
+	_rod_reel_camera_anchor_captured = false
 	set_process(false)
 	set_process_unhandled_input(false)
 	_rod_visual_root.visible = false
@@ -367,6 +392,8 @@ func end_activity() -> void:
 
 
 func clear_cast() -> void:
+	if _onboard != null and _onboard.is_fishing_fight_view_active():
+		_onboard.end_fishing_fight_view()
 	_reset_boat_fight_session(true)
 	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
 		_bite_fish_visual.queue_free()
@@ -407,7 +434,6 @@ func clear_cast() -> void:
 	_manual_line_release_held = false
 	_manual_line_releasing = false
 	_line_controls_conflicted = false
-	_rod_aim_active = false
 	_rod_tension = 0.0
 	_automatic_control_owned = false
 	_bite_candidate.clear()
@@ -426,8 +452,6 @@ func clear_cast() -> void:
 	_last_natural_bite_diagnostics.clear()
 	if _encounter != null:
 		_encounter.reset_boat_fishing_trigger_state()
-	_rod_aim_yaw_deg = 0.0
-	_rod_aim_pitch_deg = 0.0
 	_has_previous_line_connection = false
 	_line_instance.visible = false
 	_bait_instance.visible = false
@@ -497,8 +521,6 @@ func release_charge() -> bool:
 	_splash_elapsed = 0.0
 	_state_elapsed = 0.0
 	_waiting_elapsed = 0.0
-	_rod_locked_position = _rod_visual_root.position
-	_rod_locked_rotation = _rod_visual_root.rotation
 	_rod_release_start_bend_deg = _rod_bend_angle_deg
 	_onboard.set_movement_locked(true)
 	charge_progress_changed.emit(charge_ratio, false)
@@ -945,7 +967,6 @@ func release_held_controls_for_ui() -> void:
 	_manual_line_release_held = false
 	_manual_line_releasing = false
 	_line_controls_conflicted = false
-	_rod_aim_active = false
 	if _state == CastState.CHARGING:
 		cancel_charge_smoothly()
 	interaction_updated.emit(get_interaction_snapshot())
@@ -962,7 +983,6 @@ func set_automatic_control_owned(owned: bool) -> void:
 		_manual_line_release_held = false
 		_manual_line_releasing = false
 		_line_controls_conflicted = false
-		_rod_aim_active = false
 		charge_progress_changed.emit(0.0, false)
 	interaction_updated.emit(get_interaction_snapshot())
 	if not owned:
@@ -986,53 +1006,20 @@ func report_catch_succeeded(catch_batch_id: String) -> bool:
 	return true
 
 
-func can_adjust_waiting_rod() -> bool:
-	return _activity_active and _is_waiting_line_state() and not _automatic_control_owned
-
-
-func begin_rod_aim() -> bool:
-	if not can_adjust_waiting_rod() or _onboard == null or not _onboard.is_first_person_active():
-		return false
-	if _is_pointer_over_ui() or _is_menu_open():
-		return false
-	_rod_aim_active = true
-	return true
-
-
-func apply_rod_aim_mouse_motion(relative: Vector2) -> void:
-	if not _rod_aim_active or not can_adjust_waiting_rod():
-		return
-	var next_yaw_deg := clampf(
-		_rod_aim_yaw_deg - relative.x * rod_aim_degrees_per_mouse_pixel,
-		-60.0,
-		60.0
-	)
-	var next_pitch_deg := clampf(
-		_rod_aim_pitch_deg - relative.y * rod_aim_degrees_per_mouse_pixel,
-		0.0,
-		75.0
-	)
-	var previous_rotation := _rod_swing.rotation
-	_rod_swing.rotation = Vector3(deg_to_rad(next_pitch_deg), deg_to_rad(next_yaw_deg), 0.0)
-	var candidate_tip := _get_rod_tip_world()
-	_rod_swing.rotation = previous_rotation
-	if _path_is_blocked(_rod_visual_root.global_position, candidate_tip):
-		return
-	_rod_aim_yaw_deg = next_yaw_deg
-	_rod_aim_pitch_deg = next_pitch_deg
-	_apply_waiting_rod_pose()
-
-
-func end_rod_aim() -> void:
-	_rod_aim_active = false
-
-
 func on_camera_view_changed(first_person_active: bool) -> void:
 	## Release held controls on O without disturbing the cast itself.
+	if _onboard != null:
+		_onboard.set_fishing_rod_view_pitch_constraint(
+			first_person_active and _activity_active,
+			BOAT_FISHING_VIEW_PITCH_MIN_DEG,
+			BOAT_FISHING_VIEW_PITCH_MAX_DEG
+		)
 	if _rod_visual_root != null and is_instance_valid(_rod_visual_root):
 		_rod_visual_root.visible = _activity_active and first_person_active
-		if first_person_active and _state != CastState.CASTING:
-			_update_rod_hand_anchor()
+	# Rebuild the hand-to-camera relationship after every view transition. The
+	# next first-person process frame captures the reel's screen position again.
+	_rod_view_camera_pose_captured = false
+	_rod_reel_camera_anchor_captured = false
 	if not first_person_active:
 		_manual_reeling = false
 		_manual_reeling_from_ui = false
@@ -1040,7 +1027,6 @@ func on_camera_view_changed(first_person_active: bool) -> void:
 		_manual_line_release_held = false
 		_manual_line_releasing = false
 		_line_controls_conflicted = false
-		_rod_aim_active = false
 		if _state == CastState.CHARGING:
 			cancel_charge_smoothly()
 	interaction_updated.emit(get_interaction_snapshot())
@@ -1102,9 +1088,8 @@ func get_debug_snapshot() -> Dictionary:
 		"manual_reeling": _manual_reeling,
 		"manual_line_releasing": _manual_line_releasing,
 		"line_controls_conflicted": _line_controls_conflicted,
-		"rod_aim_active": _rod_aim_active,
-		"rod_aim_yaw_deg": _rod_aim_yaw_deg,
-		"rod_aim_pitch_deg": _rod_aim_pitch_deg,
+		"rod_camera_relative_pose_captured": _rod_view_camera_pose_captured,
+		"rod_view_pitch_degrees": rad_to_deg(_onboard.get_camera_pitch()) if _onboard != null else 0.0,
 		"line_tension": _rod_tension,
 		"automatic_control_owned": _automatic_control_owned,
 		"bite_approach_active": _state == CastState.BITE_APPROACH,
@@ -1140,7 +1125,7 @@ func get_debug_snapshot() -> Dictionary:
 
 
 func get_interaction_snapshot() -> Dictionary:
-	var tip := (_get_fight_solver_rod_tip_world() if _fight_session_active or _state == CastState.LANDING else _get_rod_tip_world()) if _rod_visual_root != null else Vector3.ZERO
+	var tip := (_get_fight_solver_rod_tip_world() if _fight_session_active else _get_rod_tip_world()) if _rod_visual_root != null else Vector3.ZERO
 	var line_connection := _get_main_line_terminal_world() if _rod_visual_root != null else Vector3.ZERO
 	return {
 		"state": get_casting_state_name(),
@@ -1323,10 +1308,9 @@ func _process(delta: float) -> void:
 	var first_person_active := _onboard.is_first_person_active()
 	if _rod_visual_root != null and is_instance_valid(_rod_visual_root):
 		_rod_visual_root.visible = first_person_active
-		# Casting deliberately holds its release pose. After the cast, keep the
-		# handheld rod anchored to the player's current hull-local hand/camera
-		# direction, including while a fish is approaching or being fought.
-		if first_person_active and _state != CastState.CASTING:
+		# Keep one camera-relative hand pose through charge, cast, waiting, and fight.
+		# Cast and fight movement stays local to the rod swing pivot.
+		if first_person_active:
 			_update_rod_hand_anchor()
 	var fight_real_delta := _measure_fight_real_delta()
 	var feedback_delta := fight_real_delta if _fight_session_active else maxf(delta, 0.0)
@@ -1382,6 +1366,10 @@ func _process(delta: float) -> void:
 		_advance_fight_landing(delta)
 	elif _state == CastState.LINE_BROKEN:
 		_advance_line_broken(delta)
+	if first_person_active:
+		# Landing/presentation may have adjusted camera pitch after the initial
+		# anchor update. Reapply the same-frame view transform before line geometry.
+		_update_rod_hand_anchor()
 	_update_cast_aim_marker(delta)
 	_update_rod_line_guides()
 	_update_line_and_bait_visuals()
@@ -2356,7 +2344,6 @@ func _begin_bite_event(candidate: Dictionary, debug_spawned: bool, force_approac
 	_manual_line_releasing = false
 	_manual_reeling_input_held = false
 	_manual_line_release_held = false
-	_rod_aim_active = false
 	_set_boat_fishing_audio_loop("reel_in", false)
 	_set_boat_fishing_audio_loop("line_out", false)
 	_set_boat_fishing_audio_loop("drag", false)
@@ -2743,6 +2730,7 @@ func _advance_boat_fight(delta: float) -> void:
 	if bool(solved.get("snapped", false)):
 		_break_boat_fight(str(solved.get("break_reason", "line_overload")))
 		return
+	_update_fight_surface_camera_focus(delta)
 	var landing_line_buffer_m := (
 		SABIKI_FIGHT_LANDING_LINE_BUFFER_M
 		if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI
@@ -2750,6 +2738,29 @@ func _advance_boat_fight(delta: float) -> void:
 	)
 	if _line_paid_out_length_m <= safe_minimum_line_m + landing_line_buffer_m and (_manual_reeling or line_delta_m < -0.0001):
 		_begin_fight_landing()
+
+
+func _update_fight_surface_camera_focus(delta: float) -> void:
+	if _onboard == null or not _fight_session_active:
+		return
+	var focus_positions: Array[Vector3] = []
+	for catch_id in _fight_participant_order:
+		var participant := _fight_participants_by_catch_id.get(catch_id) as BoatFishingFightParticipant
+		var visual := _fight_fish_visuals_by_catch_id.get(catch_id) as Node3D
+		if participant == null or visual == null or not is_instance_valid(visual):
+			continue
+		var hook_position := _fight_hook_position_by_catch_id(catch_id)
+		var surface_y := float(_sample_water(hook_position).get("height", hook_position.y))
+		var body_length_m := maxf(0.0, float(participant.get_read_only_snapshot().get("body_length_m", 0.0)))
+		# Begin framing as the hooked mouth reaches the surface so the view can
+		# follow the breach instead of reacting only after the fish has emerged.
+		if hook_position.y < surface_y - maxf(0.06, body_length_m * 0.08):
+			continue
+		focus_positions.append(visual.global_position)
+		focus_positions.append(hook_position)
+	_onboard.set_fishing_presentation_tracking(not focus_positions.is_empty())
+	if not focus_positions.is_empty():
+		_onboard.update_fishing_presentation_focus(focus_positions, delta)
 
 
 func _fight_hook_position_by_catch_id(catch_id: String) -> Vector3:
@@ -3124,7 +3135,6 @@ func _begin_fight_landing() -> void:
 	if not _fight_session_active or _encounter == null or _state == CastState.LANDING:
 		return
 	_clear_manual_line_controls()
-	_rod_aim_active = false
 	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
 		_cancel_sabiki_approach_reservations()
 		var pending := _encounter.begin_sabiki_batch_retrieval()
@@ -3147,25 +3157,117 @@ func _begin_fight_landing() -> void:
 	if not _encounter.begin_retrieval():
 		_handle_fight_settlement_failure("retrieval_transition_rejected")
 		return
+	set_automatic_control_owned(true)
+	if _onboard != null:
+		_onboard.set_movement_locked(true)
 	_fight_landing_elapsed = 0.0
 	_fight_landing_surface_crossed.clear()
 	_fight_landing_start_bait_world = _bait_world
-	_fight_landing_raise_m = FIGHT_LANDING_RISE_METERS
-	var landing_hooks := get_hook_attachment_world_positions()
-	for hook_position in landing_hooks:
-		var surface_y := float(_sample_water(hook_position).get("height", hook_position.y))
-		_fight_landing_raise_m = maxf(_fight_landing_raise_m, surface_y + 0.12 - hook_position.y + FIGHT_LANDING_RISE_METERS)
+	_fight_landing_start_paid_line_m = maxf(0.0, _line_paid_out_length_m)
+	# Fight-view alignment cancels the old waiting-aim pose. Start the automatic
+	# landing lift from that same neutral pose so switching to presentation mode
+	# does not reveal a stale rod angle for one frame.
+	_fight_landing_start_rod_rotation = Vector3.ZERO
+	if _rod_swing != null:
+		_rod_swing.rotation = _fight_landing_start_rod_rotation
+	_fight_landing_target_rod_rotation = Vector3(
+		maxf(_fight_landing_start_rod_rotation.x, deg_to_rad(FIGHT_LANDING_ROD_LIFT_DEG)),
+		_fight_landing_start_rod_rotation.y,
+		0.0
+	)
+	var display_target := _calculate_fight_landing_display_target()
+	_fight_landing_target_bait_world = display_target.get("bait_world", _bait_world)
+	_fight_landing_target_paid_line_m = float(display_target.get("paid_line_m", 0.0))
+	_fight_landing_target_paid_line_m = minf(_fight_landing_start_paid_line_m, _fight_landing_target_paid_line_m)
+	_fight_landing_reel_duration_seconds = maxf(
+		FIGHT_LANDING_MIN_REEL_DURATION_SECONDS,
+		(_fight_landing_start_paid_line_m - _fight_landing_target_paid_line_m) / maxf(manual_reel_speed_mps, 0.1)
+	)
 	for catch_id in _fight_participant_order:
 		_fight_landing_surface_crossed[catch_id] = false
 	_fight_session_active = false
+	_begin_fight_rod_release()
 	_set_boat_fishing_audio_loop("line_out", false)
 	_set_boat_fishing_audio_loop("reel_in", false)
 	_set_boat_fishing_audio_loop("drag", false)
 	_set_state(CastState.LANDING)
 
 
+func _calculate_fight_landing_display_target() -> Dictionary:
+	if _rod_swing == null:
+		return {"bait_world": _bait_world, "paid_line_m": _line_paid_out_length_m}
+	var previous_rod_rotation := _rod_swing.rotation
+	var previous_bend_deg := _rod_bend_angle_deg
+	_rod_swing.rotation = _fight_landing_target_rod_rotation
+	_rod_bend_angle_deg = 0.0
+	var rod_tip := _get_rod_tip_world()
+	var outward := _get_hull_outward_horizontal(rod_tip)
+	if outward.length_squared() < 0.0001:
+		outward = Vector3.FORWARD
+	var presentation_offset_m := minf(
+		FIGHT_LANDING_RIG_OUTWARD_OFFSET_M,
+		maxf(0.01, _fight_landing_start_paid_line_m * 0.5)
+	)
+	var rig_up := _get_sabiki_natural_up_direction_world()
+	var target_bait: Vector3
+	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+		target_bait = rod_tip + outward * presentation_offset_m - rig_up * _current_rig.get_line_attachment_height_m()
+	else:
+		var line_eye_target := rod_tip + outward * presentation_offset_m
+		target_bait = line_eye_target - _get_main_line_terminal_offset_world()
+
+	var maximum_body_length_m := 0.0
+	for catch_id in _fight_participant_order:
+		var participant := _fight_participants_by_catch_id.get(catch_id) as BoatFishingFightParticipant
+		if participant != null:
+			maximum_body_length_m = maxf(maximum_body_length_m, float(participant.get_read_only_snapshot().get("body_length_m", 0.0)))
+	target_bait = _project_fight_position_outside_hull(target_bait, maximum_body_length_m * 0.08)
+
+	var required_raise_m := 0.0
+	for catch_id in _fight_participant_order:
+		var participant := _fight_participants_by_catch_id.get(catch_id) as BoatFishingFightParticipant
+		if participant == null:
+			continue
+		var snapshot := participant.get_read_only_snapshot()
+		var body_length_m := maxf(0.0, float(snapshot.get("body_length_m", 0.0)))
+		var hook_position := target_bait
+		if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
+			var hook_index := int(snapshot.get("hook_index", -1))
+			if hook_index < 0 or hook_index >= _current_rig.hook_count:
+				continue
+			var distance_from_sinker_m := _current_rig.bottom_leader_length_m + float(_current_rig.hook_count - hook_index - 1) * _current_rig.hook_spacing_m
+			hook_position += rig_up * distance_from_sinker_m
+		else:
+			hook_position += _lure_visual_basis_world * Vector3(0.0, SPOON_HOOK_TIP_Y_M, 0.0)
+		var surface_y := float(_sample_water(hook_position).get("height", hook_position.y))
+		var clearance_m := maxf(FIGHT_LANDING_FISH_CLEARANCE_M, body_length_m * FIGHT_LANDING_FISH_CLEARANCE_RATIO)
+		required_raise_m = maxf(required_raise_m, surface_y + clearance_m - hook_position.y)
+	target_bait.y += maxf(0.0, required_raise_m)
+
+	var terminal_world := target_bait + _get_main_line_terminal_offset_world()
+	var paid_line_m := maxf(0.0, rod_tip.distance_to(terminal_world) - _get_fixed_rig_line_length_m())
+	_rod_swing.rotation = previous_rod_rotation
+	_rod_bend_angle_deg = previous_bend_deg
+	return {"bait_world": target_bait, "paid_line_m": paid_line_m}
+
+
 func _advance_fight_landing(delta: float) -> void:
 	_fight_landing_elapsed += maxf(0.0, delta)
+	var progress := clampf(_fight_landing_elapsed / maxf(_fight_landing_reel_duration_seconds, 0.01), 0.0, 1.0)
+	var eased_progress := _smoothstep01(progress)
+	if _rod_swing != null:
+		_rod_swing.rotation = _fight_landing_start_rod_rotation.lerp(_fight_landing_target_rod_rotation, eased_progress)
+	_advance_fight_rod_release(delta)
+	var previous_bait := _bait_world
+	_bait_world = _fight_landing_start_bait_world.lerp(_fight_landing_target_bait_world, eased_progress)
+	_line_paid_out_length_m = lerpf(_fight_landing_start_paid_line_m, _fight_landing_target_paid_line_m, eased_progress)
+	_bait_velocity_world = (_bait_world - previous_bait) / maxf(delta, 0.0001)
+	_update_rig_visual_position()
+	_fight_snapshot["line_length_m"] = _line_paid_out_length_m
+	_fight_snapshot["line_rate_mps"] = -(_fight_landing_start_paid_line_m - _fight_landing_target_paid_line_m) / maxf(_fight_landing_reel_duration_seconds, 0.01)
+	_fight_snapshot["reel_in_rate_mps"] = -float(_fight_snapshot["line_rate_mps"])
+	_fight_snapshot["line_out_rate_mps"] = 0.0
+	_fight_snapshot["drag_paying_out"] = false
 	var ordered_ids := _fight_participant_order.duplicate()
 	ordered_ids.sort_custom(func(a: String, b: String) -> bool:
 		var participant_a := _fight_participants_by_catch_id.get(a) as BoatFishingFightParticipant
@@ -3174,18 +3276,8 @@ func _advance_fight_landing(delta: float) -> void:
 		var hook_b := int(participant_b.get_read_only_snapshot().get("hook_index", 0)) if participant_b != null else 0
 		return hook_a < hook_b
 	)
-	var landing_duration := maxf(FIGHT_LANDING_DURATION_SECONDS, _fight_landing_raise_m / FIGHT_LANDING_RISE_SPEED_MPS)
-	var progress := clampf(_fight_landing_elapsed / maxf(landing_duration, 0.01), 0.0, 1.0)
-	var previous_bait := _bait_world
-	_bait_world = _fight_landing_start_bait_world + Vector3.UP * _fight_landing_raise_m * _smoothstep01(progress)
-	_bait_velocity_world = (_bait_world - previous_bait) / maxf(delta, 0.0001)
-	_update_rig_visual_position()
-	_fight_snapshot["line_length_m"] = _line_paid_out_length_m
-	_fight_snapshot["line_rate_mps"] = 0.0
-	_fight_snapshot["reel_in_rate_mps"] = 0.0
-	_fight_snapshot["line_out_rate_mps"] = 0.0
-	_fight_snapshot["drag_paying_out"] = false
 	var hook_positions := get_hook_attachment_world_positions()
+	var presentation_focus_points: Array[Vector3] = []
 	for catch_id_variant in ordered_ids:
 		var catch_id := str(catch_id_variant)
 		var participant := _fight_participants_by_catch_id.get(catch_id) as BoatFishingFightParticipant
@@ -3205,14 +3297,20 @@ func _advance_fight_landing(delta: float) -> void:
 			var previous_heading: Vector3 = _fight_fish_heading_by_catch_id.get(catch_id, target_heading)
 			var turn_rate := profile.boat_fishing_turn_rate_deg_s if profile != null else 300.0
 			var landing_heading := _advance_fight_fish_heading(catch_id, previous_heading, target_heading, hook_position, body_length_m, profile, turn_rate, delta)
+			var tail_frequency_hz := profile.tail_frequency_hz if profile != null else 2.0
+			var thrash_phase := _fight_landing_elapsed * TAU * clampf(tail_frequency_hz, 1.5, 4.0) + float(hook_index) * 0.91
+			landing_heading = (landing_heading + Vector3.UP * sin(thrash_phase) * FIGHT_LANDING_FISH_THRASH_PITCH).normalized()
 			_set_fish_visual_pose_at_hook(
 				visual,
 				species_id,
 				body_length_m,
 				hook_position,
 				landing_heading,
-				sin(_fight_landing_elapsed * 8.0) * 0.10
+				sin(thrash_phase * 1.37) * FIGHT_LANDING_FISH_THRASH_ROLL_RAD
 			)
+			presentation_focus_points.append(visual.global_position)
+		else:
+			presentation_focus_points.append(hook_position)
 		var surface_y := float(_sample_water(hook_position).get("height", hook_position.y))
 		if hook_position.y >= surface_y and not bool(_fight_landing_surface_crossed.get(catch_id, false)):
 			_fight_landing_surface_crossed[catch_id] = true
@@ -3220,7 +3318,9 @@ func _advance_fight_landing(delta: float) -> void:
 				_last_sabiki_splash_time = Time.get_ticks_msec() * 0.001
 				_show_splash_visual(hook_position)
 				_play_boat_fishing_one_shot("splash")
-	if _fight_landing_elapsed >= landing_duration:
+	if _onboard != null:
+		_onboard.update_fishing_presentation_focus(presentation_focus_points, delta)
+	if progress >= 1.0:
 		_complete_fight_landing()
 
 
@@ -3238,6 +3338,7 @@ func _complete_fight_landing() -> void:
 
 func _handle_fight_settlement_failure(reason: String) -> void:
 	_reset_boat_fight_session(true)
+	set_automatic_control_owned(false)
 	if _encounter != null:
 		if _encounter.pending_catch != null and _encounter.pending_catch.fishing_method == "boat_fishing":
 			_encounter.cancel_boat_fishing_catch(reason)
@@ -3353,7 +3454,12 @@ func _reset_boat_fight_session(keep_visuals: bool = false) -> void:
 	_fight_landing_surface_crossed.clear()
 	_fight_terminal_motion_this_step = false
 	_fight_landing_start_bait_world = Vector3.ZERO
-	_fight_landing_raise_m = FIGHT_LANDING_RISE_METERS
+	_fight_landing_target_bait_world = Vector3.ZERO
+	_fight_landing_start_paid_line_m = 0.0
+	_fight_landing_target_paid_line_m = 0.0
+	_fight_landing_reel_duration_seconds = FIGHT_LANDING_MIN_REEL_DURATION_SECONDS
+	_fight_landing_start_rod_rotation = Vector3.ZERO
+	_fight_landing_target_rod_rotation = Vector3.ZERO
 	_fight_rod_burst_impulse_rad = 0.0
 	_fight_rod_target_bend_deg = 0.0
 	_fight_rod_micro_vibration_deg = 0.0
@@ -3376,11 +3482,62 @@ func _reset_boat_fight_session(keep_visuals: bool = false) -> void:
 func _advance_catch_presentation(delta: float) -> void:
 	_catch_presentation_elapsed += maxf(delta, 0.0)
 	_advance_fight_rod_release(delta)
-	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
-		var hook_world := _get_single_jig_hook_attachment_world()
-		_set_fish_visual_pose_at_hook(_bite_fish_visual, _active_catch_species_id, _get_pending_catch_body_length_m(), hook_world, -_get_hull_outward_horizontal(hook_world), sin(_catch_presentation_elapsed * 7.0) * 0.08)
+	var presentation_focus_points := _animate_catch_presentation_fish()
+	if _onboard != null:
+		_onboard.update_fishing_presentation_focus(presentation_focus_points, delta)
 	if _catch_result_received and _catch_presentation_elapsed >= FIGHT_PRESENTATION_DURATION_SECONDS:
 		clear_cast()
+
+
+func _animate_catch_presentation_fish() -> Array[Vector3]:
+	var presentation_focus_points: Array[Vector3] = []
+	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
+		var hook_world := _get_single_jig_hook_attachment_world()
+		var profile := _fish_manager.get_species_profile(_active_catch_species_id) if _fish_manager != null else null
+		var tail_frequency_hz := profile.tail_frequency_hz if profile != null else 2.0
+		var phase := _catch_presentation_elapsed * TAU * clampf(tail_frequency_hz, 1.5, 4.0)
+		var heading := -_get_hull_outward_horizontal(hook_world)
+		heading = (heading + Vector3.UP * sin(phase) * FIGHT_LANDING_FISH_THRASH_PITCH).normalized()
+		_set_fish_visual_pose_at_hook(
+			_bite_fish_visual,
+			_active_catch_species_id,
+			_active_catch_body_length_m,
+			hook_world,
+			heading,
+			sin(phase * 1.37) * FIGHT_LANDING_FISH_THRASH_ROLL_RAD
+		)
+		presentation_focus_points.append(_bite_fish_visual.global_position)
+	if _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI:
+		return presentation_focus_points
+	var hook_positions := get_hook_attachment_world_positions()
+	for hook_state_variant in _sabiki_hook_states:
+		var hook_state: Dictionary = hook_state_variant
+		if str(hook_state.get("status", "")) != "hooked":
+			continue
+		var hook_index := int(hook_state.get("hook_index", -1))
+		if hook_index < 0 or hook_index >= hook_positions.size():
+			continue
+		var visual := hook_state.get("visual") as Node3D
+		if visual == null or not is_instance_valid(visual):
+			continue
+		var species_id := str(hook_state.get("species_id", "herring"))
+		var body_length_m := float(hook_state.get("body_length_m", 0.32))
+		var profile := _fish_manager.get_species_profile(species_id) if _fish_manager != null else null
+		var tail_frequency_hz := profile.tail_frequency_hz if profile != null else 2.0
+		var phase := _catch_presentation_elapsed * TAU * clampf(tail_frequency_hz, 1.5, 4.0) + float(hook_index) * 0.91
+		var hook_world: Vector3 = hook_positions[hook_index]
+		var heading := -_get_hull_outward_horizontal(hook_world)
+		heading = (heading + Vector3.UP * sin(phase) * FIGHT_LANDING_FISH_THRASH_PITCH).normalized()
+		_set_fish_visual_pose_at_hook(
+			visual,
+			species_id,
+			body_length_m,
+			hook_world,
+			heading,
+			sin(phase * 1.37) * FIGHT_LANDING_FISH_THRASH_ROLL_RAD
+		)
+		presentation_focus_points.append(visual.global_position)
+	return presentation_focus_points
 
 
 func _on_authority_catch_succeeded(result: FishingCatchResult) -> void:
@@ -3601,17 +3758,134 @@ func _update_ready_rod_pose() -> void:
 
 
 func _update_rod_hand_anchor() -> void:
-	if _onboard == null or _rod_visual_root == null:
+	if _onboard == null or _rod_visual_root == null or not _onboard.is_first_person_active():
 		return
-	var player_position := _onboard.get_player_local_position()
-	var player_yaw := _onboard.get_player_local_yaw()
-	var heading := Basis(Vector3.UP, player_yaw)
-	_rod_visual_root.position = player_position + heading * Vector3(0.31, 1.13, -0.02)
-	_rod_visual_root.rotation = Vector3(
-		clampf(_onboard.get_camera_pitch() * 0.18, -0.18, 0.12),
-		player_yaw,
-		0.0
+	var camera := _onboard.get_activity_camera()
+	if camera == null:
+		return
+	camera.force_update_transform()
+	if not _rod_view_camera_pose_captured:
+		# Re-enter first person from the established hand pose. RodSwing can then
+		# animate around the reel's captured screen anchor.
+		if _rod_swing != null:
+			_rod_swing.position = Vector3.ZERO
+		var player_position := _onboard.get_player_local_position()
+		var player_yaw := _onboard.get_player_local_yaw()
+		_rod_visual_root.transform = Transform3D(
+			Basis.from_euler(Vector3(clampf(_onboard.get_camera_pitch() * 0.18, -0.18, 0.12), player_yaw, 0.0)),
+			player_position + Basis(Vector3.UP, player_yaw) * Vector3(0.31, 1.13, -0.02)
+		)
+		_onboard.force_update_transform()
+		_rod_visual_root.force_update_transform()
+		camera.force_update_transform()
+		var relative_transform := camera.global_transform.affine_inverse() * _rod_visual_root.global_transform
+		_rod_view_camera_relative_transform = Transform3D(
+			relative_transform.basis.orthonormalized(),
+			relative_transform.origin
+		)
+		_rod_view_camera_pose_captured = true
+		if _reel_spool_visual != null and is_instance_valid(_reel_spool_visual):
+			_rod_swing.force_update_transform()
+			_reel_spool_visual.force_update_transform()
+			var current_spool_camera_position := camera.global_transform.affine_inverse() * _reel_spool_visual.global_position
+			_rod_reel_camera_depth_m = maxf(-current_spool_camera_position.z, camera.near + 0.05)
+			_rod_reel_camera_anchor_captured = true
+	_onboard.force_update_transform()
+	camera.force_update_transform()
+	var target_global_transform := camera.global_transform * _rod_view_camera_relative_transform
+	var target_local_transform := _onboard.global_transform.affine_inverse() * target_global_transform
+	_rod_visual_root.transform = Transform3D(
+		target_local_transform.basis.orthonormalized(),
+		target_local_transform.origin
 	)
+	_apply_rod_reel_screen_anchor(camera)
+
+
+func _apply_rod_reel_screen_anchor(camera: Camera3D = null) -> void:
+	if (
+		not _rod_reel_camera_anchor_captured
+		or _rod_visual_root == null
+		or _rod_swing == null
+		or _reel_spool_visual == null
+		or not is_instance_valid(_reel_spool_visual)
+	):
+		return
+	var active_camera := camera
+	if active_camera == null and _onboard != null:
+		active_camera = _onboard.get_activity_camera()
+	if active_camera == null:
+		return
+	var fish_presentation_active := _state in [CastState.LANDING, CastState.CATCH_PRESENTATION]
+	if not fish_presentation_active:
+		_landing_reel_anchor_released = false
+	elif _landing_reel_anchor_released:
+		return
+	active_camera.force_update_transform()
+	_rod_visual_root.force_update_transform()
+	_rod_swing.force_update_transform()
+	_reel_spool_visual.force_update_transform()
+	var viewport_rect := active_camera.get_viewport().get_visible_rect()
+	var target_screen_position := viewport_rect.position + viewport_rect.size * HANDHELD_REEL_SCREEN_ANCHOR
+	var target_spool_world := active_camera.project_position(target_screen_position, _rod_reel_camera_depth_m)
+	if fish_presentation_active and _landing_reel_anchor_conflicts_with_fish(active_camera, target_spool_world):
+		# Keep the landing animation's natural rod pivot whenever a fish occupies
+		# the reel's screen area. Once released, stay released through presentation
+		# so the reel cannot pop back over a thrashing fish mid-shot.
+		_landing_reel_anchor_released = true
+		_rod_swing.position = Vector3.ZERO
+		_rod_swing.force_update_transform()
+		return
+	var target_spool_in_root := _rod_visual_root.to_local(target_spool_world)
+	var spool_in_swing := _rod_swing.to_local(_reel_spool_visual.global_position)
+	# Moving the swing pivot around the spool keeps the reel at its exact camera-
+	# relative position while the rod, reel mount, and guides rotate as one rig.
+	# The rod tip remains the transformed tip of that same animated rig.
+	_rod_swing.position = target_spool_in_root - _rod_swing.transform.basis * spool_in_swing
+	_rod_swing.force_update_transform()
+
+
+func _landing_reel_anchor_conflicts_with_fish(camera: Camera3D, reel_world: Vector3) -> bool:
+	for catch_id in _fight_participant_order:
+		var participant := _fight_participants_by_catch_id.get(catch_id) as BoatFishingFightParticipant
+		var visual := _fight_fish_visuals_by_catch_id.get(catch_id) as Node3D
+		if participant == null or visual == null or not is_instance_valid(visual):
+			continue
+		var snapshot := participant.get_read_only_snapshot()
+		if _landing_reel_overlaps_fish(camera, reel_world, visual, float(snapshot.get("body_length_m", 0.3))):
+			return true
+	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
+		if _landing_reel_overlaps_fish(camera, reel_world, _bite_fish_visual, _active_catch_body_length_m):
+			return true
+	for hook_state_variant in _sabiki_hook_states:
+		var hook_state: Dictionary = hook_state_variant
+		if str(hook_state.get("status", "")) != "hooked":
+			continue
+		var visual := hook_state.get("visual") as Node3D
+		if visual == null or not is_instance_valid(visual):
+			continue
+		if _landing_reel_overlaps_fish(camera, reel_world, visual, float(hook_state.get("body_length_m", 0.3))):
+			return true
+	return false
+
+
+func _landing_reel_overlaps_fish(camera: Camera3D, reel_world: Vector3, fish: Node3D, fish_body_length_m: float) -> bool:
+	if not fish.is_visible_in_tree() or camera.is_position_behind(reel_world) or camera.is_position_behind(fish.global_position):
+		return false
+	var reel_screen := camera.unproject_position(reel_world)
+	var fish_screen := camera.unproject_position(fish.global_position)
+	var reel_radius_px := _projected_world_radius_pixels(camera, reel_world, HANDHELD_REEL_SCREEN_BOUNDING_RADIUS_M)
+	var fish_radius_m := maxf(0.18, maxf(0.0, fish_body_length_m) * 0.60)
+	var fish_radius_px := _projected_world_radius_pixels(camera, fish.global_position, fish_radius_m)
+	return reel_screen.distance_to(fish_screen) <= reel_radius_px + fish_radius_px + HANDHELD_REEL_SCREEN_ANCHOR_CONFLICT_PADDING_PX
+
+
+func _projected_world_radius_pixels(camera: Camera3D, world_position: Vector3, radius_m: float) -> float:
+	var center := camera.unproject_position(world_position)
+	var camera_right := camera.global_basis.x.normalized()
+	var camera_up := camera.global_basis.y.normalized()
+	var right_edge := camera.unproject_position(world_position + camera_right * radius_m)
+	var up_edge := camera.unproject_position(world_position + camera_up * radius_m)
+	return maxf(center.distance_to(right_edge), center.distance_to(up_edge))
 
 
 func _update_charge_animation(delta: float) -> void:
@@ -3721,8 +3995,7 @@ func _update_cast_animation(delta: float) -> void:
 		_rod_swing.rotation.x = deg_to_rad(lerpf(recovery_angle, 0.0, _ease_in_out(recovery_progress)))
 		_rod_bend_angle_deg = 0.0
 		_set_rod_bend_angle(0.0)
-	_rod_visual_root.position = _rod_locked_position
-	_rod_visual_root.rotation = _rod_locked_rotation
+	_apply_rod_reel_screen_anchor()
 	if not _bait_flight_started and _state_elapsed >= CAST_BAIT_RELEASE_OFFSET_SECONDS:
 		_start_bait_flight()
 	if _bait_flight_started and not _cast_tackle_entry_complete:
@@ -3736,8 +4009,7 @@ func _update_cast_animation(delta: float) -> void:
 		_rod_back_angle_deg = 0.0
 		_rod_bend_angle_deg = 0.0
 		_set_rod_bend_angle(0.0)
-		_rod_aim_yaw_deg = 0.0
-		_rod_aim_pitch_deg = 0.0
+		_apply_rod_reel_screen_anchor()
 		minimum_paid_line_m = 0.55
 		var line_connection := _get_main_line_terminal_world()
 		_previous_line_connection_world = line_connection
@@ -4049,13 +4321,13 @@ func _keep_airborne_tackle_above_surface() -> void:
 func _apply_waiting_rod_pose() -> void:
 	if _rod_swing == null:
 		return
-	_rod_swing.rotation = Vector3(deg_to_rad(_rod_aim_pitch_deg), deg_to_rad(_rod_aim_yaw_deg), 0.0)
+	_rod_swing.rotation = Vector3.ZERO
 	var bend_target := _rod_tension * rod_bend_at_full_tension_deg
 	var delta := maxf(get_process_delta_time(), 0.0)
 	_rod_bend_angle_deg = lerpf(_rod_bend_angle_deg, bend_target, 1.0 - exp(-4.5 * delta))
 	_set_rod_bend_angle(deg_to_rad(_rod_bend_angle_deg))
 	_update_rod_bend_direction_from_visual_line()
-	_rod_back_angle_deg = _rod_aim_pitch_deg
+	_rod_back_angle_deg = 0.0
 
 
 func _begin_final_retrieval() -> void:
@@ -4072,7 +4344,6 @@ func _begin_final_retrieval() -> void:
 	_manual_line_release_held = false
 	_manual_line_releasing = false
 	_line_controls_conflicted = false
-	_rod_aim_active = false
 	_retrieve_start_world = _bait_world
 	_retrieve_start_paid_length_m = _line_paid_out_length_m
 	_state_elapsed = 0.0
@@ -4100,8 +4371,6 @@ func _update_retrieve_animation(delta: float) -> void:
 		_line_paid_out_length_m = 0.0
 		_retrieve_start_paid_length_m = 0.0
 		_rod_tension = 0.0
-		_rod_aim_yaw_deg = 0.0
-		_rod_aim_pitch_deg = 0.0
 		_has_previous_line_connection = false
 		_onboard.set_movement_locked(false)
 		_set_state(CastState.READY)
@@ -4375,7 +4644,7 @@ func _update_reel_visual_and_audio(line_length_before_m: float, line_length_afte
 	var state_allows_reel_motion := (
 		(_state == CastState.CASTING and _bait_flight_started and not _bait_has_landed)
 		or (_is_waiting_line_state() and (_manual_reeling or _manual_line_releasing or _automatic_control_owned))
-		or (_state in [CastState.BITE_APPROACH, CastState.FIGHTING, CastState.CATCH_PRESENTATION] and _automatic_control_owned)
+		or (_state in [CastState.BITE_APPROACH, CastState.FIGHTING, CastState.LANDING, CastState.CATCH_PRESENTATION] and _automatic_control_owned)
 		or (_fight_session_active and _state in [CastState.SABIKI_HOOKED_WAITING, CastState.FIGHTING] and absf(line_delta_m) >= REEL_LINE_DELTA_EPSILON_M)
 		or (_state == CastState.RETRIEVING)
 	)
@@ -4631,7 +4900,6 @@ func _clear_manual_line_controls() -> void:
 func _release_non_ui_line_inputs() -> void:
 	_manual_reeling_input_held = false
 	_manual_line_release_held = false
-	_rod_aim_active = false
 	_sync_manual_line_controls()
 
 
@@ -4764,6 +5032,29 @@ func _update_line_and_bait_visuals() -> void:
 	_bait_instance.visible = _current_rig.rig_type == BoatFishingRigProfile.RigType.SINGLE_JIG
 	_update_rig_visual_position()
 	_reanchor_sabiki_hooked_fish_visuals_to_hooks()
+	_reanchor_single_jig_fight_fish_visual_to_hook()
+
+
+func _reanchor_single_jig_fight_fish_visual_to_hook() -> void:
+	if (
+		_current_rig.rig_type != BoatFishingRigProfile.RigType.SINGLE_JIG
+		or _state not in [CastState.FIGHTING, CastState.LANDING, CastState.CATCH_PRESENTATION]
+		or _bite_fish_visual == null
+		or not is_instance_valid(_bite_fish_visual)
+	):
+		return
+	var profile := _fish_manager.get_species_profile(_active_catch_species_id) if _fish_manager != null else null
+	if profile == null:
+		return
+	# The lure basis is updated immediately above. Re-anchor after that update so
+	# the displayed fish mouth uses the same frame's moving hook tip.
+	var fish_basis := _bite_fish_visual.global_basis
+	var hook_world := _get_single_jig_hook_attachment_world()
+	_bite_fish_visual.global_position = mouth_anchored_fish_origin(
+		hook_world,
+		fish_basis,
+		profile.boat_fishing_mouth_anchor_local
+	)
 
 
 func _render_complete_line_path(mesh: ImmediateMesh, owner: Node3D) -> void:
@@ -5097,7 +5388,10 @@ func _get_main_line_visual_state() -> Dictionary:
 		or _state == CastState.RETRIEVING
 	)
 	var airborne := _bait_airborne_retrieval
-	var taut := not airborne and (forced_taut or slack_ratio <= 0.001)
+	# Landing and catch presentation are automatic reel-in phases. Once the fight
+	# solver stops, do not reuse its stale slack ratio for the short display line.
+	var presentation_reel := _state in [CastState.LANDING, CastState.CATCH_PRESENTATION]
+	var taut := presentation_reel or (not airborne and (forced_taut or slack_ratio <= 0.001))
 	if taut:
 		slack_ratio = 0.0
 	return {"taut": taut, "slack_ratio": clampf(slack_ratio, 0.0, 1.0), "airborne": airborne}
@@ -5219,12 +5513,35 @@ func _get_cast_range_ratio() -> float:
 func _set_state(next_state: CastState) -> void:
 	_state = next_state
 	_state_elapsed = 0.0
+	_sync_fishing_fight_view_state(next_state)
 	if next_state == CastState.WAITING:
 		_natural_bite_sample_elapsed = 0.0
 		_natural_bite_pending_real_delta = 0.0
 		if _encounter != null:
 			_encounter.reset_boat_fishing_trigger_state()
 	_emit_state_changed()
+
+
+func _sync_fishing_fight_view_state(state: CastState) -> void:
+	if _onboard == null:
+		return
+	var fight_view_state := state in [
+		CastState.SABIKI_HOOKED_WAITING,
+		CastState.FIGHTING,
+		CastState.LANDING,
+		CastState.CATCH_PRESENTATION,
+	]
+	if fight_view_state:
+		if not _onboard.is_fishing_fight_view_active():
+			_onboard.begin_fishing_fight_view(
+				FIGHT_VIEW_YAW_HALF_RANGE_DEG,
+				BOAT_FISHING_VIEW_PITCH_MIN_DEG,
+				BOAT_FISHING_VIEW_PITCH_MAX_DEG,
+				FIGHT_PRESENTATION_PITCH_MANUAL_RANGE_DEG
+			)
+		_onboard.set_fishing_presentation_tracking(state in [CastState.LANDING, CastState.CATCH_PRESENTATION])
+	elif _onboard.is_fishing_fight_view_active():
+		_onboard.end_fishing_fight_view()
 
 
 func _emit_state_changed() -> void:
@@ -5331,6 +5648,7 @@ func _build_visuals() -> void:
 	var reel_parts := FishingRodRig.create_reel_assembly(reel_body_material, reel_moving_material, -1.0)
 	_reel_visual_root = reel_parts["root"] as Node3D
 	_reel_visual_root.name = "HandheldFishingReel"
+	_reel_spool_visual = reel_parts["spool"] as MeshInstance3D
 	_reel_visual_root.scale = Vector3.ONE * 0.82
 	# The shared trolling seat is broad for a fixed mount. Narrow only the
 	# handheld seat so it follows the rod instead of reading as a crossbar.
