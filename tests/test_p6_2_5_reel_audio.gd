@@ -64,10 +64,35 @@ func _run() -> void:
 	_check(winding.visible, "Payout beyond the visual range keeps winding visible at minimum thickness")
 	FishingRodRig.set_reel_winding_line_length_on_visual(winding, 0.0)
 	_check(rotor != null and rotor.find_child("ReelHandleArm", true, false) is MeshInstance3D and rotor.find_child("ReelHandleKnob", true, false) is MeshInstance3D, "Shared rotor contains visible crank and handle parts")
-	var handheld_parts := FishingRodRig.create_reel_assembly(reel_material, reel_material, -1.0)
+	var handheld_parts := FishingRodRig.create_reel_assembly(reel_material, reel_material, -1.0, true)
 	var handheld_root := handheld_parts["root"] as Node3D
 	root.add_child(handheld_root)
 	var handheld_rotor := handheld_parts["rotating_assembly"] as Node3D
+	var handheld_winding := handheld_parts["winding_visual"] as MultiMeshInstance3D
+	_check(
+		handheld_winding != null
+		and handheld_winding.multimesh != null
+		and handheld_winding.multimesh.instance_count == 1
+		and handheld_winding.multimesh.mesh is CylinderMesh
+		and handheld_winding.get_parent() == handheld_rotor,
+		"Handheld line uses one rotating, low-frequency winding shell instead of sub-pixel ring instances"
+	)
+	var full_shell_thickness := FishingRodRig.set_reel_winding_line_length_on_visual(handheld_winding, 0.0)
+	var full_shell_transform := handheld_winding.multimesh.get_instance_transform(0)
+	var thin_shell_thickness := FishingRodRig.set_reel_winding_line_length_on_visual(handheld_winding, 50.0)
+	var thin_shell_transform := handheld_winding.multimesh.get_instance_transform(0)
+	_check(
+		is_equal_approx(full_shell_thickness, FishingRodRig.REEL_LINE_LAYER_MAX_THICKNESS_M)
+		and is_equal_approx(thin_shell_thickness, FishingRodRig.REEL_LINE_LAYER_MIN_THICKNESS_M),
+		"Handheld winding shell keeps the existing line-length-to-layer-thickness range"
+	)
+	if RenderingServer.get_rendering_device() != null:
+		_check(
+			thin_shell_transform.basis.x.length() < full_shell_transform.basis.x.length()
+			and is_equal_approx(thin_shell_transform.basis.y.length(), full_shell_transform.basis.y.length())
+			and is_equal_approx(thin_shell_transform.basis.z.length(), thin_shell_transform.basis.x.length()),
+			"Handheld winding shell changes only radial thickness as paid-out length changes"
+		)
 	var handheld_handle := handheld_rotor.find_child("ReelHandleArm", true, false) as MeshInstance3D
 	var trolling_handle := rotor.find_child("ReelHandleArm", true, false) as MeshInstance3D
 	var handheld_knob := handheld_rotor.find_child("ReelHandleKnob", true, false) as MeshInstance3D

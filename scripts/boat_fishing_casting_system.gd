@@ -12,6 +12,8 @@ signal interaction_updated(snapshot: Dictionary)
 enum CastState { READY, CHARGING, CASTING, WAITING, SABIKI_HOOKED_WAITING, RETRIEVING, BITE_APPROACH, FIGHTING, CATCH_PRESENTATION, LANDING, LINE_BROKEN }
 
 const ROD_BEND_SHADER := preload("res://shaders/boat_fishing_rod_bend.gdshader")
+const HANDHELD_PBR_SHADER := preload("res://shaders/boat_fishing_handheld_pbr.gdshader")
+const CAMERA_RELATIVE_LINE_SHADER := preload("res://shaders/boat_fishing_line_camera_relative.gdshader")
 const SINGLE_JIG_PROFILE: BoatFishingRigProfile = preload("res://resources/boat_fishing/single_jig.tres")
 const SABIKI_RIG_PROFILE: BoatFishingRigProfile = preload("res://resources/boat_fishing/sabiki_rig.tres")
 const ROD_LENGTH_M := 1.78
@@ -205,7 +207,7 @@ var _played_success_audio_batches: Dictionary = {}
 var _success_audio_batch_order: Array[String] = []
 var _line_mesh: ImmediateMesh
 var _line_instance: MeshInstance3D
-var _line_material: StandardMaterial3D
+var _line_material: ShaderMaterial
 var _cast_aim_marker: Node3D
 var _cast_aim_marker_material: StandardMaterial3D
 var _cast_aim_preview_elapsed := 0.0
@@ -221,6 +223,10 @@ var _last_sabiki_splash_time := -INF
 var _sabiki_batch_result_summary: Dictionary = {}
 var _current_rig: BoatFishingRigProfile = SINGLE_JIG_PROFILE
 var _rod_shader_material: ShaderMaterial
+var _handheld_pbr_material: ShaderMaterial
+var _handheld_render_instances: Array[GeometryInstance3D] = []
+var _line_render_root: Node3D
+var _camera_relative_callback_connected := false
 var _splash_instance: MeshInstance3D
 var _game_menu: Node
 var _natural_bite_sample_elapsed := 0.0
@@ -301,6 +307,8 @@ func _ready() -> void:
 	_game_menu = get_tree().root.find_child("GameMenu", true, false)
 	_resolve_encounter()
 	_build_visuals()
+	RenderingServer.frame_pre_draw.connect(_update_camera_relative_render_transforms)
+	_camera_relative_callback_connected = true
 	set_process(false)
 	set_process_unhandled_input(false)
 
@@ -315,6 +323,9 @@ func _notification(what: int) -> void:
 
 
 func _exit_tree() -> void:
+	if _camera_relative_callback_connected and RenderingServer.frame_pre_draw.is_connected(_update_camera_relative_render_transforms):
+		RenderingServer.frame_pre_draw.disconnect(_update_camera_relative_render_transforms)
+	_camera_relative_callback_connected = false
 	_clear_boat_fishing_audio_loops()
 	_reset_boat_fight_session(true)
 	if is_instance_valid(_encounter):
@@ -1309,8 +1320,9 @@ func _process(delta: float) -> void:
 	if _rod_visual_root != null and is_instance_valid(_rod_visual_root):
 		_rod_visual_root.visible = first_person_active
 		# Keep one camera-relative hand pose through charge, cast, waiting, and fight.
-		# Cast and fight movement stays local to the rod swing pivot.
-		if first_person_active:
+		# Cast and fight movement stays local to the rod swing pivot. READY gets
+		# its single anchor correction after the neutral rod pose is applied below.
+		if first_person_active and _state != CastState.READY:
 			_update_rod_hand_anchor()
 	var fight_real_delta := _measure_fight_real_delta()
 	var feedback_delta := fight_real_delta if _fight_session_active else maxf(delta, 0.0)
@@ -1318,7 +1330,7 @@ func _process(delta: float) -> void:
 	var reel_line_length_before := _get_reel_feedback_line_length()
 	_update_boat_velocity_estimate(delta)
 	if _state == CastState.READY:
-		_update_ready_rod_pose()
+		_update_ready_rod_pose(false)
 	elif _state == CastState.CHARGING:
 		if not _charge_canceling and (
 			not is_instance_valid(_onboard)
@@ -3747,14 +3759,15 @@ static func advance_bounded_branch_direction_world(
 	return moved
 
 
-func _update_ready_rod_pose() -> void:
+func _update_ready_rod_pose(anchor_hand: bool = true) -> void:
 	if _onboard == null or _rod_visual_root == null:
 		return
-	_update_rod_hand_anchor()
 	_rod_swing.rotation = Vector3.ZERO
 	_rod_back_angle_deg = 0.0
 	_rod_bend_angle_deg = 0.0
 	_set_rod_bend_angle(0.0)
+	if anchor_hand:
+		_update_rod_hand_anchor()
 
 
 func _update_rod_hand_anchor() -> void:
@@ -3777,28 +3790,49 @@ func _update_rod_hand_anchor() -> void:
 		)
 		_onboard.force_update_transform()
 		_rod_visual_root.force_update_transform()
-		camera.force_update_transform()
-		var relative_transform := camera.global_transform.affine_inverse() * _rod_visual_root.global_transform
+		var camera_transform_in_onboard := _get_descendant_transform_in_ancestor(_onboard, camera)
+		var relative_transform := camera_transform_in_onboard.affine_inverse() * _rod_visual_root.transform
 		_rod_view_camera_relative_transform = Transform3D(
 			relative_transform.basis.orthonormalized(),
 			relative_transform.origin
 		)
 		_rod_view_camera_pose_captured = true
 		if _reel_spool_visual != null and is_instance_valid(_reel_spool_visual):
-			_rod_swing.force_update_transform()
-			_reel_spool_visual.force_update_transform()
-			var current_spool_camera_position := camera.global_transform.affine_inverse() * _reel_spool_visual.global_position
+			var spool_in_root := _rod_swing.transform * _get_handheld_spool_transform_in_rod_swing()
+			var current_spool_camera_position := _rod_view_camera_relative_transform * spool_in_root.origin
 			_rod_reel_camera_depth_m = maxf(-current_spool_camera_position.z, camera.near + 0.05)
 			_rod_reel_camera_anchor_captured = true
 	_onboard.force_update_transform()
 	camera.force_update_transform()
-	var target_global_transform := camera.global_transform * _rod_view_camera_relative_transform
-	var target_local_transform := _onboard.global_transform.affine_inverse() * target_global_transform
+	var camera_transform_in_onboard := _get_descendant_transform_in_ancestor(_onboard, camera)
+	var target_local_transform := camera_transform_in_onboard * _rod_view_camera_relative_transform
+	target_local_transform.basis = target_local_transform.basis.orthonormalized()
 	_rod_visual_root.transform = Transform3D(
-		target_local_transform.basis.orthonormalized(),
+		target_local_transform.basis,
 		target_local_transform.origin
 	)
+	_rod_visual_root.force_update_transform()
 	_apply_rod_reel_screen_anchor(camera)
+
+
+func _get_descendant_transform_in_ancestor(ancestor: Node3D, descendant: Node3D) -> Transform3D:
+	# Compose local transforms directly. Converting the same anchor through distant
+	# world coordinates quantizes the handheld pose as the boat moves.
+	var relative_transform := Transform3D.IDENTITY
+	var current := descendant
+	while current != ancestor:
+		relative_transform = current.transform * relative_transform
+		var parent := current.get_parent() as Node3D
+		if parent == null:
+			return Transform3D.IDENTITY
+		current = parent
+	return relative_transform
+
+
+func _get_handheld_spool_transform_in_rod_swing() -> Transform3D:
+	if _reel_mount == null or _reel_visual_root == null or _reel_rotating_assembly == null or _reel_spool_visual == null:
+		return Transform3D.IDENTITY
+	return _reel_mount.transform * _reel_visual_root.transform * _reel_rotating_assembly.transform * _reel_spool_visual.transform
 
 
 func _apply_rod_reel_screen_anchor(camera: Camera3D = null) -> void:
@@ -3821,22 +3855,24 @@ func _apply_rod_reel_screen_anchor(camera: Camera3D = null) -> void:
 	elif _landing_reel_anchor_released:
 		return
 	active_camera.force_update_transform()
-	_rod_visual_root.force_update_transform()
-	_rod_swing.force_update_transform()
-	_reel_spool_visual.force_update_transform()
 	var viewport_rect := active_camera.get_viewport().get_visible_rect()
 	var target_screen_position := viewport_rect.position + viewport_rect.size * HANDHELD_REEL_SCREEN_ANCHOR
-	var target_spool_world := active_camera.project_position(target_screen_position, _rod_reel_camera_depth_m)
-	if fish_presentation_active and _landing_reel_anchor_conflicts_with_fish(active_camera, target_spool_world):
-		# Keep the landing animation's natural rod pivot whenever a fish occupies
-		# the reel's screen area. Once released, stay released through presentation
-		# so the reel cannot pop back over a thrashing fish mid-shot.
-		_landing_reel_anchor_released = true
-		_rod_swing.position = Vector3.ZERO
-		_rod_swing.force_update_transform()
-		return
-	var target_spool_in_root := _rod_visual_root.to_local(target_spool_world)
-	var spool_in_swing := _rod_swing.to_local(_reel_spool_visual.global_position)
+	# Keep the screen-anchor solve in camera/root-local space to avoid round-tripping
+	# the reel target through the boat's large absolute world coordinates.
+	var target_ray_camera := active_camera.project_local_ray_normal(target_screen_position)
+	var target_spool_camera := target_ray_camera * (_rod_reel_camera_depth_m / maxf(-target_ray_camera.z, 0.000001))
+	if fish_presentation_active:
+		var target_spool_world := active_camera.global_transform * target_spool_camera
+		if _landing_reel_anchor_conflicts_with_fish(active_camera, target_spool_world):
+			# Keep the landing animation's natural rod pivot whenever a fish occupies
+			# the reel's screen area. Once released, stay released through presentation
+			# so the reel cannot pop back over a thrashing fish mid-shot.
+			_landing_reel_anchor_released = true
+			_rod_swing.position = Vector3.ZERO
+			_rod_swing.force_update_transform()
+			return
+	var target_spool_in_root := _rod_view_camera_relative_transform.affine_inverse() * target_spool_camera
+	var spool_in_swing := _get_handheld_spool_transform_in_rod_swing().origin
 	# Moving the swing pivot around the spool keeps the reel at its exact camera-
 	# relative position while the rod, reel mount, and guides rotate as one rig.
 	# The rod tip remains the transformed tip of that same animated rig.
@@ -5025,7 +5061,7 @@ func _update_line_and_bait_visuals() -> void:
 		return
 	_update_single_jig_visual(maxf(get_process_delta_time(), 0.0))
 	_ensure_fishing_line_path_snapshot()
-	_render_complete_line_path(_line_mesh, self)
+	_render_complete_line_path(_line_mesh, _line_render_root if _line_render_root != null else self)
 	_line_instance.visible = true
 	_bait_instance.global_position = _bait_world
 	_bait_instance.global_basis = _lure_visual_basis_world
@@ -5071,7 +5107,31 @@ func _render_complete_line_path(mesh: ImmediateMesh, owner: Node3D) -> void:
 		local_points.append(owner.to_local(points[index]))
 		local_tangents.append((inverse * tangents[index]).normalized())
 		local_sides.append((inverse * sides[index]).normalized())
+	# Keep the visible line origin on the same precise onboard-local vertex used
+	# by the camera-relative rod shader. The physics/path snapshot remains world
+	# space and is not modified by this render-only correction.
+	var stations: Dictionary = _main_line_path_snapshot.get("stations", {})
+	var rod_tip_station: Dictionary = stations.get("rod_tip", {})
+	var rod_tip_index := int(rod_tip_station.get("index", -1))
+	if rod_tip_index >= 0 and rod_tip_index < local_points.size() and _rod_mesh_instance != null and _onboard != null:
+		local_points[rod_tip_index] = _get_rod_tip_in_onboard_local()
 	_rebuild_line_tube_mesh(mesh, local_points, local_tangents, local_sides)
+
+
+func _get_rod_tip_in_onboard_local() -> Vector3:
+	if _onboard == null or _rod_mesh_instance == null:
+		return Vector3.ZERO
+	var bend_radians := deg_to_rad(_rod_bend_angle_deg)
+	var curved_tip := Vector3(0.0, ROD_LENGTH_M * 0.5, 0.0)
+	if absf(bend_radians) > 0.0001:
+		curved_tip.x = ROD_LENGTH_M * (1.0 - cos(bend_radians)) / bend_radians
+		curved_tip.y = -ROD_LENGTH_M * 0.5 + ROD_LENGTH_M * sin(bend_radians) / bend_radians
+	var directional_tip := Vector3(
+		_rod_bend_direction_local.x * curved_tip.x,
+		curved_tip.y,
+		_rod_bend_direction_local.y * curved_tip.x
+	)
+	return _get_descendant_transform_in_ancestor(_onboard, _rod_mesh_instance) * directional_tip
 
 
 static func generate_fishing_line_path(
@@ -5645,7 +5705,7 @@ func _build_visuals() -> void:
 	# The shared reel defaults to the fixed trolling rod's handle side. The
 	# handheld mount is mirrored so the crank projects to screen-left from the
 	# player's first-person view without changing its winding axis or direction.
-	var reel_parts := FishingRodRig.create_reel_assembly(reel_body_material, reel_moving_material, -1.0)
+	var reel_parts := FishingRodRig.create_reel_assembly(reel_body_material, reel_moving_material, -1.0, true)
 	_reel_visual_root = reel_parts["root"] as Node3D
 	_reel_visual_root.name = "HandheldFishingReel"
 	_reel_spool_visual = reel_parts["spool"] as MeshInstance3D
@@ -5667,19 +5727,17 @@ func _build_visuals() -> void:
 	_line_instance = MeshInstance3D.new()
 	_line_instance.name = "BoatFishingLine"
 	_line_instance.mesh = _line_mesh
-	_line_material = _make_material(Color(0.77, 0.86, 0.84, 0.95), 0.0)
-	_line_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	_line_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	_line_material.cull_mode = BaseMaterial3D.CULL_DISABLED
-	# Keep depth testing enabled so the hull hides line segments behind the boat.
-	# The line stays late-rendered but does not write depth; above-water segments
-	# remain legible while segments behind the water surface are naturally hidden.
-	_line_material.no_depth_test = false
-	_line_material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
+	_line_material = ShaderMaterial.new()
+	_line_material.shader = CAMERA_RELATIVE_LINE_SHADER
+	_line_material.set_shader_parameter("line_color", Color(0.77, 0.86, 0.84, 0.95))
 	_line_material.render_priority = 20
 	_line_instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_line_instance.visible = false
+	_line_render_root = _onboard if _onboard != null else self
 	add_child(_line_instance)
+	_line_instance.set_as_top_level(true)
+	if _line_render_root == _onboard:
+		_line_instance.global_transform = _onboard.global_transform
 	_bait_instance = MeshInstance3D.new()
 	_bait_instance.name = "BoatFishingBait"
 	_bait_instance.mesh = _build_spoon_mesh()
@@ -5739,6 +5797,7 @@ func _build_visuals() -> void:
 	_build_cast_aim_marker()
 	_update_rig_visual_selection()
 	_update_rod_line_guides()
+	_configure_handheld_camera_relative_materials()
 
 
 func _build_cast_aim_marker() -> void:
@@ -5801,6 +5860,91 @@ func _build_handheld_rod_guides() -> void:
 		guide.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		_rod_swing.add_child(guide)
 		_rod_line_guides.append(guide)
+
+
+func _configure_handheld_camera_relative_materials() -> void:
+	_handheld_pbr_material = ShaderMaterial.new()
+	_handheld_pbr_material.shader = HANDHELD_PBR_SHADER
+	_handheld_render_instances.clear()
+	if _rod_visual_root == null:
+		return
+	var pending: Array[Node] = [_rod_visual_root]
+	while not pending.is_empty():
+		var current: Node = pending.pop_back()
+		for child in current.get_children():
+			pending.append(child)
+		if not (current is GeometryInstance3D):
+			continue
+		var geometry := current as GeometryInstance3D
+		geometry.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		var source_material := _get_handheld_source_material(geometry)
+		if source_material is StandardMaterial3D:
+			var standard := source_material as StandardMaterial3D
+			geometry.material_override = _handheld_pbr_material
+			geometry.set_instance_shader_parameter("albedo_color", standard.albedo_color)
+			geometry.set_instance_shader_parameter("metallic_value", standard.metallic)
+			geometry.set_instance_shader_parameter("roughness_value", standard.roughness)
+			_handheld_render_instances.append(geometry)
+		elif source_material is ShaderMaterial:
+			var shader_material := source_material as ShaderMaterial
+			if shader_material.shader == null or not shader_material.shader.code.contains("camera_relative_column_0"):
+				push_error("Handheld geometry %s has a shader that does not use the camera-relative vertex path." % geometry.name)
+				continue
+			_handheld_render_instances.append(geometry)
+		else:
+			push_error("Handheld geometry %s has an unsupported material for camera-relative rendering." % geometry.name)
+
+
+func _get_handheld_source_material(geometry: GeometryInstance3D) -> Material:
+	if geometry.material_override != null:
+		return geometry.material_override
+	var mesh: Mesh
+	if geometry is MeshInstance3D:
+		mesh = (geometry as MeshInstance3D).mesh
+	elif geometry is MultiMeshInstance3D:
+		var multimesh := (geometry as MultiMeshInstance3D).multimesh
+		mesh = multimesh.mesh if multimesh != null else null
+	if mesh == null:
+		return null
+	for surface_index in range(mesh.get_surface_count()):
+		var surface_material := mesh.surface_get_material(surface_index)
+		if surface_material != null:
+			return surface_material
+	return null
+
+
+func _update_camera_relative_render_transforms() -> void:
+	if not _activity_active or _onboard == null or not is_instance_valid(_onboard):
+		return
+	var camera := _onboard.get_activity_camera()
+	if camera == null or not is_instance_valid(camera) or not _onboard.is_ancestor_of(camera):
+		return
+	_onboard.force_update_transform()
+	camera.force_update_transform()
+	var camera_in_onboard := _get_descendant_transform_in_ancestor(_onboard, camera)
+	var camera_inverse := camera_in_onboard.affine_inverse()
+	for geometry in _handheld_render_instances:
+		if not is_instance_valid(geometry):
+			continue
+		var model_in_onboard := _get_descendant_transform_in_ancestor(_onboard, geometry)
+		if geometry is MultiMeshInstance3D:
+			var multimesh := (geometry as MultiMeshInstance3D).multimesh
+			if multimesh == null or multimesh.instance_count != 1:
+				continue
+			model_in_onboard *= multimesh.get_instance_transform(0)
+		_set_camera_relative_instance_transform(geometry, camera_inverse * model_in_onboard)
+	if _line_instance != null and is_instance_valid(_line_instance) and _line_render_root == _onboard:
+		# Keep the node's world placement only for CPU frustum culling. Its mesh
+		# vertices are onboard-local and the shader projects them without this matrix.
+		_line_instance.global_transform = _onboard.global_transform
+		_set_camera_relative_instance_transform(_line_instance, camera_inverse)
+
+
+func _set_camera_relative_instance_transform(geometry: GeometryInstance3D, transform: Transform3D) -> void:
+	geometry.set_instance_shader_parameter("camera_relative_column_0", Vector4(transform.basis.x.x, transform.basis.x.y, transform.basis.x.z, 0.0))
+	geometry.set_instance_shader_parameter("camera_relative_column_1", Vector4(transform.basis.y.x, transform.basis.y.y, transform.basis.y.z, 0.0))
+	geometry.set_instance_shader_parameter("camera_relative_column_2", Vector4(transform.basis.z.x, transform.basis.z.y, transform.basis.z.z, 0.0))
+	geometry.set_instance_shader_parameter("camera_relative_column_3", Vector4(transform.origin.x, transform.origin.y, transform.origin.z, 1.0))
 
 
 func _rod_centerline_point_local(progress: float) -> Vector3:

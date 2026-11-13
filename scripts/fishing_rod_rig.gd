@@ -13,6 +13,51 @@ const REEL_LINE_VISUAL_RANGE_M := 50.0
 const REEL_SPOOL_AXIAL_WIDTH_M := 0.064
 const REEL_WINDING_BASE_OUTER_RADIUS_M := REEL_SPOOL_CORE_RADIUS_M + REEL_LINE_LAYER_MIN_THICKNESS_M
 const REEL_WINDING_RING_COUNT := 56
+const HANDHELD_WINDING_SHADER_CODE := """
+shader_type spatial;
+render_mode skip_vertex_transform, cull_back, diffuse_burley, specular_schlick_ggx;
+
+instance uniform vec4 camera_relative_column_0 = vec4(1.0, 0.0, 0.0, 0.0);
+instance uniform vec4 camera_relative_column_1 = vec4(0.0, 1.0, 0.0, 0.0);
+instance uniform vec4 camera_relative_column_2 = vec4(0.0, 0.0, 1.0, 0.0);
+instance uniform vec4 camera_relative_column_3 = vec4(0.0, 0.0, 0.0, 1.0);
+uniform vec4 base_color : source_color = vec4(0.56, 0.63, 0.60, 1.0);
+uniform vec4 strand_color : source_color = vec4(0.74, 0.78, 0.75, 1.0);
+uniform float wraps_across_width = 16.0;
+uniform float strand_half_width = 0.14;
+
+void vertex() {
+	mat4 camera_relative_model = mat4(
+		camera_relative_column_0,
+		camera_relative_column_1,
+		camera_relative_column_2,
+		camera_relative_column_3
+	);
+	mat3 camera_relative_basis = mat3(camera_relative_model);
+	NORMAL = normalize(transpose(inverse(camera_relative_basis)) * NORMAL);
+	TANGENT = normalize(camera_relative_basis * TANGENT);
+	BINORMAL = normalize(camera_relative_basis * BINORMAL);
+	vec4 view_position = camera_relative_model * vec4(VERTEX, 1.0);
+	VERTEX = view_position.xyz;
+	POSITION = PROJECTION_MATRIX * view_position;
+}
+
+void fragment() {
+	// A low-frequency helical marking reads as wound line while avoiding the
+	// sub-pixel torus repetition that shimmered as the camera moved.
+	float phase = UV.y * wraps_across_width - UV.x;
+	float distance_to_strand = abs(fract(phase) - 0.5);
+	float antialias_width = max(fwidth(phase), 0.004);
+	float strand = 1.0 - smoothstep(
+		strand_half_width - antialias_width,
+		strand_half_width + antialias_width,
+		distance_to_strand
+	);
+	ALBEDO = mix(base_color.rgb, strand_color.rgb, strand * 0.58);
+	METALLIC = 0.0;
+	ROUGHNESS = 0.96;
+}
+"""
 const REEL_SPOOL_CENTER_LOCAL := Vector3(0.046, 0.045, 0.19)
 const CATCH_HOOK_LENGTH_RATIO := 0.45
 const CATCH_DEFORMATION_SHADER := preload("res://shaders/fishing_catch_deform.gdshader")
@@ -568,7 +613,12 @@ func _build_reel(material: Material) -> void:
 
 ## Shared procedural reel used by both the hull-mounted trolling rod and the
 ## handheld Boat Fishing rod. Callers own placement and rotation state.
-static func create_reel_assembly(body_material: Material, rotating_material: Material = null, handle_axial_side_sign: float = 1.0) -> Dictionary:
+static func create_reel_assembly(
+	body_material: Material,
+	rotating_material: Material = null,
+	handle_axial_side_sign: float = 1.0,
+	stable_handheld_winding_surface: bool = false
+) -> Dictionary:
 	var moving_material := rotating_material if rotating_material != null else body_material
 	var handle_side := -1.0 if handle_axial_side_sign < 0.0 else 1.0
 	var root := Node3D.new()
@@ -636,26 +686,48 @@ static func create_reel_assembly(body_material: Material, rotating_material: Mat
 	spool.mesh = spool_mesh
 	spool.material_override = body_material
 	spinner.add_child(spool)
-	var line_material := StandardMaterial3D.new()
-	line_material.albedo_color = Color(0.56, 0.63, 0.60, 1.0)
-	line_material.metallic = 0.12
-	line_material.roughness = 0.52
-	var winding_mesh := TorusMesh.new()
-	winding_mesh.outer_radius = REEL_WINDING_BASE_OUTER_RADIUS_M
-	winding_mesh.inner_radius = REEL_WINDING_BASE_OUTER_RADIUS_M - 0.0012
-	winding_mesh.ring_segments = 5
-	winding_mesh.rings = 32
+	var line_material: Material
+	var winding_mesh: Mesh
+	var winding_instance_count := REEL_WINDING_RING_COUNT
+	if stable_handheld_winding_surface:
+		var winding_shader := Shader.new()
+		winding_shader.code = HANDHELD_WINDING_SHADER_CODE
+		var winding_surface_material := ShaderMaterial.new()
+		winding_surface_material.shader = winding_shader
+		line_material = winding_surface_material
+		var winding_cylinder := CylinderMesh.new()
+		winding_cylinder.top_radius = REEL_WINDING_BASE_OUTER_RADIUS_M
+		winding_cylinder.bottom_radius = REEL_WINDING_BASE_OUTER_RADIUS_M
+		winding_cylinder.height = REEL_SPOOL_AXIAL_WIDTH_M * 0.96
+		winding_cylinder.radial_segments = 48
+		winding_mesh = winding_cylinder
+		winding_instance_count = 1
+	else:
+		var winding_standard_material := StandardMaterial3D.new()
+		winding_standard_material.albedo_color = Color(0.56, 0.63, 0.60, 1.0)
+		winding_standard_material.metallic = 0.12
+		winding_standard_material.roughness = 0.52
+		line_material = winding_standard_material
+		var winding_torus := TorusMesh.new()
+		winding_torus.outer_radius = REEL_WINDING_BASE_OUTER_RADIUS_M
+		winding_torus.inner_radius = REEL_WINDING_BASE_OUTER_RADIUS_M - 0.0012
+		winding_torus.ring_segments = 5
+		winding_torus.rings = 32
+		winding_mesh = winding_torus
 	var winding_multimesh := MultiMesh.new()
 	winding_multimesh.transform_format = MultiMesh.TRANSFORM_3D
 	winding_multimesh.mesh = winding_mesh
-	winding_multimesh.instance_count = REEL_WINDING_RING_COUNT
-	for winding_index in range(REEL_WINDING_RING_COUNT):
-		var across := float(winding_index) / float(REEL_WINDING_RING_COUNT - 1)
-		var y := lerpf(-REEL_SPOOL_AXIAL_WIDTH_M * 0.5, REEL_SPOOL_AXIAL_WIDTH_M * 0.5, across)
-		# TorusMesh is generated in the XZ plane, with local Y along its axle.
-		# Keep the ring normal on the spool's local Y axis and pack each ring
-		# across the drum width.
-		winding_multimesh.set_instance_transform(winding_index, Transform3D(Basis.IDENTITY, Vector3(0.0, y, 0.0)))
+	winding_multimesh.instance_count = winding_instance_count
+	if stable_handheld_winding_surface:
+		winding_multimesh.set_instance_transform(0, Transform3D.IDENTITY)
+	else:
+		for winding_index in range(REEL_WINDING_RING_COUNT):
+			var across := float(winding_index) / float(REEL_WINDING_RING_COUNT - 1)
+			var y := lerpf(-REEL_SPOOL_AXIAL_WIDTH_M * 0.5, REEL_SPOOL_AXIAL_WIDTH_M * 0.5, across)
+			# TorusMesh is generated in the XZ plane, with local Y along its axle.
+			# Keep the ring normal on the spool's local Y axis and pack each ring
+			# across the drum width.
+			winding_multimesh.set_instance_transform(winding_index, Transform3D(Basis.IDENTITY, Vector3(0.0, y, 0.0)))
 	winding_multimesh.custom_aabb = AABB(Vector3(-0.043, -0.035, -0.043), Vector3(0.086, 0.070, 0.086))
 	var winding := MultiMeshInstance3D.new()
 	winding.name = "ReelWoundLine"
@@ -764,6 +836,13 @@ static func set_reel_winding_line_length_on_visual(winding: MultiMeshInstance3D,
 			return thickness
 	var radial_scale := get_reel_spool_outer_radius_m(line_length_m) / REEL_WINDING_BASE_OUTER_RADIUS_M
 	var multimesh := winding.multimesh
+	if multimesh.mesh is CylinderMesh:
+		var shell_transform := multimesh.get_instance_transform(0)
+		shell_transform.basis = Basis(Vector3(radial_scale, 0.0, 0.0), Vector3.UP, Vector3(0.0, 0.0, radial_scale))
+		multimesh.set_instance_transform(0, shell_transform)
+		winding.set_meta("line_layer_thickness_m", thickness)
+		winding.visible = true
+		return thickness
 	for winding_index in range(multimesh.instance_count):
 		var current := multimesh.get_instance_transform(winding_index)
 		# TorusMesh's ring plane is XZ, so preserve the Y-axis axle and scale
