@@ -22,10 +22,12 @@ const TROLLING_AUDIO_PATHS := {
 	"drag": "res://assets/sfx/fishing_drag.wav",
 	"reel_in": "res://assets/sfx/fishing_reel_in.wav",
 	"splash": "res://assets/sfx/fishing_splash.wav",
+	"boat_splash": "res://assets/sfx/fishing_fish_flex.wav",
 	"catch_success": "res://assets/sfx/fishing_catch_success.wav",
 }
 const TROLLING_LOOP_VOLUME_DB := {"line_out": -12.0, "drag": 4.0, "reel_in": 4.0}
-const TROLLING_ONE_SHOT_VOLUME_DB := {"splash": -6.0, "catch_success": -2.0}
+const TROLLING_ONE_SHOT_VOLUME_DB := {"splash": -6.0, "boat_splash": -6.0, "catch_success": -2.0}
+const BOAT_FISH_FLEX_SOUND := "res://assets/sfx/fishing_fish_flex.wav"
 const TROLLING_AUDIO_FADE_SECONDS := 0.1
 const TROLLING_AMBIENCE_DUCK_DB := {"Ocean": 8.0, "Engine": 8.0, "Weather": 5.0}
 const TROLLING_AMBIENCE_DUCK_FADE_SECONDS := 0.14
@@ -118,6 +120,8 @@ var _external_fishing_audio_loops: Dictionary = {}
 var _external_fishing_audio_intensities: Dictionary = {}
 var _external_loop_volume_scale: Dictionary = {}
 var _shared_fishing_audio_event_counts: Dictionary = {}
+var _boat_fish_flex_players: Array[AudioStreamPlayer] = []
+var _boat_fish_flex_last_play_usec := 0
 var _trolling_ambience_bus_states: Dictionary = {}
 var _last_splash_audio_catch_id := ""
 var _success_audio_played_for_presentation := false
@@ -211,6 +215,18 @@ func play_shared_fishing_one_shot(key: String) -> bool:
 	_shared_fishing_audio_event_counts[key] = int(_shared_fishing_audio_event_counts.get(key, 0)) + 1
 	_play_trolling_one_shot(key)
 	return true
+
+
+func play_boat_fish_flex(intensity: float) -> void:
+	var now := Time.get_ticks_usec()
+	if now - _boat_fish_flex_last_play_usec < 90000:
+		return
+	for player in _boat_fish_flex_players:
+		if not player.playing:
+			player.volume_db = -12.0 + linear_to_db(clampf(intensity, 0.12, 1.0))
+			player.play()
+			_boat_fish_flex_last_play_usec = now
+			return
 
 
 func get_shared_fishing_audio_event_count(key: String) -> int:
@@ -1417,6 +1433,15 @@ func _create_trolling_audio_players() -> void:
 			player.volume_db = float(TROLLING_ONE_SHOT_VOLUME_DB.get(key, 0.0))
 		add_child(player)
 		_trolling_audio_players[key] = player
+	var flex_sound := load(BOAT_FISH_FLEX_SOUND) as AudioStream
+	if flex_sound != null:
+		for index in range(3):
+			var player := AudioStreamPlayer.new()
+			player.name = "BoatFishFlex%d" % index
+			player.bus = "SFX"
+			player.stream = flex_sound
+			add_child(player)
+			_boat_fish_flex_players.append(player)
 
 
 func _ensure_fishing_sfx_bus() -> void:

@@ -2128,6 +2128,15 @@ func _pose_airborne_fish(fish: Node3D, species_id: String, body_length_m: float,
 	fish.set_meta("airborne_elapsed", elapsed)
 	var phase := elapsed * TAU * (1.7 + float(posmod(fish_index, 5)) * 0.13) + float(fish_index) * 1.37
 	var amplitude := (0.70 + float(posmod(fish_index, 3)) * 0.15) * (0.15 + 0.85 * exp(-elapsed * 0.55)) * weight
+	# The C-bend peaks at pi/2 + k*pi. Track each fish's unwrapped phase so
+	# frame-rate changes and the transition into landing do not restart a loop.
+	var peak_index := floori((phase + PI * 0.5) / PI)
+	if fish.has_meta("boat_fish_flex_peak"):
+		var previous_peak := int(fish.get_meta("boat_fish_flex_peak"))
+		if peak_index > previous_peak and weight > 0.5 and amplitude > 0.16 and hook_world.y >= surface_y:
+			if is_instance_valid(_fishing_audio_system):
+				_fishing_audio_system.play_boat_fish_flex(amplitude)
+	fish.set_meta("boat_fish_flex_peak", peak_index)
 	var horizontal := Vector3(swim_heading.x, 0.0, swim_heading.z)
 	if horizontal.length_squared() < 0.0001:
 		horizontal = Vector3.FORWARD
@@ -4989,7 +4998,7 @@ func _clear_boat_fishing_audio_loops() -> void:
 func _play_boat_fishing_one_shot(key: String) -> void:
 	_fishing_audio_event_counts[key] = int(_fishing_audio_event_counts.get(key, 0)) + 1
 	if is_instance_valid(_fishing_audio_system):
-		_fishing_audio_system.play_shared_fishing_one_shot(key)
+		_fishing_audio_system.play_shared_fishing_one_shot("boat_splash" if key == "splash" else key)
 
 
 func _clear_manual_line_controls() -> void:
