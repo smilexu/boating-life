@@ -196,6 +196,7 @@ var _reel_mount: Node3D
 var _reel_visual_root: Node3D
 var _reel_spool_visual: MeshInstance3D
 var _reel_rotating_assembly: Node3D
+var _reel_drag_dial: Node3D
 var _reel_rotating_assembly_base_basis := Basis.IDENTITY
 var _reel_winding_visual: MultiMeshInstance3D
 var _rod_line_guides: Array[MeshInstance3D] = []
@@ -1389,6 +1390,8 @@ func _process(delta: float) -> void:
 	_update_splash(delta)
 	var reel_line_length_after := _get_reel_feedback_line_length()
 	_update_reel_visual_and_audio(reel_line_length_before, reel_line_length_after, delta)
+	if _reel_drag_dial != null:
+		_reel_drag_dial.rotation.x = lerpf(-PI * 0.70, PI * 0.70, clampf(_fight_drag_setting, 0.0, 1.0))
 
 
 func _resolve_encounter() -> void:
@@ -5827,9 +5830,15 @@ func _build_visuals() -> void:
 	if _reel_rotating_assembly != null:
 		_reel_rotating_assembly_base_basis = _reel_rotating_assembly.transform.basis
 		_reel_visual_total_rotation_rad = 0.0
+		# Provide axial clearance for the fixed drag lever behind the crank.
+		for part_name in ["ReelHandleArm", "ReelHandleKnob"]:
+			var part := _reel_rotating_assembly.get_node_or_null(part_name) as Node3D
+			if part != null:
+				part.position.y -= 0.012
 	_reel_winding_visual = reel_parts["winding_visual"] as MultiMeshInstance3D
 	FishingRodRig.set_reel_winding_line_length_on_visual(_reel_winding_visual, 0.0)
 	_reel_mount.add_child(_reel_visual_root)
+	_build_handheld_drag_dial()
 	_build_handheld_rod_guides()
 	_line_mesh = ImmediateMesh.new()
 	_line_instance = MeshInstance3D.new()
@@ -5945,6 +5954,36 @@ func _build_cast_aim_marker() -> void:
 	_cast_aim_marker_material.emission_enabled = true
 	ring.material_override = _cast_aim_marker_material
 	center_dot.material_override = _cast_aim_marker_material
+
+
+func _build_handheld_drag_dial() -> void:
+	# A fixed-frame lever sits around the hub, behind the rotating crank.
+	var origin := FishingRodRig.REEL_SPOOL_CENTER_LOCAL + Vector3(0.043, 0.0, 0.0)
+	var dark := _make_material(Color(0.10, 0.13, 0.14), 0.45)
+	_reel_drag_dial = Node3D.new()
+	_reel_drag_dial.name = "DragAdjustmentDial"
+	_reel_drag_dial.position = origin
+	_reel_drag_dial.rotation.x = lerpf(-PI * 0.70, PI * 0.70, clampf(_fight_drag_setting, 0.0, 1.0))
+	_reel_visual_root.add_child(_reel_drag_dial)
+	var ring := MeshInstance3D.new()
+	ring.name = "DragLeverRing"
+	var ring_mesh := TorusMesh.new()
+	ring_mesh.inner_radius = 0.0148
+	ring_mesh.outer_radius = 0.019
+	ring_mesh.rings = 8
+	ring_mesh.ring_segments = 24
+	ring.mesh = ring_mesh
+	ring.material_override = dark
+	ring.rotation.z = PI * 0.5
+	_reel_drag_dial.add_child(ring)
+	var lever := MeshInstance3D.new()
+	lever.name = "DragLeverTab"
+	var lever_mesh := BoxMesh.new()
+	lever_mesh.size = Vector3(0.004, 0.008, 0.020)
+	lever.mesh = lever_mesh
+	lever.material_override = dark
+	lever.position = Vector3(0.0, 0.0, 0.026)
+	_reel_drag_dial.add_child(lever)
 
 
 func _build_handheld_rod_guides() -> void:
