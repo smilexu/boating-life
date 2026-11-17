@@ -288,6 +288,7 @@ var _fight_rod_micro_vibration_deg := 0.0
 var _fight_rod_recoil_amplitude_deg := 0.0
 var _fight_rod_recoil_elapsed := 0.0
 var _fight_visual_elapsed := 0.0
+var _fight_surge_speed_mps := 0.0
 var _fight_previous_base_bend_deg := 0.0
 var _fight_drag_feedback_remaining := 0.0
 var _fight_drag_feedback_direction := 0
@@ -2112,7 +2113,7 @@ func _prepare_boat_fish_deformation(fish: Node3D, profile: FishSpeciesProfile) -
 	fish.set_meta("boat_fish_deformation_materials", materials)
 
 
-func _pose_airborne_fish(fish: Node3D, species_id: String, body_length_m: float, hook_world: Vector3, swim_heading: Vector3, delta: float, fish_index: int, swim_roll: float = 0.0) -> void:
+func _pose_airborne_fish(fish: Node3D, species_id: String, body_length_m: float, hook_world: Vector3, swim_heading: Vector3, delta: float, fish_index: int, swim_roll: float = 0.0, swim_elapsed: float = 0.0, swim_intensity: float = 0.0) -> void:
 	var profile := _fish_manager.get_species_profile(species_id) if _fish_manager != null else null
 	if profile == null:
 		return
@@ -2139,10 +2140,12 @@ func _pose_airborne_fish(fish: Node3D, species_id: String, body_length_m: float,
 	var scaled_basis := basis.scaled(Vector3.ONE * maxf(0.05, body_length_m / 1.2))
 	fish.global_transform = Transform3D(scaled_basis, mouth_anchored_fish_origin(hook_world, scaled_basis, profile.boat_fishing_mouth_anchor_local))
 	for material in fish.get_meta("boat_fish_deformation_materials", []):
-		material.set_shader_parameter("spine_bend_angle", amplitude * 3.45 * absf(sin(phase)))
-		material.set_shader_parameter("curl_sign", 1.0 if sin(phase) >= 0.0 else -1.0)
-		material.set_shader_parameter("tail_whip_angle", amplitude * 0.75)
-		material.set_shader_parameter("tail_wave_phase", phase)
+		var swim_phase := swim_elapsed * TAU * clampf(profile.tail_frequency_hz, 0.5, 4.0) + float(fish_index) * 0.67
+		var bend := lerpf(clampf(swim_intensity, 0.0, 1.0) * 0.9 * sin(swim_phase), amplitude * 3.45 * sin(phase), weight)
+		material.set_shader_parameter("spine_bend_angle", absf(bend))
+		material.set_shader_parameter("curl_sign", 1.0 if bend >= 0.0 else -1.0)
+		material.set_shader_parameter("tail_whip_angle", lerpf(swim_intensity * 0.32, amplitude * 0.75, weight))
+		material.set_shader_parameter("tail_wave_phase", lerpf(swim_phase, phase, weight))
 
 
 func _depth_below_surface_at(position: Vector3) -> float:
@@ -2923,6 +2926,23 @@ func _constrain_fight_connection_to_terminal_water_column(
 
 
 func _apply_fight_participant_motion(delta: float, fish_snapshots: Array[Dictionary]) -> void:
+	var aggregate_speed := 0.0
+	var burst_count := 0
+	for snapshot in fish_snapshots:
+		aggregate_speed += maxf(0.0, float(snapshot.get("swim_speed_mps", 0.0)))
+		if str(snapshot.get("struggle_state", "steady")) == "burst":
+			burst_count += 1
+	var count := maxi(fish_snapshots.size(), 1)
+	var underwater := 1.0 - smoothstep(-0.25, 0.05, _bait_world.y - float(_sample_water(_bait_world).get("height", _bait_world.y)))
+	var burst_boost := 0.32 if burst_count > 0 else 0.0
+	var target_speed := minf(2.5, aggregate_speed / float(count) * (1.0 + 0.20 * float(count - 1)) + burst_boost) * underwater
+	_fight_surge_speed_mps = lerpf(_fight_surge_speed_mps, target_speed, 1.0 - exp(-delta * 3.0))
+	var outward := _get_hull_outward_horizontal(_bait_world)
+	var lateral := Vector3.UP.cross(outward).normalized()
+	var surge := sin(_fight_visual_elapsed * 2.8) + 0.30 * sin(_fight_visual_elapsed * 4.3)
+	var shared_direction := lateral * surge
+	if shared_direction.length_squared() > 0.0001:
+		_advance_fight_tackle_for_fish(shared_direction, _fight_surge_speed_mps * minf(absf(surge), 1.0), delta)
 	_update_rig_visual_position()
 	for snapshot in fish_snapshots:
 		var catch_id := str(snapshot.get("catch_id", ""))
@@ -2935,7 +2955,6 @@ func _apply_fight_participant_motion(delta: float, fish_snapshots: Array[Diction
 			_update_rig_visual_position()
 			hook_position = _get_sabiki_hook_attachment_world_position(hook_index)
 		else:
-			_advance_single_jig_tackle_for_fish(swim_direction, speed, delta)
 			hook_position = _get_single_jig_hook_attachment_world()
 		var visual := _fight_fish_visuals_by_catch_id.get(catch_id) as Node3D
 		if visual == null or not is_instance_valid(visual):
@@ -2950,13 +2969,13 @@ func _apply_fight_participant_motion(delta: float, fish_snapshots: Array[Diction
 		var previous_heading: Vector3 = _fight_fish_heading_by_catch_id.get(catch_id, -_get_hull_outward_horizontal(hook_position))
 		var turn_rate := profile.boat_fishing_turn_rate_deg_s if profile != null else 300.0
 		var heading := _advance_fight_fish_heading(catch_id, previous_heading, target_heading, hook_position, float(snapshot.get("body_length_m", 0.3)), profile, turn_rate, delta)
-		_pose_airborne_fish(visual, str(snapshot.get("species_id", "")), float(snapshot.get("body_length_m", 0.3)), hook_position, heading, delta, maxi(hook_index, 0), sin(visual_elapsed * TAU * frequency) * intensity)
+		_pose_airborne_fish(visual, str(snapshot.get("species_id", "")), float(snapshot.get("body_length_m", 0.3)), hook_position, heading, delta, maxi(hook_index, 0), sin(visual_elapsed * TAU * frequency) * intensity, visual_elapsed, intensity * 2.0)
 		var mouth_world := visual.global_transform * (profile.boat_fishing_mouth_anchor_local if profile != null else Vector3.ZERO)
 		var error_m := mouth_world.distance_to(hook_position)
 		_fight_max_mouth_hook_error_m = maxf(_fight_max_mouth_hook_error_m, error_m)
 
 
-func _advance_single_jig_tackle_for_fish(direction: Vector3, speed: float, delta: float) -> void:
+func _advance_fight_tackle_for_fish(direction: Vector3, speed: float, delta: float) -> void:
 	if speed <= 0.0 or delta <= 0.0:
 		return
 	var rod_tip := _get_fight_solver_rod_tip_world()
@@ -2968,18 +2987,18 @@ func _advance_single_jig_tackle_for_fish(direction: Vector3, speed: float, delta
 		safe_direction,
 		speed,
 		delta,
-		_line_paid_out_length_m
+		_get_effective_main_line_length_m()
 	)
 	connection = _constrain_fight_connection_to_terminal_water_column(
 		connection,
 		rod_tip,
-		_line_paid_out_length_m,
+		_get_effective_main_line_length_m(),
 		_get_main_line_terminal_offset_world()
 	)
 	connection = _constrain_fight_connection_to_line_and_hull(
 		connection,
 		rod_tip,
-		_line_paid_out_length_m,
+		_get_effective_main_line_length_m(),
 		_get_main_line_terminal_offset_world()
 	)
 	_bait_world = connection - _get_main_line_terminal_offset_world()
@@ -3530,6 +3549,7 @@ func _reset_boat_fight_session(keep_visuals: bool = false) -> void:
 	_fight_rod_recoil_amplitude_deg = 0.0
 	_fight_rod_recoil_elapsed = 0.0
 	_fight_visual_elapsed = 0.0
+	_fight_surge_speed_mps = 0.0
 	_fight_previous_base_bend_deg = 0.0
 	_fight_rod_release_start_deg = 0.0
 	_fight_rod_release_elapsed = 0.0
