@@ -470,7 +470,7 @@ func _prepare_catch_deformation(mesh_node: MeshInstance3D, source_root: Node3D, 
 		deformation_material.set_shader_parameter("tail_u", CATCH_BODY_CURVE_TAIL_U)
 
 
-func _create_catch_deformation_material(source_material: StandardMaterial3D) -> ShaderMaterial:
+static func _create_catch_deformation_material(source_material: StandardMaterial3D) -> ShaderMaterial:
 	var material := ShaderMaterial.new()
 	material.shader = CATCH_DEFORMATION_SHADER
 	if source_material == null:
@@ -617,7 +617,8 @@ static func create_reel_assembly(
 	body_material: Material,
 	rotating_material: Material = null,
 	handle_axial_side_sign: float = 1.0,
-	stable_handheld_winding_surface: bool = false
+	stable_handheld_winding_surface: bool = false,
+	include_star_spokes: bool = true
 ) -> Dictionary:
 	var moving_material := rotating_material if rotating_material != null else body_material
 	var handle_side := -1.0 if handle_axial_side_sign < 0.0 else 1.0
@@ -735,20 +736,22 @@ static func create_reel_assembly(
 	winding.material_override = line_material
 	winding.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	spinner.add_child(winding)
-	# Three spokes on each spool face make the rotation legible from either side.
-	# The fixed side plates and supports remain on ReelFrame.
-	for side in [-1.0, 1.0]:
-		for spoke_index in range(3):
-			var spoke := MeshInstance3D.new()
-			spoke.name = "ReelSpoke%s%d" % ["L" if side < 0.0 else "R", spoke_index]
-			var spoke_mesh := BoxMesh.new()
-			spoke_mesh.size = Vector3(0.070, 0.004, 0.005)
-			spoke.mesh = spoke_mesh
-			spoke.material_override = moving_material
-			spoke.position = Vector3(0.0, side * (REEL_SPOOL_AXIAL_WIDTH_M * 0.5 + 0.006), 0.0)
-			spoke.rotation.y = TAU * float(spoke_index) / 3.0
-			spoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-			spinner.add_child(spoke)
+	if include_star_spokes:
+		# Three bars on each spool face form the rotating star-shaped spokes.
+		# Keep them for trolling reels; the handheld reel uses its asymmetric crank
+		# as the only prominent rotation cue.
+		for side in [-1.0, 1.0]:
+			for spoke_index in range(3):
+				var spoke := MeshInstance3D.new()
+				spoke.name = "ReelSpoke%s%d" % ["L" if side < 0.0 else "R", spoke_index]
+				var spoke_mesh := BoxMesh.new()
+				spoke_mesh.size = Vector3(0.070, 0.004, 0.005)
+				spoke.mesh = spoke_mesh
+				spoke.material_override = moving_material
+				spoke.position = Vector3(0.0, side * (REEL_SPOOL_AXIAL_WIDTH_M * 0.5 + 0.006), 0.0)
+				spoke.rotation.y = TAU * float(spoke_index) / 3.0
+				spoke.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+				spinner.add_child(spoke)
 	var hub := MeshInstance3D.new()
 	hub.name = "ReelHub"
 	var hub_mesh := CylinderMesh.new()

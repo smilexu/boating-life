@@ -47,6 +47,8 @@ const SPOON_LINE_EYE_Y_M := 0.050
 const SPOON_HOOK_TIP_Y_M := -(SPOON_LENGTH_M * 0.5) - 0.00402
 const SABIKI_HOOK_TIP_BRANCH_OFFSET := Vector3(0.00864, -0.00432, 0.0)
 const SABIKI_HOOK_TUBE_RADIUS_M := 0.0022
+const SABIKI_BRANCH_LINE_RADIUS_M := 0.0035
+const SABIKI_BRANCH_REST_ANGLE_RAD := PI / 12.0
 const CHARGE_LIFT_TIME_SECONDS := 0.4
 const CHARGE_MIDPOINT_SECONDS := 1.5
 const CHARGE_CANCEL_DURATION_SECONDS := 0.24
@@ -71,8 +73,6 @@ const FIGHT_LANDING_ROD_LIFT_DEG := 42.0
 const FIGHT_LANDING_RIG_OUTWARD_OFFSET_M := 0.28
 const FIGHT_LANDING_FISH_CLEARANCE_M := 0.28
 const FIGHT_LANDING_FISH_CLEARANCE_RATIO := 0.14
-const FIGHT_LANDING_FISH_THRASH_ROLL_RAD := 0.32
-const FIGHT_LANDING_FISH_THRASH_PITCH := 0.14
 const FIGHT_HULL_SAFETY_MARGIN_M := 0.28
 const SABIKI_FIGHT_LANDING_LINE_BUFFER_M := 0.35
 const SABIKI_EMPTY_RETRIEVAL_APPROACH_MARGIN_M := 0.35
@@ -196,6 +196,7 @@ var _reel_mount: Node3D
 var _reel_visual_root: Node3D
 var _reel_spool_visual: MeshInstance3D
 var _reel_rotating_assembly: Node3D
+var _reel_rotating_assembly_base_basis := Basis.IDENTITY
 var _reel_winding_visual: MultiMeshInstance3D
 var _rod_line_guides: Array[MeshInstance3D] = []
 var _reel_visual_total_rotation_rad := 0.0
@@ -945,9 +946,7 @@ func _get_sabiki_hook_attachment_world_position(hook_index: int) -> Vector3:
 		var bases := get_hook_world_positions()
 		return bases[hook_index] if hook_index >= 0 and hook_index < bases.size() else _bait_world
 	var hook_node := _sabiki_hook_nodes[hook_index]
-	var branch_length := _current_rig.branch_length_m
-	var local_hook_tip := Vector3(-branch_length, 0.0, 0.0) + SABIKI_HOOK_TIP_BRANCH_OFFSET
-	return hook_node.global_transform * local_hook_tip
+	return hook_node.global_transform * get_sabiki_hook_attachment_local(_current_rig.branch_length_m)
 
 
 func get_rig_hook_positions() -> Array[Vector3]:
@@ -2025,6 +2024,7 @@ func _create_sabiki_fish_visual(species_id: String, body_length_m: float, headin
 	add_child(fish)
 	for mesh_node in fish.find_children("*", "MeshInstance3D", true, false):
 		(mesh_node as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_prepare_boat_fish_deformation(fish, profile)
 	var direction := heading.normalized() if heading.length_squared() > 0.001 else Vector3.FORWARD
 	var scale_factor := maxf(0.05, body_length_m / 1.2)
 	fish.global_basis = FishSchoolRenderer.basis_for_model_heading(direction, profile.model_forward_axis).scaled(Vector3.ONE * scale_factor)
@@ -2074,6 +2074,75 @@ func _boat_fish_basis_for_heading(direction: Vector3, profile: FishSpeciesProfil
 	model_up = model_up.normalized()
 	var model_z := model_x_forward.cross(model_up).normalized()
 	return Basis(model_x_forward, model_up, model_z)
+
+
+func _prepare_boat_fish_deformation(fish: Node3D, profile: FishSpeciesProfile) -> void:
+	var materials: Array[ShaderMaterial] = []
+	var meshes: Array[Node] = fish.find_children("*", "MeshInstance3D", true, false)
+	if fish is MeshInstance3D:
+		meshes.push_front(fish)
+	for node in meshes:
+		var mesh_node := node as MeshInstance3D
+		var mesh := mesh_node.mesh as ArrayMesh
+		if mesh == null or mesh.get_blend_shape_count() > 0:
+			continue
+		var mesh_to_fish := fish.global_transform.affine_inverse() * mesh_node.global_transform
+		var lateral := mesh_to_fish.basis.inverse() * Vector3.BACK
+		lateral.x = 0.0
+		if lateral.length_squared() < 0.0001:
+			continue
+		var bounds := mesh.get_aabb()
+		var growth := bounds.size.x * 1.1
+		mesh_node.custom_aabb = bounds.grow(growth)
+		for surface in range(mesh.get_surface_count()):
+			var source := mesh_node.get_active_material(surface) as StandardMaterial3D
+			if source == null:
+				continue
+			var material := FishingRodRig._create_catch_deformation_material(source)
+			material.set_shader_parameter("body_min_x", bounds.position.x)
+			material.set_shader_parameter("body_range_x", maxf(bounds.size.x, 0.0001))
+			material.set_shader_parameter("body_center_y", bounds.get_center().y)
+			material.set_shader_parameter("body_center_z", bounds.get_center().z)
+			material.set_shader_parameter("head_at_max_x", profile.model_forward_axis != 1)
+			material.set_shader_parameter("lateral_axis_mesh", lateral.normalized())
+			material.set_shader_parameter("hook_u", 1.0)
+			material.set_shader_parameter("tail_u", 0.0)
+			mesh_node.set_surface_override_material(surface, material)
+			materials.append(material)
+	fish.set_meta("boat_fish_deformation_materials", materials)
+
+
+func _pose_airborne_fish(fish: Node3D, species_id: String, body_length_m: float, hook_world: Vector3, swim_heading: Vector3, delta: float, fish_index: int, swim_roll: float = 0.0) -> void:
+	var profile := _fish_manager.get_species_profile(species_id) if _fish_manager != null else null
+	if profile == null:
+		return
+	var surface_y := float(_sample_water(hook_world).get("height", hook_world.y))
+	var target := smoothstep(-0.08, 0.18, hook_world.y - surface_y)
+	var weight := move_toward(float(fish.get_meta("airborne_weight", 0.0)), target, maxf(delta, 0.0) * 2.0)
+	var elapsed := float(fish.get_meta("airborne_elapsed", 0.0)) + maxf(delta, 0.0) * weight
+	fish.set_meta("airborne_weight", weight)
+	fish.set_meta("airborne_elapsed", elapsed)
+	var phase := elapsed * TAU * (1.7 + float(posmod(fish_index, 5)) * 0.13) + float(fish_index) * 1.37
+	var amplitude := (0.70 + float(posmod(fish_index, 3)) * 0.15) * (0.15 + 0.85 * exp(-elapsed * 0.55)) * weight
+	var horizontal := Vector3(swim_heading.x, 0.0, swim_heading.z)
+	if horizontal.length_squared() < 0.0001:
+		horizontal = Vector3.FORWARD
+	horizontal = horizontal.normalized()
+	var hanging := (Vector3.UP + horizontal * (0.12 + sin(phase * 0.7) * 0.10 * amplitude)).normalized()
+	var start_basis := _boat_fish_basis_for_heading(swim_heading, profile)
+	if swim_heading.length_squared() > 0.0001:
+		start_basis = start_basis.rotated(swim_heading.normalized(), clampf(swim_roll, -0.5, 0.5) * (1.0 - weight))
+	var end_x := -hanging if profile.model_forward_axis == 1 else hanging
+	var end_z := end_x.cross(horizontal).normalized()
+	var end_basis := Basis(end_x, end_z.cross(end_x).normalized(), end_z)
+	var basis := Basis(start_basis.get_rotation_quaternion().slerp(end_basis.get_rotation_quaternion(), weight)).orthonormalized()
+	var scaled_basis := basis.scaled(Vector3.ONE * maxf(0.05, body_length_m / 1.2))
+	fish.global_transform = Transform3D(scaled_basis, mouth_anchored_fish_origin(hook_world, scaled_basis, profile.boat_fishing_mouth_anchor_local))
+	for material in fish.get_meta("boat_fish_deformation_materials", []):
+		material.set_shader_parameter("spine_bend_angle", amplitude * 3.45 * absf(sin(phase)))
+		material.set_shader_parameter("curl_sign", 1.0 if sin(phase) >= 0.0 else -1.0)
+		material.set_shader_parameter("tail_whip_angle", amplitude * 0.75)
+		material.set_shader_parameter("tail_wave_phase", phase)
 
 
 func _depth_below_surface_at(position: Vector3) -> float:
@@ -2534,7 +2603,8 @@ func _register_fight_participant(pending: FishingPendingCatch, fish_visual: Node
 	_fight_fish_heading_by_catch_id[pending.catch_id] = -_get_hull_outward_horizontal(fish_position)
 	_fight_previous_struggle_state_by_catch_id[pending.catch_id] = "steady"
 	if _current_rig.rig_type == BoatFishingRigProfile.RigType.SABIKI:
-		_fight_sabiki_branch_directions_local[pending.hook_index] = Vector3.LEFT
+		if pending.hook_index >= 0 and pending.hook_index < _sabiki_hook_nodes.size():
+			_fight_sabiki_branch_directions_local[pending.hook_index] = _sabiki_hook_nodes[pending.hook_index].basis * get_sabiki_hook_attachment_local(_current_rig.branch_length_m).normalized()
 	if _active_catch_id.is_empty():
 		_active_catch_id = pending.catch_id
 		_active_catch_species_id = pending.species_id
@@ -2876,19 +2946,11 @@ func _apply_fight_participant_motion(delta: float, fish_snapshots: Array[Diction
 		var frequency := profile.tail_frequency_hz if profile != null else 2.0
 		var struggle_state := str(snapshot.get("struggle_state", "steady"))
 		var intensity := 0.12 if struggle_state == "steady" else 0.34 if struggle_state == "burst" else 0.20
-		var phase := visual_elapsed * TAU * frequency
 		var target_heading := swim_direction if swim_direction.length_squared() > 0.0001 else -_get_hull_outward_horizontal(hook_position)
 		var previous_heading: Vector3 = _fight_fish_heading_by_catch_id.get(catch_id, -_get_hull_outward_horizontal(hook_position))
 		var turn_rate := profile.boat_fishing_turn_rate_deg_s if profile != null else 300.0
 		var heading := _advance_fight_fish_heading(catch_id, previous_heading, target_heading, hook_position, float(snapshot.get("body_length_m", 0.3)), profile, turn_rate, delta)
-		_set_fish_visual_pose_at_hook(
-			visual,
-			str(snapshot.get("species_id", "")),
-			float(snapshot.get("body_length_m", 0.3)),
-			hook_position,
-			heading,
-			sin(phase) * intensity
-		)
+		_pose_airborne_fish(visual, str(snapshot.get("species_id", "")), float(snapshot.get("body_length_m", 0.3)), hook_position, heading, delta, maxi(hook_index, 0), sin(visual_elapsed * TAU * frequency) * intensity)
 		var mouth_world := visual.global_transform * (profile.boat_fishing_mouth_anchor_local if profile != null else Vector3.ZERO)
 		var error_m := mouth_world.distance_to(hook_position)
 		_fight_max_mouth_hook_error_m = maxf(_fight_max_mouth_hook_error_m, error_m)
@@ -2962,7 +3024,7 @@ func _advance_sabiki_branch_for_fish(hook_index: int, direction: Vector3, speed:
 		speed,
 		delta,
 		_current_rig.branch_length_m,
-		(root_basis * Vector3.LEFT).normalized(),
+		_get_sabiki_rest_branch_direction_world(hook_index),
 		deg_to_rad(52.0)
 	)
 	_fight_sabiki_branch_directions_local[hook_index] = (root_basis.inverse() * next_world_direction).normalized()
@@ -3309,17 +3371,7 @@ func _advance_fight_landing(delta: float) -> void:
 			var previous_heading: Vector3 = _fight_fish_heading_by_catch_id.get(catch_id, target_heading)
 			var turn_rate := profile.boat_fishing_turn_rate_deg_s if profile != null else 300.0
 			var landing_heading := _advance_fight_fish_heading(catch_id, previous_heading, target_heading, hook_position, body_length_m, profile, turn_rate, delta)
-			var tail_frequency_hz := profile.tail_frequency_hz if profile != null else 2.0
-			var thrash_phase := _fight_landing_elapsed * TAU * clampf(tail_frequency_hz, 1.5, 4.0) + float(hook_index) * 0.91
-			landing_heading = (landing_heading + Vector3.UP * sin(thrash_phase) * FIGHT_LANDING_FISH_THRASH_PITCH).normalized()
-			_set_fish_visual_pose_at_hook(
-				visual,
-				species_id,
-				body_length_m,
-				hook_position,
-				landing_heading,
-				sin(thrash_phase * 1.37) * FIGHT_LANDING_FISH_THRASH_ROLL_RAD
-			)
+			_pose_airborne_fish(visual, species_id, body_length_m, hook_position, landing_heading, delta, maxi(hook_index, 0))
 			presentation_focus_points.append(visual.global_position)
 		else:
 			presentation_focus_points.append(hook_position)
@@ -3494,30 +3546,19 @@ func _reset_boat_fight_session(keep_visuals: bool = false) -> void:
 func _advance_catch_presentation(delta: float) -> void:
 	_catch_presentation_elapsed += maxf(delta, 0.0)
 	_advance_fight_rod_release(delta)
-	var presentation_focus_points := _animate_catch_presentation_fish()
+	var presentation_focus_points := _animate_catch_presentation_fish(delta)
 	if _onboard != null:
 		_onboard.update_fishing_presentation_focus(presentation_focus_points, delta)
 	if _catch_result_received and _catch_presentation_elapsed >= FIGHT_PRESENTATION_DURATION_SECONDS:
 		clear_cast()
 
 
-func _animate_catch_presentation_fish() -> Array[Vector3]:
+func _animate_catch_presentation_fish(delta: float) -> Array[Vector3]:
 	var presentation_focus_points: Array[Vector3] = []
 	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
 		var hook_world := _get_single_jig_hook_attachment_world()
-		var profile := _fish_manager.get_species_profile(_active_catch_species_id) if _fish_manager != null else null
-		var tail_frequency_hz := profile.tail_frequency_hz if profile != null else 2.0
-		var phase := _catch_presentation_elapsed * TAU * clampf(tail_frequency_hz, 1.5, 4.0)
 		var heading := -_get_hull_outward_horizontal(hook_world)
-		heading = (heading + Vector3.UP * sin(phase) * FIGHT_LANDING_FISH_THRASH_PITCH).normalized()
-		_set_fish_visual_pose_at_hook(
-			_bite_fish_visual,
-			_active_catch_species_id,
-			_active_catch_body_length_m,
-			hook_world,
-			heading,
-			sin(phase * 1.37) * FIGHT_LANDING_FISH_THRASH_ROLL_RAD
-		)
+		_pose_airborne_fish(_bite_fish_visual, _active_catch_species_id, _active_catch_body_length_m, hook_world, heading, delta, 0)
 		presentation_focus_points.append(_bite_fish_visual.global_position)
 	if _current_rig.rig_type != BoatFishingRigProfile.RigType.SABIKI:
 		return presentation_focus_points
@@ -3534,20 +3575,9 @@ func _animate_catch_presentation_fish() -> Array[Vector3]:
 			continue
 		var species_id := str(hook_state.get("species_id", "herring"))
 		var body_length_m := float(hook_state.get("body_length_m", 0.32))
-		var profile := _fish_manager.get_species_profile(species_id) if _fish_manager != null else null
-		var tail_frequency_hz := profile.tail_frequency_hz if profile != null else 2.0
-		var phase := _catch_presentation_elapsed * TAU * clampf(tail_frequency_hz, 1.5, 4.0) + float(hook_index) * 0.91
 		var hook_world: Vector3 = hook_positions[hook_index]
 		var heading := -_get_hull_outward_horizontal(hook_world)
-		heading = (heading + Vector3.UP * sin(phase) * FIGHT_LANDING_FISH_THRASH_PITCH).normalized()
-		_set_fish_visual_pose_at_hook(
-			visual,
-			species_id,
-			body_length_m,
-			hook_world,
-			heading,
-			sin(phase * 1.37) * FIGHT_LANDING_FISH_THRASH_ROLL_RAD
-		)
+		_pose_airborne_fish(visual, species_id, body_length_m, hook_world, heading, delta, hook_index)
 		presentation_focus_points.append(visual.global_position)
 	return presentation_focus_points
 
@@ -3567,7 +3597,6 @@ func _on_authority_catch_succeeded(result: FishingCatchResult) -> void:
 	report_catch_succeeded(result.catch_id)
 	if _bite_fish_visual != null and is_instance_valid(_bite_fish_visual):
 		var hook_world := _get_single_jig_hook_attachment_world()
-		_set_fish_visual_pose_at_hook(_bite_fish_visual, result.species_id, _active_catch_body_length_m, hook_world, -_get_hull_outward_horizontal(hook_world))
 		_show_splash_visual(hook_world)
 	_set_state(CastState.CATCH_PRESENTATION)
 
@@ -3658,6 +3687,7 @@ func _create_transient_fish_visual(species_id: String, body_length_m: float, hea
 	var meshes: Array[Node] = fish.find_children("*", "MeshInstance3D", true, false)
 	for mesh_node in meshes:
 		(mesh_node as MeshInstance3D).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_prepare_boat_fish_deformation(fish, profile)
 	var scale_factor := maxf(0.05, body_length_m / 1.2)
 	_bite_visual_scale = scale_factor
 	fish.global_basis = FishSchoolRenderer.basis_for_model_heading(heading, profile.model_forward_axis).scaled(Vector3.ONE * scale_factor)
@@ -4691,9 +4721,16 @@ func _update_reel_visual_and_audio(line_length_before_m: float, line_length_afte
 		reel_speed_rad_s = get_reel_visual_speed_rad_s(line_rate_mps, line_length_after_m)
 		if _reel_rotating_assembly != null and absf(reel_speed_rad_s) > 0.01:
 			var angular_delta := FishingRodRig.REEL_ROTATION_SIGN * reel_speed_rad_s * maxf(delta, 0.0)
-			_reel_rotating_assembly.rotate_object_local(Vector3.UP, angular_delta)
 			_reel_visual_total_rotation_rad += angular_delta
 	if _reel_rotating_assembly != null:
+		# The handle, star spokes, spool, and winding shell are children of one
+		# rotor. Rebuild that rotor from one integrated phase so each part receives
+		# the exact same angle even when line speed changes or stops.
+		set_reel_rotating_assembly_phase(
+			_reel_rotating_assembly,
+			_reel_rotating_assembly_base_basis,
+			_reel_visual_total_rotation_rad
+		)
 		_reel_rotating_assembly.set_meta("spin_speed_rad_s", reel_speed_rad_s)
 		_reel_rotating_assembly.set_meta("line_out_rate_mps", maxf(line_rate_mps, 0.0))
 	FishingRodRig.set_reel_winding_line_length_on_visual(_reel_winding_visual, line_length_after_m)
@@ -4896,6 +4933,14 @@ static func get_reel_visual_speed_rad_s(line_rate_mps: float, line_length_m: flo
 		return 0.0
 	var spool_radius := FishingRodRig.get_reel_spool_outer_radius_m(line_length_m)
 	return -line_rate_mps / maxf(spool_radius, 0.001)
+
+
+static func set_reel_rotating_assembly_phase(rotating_assembly: Node3D, base_basis: Basis, phase_radians: float) -> void:
+	if rotating_assembly == null or not is_finite(phase_radians):
+		return
+	var assembly_transform := rotating_assembly.transform
+	assembly_transform.basis = base_basis * Basis(Vector3.UP, phase_radians)
+	rotating_assembly.transform = assembly_transform
 
 
 func _set_boat_fishing_audio_loop(key: String, active: bool, intensity: float = 1.0) -> void:
@@ -5363,6 +5408,33 @@ static func calculate_line_tube_side_direction(segment_direction: Vector3, previ
 	return side.normalized() if side.length_squared() > 0.000001 else Vector3.FORWARD
 
 
+static func calculate_sabiki_hook_hanging_basis(branch_direction_world: Vector3, fallback_forward_world: Vector3) -> Basis:
+	var hook_forward := branch_direction_world - Vector3.UP * branch_direction_world.dot(Vector3.UP)
+	if hook_forward.length_squared() < 0.0001 or not hook_forward.is_finite():
+		hook_forward = fallback_forward_world - Vector3.UP * fallback_forward_world.dot(Vector3.UP)
+	if hook_forward.length_squared() < 0.0001 or not hook_forward.is_finite():
+		hook_forward = Vector3.RIGHT
+	hook_forward = hook_forward.normalized()
+	var hook_back := hook_forward.cross(Vector3.UP).normalized()
+	return Basis(hook_forward, Vector3.UP, hook_back).orthonormalized()
+
+
+static func get_sabiki_hook_attachment_local(branch_length_m: float) -> Vector3:
+	return Vector3(-maxf(branch_length_m, 0.0), 0.0, 0.0) + SABIKI_HOOK_TIP_BRANCH_OFFSET
+
+
+func _get_sabiki_rest_branch_direction_world(hook_index: int) -> Vector3:
+	var stations: Dictionary = _main_line_path_snapshot.get("stations", {})
+	var station: Dictionary = stations.get("hook_%d" % (hook_index + 1), {})
+	var down: Vector3 = station.get("tangent", Vector3.DOWN)
+	if not down.is_finite() or down.length_squared() < 0.0001:
+		down = Vector3.DOWN
+	down = down.normalized()
+	var side: Vector3 = station.get("side", Vector3.RIGHT)
+	side = calculate_line_tube_side_direction(down, side)
+	return (down * cos(SABIKI_BRANCH_REST_ANGLE_RAD) + side * sin(SABIKI_BRANCH_REST_ANGLE_RAD)).normalized()
+
+
 func _rebuild_line_tube_mesh(mesh: ImmediateMesh, points: PackedVector3Array, tangents: PackedVector3Array = PackedVector3Array(), sides: PackedVector3Array = PackedVector3Array()) -> void:
 	if mesh == null:
 		return
@@ -5429,11 +5501,24 @@ func _update_rig_visual_position() -> Vector3:
 			var station: Dictionary = stations[station_name]
 			var hook_node := _sabiki_hook_nodes[hook_index]
 			hook_node.position = _sabiki_rig_root.to_local(station["position"])
-			var default_branch_world: Vector3 = station.get("side", Vector3.RIGHT)
+			var default_branch_world := _get_sabiki_rest_branch_direction_world(hook_index)
 			var default_branch_local: Vector3 = (root_inverse * default_branch_world).normalized()
 			var branch_direction: Vector3 = _fight_sabiki_branch_directions_local.get(hook_index, default_branch_local)
 			branch_direction = branch_direction.normalized() if branch_direction.length_squared() > 0.0001 else default_branch_local
-			hook_node.basis = Basis(Quaternion(Vector3.LEFT, branch_direction))
+			var hook_node_basis := Basis(Quaternion(get_sabiki_hook_attachment_local(_current_rig.branch_length_m).normalized(), branch_direction))
+			hook_node.basis = hook_node_basis
+			var hook_visual := hook_node.get_node_or_null("SabikiSmallHook") as Node3D
+			if hook_visual != null:
+				var branch_direction_world := (
+					_sabiki_rig_root.global_basis
+					* hook_node_basis
+					* get_sabiki_hook_attachment_local(_current_rig.branch_length_m)
+				).normalized()
+				var hanging_basis_world := calculate_sabiki_hook_hanging_basis(
+					branch_direction_world,
+					_sabiki_rig_root.global_basis.x
+				)
+				hook_visual.basis = hook_node_basis.inverse() * root_inverse * hanging_basis_world
 	_sabiki_rig_root.visible = sabiki_active and is_cast_active() and _bait_flight_started
 	return rig_up_direction
 
@@ -5705,7 +5790,7 @@ func _build_visuals() -> void:
 	# The shared reel defaults to the fixed trolling rod's handle side. The
 	# handheld mount is mirrored so the crank projects to screen-left from the
 	# player's first-person view without changing its winding axis or direction.
-	var reel_parts := FishingRodRig.create_reel_assembly(reel_body_material, reel_moving_material, -1.0, true)
+	var reel_parts := FishingRodRig.create_reel_assembly(reel_body_material, reel_moving_material, -1.0, true, false)
 	_reel_visual_root = reel_parts["root"] as Node3D
 	_reel_visual_root.name = "HandheldFishingReel"
 	_reel_spool_visual = reel_parts["spool"] as MeshInstance3D
@@ -5719,6 +5804,9 @@ func _build_visuals() -> void:
 		handheld_reel_seat.mesh = handheld_seat_mesh
 		handheld_reel_seat.position = Vector3(0.0, 0.014, 0.18)
 	_reel_rotating_assembly = _reel_visual_root.get_node_or_null("ReelSpinningAssembly") as Node3D
+	if _reel_rotating_assembly != null:
+		_reel_rotating_assembly_base_basis = _reel_rotating_assembly.transform.basis
+		_reel_visual_total_rotation_rad = 0.0
 	_reel_winding_visual = reel_parts["winding_visual"] as MultiMeshInstance3D
 	FishingRodRig.set_reel_winding_line_length_on_visual(_reel_winding_visual, 0.0)
 	_reel_mount.add_child(_reel_visual_root)
@@ -6006,6 +6094,12 @@ func _build_sabiki_visuals() -> void:
 		_make_material(Color(0.73, 0.31, 0.26), 0.04),
 	]
 	var hook_material := _make_material(Color(0.67, 0.74, 0.73), 0.82)
+	var branch_material := StandardMaterial3D.new()
+	branch_material.albedo_color = Color(0.77, 0.86, 0.84, 0.95)
+	branch_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	branch_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	branch_material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	branch_material.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
 	for index in range(5):
 		var hook_node := Node3D.new()
 		hook_node.name = "SabikiHook_%d" % (index + 1)
@@ -6013,14 +6107,18 @@ func _build_sabiki_visuals() -> void:
 		var branch := MeshInstance3D.new()
 		branch.name = "SabikiBranchLine"
 		var branch_mesh := CylinderMesh.new()
-		branch_mesh.top_radius = 0.0017
-		branch_mesh.bottom_radius = 0.0017
-		branch_mesh.height = SABIKI_RIG_PROFILE.branch_length_m
+		branch_mesh.top_radius = SABIKI_BRANCH_LINE_RADIUS_M
+		branch_mesh.bottom_radius = SABIKI_BRANCH_LINE_RADIUS_M
+		var branch_end_local := get_sabiki_hook_attachment_local(SABIKI_RIG_PROFILE.branch_length_m)
+		branch_mesh.height = branch_end_local.length()
 		branch_mesh.radial_segments = 5
 		branch.mesh = branch_mesh
-		branch.position.x = -SABIKI_RIG_PROFILE.branch_length_m * 0.5
-		branch.rotation.z = PI * 0.5
-		branch.material_override = _line_material
+		branch.position = branch_end_local * 0.5
+		branch.basis = Basis(Quaternion(Vector3.UP, branch_end_local.normalized()))
+		# The main line shader expects camera-relative instance transforms. This
+		# branch stays in the Sabiki rig's world-space hierarchy, so use a matching
+		# world-space material instead of projecting its local vertices as view space.
+		branch.material_override = branch_material
 		branch.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 		hook_node.add_child(branch)
 		var bead := MeshInstance3D.new()
@@ -6050,9 +6148,9 @@ func _build_sabiki_visuals() -> void:
 			hook_node.add_child(feather)
 		var small_hook := Node3D.new()
 		small_hook.name = "SabikiSmallHook"
-		small_hook.position.x = -SABIKI_RIG_PROFILE.branch_length_m
+		small_hook.position = branch_end_local
 		hook_node.add_child(small_hook)
-		_build_open_j_hook(small_hook, 0.72, hook_material)
+		_build_open_j_hook(small_hook, 1.0, hook_material)
 		_sabiki_rig_root.add_child(hook_node)
 		_sabiki_hook_nodes.append(hook_node)
 	_sabiki_sinker_instance = MeshInstance3D.new()

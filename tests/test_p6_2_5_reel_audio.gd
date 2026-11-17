@@ -64,7 +64,7 @@ func _run() -> void:
 	_check(winding.visible, "Payout beyond the visual range keeps winding visible at minimum thickness")
 	FishingRodRig.set_reel_winding_line_length_on_visual(winding, 0.0)
 	_check(rotor != null and rotor.find_child("ReelHandleArm", true, false) is MeshInstance3D and rotor.find_child("ReelHandleKnob", true, false) is MeshInstance3D, "Shared rotor contains visible crank and handle parts")
-	var handheld_parts := FishingRodRig.create_reel_assembly(reel_material, reel_material, -1.0, true)
+	var handheld_parts := FishingRodRig.create_reel_assembly(reel_material, reel_material, -1.0, true, false)
 	var handheld_root := handheld_parts["root"] as Node3D
 	root.add_child(handheld_root)
 	var handheld_rotor := handheld_parts["rotating_assembly"] as Node3D
@@ -96,9 +96,42 @@ func _run() -> void:
 	var handheld_handle := handheld_rotor.find_child("ReelHandleArm", true, false) as MeshInstance3D
 	var trolling_handle := rotor.find_child("ReelHandleArm", true, false) as MeshInstance3D
 	var handheld_knob := handheld_rotor.find_child("ReelHandleKnob", true, false) as MeshInstance3D
+	var trolling_spoke := rotor.get_node_or_null("ReelSpokeL0") as MeshInstance3D
 	var handheld_handle_root_position := handheld_root.to_local(handheld_handle.global_position) if handheld_handle != null else Vector3.ZERO
 	var trolling_handle_root_position := reel_root.to_local(trolling_handle.global_position) if trolling_handle != null else Vector3.ZERO
 	var handheld_knob_root_position := handheld_root.to_local(handheld_knob.global_position) if handheld_knob != null else Vector3.ZERO
+	var handheld_has_star_spokes := false
+	for child in handheld_rotor.get_children():
+		if String(child.name).begins_with("ReelSpoke"):
+			handheld_has_star_spokes = true
+	_check(not handheld_has_star_spokes, "Handheld boat-fishing reel omits the alias-prone star spokes")
+	_check(trolling_spoke != null, "Trolling reel retains its star spokes")
+	if trolling_handle != null and trolling_spoke != null:
+		var rotor_base_basis := rotor.transform.basis
+		BoatFishingCastingSystem.set_reel_rotating_assembly_phase(rotor, rotor_base_basis, 0.0)
+		rotor.force_update_transform()
+		trolling_handle.force_update_transform()
+		trolling_spoke.force_update_transform()
+		var initial_axis := (rotor.global_basis * Vector3.UP).normalized()
+		var initial_handle_axis := trolling_handle.global_basis.x.normalized()
+		var initial_spoke_axis := trolling_spoke.global_basis.x.normalized()
+		var fixed_phase_offset := _signed_angle_around_axis(initial_spoke_axis, initial_handle_axis, initial_axis)
+		for phase_variant in [0.0, 0.25, 0.9, 0.3, 0.3]:
+			var phase := float(phase_variant)
+			BoatFishingCastingSystem.set_reel_rotating_assembly_phase(rotor, rotor_base_basis, phase)
+			rotor.force_update_transform()
+			trolling_handle.force_update_transform()
+			trolling_spoke.force_update_transform()
+			var current_axis := (rotor.global_basis * Vector3.UP).normalized()
+			var handle_phase := _signed_angle_around_axis(initial_handle_axis, trolling_handle.global_basis.x, current_axis)
+			var spoke_phase := _signed_angle_around_axis(initial_spoke_axis, trolling_spoke.global_basis.x, current_axis)
+			var current_offset := _signed_angle_around_axis(trolling_spoke.global_basis.x, trolling_handle.global_basis.x, current_axis)
+			_check(
+				absf(wrapf(handle_phase - phase, -PI, PI)) < 0.001
+				and absf(wrapf(spoke_phase - phase, -PI, PI)) < 0.001
+				and absf(wrapf(current_offset - fixed_phase_offset, -PI, PI)) < 0.001,
+				"Trolling crank and star spokes follow one rotor phase through speed changes, reversal, and stop"
+			)
 	_check(handheld_handle != null and handheld_handle_root_position.x > 0.0, "Handheld crank is mounted on the player's screen-left side of the spool")
 	_check(handheld_knob != null and handheld_knob_root_position.x > 0.0, "Handheld crank knob sits on the same screen-left side as its arm")
 	_check(trolling_handle != null and absf(trolling_handle_root_position.x - handheld_handle_root_position.x) > 0.05, "Trolling reel keeps its original crank placement while the handheld reel is mirrored")
@@ -164,3 +197,9 @@ func _check(condition: bool, message: String) -> void:
 	else:
 		_failures += 1
 		push_error("FAIL: %s" % message)
+
+
+func _signed_angle_around_axis(from: Vector3, to: Vector3, axis: Vector3) -> float:
+	var first := (from - axis * from.dot(axis)).normalized()
+	var second := (to - axis * to.dot(axis)).normalized()
+	return atan2(axis.dot(first.cross(second)), clampf(first.dot(second), -1.0, 1.0))
